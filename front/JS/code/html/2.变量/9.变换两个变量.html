@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      //  1.重新赋值
+      //  let num1 = 10;
+      //  let num2 = 20;
+      //  num1 = 20;
+      //  num2 = 10;
+      //  2.临时变量中转
+      let num1 = "张三";
+      let num2 = 25;
+      console.log("修改前值为:");
+      console.log("num1:", num1);
+      console.log("num2:", num2);
+      let num;
+      num = num1;
+      num1 = num2;
+      num2 = num;
+      console.log("修改前值为:");
+      console.log("num1:", num1);
+      console.log("num2:", num2);
+    </script>
+  </body>
+</html>
