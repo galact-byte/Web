@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <style>
+      h2 {
+        text-align: center;
+      }
+      table {
+        border-collapse: collapse;
+        height: 80px;
+        margin: 0 auto;
+        text-align: center;
+      }
+      th {
+        padding: 5px 30px;
+      }
+      table,
+      tr,
+      th {
+        border: 1px solid #000;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>当月账单</h2>
+    <script>
+      let total = Number(prompt("请输入本月总收入"));
+      let water = Number(prompt("请输入本月水费"));
+      let electricity = Number(prompt("请输入本月电费"));
+      let net = Number(prompt("请输入本月网费"));
+      let remain = total - water - electricity - net;
+      document.write(
+        `<table>
+                <tr>
+                    <th>银行卡余额</th>
+                    <th>水费</th>
+                    <th>电费</th>
+                    <th>网费</th>
+                    <th>银行卡余额</th>
+                </tr>
+                <tr>
+                    <th>${total}</th>
+                    <th>${water}</th>
+                    <th>${electricity}</th>
+                    <th>${net}</th>
+                    <th>${remain}</th>
+                </tr>
+            </table>
+        `
+      );
+    </script>
+  </body>
+</html>
