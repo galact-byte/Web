@@ -23,7 +23,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
-const api_url = ref("http://127.0.0.1:8000/v1/chat/completions");
+const api_url = ref("https://ghjlr-text-op.hf.space/v1/chat/completions");
 const api_key = ref("");
 const model = ref("gemini-2.5-flash");
 const input = ref("");
