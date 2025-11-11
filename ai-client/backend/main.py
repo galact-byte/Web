@@ -21,6 +21,9 @@ class ChatRequest(BaseModel):
     api_key: str
     model: str = "gemini-2.5-flash"
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 @app.post("/chat")
 def chat(req: ChatRequest):
     headers = {
