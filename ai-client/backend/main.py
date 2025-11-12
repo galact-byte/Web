@@ -3,8 +3,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import requests
 import uvicorn
+import os, sys, traceback, datetime
 
 app = FastAPI()
+
+# ============ 日志辅助函数 ============
+def _write_crash_log(msg: str):
+    """写入后端崩溃日志"""
+    try:
+        base = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
+        log_path = os.path.join(base, "api-server.log")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.datetime.now().isoformat()}] {msg}\n")
+    except Exception:
+        pass
 
 # 启用CORS（跨域支持）
 app.add_middleware(
@@ -24,6 +36,7 @@ class ChatRequest(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 @app.post("/chat")
 def chat(req: ChatRequest):
     headers = {
@@ -50,7 +63,13 @@ def chat(req: ChatRequest):
             content = str(j)
         return {"reply": content}
     except Exception as e:
+        _write_crash_log(f"❌ Chat 调用错误: {repr(e)}")
         return {"error": str(e)}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    try:
+        _write_crash_log("✅ uvicorn 正在启动 (127.0.0.1:8000)")
+        uvicorn.run(app, host="127.0.0.1", port=8000)
+    except Exception:
+        _write_crash_log("💥 后端崩溃:\n" + traceback.format_exc())
+        raise
