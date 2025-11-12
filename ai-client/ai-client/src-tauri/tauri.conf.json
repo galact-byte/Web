@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "AI Client",
+  "productName": "AI-Client",
   "version": "1.0.0",
   "identifier": "com.galact.ai-client",
   "build": {
@@ -39,9 +39,9 @@
         "type": "embedBootstrapper"
       }
     },
-    "resources": {
-      "binaries/api-server.exe":"./binaries/",
-      "target/release/WebView2Loader.dll": "./"
-  }
+    "resources": [
+      "binaries/api-server/**/*",
+      "WebView2Loader.dll"
+    ]
   }
 }
