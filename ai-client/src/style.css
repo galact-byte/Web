@@ -1,0 +1,91 @@
+:root {
+  /* Core Colors */
+  --bg-color: #343541;
+  --sidebar-bg: rgba(10, 10, 15, 0.4); /* More transparent */
+  --text-primary: #ffffff;
+  --text-secondary: #d1d5db;
+  --accent-color: #10a37f;
+  --accent-hover: #1a7f64;
+  
+  /* Input & Borders */
+  --input-bg: rgba(64, 65, 79, 0.4); /* More transparent */
+  --border-color: rgba(255, 255, 255, 0.1);
+  
+  /* Message Colors */
+  --message-user-bg: rgba(52, 53, 65, 0.4);
+  --message-ai-bg: rgba(68, 70, 84, 0.4);
+  
+  /* Glassmorphism */
+  --glass-blur: 10px; /* Reduced from 20px */
+  --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body, html {
+  height: 100%;
+  width: 100%;
+  font-family: var(--font-family);
+  background-color: var(--bg-color); /* Fallback */
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+#app {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+/* Background Layer */
+.app-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  transition: background-image 0.5s ease;
+}
+
+.app-overlay {
+  position: absolute;
+  inset: 0;
+  transition: background-color 0.3s;
+}
+
+.layout-container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  backdrop-filter: blur(var(--glass-blur)); /* Global blur optional, usually better on specific panels */
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
