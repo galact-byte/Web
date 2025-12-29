@@ -80,25 +80,14 @@ def replace_doc_content(rules, project_info, output_subdir=None):
     """
     doc = Document("templates\\" + rules['文档名称'])
 
-    for rule in rules['文档替换规则']:
-        if len(rule) != 3:
-            # 表格替换
-            table = doc.tables[rule[1]]
-            dest_cell = copy_cell_00_format(table, dest_row=rule[2], dest_col=rule[3])
+    # 新模式：docx 占位符模式
+    if '文档替换规则' not in rules or not rules['文档替换规则']:
+        replace_by_placeholder(doc, project_info)
 
-            if dest_cell.paragraphs:
-                for paragraph in dest_cell.paragraphs:
-                    all_text = "".join(run.text for run in paragraph.runs)
+    # 旧模式：坐标规则模式（完全保留）
+    else:
+        replace_by_rules(doc, rules, project_info)
 
-                    # 替换文本
-                    if all_text:
-                        new_runs = paragraph.runs
-                        new_runs[0].text = project_info[rule[0]]
-                        for run in new_runs[1:]:
-                            run.text = ""
-        else:
-            # 段落替换
-            doc.paragraphs[rule[1]].runs[rule[2]].text = project_info[rule[0]]
 
     # 保存新文档
     output_dir = '授权文档输出目录'
@@ -147,6 +136,35 @@ def process_multiple_projects(projects_data, rules_dir):
                     config = json.load(f)
                 # 替换文档内容并保存到对应项目的子目录
                 replace_doc_content(config, project_info, output_subdir)
+
+def replace_by_placeholder(doc, mapping):
+    def do_replace(text):
+        for k, v in mapping.items():
+            text = text.replace(f"{{{{{k}}}}}", str(v))
+        return text
+
+    # 段落
+    for p in doc.paragraphs:
+        p.text = do_replace(p.text)
+
+    # 表格
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                cell.text = do_replace(cell.text)
+
+def replace_by_rules(doc, rules, project_info):
+    for rule in rules['文档替换规则']:
+        if len(rule) != 3:
+            table = doc.tables[rule[1]]
+            dest_cell = copy_cell_00_format(table, rule[2], rule[3])
+            for p in dest_cell.paragraphs:
+                p.text = project_info.get(rule[0], "")
+        else:
+            try:
+                doc.paragraphs[rule[1]].runs[rule[2]].text = project_info.get(rule[0], "")
+            except IndexError:
+                print(f"跳过无效规则: {rule}")
 
 
 import argparse
