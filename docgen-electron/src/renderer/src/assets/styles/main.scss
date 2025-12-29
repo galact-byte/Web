@@ -1,0 +1,59 @@
+@import 'variables';
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background-color: $bg-body;
+    color: $text-primary;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    margin: 0;
+    font-weight: 600;
+}
+
+// Override Element Plus specific styles nicely
+:root {
+    --el-color-primary: #{$primary-color};
+    --el-color-success: #{$success-color};
+    --el-color-warning: #{$warning-color};
+    --el-color-danger: #{$danger-color};
+    --el-color-info: #{$info-color};
+}
+
+.el-button {
+    border-radius: $radius-md;
+    font-weight: 500;
+}
+
+.el-input__wrapper,
+.el-select__wrapper {
+    border-radius: $radius-md;
+    box-shadow: 0 0 0 1px $border-color inset;
+
+    &:hover {
+        box-shadow: 0 0 0 1px $primary-light inset;
+    }
+
+    &.is-focus {
+        box-shadow: 0 0 0 1px $primary-color inset !important;
+    }
+}
+
+.el-card {
+    border-radius: $radius-lg;
+    border: none;
+    box-shadow: $shadow-sm !important;
+    transition: box-shadow 0.3s ease;
+
+    &:hover {
+        box-shadow: $shadow-md !important;
+    }
+}
