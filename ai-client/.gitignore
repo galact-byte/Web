@@ -22,3 +22,35 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Rust 编译输出目录
+**/target/
+**/src-tauri/target/
+
+# Rust 编译生成的文件
+*.exe
+*.dll
+*.lib
+*.a
+*.so
+*.dylib
+*.d
+*.rlib
+*.pdb
+
+# Cargo 相关
+Cargo.lock
+.cargo/
+
+# Tauri 生成的文件
+**/gen/
+**/.tauri/
+
+# WebView2 相关
+**/WebView2Loader.dll
+
+# 其他临时文件
+*.tmp
+*.bak
+*.swp
+*~
