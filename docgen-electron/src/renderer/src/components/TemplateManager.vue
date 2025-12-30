@@ -6,7 +6,15 @@
                 <p class="subtitle">管理用于生成的 Word 模板与 JSON 替换规则</p>
             </div>
             <div class="actions">
-                <input ref="fileInput" type="file" accept=".docx,.json" style="display: none" @change="handleFileSelect" multiple/>
+                <el-button @click="showRecycleBin" size="large">
+                    <el-icon class="el-icon--left">
+                        <Delete />
+                    </el-icon>
+                    回收站
+                    <el-badge v-if="recycleBin.length > 0" :value="recycleBin.length" style="margin-left: 8px;" />
+                </el-button>
+                <input ref="fileInput" type="file" accept=".docx,.json" style="display: none" @change="handleFileSelect"
+                    multiple />
                 <el-button type="primary" size="large" @click="triggerFileSelect">
                     <el-icon class="el-icon--left">
                         <Upload />
@@ -69,16 +77,46 @@
                 </el-tab-pane>
             </el-tabs>
         </div>
+        <!-- JSON 编辑对话框 -->
+        <el-dialog v-model="editDialogVisible" :title="`编辑: ${currentEditFile}`" width="800px">
+            <el-input v-model="editContent" type="textarea" :rows="20" placeholder="JSON 内容"
+                style="font-family: monospace;" />
+            <template #footer>
+                <el-button @click="editDialogVisible = false">取消</el-button>
+                <el-button type="primary" @click="saveEdit">保存</el-button>
+            </template>
+        </el-dialog>
+        <!-- 回收站对话框 -->
+        <el-dialog v-model="recycleBinVisible" title="回收站" width="800px">
+            <el-table :data="recycleBin" style="width: 100%">
+                <el-table-column type="index" width="60" align="center" label="#" />
+                <el-table-column prop="name" label="文件名" min-width="200" />
+                <el-table-column prop="type" label="类型" width="100">
+                    <template #default="scope">
+                        <el-tag :type="scope.row.type === 'docx' ? 'primary' : 'warning'">
+                            {{ scope.row.type }}
+                        </el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="deletedAt" label="删除时间" width="180" />
+                <el-table-column label="操作" width="180" align="center">
+                    <template #default="scope">
+                        <el-button link type="success" @click="restoreFile(scope.row)">恢复</el-button>
+                        <el-button link type="danger" @click="permanentDelete(scope.$index)">彻底删除</el-button>
+                    </template>
+                </el-table-column>
+            </el-table>
+            <div v-if="recycleBin.length === 0" style="padding: 40px; text-align: center; color: #909399;">
+                回收站是空的
+            </div>
+            <template #footer>
+                <el-button @click="recycleBinVisible = false">关闭</el-button>
+                <el-button type="danger" @click="clearRecycleBin" :disabled="recycleBin.length === 0">
+                    清空回收站
+                </el-button>
+            </template>
+        </el-dialog>
     </div>
-    <!-- JSON 编辑对话框 -->
-    <el-dialog v-model="editDialogVisible" :title="`编辑: ${currentEditFile}`" width="800px">
-        <el-input v-model="editContent" type="textarea" :rows="20" placeholder="JSON 内容"
-            style="font-family: monospace;" />
-        <template #footer>
-            <el-button @click="editDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="saveEdit">保存</el-button>
-        </template>
-    </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -94,6 +132,62 @@ const uploadDialogVisible = ref(false)
 const editDialogVisible = ref(false)
 const currentEditFile = ref<any>(null)
 const editContent = ref('')
+
+// 回收站相关
+const recycleBin = ref<any[]>([])
+const recycleBinVisible = ref(false)
+
+// 显示回收站
+const showRecycleBin = () => {
+    recycleBinVisible.value = true
+}
+
+// 从回收站恢复文件
+const restoreFile = async (file: any) => {
+    try {
+        const success = await window.api.restoreFile(file.folder, file.name)
+        if (success) {
+            // 从回收站移除
+            recycleBin.value = recycleBin.value.filter(f => f !== file)
+            ElMessage.success('文件已恢复')
+            await loadFiles()
+        } else {
+            ElMessage.error('恢复失败')
+        }
+    } catch (e) {
+        ElMessage.error('恢复失败: ' + e)
+    }
+}
+
+// 彻底删除文件
+const permanentDelete = async (index: number) => {
+    try {
+        await ElMessageBox.confirm('彻底删除后无法恢复，确定吗？', '警告', {
+            confirmButtonText: '彻底删除',
+            cancelButtonText: '取消',
+            type: 'error'
+        })
+        recycleBin.value.splice(index, 1)
+        ElMessage.success('已彻底删除')
+    } catch (e) {
+        // 用户取消
+    }
+}
+
+// 清空回收站
+const clearRecycleBin = async () => {
+    try {
+        await ElMessageBox.confirm('确定清空回收站吗？此操作不可恢复！', '警告', {
+            confirmButtonText: '清空',
+            cancelButtonText: '取消',
+            type: 'error'
+        })
+        recycleBin.value = []
+        ElMessage.success('回收站已清空')
+    } catch (e) {
+        // 用户取消
+    }
+}
 const loadFiles = async () => {
     try {
         templates.value = await window.api.listFiles('templates')
@@ -152,7 +246,7 @@ const saveEdit = async () => {
     }
 }
 
-// 删除模板
+// 删除模板（移到回收站）
 const deleteTemplate = async (filename: string) => {
     try {
         await ElMessageBox.confirm(`确定要删除 "${filename}" 吗？`, '确认删除', {
@@ -161,9 +255,17 @@ const deleteTemplate = async (filename: string) => {
             type: 'warning'
         })
 
+        // 添加到回收站
+        recycleBin.value.push({
+            name: filename,
+            folder: 'templates',
+            deletedAt: new Date().toLocaleString('zh-CN'),
+            type: 'docx'
+        })
+
         const success = await window.api.deleteFile('templates', filename)
         if (success) {
-            ElMessage.success('已删除')
+            ElMessage.success('已删除（可在回收站中恢复）')
             await loadFiles()
         } else {
             ElMessage.error('删除失败')
@@ -173,7 +275,7 @@ const deleteTemplate = async (filename: string) => {
     }
 }
 
-// 删除规则
+// 删除规则（移到回收站）
 const deleteRule = async (filename: string) => {
     try {
         await ElMessageBox.confirm(`确定要删除 "${filename}" 吗？`, '确认删除', {
@@ -182,9 +284,17 @@ const deleteRule = async (filename: string) => {
             type: 'warning'
         })
 
+        // 添加到回收站
+        recycleBin.value.push({
+            name: filename,
+            folder: 'rules',
+            deletedAt: new Date().toLocaleString('zh-CN'),
+            type: 'json'
+        })
+
         const success = await window.api.deleteFile('rules', filename)
         if (success) {
-            ElMessage.success('已删除')
+            ElMessage.success('已删除（可在回收站中恢复）')
             await loadFiles()
         } else {
             ElMessage.error('删除失败')
@@ -228,10 +338,10 @@ const handleFileSelect = async (event: Event) => {
         try {
             // 读取文件内容
             const content = await readFileAsBuffer(file)
-            
+
             // 上传文件
             const success = await window.api.uploadFile(targetFolder, fileName, content)
-            
+
             if (success) {
                 ElMessage.success(`已上传: ${fileName}`)
             } else {
@@ -244,7 +354,7 @@ const handleFileSelect = async (event: Event) => {
 
     // 刷新列表
     await loadFiles()
-    
+
     // 清空 input，允许重复上传同一文件
     if (target) target.value = ''
 }
@@ -355,5 +465,25 @@ onMounted(() => {
 .file-name {
     font-weight: 500;
     color: #374151;
+}
+.actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.actions .el-button {
+    display: flex;
+    align-items: center;
+}
+
+/* 徽章样式调整 */
+.actions :deep(.el-badge) {
+    margin-left: 8px;
+}
+
+.actions :deep(.el-badge__content) {
+    background-color: #f56c6c;
+    border: none;
 }
 </style>

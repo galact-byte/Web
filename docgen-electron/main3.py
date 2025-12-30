@@ -78,7 +78,7 @@ def replace_doc_content(rules, project_info, output_subdir=None):
     :param output_subdir: 输出子目录名称（用于多项目时区分不同项目）
     :return: None
     """
-    doc = Document("templates\\" + rules['文档名称'])
+    doc = Document(os.path.join("templates", rules['文档名称']))
 
     # 新模式：docx 占位符模式
     if '文档替换规则' not in rules or not rules['文档替换规则']:
@@ -91,6 +91,13 @@ def replace_doc_content(rules, project_info, output_subdir=None):
 
     # 保存新文档
     output_dir = '授权文档输出目录'
+    if not os.path.exists(output_dir):
+        try:
+            os.makedirs(output_dir)
+            print(f"创建输出目录: {output_dir}")
+        except Exception as e:
+            print(f"创建输出目录失败: {e}")
+            return False
 
     # 如果指定了子目录，则在输出目录下创建子目录
     if output_subdir:
@@ -138,20 +145,30 @@ def process_multiple_projects(projects_data, rules_dir):
                 replace_doc_content(config, project_info, output_subdir)
 
 def replace_by_placeholder(doc, mapping):
-    def do_replace(text):
-        for k, v in mapping.items():
-            text = text.replace(f"{{{{{k}}}}}", str(v))
-        return text
-
-    # 段落
-    for p in doc.paragraphs:
-        p.text = do_replace(p.text)
-
-    # 表格
+    # 替换占位符，保留原有格式
+    def replace_in_runs(paragraph, mapping):
+        # 在段落的 runs 中替换占位符
+        for run in paragraph.runs:
+            text = run.text
+            for key, value in mapping.items():
+                placeholder = f"{{{{{key}}}}}"
+                if value is None:
+                    value=""
+                elif isinstance(value, (list,dict)):
+                    value = str(value)
+                text = text.replace(placeholder, str(value))
+            run.text = text
+    
+    # 替换段落
+    for paragraph in doc.paragraphs:
+        replace_in_runs(paragraph, mapping)
+    
+    # 替换表格
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                cell.text = do_replace(cell.text)
+                for paragraph in cell.paragraphs:
+                    replace_in_runs(paragraph, mapping)
 
 def replace_by_rules(doc, rules, project_info):
     for rule in rules['文档替换规则']:
@@ -162,9 +179,12 @@ def replace_by_rules(doc, rules, project_info):
                 p.text = project_info.get(rule[0], "")
         else:
             try:
-                doc.paragraphs[rule[1]].runs[rule[2]].text = project_info.get(rule[0], "")
-            except IndexError:
-                print(f"跳过无效规则: {rule}")
+                value = project_info.get(rule[0], "")
+                if not isinstance(value, str):  # 确保值是字符串
+                    value = str(value)
+                doc.paragraphs[rule[1]].runs[rule[2]].text = value
+            except (IndexError, AttributeError) as e:
+                print(f"跳过无效规则{rule}: {e}")
 
 
 import argparse
