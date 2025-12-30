@@ -26,6 +26,9 @@ h6 {
     --el-color-warning: #{$warning-color};
     --el-color-danger: #{$danger-color};
     --el-color-info: #{$info-color};
+    --primary-color: #4f46e5;
+    --base-font-size: 14px;
+    --transition-duration: 0.2s;
 }
 
 .el-button {
@@ -55,5 +58,19 @@ h6 {
 
     &:hover {
         box-shadow: $shadow-md !important;
+    }
+}
+
+* {
+    transition-duration: var(--transition-duration);
+}
+
+html.dark{
+    .app-container {
+        background: #111827;
+    }
+
+    .main-content {
+        background: #1f2937; 
     }
 }

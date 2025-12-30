@@ -23,7 +23,7 @@
       <!-- 主内容区 -->
       <main class="main-content">
         <transition name="fade" mode="out-in">
-          <component :is="currentComponent" />
+          <component :is="currentComponent" :key="activeMenu" />
         </transition>
       </main>
     </div>
@@ -36,13 +36,15 @@ import { Document, Files, Setting } from '@element-plus/icons-vue'
 import SingleProject from './components/SingleProject.vue'
 import MultiProject from './components/MultiProject.vue'
 import TemplateManager from './components/TemplateManager.vue'
+import Settings from './components/Settings.vue'
 
 const activeMenu = ref('1')
 
 const menuItems = [
   { index: '1', label: '单项目生成', icon: Document },
   { index: '2', label: '多项目生成', icon: Files },
-  { index: '3', label: '模板管理', icon: Setting }
+  { index: '3', label: '模板管理', icon: Setting },
+  { index: '4', label: '外观设置', icon: Setting }
 ]
 
 const currentComponent = computed(() => {
@@ -50,6 +52,7 @@ const currentComponent = computed(() => {
     case '1': return SingleProject
     case '2': return MultiProject
     case '3': return TemplateManager
+    case '4': return Settings
     default: return SingleProject
   }
 })
