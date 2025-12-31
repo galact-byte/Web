@@ -228,9 +228,15 @@ const deleteHistory = async (index: number) => {
         historyList.value.splice(index, 1)
         
         // 保存更新后的历史记录
-        await window.api.saveFile('history.json', historyList.value)
+        // Ensure we send a plain array, stripping Vue reactivity
+        const plainHistory = JSON.parse(JSON.stringify(historyList.value))
+        const success = await window.api.saveFile('history.json', plainHistory)
         
-        ElMessage.success('已删除')
+        if (success) {
+            ElMessage.success('已删除')
+        } else {
+            ElMessage.error('删除失败，未能保存到文件')
+        }
     } catch (e) {
         // 用户取消
     }
@@ -250,10 +256,14 @@ const clearAllHistory = async () => {
         )
         
         historyList.value = []
-        await window.api.saveFile('history.json', [])
+        const success = await window.api.saveFile('history.json', [])
         
-        ElMessage.success('已清空所有历史记录')
-        historyVisible.value = false
+        if (success) {
+            ElMessage.success('已清空所有历史记录')
+            historyVisible.value = false
+        } else {
+            ElMessage.error('清空失败，未能保存到文件')
+        }
     } catch (e) {
         // 用户取消
     }

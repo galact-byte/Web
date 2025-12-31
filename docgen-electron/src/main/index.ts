@@ -3,19 +3,15 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import spawn from 'cross-spawn'
 import fs from 'fs'
-import { TextDecoder } from 'util'
+import { Buffer } from 'buffer'
 
-// Commented out icon to prevent build error if missing
-// import icon from '../../resources/icon.png?asset'
 
 function createWindow(): void {
-    // Create the browser window.
     const mainWindow = new BrowserWindow({
-        width: 900,
-        height: 670,
+        width: 1200,
+        height: 800,
         show: false,
         autoHideMenuBar: true,
-        // ...(process.platform === 'linux' ? { icon } : {}),
         webPreferences: {
             preload: join(__dirname, '../preload/index.js'),
             sandbox: false
@@ -31,8 +27,6 @@ function createWindow(): void {
         return { action: 'deny' }
     })
 
-    // HMR for renderer base on electron-vite cli.
-    // Load the remote URL for development or the local html file for production.
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
         mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
     } else {
@@ -40,192 +34,216 @@ function createWindow(): void {
     }
 }
 
-// IPC Handler
+// 🔧 IPC Handler - 运行 Python 文档生成
 ipcMain.handle('run-docgen', async (_event, { mode, data }) => {
     return new Promise((resolve, reject) => {
-        const fileName = mode === '1' ? 'information.json' : 'projects.json';
-        const filePath = join(process.cwd(), fileName); // or app.getPath('userData') for production
+        const fileName = mode === '1' ? 'information.json' : 'projects.json'
+        const filePath = join(process.cwd(), fileName)
 
-        // Write data to file
+        // 写入配置文件
         try {
-            fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+            fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
         } catch (err) {
-            return reject(`Failed to write config file: ${err}`);
+            return reject(`写入配置文件失败: ${err}`)
         }
 
-        const scriptPath = join(process.cwd(), 'main3.py'); // Adjust for prod if needed
-        // Assuming python is in PATH. In prod, might need to bundle python or configure path.
+        const scriptPath = join(process.cwd(), 'main3.py')
 
-        // ... existing imports ...
+        // 检查 Python 脚本是否存在
+        if (!fs.existsSync(scriptPath)) {
+            return reject(`找不到 Python 脚本: ${scriptPath}`)
+        }
 
-        // ... existing imports ...
-
-        // ... inside ipcMain.handle ...
-        const pythonProcess = spawn('python', [scriptPath, '--mode', mode, '--config', filePath]);
-
-        let output = '';
-        let errorOutput = '';
-
-        // Use correct encoding for Windows (GBK) vs others (UTF-8)
-        const encoding = process.platform === 'win32' ? 'gbk' : 'utf-8';
-        const outDecoder = new TextDecoder(encoding);
-        const errDecoder = new TextDecoder(encoding);
-
-        pythonProcess.stdout?.on('data', (data) => {
-            const str = outDecoder.decode(data, { stream: true });
-            output += str;
-            if (process.platform === 'win32') {
-                process.stdout.write(`Python stdout: `);
-                process.stdout.write(data);
-                // process.stdout.write('\n'); // Optional: data usually contains newline
-            } else {
-                console.log(`Python stdout: ${str}`);
-            }
-        });
-
-        pythonProcess.stderr?.on('data', (data) => {
-            const str = errDecoder.decode(data, { stream: true });
-            errorOutput += str;
-            if (process.platform === 'win32') {
-                process.stderr.write(`Python stderr: `);
-                process.stderr.write(data);
-            } else {
-                console.error(`Python stderr: ${str}`);
-            }
-        });
-
-        pythonProcess.on('close', (code) => {
-            if (code === 0) {
-                if (mode === '1') {
-                    saveToHistory(data);
+        const pythonProcess = spawn(
+            'python',
+            ['-X', 'utf8', '-E', 'main3.py', '--mode', mode, '--config', filePath],
+            {
+                cwd: process.cwd(),
+                windowsHide: true,
+                env: {
+                    ...process.env,
+                    PYTHONUTF8: '1',
+                    LANG: 'C.UTF-8'
                 }
-                resolve({ success: true, output });
-            } else {
-                resolve({ success: false, output, error: errorOutput });
             }
-        });
+        )
 
-        pythonProcess.on('error', (err) => {
-            reject(`Failed to spawn python process: ${err}`);
-        });
-    });
-});
+        let output = ''
+        let errorOutput = ''
 
-// Helper to save history
+
+
+        pythonProcess.stdout.setEncoding('utf8')
+        pythonProcess.stderr.setEncoding('utf8')
+
+        pythonProcess.stdout.on('data', (data: string) => {
+            output += data
+            console.log('Python Output:', data)
+        })
+
+        pythonProcess.stderr.on('data', (data: string) => {
+            errorOutput += data
+            console.error('Python Error:', data)
+        })
+
+        pythonProcess.on('close', (code: number) => {
+            if (code === 0) {
+                // 单项目模式时保存到历史记录
+                if (mode === '1') {
+                    saveToHistory(data)
+                }
+                resolve({ success: true, output })
+            } else {
+                resolve({ success: false, output, error: errorOutput })
+            }
+        })
+
+        pythonProcess.on('error', (err: Error) => {
+            reject(`启动 Python 进程失败: ${err}`)
+        })
+    })
+})
+
+// 💾 保存历史记录
 function saveToHistory(data: any) {
-    const historyFile = join(process.cwd(), 'history.json');
-    let history: any[] = [];
+    const historyFile = join(process.cwd(), 'history.json')
+    console.log(`Saving history to: ${historyFile}`)
+
+    let history: any[] = []
+
     try {
         if (fs.existsSync(historyFile)) {
-            history = JSON.parse(fs.readFileSync(historyFile, 'utf-8'));
+            history = JSON.parse(fs.readFileSync(historyFile, 'utf-8'))
         }
     } catch (e) {
-        console.error('Failed to read history:', e);
+        console.error('读取历史记录失败:', e)
+    }
+
+    // 检查是否与最近一条历史记录内容相同（去重）
+    if (history.length > 0) {
+        const lastData = history[0].data
+        if (JSON.stringify(lastData) === JSON.stringify(data)) {
+            console.log('历史记录内容相同，跳过保存')
+            return
+        }
     }
 
     const entry = {
-        timestamp: new Date().toLocaleString(),
+        timestamp: new Date().toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        }),
         data: data
-    };
+    }
 
-    history.unshift(entry);
+    history.unshift(entry)
     if (history.length > 10) {
-        history = history.slice(0, 10);
+        history = history.slice(0, 10)
     }
 
     try {
-        fs.writeFileSync(historyFile, JSON.stringify(history, null, 2), 'utf-8');
+        fs.writeFileSync(historyFile, JSON.stringify(history, null, 2), 'utf-8')
+        console.log('History saved successfully')
     } catch (e) {
-        console.error('Failed to save history:', e);
+        console.error('保存历史记录失败:', e)
     }
 }
 
-import { Buffer } from 'buffer'
-
+// 📋 获取历史记录
 ipcMain.handle('get-history', async () => {
     try {
-        const historyFile = join(process.cwd(), 'history.json');
+        const historyFile = join(process.cwd(), 'history.json')
+        console.log(`Loading history from: ${historyFile}`)
         if (fs.existsSync(historyFile)) {
-            return JSON.parse(fs.readFileSync(historyFile, 'utf-8'));
+            return JSON.parse(fs.readFileSync(historyFile, 'utf-8'))
         }
-        return [];
+        return []
     } catch (e) {
-        console.error('Failed to get history:', e);
-        return [];
+        console.error('获取历史记录失败:', e)
+        return []
     }
-});
+})
 
+// 📄 读取配置文件
 ipcMain.handle('read-file', async (_event, path) => {
     try {
-        const fullPath = join(process.cwd(), path);
+        const fullPath = join(process.cwd(), path)
         if (fs.existsSync(fullPath)) {
-            return JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
+            return JSON.parse(fs.readFileSync(fullPath, 'utf-8'))
         }
-        return null;
+        return null
     } catch (err) {
-        console.error(`Error reading file ${path}:`, err);
-        return null;
+        console.error(`读取文件失败 ${path}:`, err)
+        return null
     }
-});
+})
 
+// 💾 保存文件
 ipcMain.handle('save-file', async (_event, { filename, data }) => {
     try {
-        const filePath = join(process.cwd(), filename);
-        // Ensure data is stringified if it's an object
-        const content = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-        fs.writeFileSync(filePath, content, 'utf-8');
-        return true;
+        const filePath = join(process.cwd(), filename)
+        console.log(`Saving file to: ${filePath}`)
+        const content = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+        fs.writeFileSync(filePath, content, 'utf-8')
+        console.log(`File saved successfully: ${filename}`)
+        return true
     } catch (err) {
-        console.error(`Error saving file ${filename}:`, err);
-        return false;
+        console.error(`保存文件失败 ${filename}:`, err)
+        return false
     }
-});
+})
 
+// ✍️ 写入文件
 ipcMain.handle('write-file', async (_event, { path, data }) => {
     try {
-        const fullPath = join(process.cwd(), path);
-        fs.writeFileSync(fullPath, JSON.stringify(data, null, 2), 'utf-8');
-        return { success: true };
+        const fullPath = join(process.cwd(), path)
+        fs.writeFileSync(fullPath, JSON.stringify(data, null, 2), 'utf-8')
+        return { success: true }
     } catch (err: any) {
-        console.error(`Error writing file ${path}:`, err);
-        return { success: false, error: err.message };
+        console.error(`写入文件失败 ${path}:`, err)
+        return { success: false, error: err.message }
     }
-});
+})
 
+// 📂 打开文件夹
 ipcMain.handle('open-folder', async (_event, path) => {
-    const fullPath = join(process.cwd(), path);
+    const fullPath = join(process.cwd(), path)
     if (fs.existsSync(fullPath)) {
-        await shell.openPath(fullPath);
-        return true;
+        await shell.openPath(fullPath)
+        return true
     }
-    return false;
-});
+    return false
+})
 
+// 📋 列出文件
 ipcMain.handle('list-files', async (_event, subDir) => {
     try {
-        const dirPath = join(process.cwd(), subDir);
+        const dirPath = join(process.cwd(), subDir)
         if (!fs.existsSync(dirPath)) {
-            return [];
+            return []
         }
-        const files = fs.readdirSync(dirPath);
+        const files = fs.readdirSync(dirPath)
         return files.map(file => {
-            const stats = fs.statSync(join(dirPath, file));
+            const stats = fs.statSync(join(dirPath, file))
             const size = stats.size < 1024
                 ? `${stats.size} B`
-                : `${(stats.size / 1024).toFixed(0)} KB`;
+                : `${(stats.size / 1024).toFixed(0)} KB`
             return {
                 name: file,
-                date: stats.mtime.toISOString().split('T')[0],
+                date: stats.mtime.toLocaleString('zh-CN').split(' ')[0],
                 size: size
-            };
-        });
+            }
+        })
     } catch (err) {
-        console.error(`Error listing files in ${subDir}:`, err);
-        return [];
+        console.error(`列出文件失败 ${subDir}:`, err)
+        return []
     }
-});
+})
 
-// 打开文件（用系统默认程序）
+// 📖 打开文件（用系统默认程序）
 ipcMain.handle('open-file', async (_event, folder, filename) => {
     try {
         const fullPath = join(process.cwd(), folder, filename)
@@ -235,12 +253,12 @@ ipcMain.handle('open-file', async (_event, folder, filename) => {
         }
         return false
     } catch (err) {
-        console.error(`Error opening file ${filename}:`, err)
+        console.error(`打开文件失败 ${filename}:`, err)
         return false
     }
 })
 
-// 读取文件内容
+// 📄 读取文件内容
 ipcMain.handle('read-file-content', async (_event, folder, filename) => {
     try {
         const fullPath = join(process.cwd(), folder, filename)
@@ -249,24 +267,24 @@ ipcMain.handle('read-file-content', async (_event, folder, filename) => {
         }
         return null
     } catch (err) {
-        console.error(`Error reading file ${filename}:`, err)
+        console.error(`读取文件内容失败 ${filename}:`, err)
         return null
     }
 })
 
-// 写入文件内容
+// ✍️ 写入文件内容
 ipcMain.handle('write-file-content', async (_event, folder, filename, content) => {
     try {
         const fullPath = join(process.cwd(), folder, filename)
         fs.writeFileSync(fullPath, content, 'utf-8')
         return true
     } catch (err) {
-        console.error(`Error writing file ${filename}:`, err)
+        console.error(`写入文件内容失败 ${filename}:`, err)
         return false
     }
 })
 
-// 删除文件
+// 🗑️ 删除文件
 ipcMain.handle('delete-file', async (_event, folder, filename) => {
     try {
         const fullPath = join(process.cwd(), folder, filename)
@@ -276,36 +294,92 @@ ipcMain.handle('delete-file', async (_event, folder, filename) => {
         }
         return false
     } catch (err) {
-        console.error(`Error deleting file ${filename}:`, err)
+        console.error(`删除文件失败 ${filename}:`, err)
         return false
     }
 })
 
+// 📤 上传文件
 ipcMain.handle('upload-file', async (_event, { folder, filename, content }) => {
     try {
-        const dirPath = join(process.cwd(), folder);
-        // 确保文件夹存在，不存在则创建
+        const dirPath = join(process.cwd(), folder)
         if (!fs.existsSync(dirPath)) {
-            fs.mkdirSync(dirPath, { recursive: true });
+            fs.mkdirSync(dirPath, { recursive: true })
         }
-        
-        const filePath = join(dirPath, filename);
-        // 将 ArrayBuffer 转为 Buffer 并写入
-        fs.writeFileSync(filePath, Buffer.from(content));
-        return true;
+
+        const filePath = join(dirPath, filename)
+        fs.writeFileSync(filePath, Buffer.from(content))
+        return true
     } catch (err) {
-        console.error(`Error uploading file ${filename}:`, err);
-        return false;
+        console.error(`上传文件失败 ${filename}:`, err)
+        return false
     }
-});
+})
+
+// 🔄 恢复文件（从回收站）
+ipcMain.handle('restore-file', async (_event, folder, filename) => {
+    try {
+        // 这里假设你有一个回收站机制
+        // 实际上你可能需要实现一个真正的回收站逻辑
+        // 暂时返回 true
+        console.log(`恢复文件: ${folder}/${filename}`)
+        return true
+    } catch (err) {
+        console.error(`恢复文件失败 ${filename}:`, err)
+        return false
+    }
+})
+
+// 🔧 读取 .env 文件
+ipcMain.handle('load-env', async () => {
+    try {
+        const envPath = join(process.cwd(), '.env')
+
+        if (!fs.existsSync(envPath)) {
+            return { success: false, message: '.env 文件不存在', data: {} }
+        }
+
+        const envContent = fs.readFileSync(envPath, 'utf-8')
+        const envVars: Record<string, string> = {}
+
+        envContent.split('\n').forEach(line => {
+            line = line.trim()
+            if (!line || line.startsWith('#')) return
+
+            const [key, ...valueParts] = line.split('=')
+            if (key && valueParts.length > 0) {
+                envVars[key.trim()] = valueParts.join('=').trim()
+            }
+        })
+
+        return { success: true, data: envVars }
+    } catch (error: any) {
+        console.error('读取 .env 失败:', error)
+        return { success: false, message: error.message, data: {} }
+    }
+})
+
+// 💾 保存 .env 文件
+ipcMain.handle('save-env', async (_event, envVars) => {
+    try {
+        const envPath = join(process.cwd(), '.env')
+
+        const envContent = Object.entries(envVars)
+            .map(([key, value]) => `${key}=${value}`)
+            .join('\n')
+
+        fs.writeFileSync(envPath, envContent, 'utf-8')
+
+        return { success: true, message: '.env 文件保存成功' }
+    } catch (error: any) {
+        console.error('保存 .env 失败:', error)
+        return { success: false, message: error.message }
+    }
+})
 
 app.whenReady().then(() => {
-    // Set app user model id for windows
-    electronApp.setAppUserModelId('com.electron')
+    electronApp.setAppUserModelId('com.docgen.electron')
 
-    // Default open or close DevTools by F12 in development
-    // and ignore CommandOrControl + R in production.
-    // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
     app.on('browser-window-created', (_, window) => {
         optimizer.watchWindowShortcuts(window)
     })

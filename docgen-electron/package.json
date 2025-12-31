@@ -4,7 +4,7 @@
   "description": "DocGenPro 是一个基于 Python `docx` 库的文档生成工具，支持使用模板文件和自定义规则快速生成文档。适用于自动化文档创建、批量生成报告等场景。\r 这里用来制作等保测评中过程文档\r ## 特性\r - **模板驱动**：支持基于 `.docx` 模板文件生成文档\r - **自定义规则**：支持根据手写规则填充内容\r - **支持表格**：支持文档中的表格，可参考`20`的规则\r - **自动化处理**：减少重复性手工操作，提高工作效率",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "chcp 65001 && electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "start": "electron-vite preview"
