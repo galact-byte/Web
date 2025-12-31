@@ -37,6 +37,7 @@ import SingleProject from './components/SingleProject.vue'
 import MultiProject from './components/MultiProject.vue'
 import TemplateManager from './components/TemplateManager.vue'
 import Settings from './components/Settings.vue'
+import EnvSettings from './components/EnvSettings.vue'
 
 const activeMenu = ref('1')
 
@@ -44,7 +45,8 @@ const menuItems = [
   { index: '1', label: '单项目生成', icon: Document },
   { index: '2', label: '多项目生成', icon: Files },
   { index: '3', label: '模板管理', icon: Setting },
-  { index: '4', label: '外观设置', icon: Setting }
+  { index: '4', label: '环境变量', icon: Setting },
+  { index: '5', label: '外观设置', icon: Setting }
 ]
 
 const currentComponent = computed(() => {
@@ -52,7 +54,8 @@ const currentComponent = computed(() => {
     case '1': return SingleProject
     case '2': return MultiProject
     case '3': return TemplateManager
-    case '4': return Settings
+    case '4': return EnvSettings
+    case '5': return Settings
     default: return SingleProject
   }
 })

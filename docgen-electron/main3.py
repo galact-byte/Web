@@ -1,21 +1,33 @@
+import sys
+print("PYTHON STDOUT ENCODING =", sys.stdout.encoding)
+print("中文测试：太原清众网络科技有限公司")
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 # author:qiao xiong
 # datetime:2025/3/13 20:31
 # name: main
-import sys
-import platform
-if platform.system() == 'Windows':
-    sys.stdout.reconfigure(encoding="gbk")
-    sys.stderr.reconfigure(encoding="gbk")
-else:
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
 
 from docx import Document
 import json
 from copy import deepcopy
 import os
+from dotenv import load_dotenv  # 新增：导入 dotenv
+import sys
+
+
+def load_env_variables():
+    """加载 .env 文件中的环境变量到字典"""
+    load_dotenv()  # 加载 .env 文件
+    
+    # 从环境变量中读取所有配置
+    env_vars = {
+        'CLIENT_COMPANY': os.getenv('CLIENT_COMPANY', ''),
+        'EVAL_CONTACT': os.getenv('EVAL_CONTACT', ''),
+        'EVAL_PHONE': os.getenv('EVAL_PHONE', ''),
+    }
+    
+    print(f"已加载环境变量: {env_vars}")
+    return env_vars
 
 
 def copy_cell_00_format(table, dest_row, dest_col):
@@ -46,14 +58,20 @@ def copy_cell_00_format(table, dest_row, dest_col):
 
 def merge_system_information(project_info):
     """合并系统信息"""
-    merge_info = project_info['系统']
-    systems = [f"{system_info['系统名称']}（{system_info['系统级别']}）" for system_info in merge_info]
-    project_info['合并系统信息'] = '、'.join(systems)
+    if '系统' in project_info and project_info['系统']:
+        merge_info = project_info['系统']
+        systems = [f"{system_info['系统名称']}（{system_info['系统级别']}）" for system_info in merge_info]
+        project_info['合并系统信息'] = '、'.join(systems)
+    else:
+        project_info['合并系统信息'] = ''
     return project_info
 
 
-def auto_add_project_info(project_info):
-    """自动添加项目信息的默认值"""
+def auto_add_project_info(project_info, env_vars):
+    """自动添加项目信息的默认值，并合并环境变量"""
+    # 合并环境变量到项目信息中
+    project_info.update(env_vars)
+    
     project_info = merge_system_information(project_info)
 
     # 如果用户没有填写"业务影响"，则使用默认值
@@ -78,16 +96,24 @@ def replace_doc_content(rules, project_info, output_subdir=None):
     :param output_subdir: 输出子目录名称（用于多项目时区分不同项目）
     :return: None
     """
-    doc = Document(os.path.join("templates", rules['文档名称']))
+    template_path = os.path.join("templates", rules['文档名称'])
+    
+    if not os.path.exists(template_path):
+        print(f"警告: 模板文件不存在: {template_path}")
+        return False
+    
+    try:
+        doc = Document(template_path)
+    except Exception as e:
+        print(f"错误: 无法打开模板文件 {template_path}: {e}")
+        return False
 
     # 新模式：docx 占位符模式
     if '文档替换规则' not in rules or not rules['文档替换规则']:
         replace_by_placeholder(doc, project_info)
-
     # 旧模式：坐标规则模式（完全保留）
     else:
         replace_by_rules(doc, rules, project_info)
-
 
     # 保存新文档
     output_dir = '授权文档输出目录'
@@ -110,11 +136,12 @@ def replace_doc_content(rules, project_info, output_subdir=None):
     output_path = os.path.join(output_dir, output_filename)
     doc.save(output_path)
     print(f"已生成文档: {output_path}")
+    return True
 
 
-def process_single_project(project_info, rules_dir):
+def process_single_project(project_info, rules_dir, env_vars):
     """处理单个项目的文档生成"""
-    project_info = auto_add_project_info(project_info)
+    project_info = auto_add_project_info(project_info, env_vars)
 
     # 遍历rules文件夹下的所有json规则文件
     for rule_file in os.listdir(rules_dir):
@@ -126,14 +153,16 @@ def process_single_project(project_info, rules_dir):
             replace_doc_content(config, project_info)
 
 
-def process_multiple_projects(projects_data, rules_dir):
+def process_multiple_projects(projects_data, rules_dir, env_vars):
     """处理多个项目的批量文档生成"""
     for idx, project_info in enumerate(projects_data['projects'], start=1):
-        print(f"\n正在处理第 {idx} 个项目: {project_info['项目名称']}")
-        project_info = auto_add_project_info(project_info)
+        print(f"\n正在处理第 {idx} 个项目: {project_info.get('项目名称', '未命名项目')}")
+        project_info = auto_add_project_info(project_info, env_vars)
 
         # 使用项目编号作为子目录名称
-        output_subdir = f"{project_info['项目编号']}_{project_info['项目名称']}"
+        project_number = project_info.get('项目编号', f'project_{idx}')
+        project_name = project_info.get('项目名称', '未命名项目')
+        output_subdir = f"{project_number}_{project_name}"
 
         # 遍历rules文件夹下的所有json规则文件
         for rule_file in os.listdir(rules_dir):
@@ -144,20 +173,100 @@ def process_multiple_projects(projects_data, rules_dir):
                 # 替换文档内容并保存到对应项目的子目录
                 replace_doc_content(config, project_info, output_subdir)
 
+
 def replace_by_placeholder(doc, mapping):
-    # 替换占位符，保留原有格式
+    """替换占位符，保留原有格式"""
     def replace_in_runs(paragraph, mapping):
-        # 在段落的 runs 中替换占位符
-        for run in paragraph.runs:
-            text = run.text
-            for key, value in mapping.items():
-                placeholder = f"{{{{{key}}}}}"
-                if value is None:
-                    value=""
-                elif isinstance(value, (list,dict)):
-                    value = str(value)
-                text = text.replace(placeholder, str(value))
-            run.text = text
+        runs = paragraph.runs
+        if not runs:
+            return
+
+        # 1. 拼全文 + run 索引映射
+        full_text = ""
+        index_map = []  # [(run, start, end)]
+        cursor = 0
+
+        for run in runs:
+            start = cursor
+            text = run.text or ""
+            cursor += len(text)
+            end = cursor
+            full_text += text
+            index_map.append((run, start, end))
+
+        # 2. 逐个占位符处理（可以多个）
+        for key, value in mapping.items():
+            placeholder = f"{{{{{key}}}}}"
+            
+            if value is None:
+                value = ""
+            value = str(value)
+
+            # 循环替换所有出现的占位符
+            while placeholder in full_text:
+                start_idx = full_text.index(placeholder)
+                end_idx = start_idx + len(placeholder)
+
+                # 3. 找占位符覆盖的 runs
+                affected_runs = []
+                for run, s, e in index_map:
+                    if e <= start_idx or s >= end_idx:
+                        continue
+                    affected_runs.append((run, s, e))
+
+                if not affected_runs:
+                    break
+
+                # 4. 参考样式 = 占位符第一个 run 的样式
+                ref_run = affected_runs[0][0]
+
+                # 5. 清空被影响的 runs，并计算新的文本内容
+                for i, (run, s, e) in enumerate(affected_runs):
+                    run_text = run.text or ""
+                    
+                    # 计算占位符在当前 run 中的相对位置
+                    placeholder_start_in_run = max(0, start_idx - s)
+                    placeholder_end_in_run = min(len(run_text), end_idx - s)
+                    
+                    if i == 0:
+                        # 第一个 run: 保留占位符之前的部分
+                        before_text = run_text[:placeholder_start_in_run]
+                        if len(affected_runs) == 1:
+                            # 只有一个 run 被影响：before + value + after
+                            after_text = run_text[placeholder_end_in_run:]
+                            run.text = before_text + value + after_text
+                        else:
+                            # 多个 runs：第一个 run 放 before + value
+                            run.text = before_text + value
+                    elif i == len(affected_runs) - 1:
+                        # 最后一个 run: 保留占位符之后的部分
+                        after_text = run_text[placeholder_end_in_run:]
+                        run.text = after_text
+                    else:
+                        # 中间的 run: 完全清空
+                        run.text = ""
+
+                # 6. 保留原有样式
+                target_run = affected_runs[0][0]
+                target_run.font.name = ref_run.font.name
+                target_run.font.size = ref_run.font.size
+                target_run.font.bold = ref_run.font.bold
+                target_run.font.italic = ref_run.font.italic
+                target_run.font.underline = ref_run.font.underline
+
+                # 7. 重建 full_text 和 index_map 以处理下一个匹配
+                full_text = ""
+                index_map = []
+                cursor = 0
+                for run in runs:
+                    start = cursor
+                    text = run.text or ""
+                    cursor += len(text)
+                    end = cursor
+                    full_text += text
+                    index_map.append((run, start, end))
+
+
     
     # 替换段落
     for paragraph in doc.paragraphs:
@@ -170,27 +279,33 @@ def replace_by_placeholder(doc, mapping):
                 for paragraph in cell.paragraphs:
                     replace_in_runs(paragraph, mapping)
 
+
 def replace_by_rules(doc, rules, project_info):
+    """使用坐标规则替换（旧模式）"""
     for rule in rules['文档替换规则']:
-        if len(rule) != 3:
-            table = doc.tables[rule[1]]
-            dest_cell = copy_cell_00_format(table, rule[2], rule[3])
-            for p in dest_cell.paragraphs:
-                p.text = project_info.get(rule[0], "")
-        else:
-            try:
+        try:
+            if len(rule) != 3:
+                # 表格单元格替换
+                table = doc.tables[rule[1]]
+                dest_cell = copy_cell_00_format(table, rule[2], rule[3])
+                for p in dest_cell.paragraphs:
+                    p.text = project_info.get(rule[0], "")
+            else:
+                # 段落替换
                 value = project_info.get(rule[0], "")
                 if not isinstance(value, str):  # 确保值是字符串
                     value = str(value)
                 doc.paragraphs[rule[1]].runs[rule[2]].text = value
-            except (IndexError, AttributeError) as e:
-                print(f"跳过无效规则{rule}: {e}")
+        except (IndexError, AttributeError) as e:
+            print(f"跳过无效规则{rule}: {e}")
 
 
 import argparse
-import sys
 
 if __name__ == '__main__':
+    # 首先加载环境变量
+    env_vars = load_env_variables()
+    
     parser = argparse.ArgumentParser(description='DocGen Pro Automation')
     parser.add_argument('--mode', type=str, choices=['1', '2'], help='Mode: 1 for Single Project, 2 for Multi Project')
     parser.add_argument('--config', type=str, help='Path to configuration JSON file (information.json or projects.json)')
@@ -232,7 +347,7 @@ if __name__ == '__main__':
         with open(config_file, 'r', encoding='utf-8') as f:
             project_info = json.load(f)
 
-        process_single_project(project_info, rules_dir)
+        process_single_project(project_info, rules_dir, env_vars)
         print("\n单项目文档生成完成！")
 
     elif mode == '2':
@@ -250,7 +365,7 @@ if __name__ == '__main__':
             exit(1)
 
         print(f"共找到 {len(projects_data['projects'])} 个项目")
-        process_multiple_projects(projects_data, rules_dir)
+        process_multiple_projects(projects_data, rules_dir, env_vars)
         print("\n多项目批量文档生成完成！")
     
     print("\n所有文档已生成到 '授权文档输出目录' 文件夹中")
