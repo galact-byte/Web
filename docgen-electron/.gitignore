@@ -27,3 +27,4 @@ dist-ssr
 history.json
 resources/
 dist_setup/
+out/
