@@ -26,6 +26,8 @@ const api = {
   deleteFile: (folder, filename) => electron.ipcRenderer.invoke("delete-file", folder, filename),
   // 上传文件
   uploadFile: (folder, filename, content) => electron.ipcRenderer.invoke("upload-file", { folder, filename, content }),
+  // 彻底删除文件
+  permanentDeleteFile: (folder, filename) => electron.ipcRenderer.invoke("permanent-delete-file", folder, filename),
   // 恢复文件（从回收站）
   restoreFile: (folder, filename) => electron.ipcRenderer.invoke("restore-file", folder, filename),
   // 🆕 读取 .env 文件

@@ -47,26 +47,41 @@ ipcMain.handle('run-docgen', async (_event, { mode, data }) => {
             return reject(`写入配置文件失败: ${err}`)
         }
 
+        // Determine execution mode (Binary vs Python Script)
+        let command = ''
+        let args: string[] = []
+        let cwd = process.cwd()
+
+        const exePath = join(process.resourcesPath, 'bin', 'main3.exe')
         const scriptPath = join(process.cwd(), 'main3.py')
 
-        // 检查 Python 脚本是否存在
-        if (!fs.existsSync(scriptPath)) {
-            return reject(`找不到 Python 脚本: ${scriptPath}`)
+        // Priority 1: Check for packaged executable (Production)
+        if (fs.existsSync(exePath)) {
+            console.log('Found executable at:', exePath)
+            command = exePath
+            args = ['--mode', mode, '--config', filePath]
+            cwd = process.resourcesPath
+        }
+        // Priority 2: Check for python script (Development)
+        else if (fs.existsSync(scriptPath)) {
+            console.log('Found python script at:', scriptPath)
+            command = 'python' // Assumes python is in PATH
+            args = ['-X', 'utf8', '-E', 'main3.py', '--mode', mode, '--config', filePath]
+        }
+        // Error: Neither found
+        else {
+            return reject(`无法找到文档生成程序。\n已尝试路径:\n1. executable: ${exePath}\n2. script: ${scriptPath}`)
         }
 
-        const pythonProcess = spawn(
-            'python',
-            ['-X', 'utf8', '-E', 'main3.py', '--mode', mode, '--config', filePath],
-            {
-                cwd: process.cwd(),
-                windowsHide: true,
-                env: {
-                    ...process.env,
-                    PYTHONUTF8: '1',
-                    LANG: 'C.UTF-8'
-                }
+        const pythonProcess = spawn(command, args, {
+            cwd,
+            windowsHide: true,
+            env: {
+                ...process.env,
+                PYTHONUTF8: '1',
+                LANG: 'C.UTF-8'
             }
-        )
+        })
 
         let output = ''
         let errorOutput = ''
@@ -210,43 +225,95 @@ ipcMain.handle('write-file', async (_event, { path, data }) => {
 
 // 📂 打开文件夹
 ipcMain.handle('open-folder', async (_event, path) => {
-    const fullPath = join(process.cwd(), path)
-    if (fs.existsSync(fullPath)) {
-        await shell.openPath(fullPath)
-        return true
+    // Try cwd first (Development / Portable)
+    let fullPath = join(process.cwd(), path)
+
+    if (!fs.existsSync(fullPath)) {
+        // Try resources path (Packaged Production)
+        const resourcesPath = join(process.resourcesPath, path)
+        if (fs.existsSync(resourcesPath)) {
+            fullPath = resourcesPath
+        } else {
+            console.error(`Folder not found: ${path} (Checked: ${fullPath}, ${resourcesPath})`)
+            return false
+        }
     }
-    return false
+
+    console.log(`Opening folder: ${fullPath}`)
+    await shell.openPath(fullPath)
+    return true
 })
 
 // 📋 列出文件
 ipcMain.handle('list-files', async (_event, subDir) => {
     try {
-        const dirPath = join(process.cwd(), subDir)
+        const basePath = getBasePath()
+        const dirPath = join(basePath, subDir)
+        console.log(`[DEBUG] list-files: subDir=${subDir}, base=${basePath}, full=${dirPath}`)
+
         if (!fs.existsSync(dirPath)) {
+            console.log(`[DEBUG] list-files: Path not found!`)
             return []
         }
+
         const files = fs.readdirSync(dirPath)
-        return files.map(file => {
-            const stats = fs.statSync(join(dirPath, file))
-            const size = stats.size < 1024
-                ? `${stats.size} B`
-                : `${(stats.size / 1024).toFixed(0)} KB`
-            return {
-                name: file,
-                date: stats.mtime.toLocaleString('zh-CN').split(' ')[0],
-                size: size
+        const result: any[] = []
+
+        for (const file of files) {
+            try {
+                const filePath = join(dirPath, file)
+                const stats = fs.statSync(filePath)
+                const size = stats.size < 1024
+                    ? `${stats.size} B`
+                    : `${(stats.size / 1024).toFixed(0)} KB`
+
+                result.push({
+                    name: file,
+                    date: stats.mtime.toLocaleString('zh-CN').split(' ')[0],
+                    size: size
+                })
+            } catch (fileErr) {
+                console.error(`[DEBUG] Error stating file ${file}:`, fileErr)
+                // Skip problematic file
             }
-        })
+        }
+        console.log(`[DEBUG] list-files returning ${result.length} files`)
+        return result
     } catch (err) {
         console.error(`列出文件失败 ${subDir}:`, err)
+        console.error(err)
         return []
     }
 })
 
+const getBasePath = () => {
+    // Debug logging
+    console.log('[DEBUG] getBasePath check:')
+    console.log('  cwd:', process.cwd())
+    console.log('  resourcesPath:', process.resourcesPath)
+    console.log('  app.isPackaged:', app.isPackaged)
+
+    // Priority: Check if 'templates' or 'rules' exist in resourcesPath (Production with files)
+    if (fs.existsSync(join(process.resourcesPath, 'templates')) || fs.existsSync(join(process.resourcesPath, 'rules'))) {
+        console.log('  -> MATCH: Found data in resourcesPath')
+        return process.resourcesPath
+    }
+
+    // Fallback: If Packaged flag is true, assume we want resources (e.g. fresh install, empty folders)
+    if (app.isPackaged) {
+        console.log('  -> MATCH: app.isPackaged is true')
+        return process.resourcesPath
+    }
+
+    // Default: Development / Portable CWD
+    console.log('  -> MATCH: Defaulting to CWD')
+    return process.cwd()
+}
+
 // 📖 打开文件（用系统默认程序）
 ipcMain.handle('open-file', async (_event, folder, filename) => {
     try {
-        const fullPath = join(process.cwd(), folder, filename)
+        const fullPath = join(getBasePath(), folder, filename)
         if (fs.existsSync(fullPath)) {
             await shell.openPath(fullPath)
             return true
@@ -261,7 +328,7 @@ ipcMain.handle('open-file', async (_event, folder, filename) => {
 // 📄 读取文件内容
 ipcMain.handle('read-file-content', async (_event, folder, filename) => {
     try {
-        const fullPath = join(process.cwd(), folder, filename)
+        const fullPath = join(getBasePath(), folder, filename)
         if (fs.existsSync(fullPath)) {
             return fs.readFileSync(fullPath, 'utf-8')
         }
@@ -275,7 +342,7 @@ ipcMain.handle('read-file-content', async (_event, folder, filename) => {
 // ✍️ 写入文件内容
 ipcMain.handle('write-file-content', async (_event, folder, filename, content) => {
     try {
-        const fullPath = join(process.cwd(), folder, filename)
+        const fullPath = join(getBasePath(), folder, filename)
         fs.writeFileSync(fullPath, content, 'utf-8')
         return true
     } catch (err) {
@@ -284,15 +351,25 @@ ipcMain.handle('write-file-content', async (_event, folder, filename, content) =
     }
 })
 
-// 🗑️ 删除文件
+// 🗑️ 删除文件（移到回收站）
 ipcMain.handle('delete-file', async (_event, folder, filename) => {
     try {
-        const fullPath = join(process.cwd(), folder, filename)
-        if (fs.existsSync(fullPath)) {
-            fs.unlinkSync(fullPath)
-            return true
+        const basePath = getBasePath()
+        const srcPath = join(basePath, folder, filename)
+        const trashDir = join(basePath, '.trash', folder)
+        const destPath = join(trashDir, filename)
+
+        if (!fs.existsSync(srcPath)) {
+            return false
         }
-        return false
+
+        if (!fs.existsSync(trashDir)) {
+            fs.mkdirSync(trashDir, { recursive: true })
+        }
+
+        fs.renameSync(srcPath, destPath)
+        console.log(`Moved to trash: ${filename}`)
+        return true
     } catch (err) {
         console.error(`删除文件失败 ${filename}:`, err)
         return false
@@ -302,7 +379,7 @@ ipcMain.handle('delete-file', async (_event, folder, filename) => {
 // 📤 上传文件
 ipcMain.handle('upload-file', async (_event, { folder, filename, content }) => {
     try {
-        const dirPath = join(process.cwd(), folder)
+        const dirPath = join(getBasePath(), folder)
         if (!fs.existsSync(dirPath)) {
             fs.mkdirSync(dirPath, { recursive: true })
         }
@@ -319,13 +396,42 @@ ipcMain.handle('upload-file', async (_event, { folder, filename, content }) => {
 // 🔄 恢复文件（从回收站）
 ipcMain.handle('restore-file', async (_event, folder, filename) => {
     try {
-        // 这里假设你有一个回收站机制
-        // 实际上你可能需要实现一个真正的回收站逻辑
-        // 暂时返回 true
-        console.log(`恢复文件: ${folder}/${filename}`)
+        const basePath = getBasePath()
+        const srcPath = join(basePath, '.trash', folder, filename)
+        const destDir = join(basePath, folder)
+        const destPath = join(destDir, filename)
+
+        if (!fs.existsSync(srcPath)) {
+            console.error(`Trash file not found: ${srcPath}`)
+            return false
+        }
+
+        if (!fs.existsSync(destDir)) {
+            fs.mkdirSync(destDir, { recursive: true })
+        }
+
+        fs.renameSync(srcPath, destPath)
+        console.log(`Restored file: ${filename}`)
         return true
     } catch (err) {
         console.error(`恢复文件失败 ${filename}:`, err)
+        return false
+    }
+})
+
+// ❌ 彻底删除文件
+ipcMain.handle('permanent-delete-file', async (_event, folder, filename) => {
+    try {
+        const basePath = getBasePath()
+        const filePath = join(basePath, '.trash', folder, filename)
+
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath)
+            return true
+        }
+        return false
+    } catch (err) {
+        console.error(`彻底删除文件失败 ${filename}:`, err)
         return false
     }
 })

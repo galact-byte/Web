@@ -3,7 +3,7 @@
     <div class="page-header">
         <div class="title-group">
             <h2>多项目批量生成</h2>
-            <p class="subtitle">批量处理 Projects.json 中的所有项目</p>
+            <p class="subtitle">批量生成项目的过程文档</p>
         </div>
         <div class="actions">
              <el-button @click="openOutputFolder">

@@ -1,6 +1,3 @@
-import sys
-print("PYTHON STDOUT ENCODING =", sys.stdout.encoding)
-print("中文测试：太原清众网络科技有限公司")
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 # author:qiao xiong

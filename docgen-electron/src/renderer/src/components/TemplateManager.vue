@@ -133,6 +133,52 @@ const editDialogVisible = ref(false)
 const currentEditFile = ref<any>(null)
 const editContent = ref('')
 
+// 加载文件列表
+const loadFiles = async () => {
+    try {
+        const templatesList = await window.api.listFiles('templates')
+        templates.value = templatesList
+        
+        const rulesList = await window.api.listFiles('rules')
+        rules.value = rulesList
+    } catch (e) {
+        ElMessage.error('加载文件列表失败: ' + e)
+    }
+}
+
+// 预览模板
+const previewTemplate = async (filename: string) => {
+    try {
+        const success = await window.api.openFile('templates', filename)
+        if (!success) {
+            ElMessage.error('无法打开文件')
+        }
+    } catch (e) {
+        ElMessage.error('打开文件失败: ' + e)
+    }
+}
+
+// 清空回收站
+const clearRecycleBin = async () => {
+     try {
+        await ElMessageBox.confirm('确定要清空回收站吗？此操作无法撤销。', '警告', {
+            confirmButtonText: '清空',
+            cancelButtonText: '取消',
+            type: 'warning'
+        })
+        
+        for (const file of recycleBin.value) {
+            await window.api.permanentDeleteFile(file.folder, file.name)
+        }
+        
+        recycleBin.value = []
+        ElMessage.success('回收站已清空')
+    } catch (e) {
+        // 用户取消
+    }
+}
+
+
 // 回收站相关
 const recycleBin = ref<any[]>([])
 const recycleBinVisible = ref(false)
@@ -167,61 +213,37 @@ const permanentDelete = async (index: number) => {
             cancelButtonText: '取消',
             type: 'error'
         })
-        recycleBin.value.splice(index, 1)
-        ElMessage.success('已彻底删除')
-    } catch (e) {
-        // 用户取消
-    }
-}
-
-// 清空回收站
-const clearRecycleBin = async () => {
-    try {
-        await ElMessageBox.confirm('确定清空回收站吗？此操作不可恢复！', '警告', {
-            confirmButtonText: '清空',
-            cancelButtonText: '取消',
-            type: 'error'
-        })
-        recycleBin.value = []
-        ElMessage.success('回收站已清空')
-    } catch (e) {
-        // 用户取消
-    }
-}
-const loadFiles = async () => {
-    try {
-        templates.value = await window.api.listFiles('templates')
-        rules.value = await window.api.listFiles('rules')
-    } catch (e) {
-        console.error('Failed to load files:', e)
-    }
-}
-
-// 刷新文件列表
-const refreshFiles = async () => {
-    await loadFiles()
-    ElMessage.success('已刷新')
-}
-
-// 预览 Word 文档（用系统默认程序打开）
-const previewTemplate = async (filename: string) => {
-    try {
-        const success = await window.api.openFile('templates', filename)
-        if (!success) {
-            ElMessage.error('无法打开文件')
+        
+        const file = recycleBin.value[index]
+        const success = await window.api.permanentDeleteFile(file.folder, file.name)
+        
+        if (success) {
+            recycleBin.value.splice(index, 1)
+            ElMessage.success('已彻底删除')
+        } else {
+            ElMessage.error('删除失败')
         }
     } catch (e) {
-        ElMessage.error('打开失败: ' + e)
+        // 用户取消
     }
 }
+
+// ... (existing code)
 
 // 编辑 JSON 文件
 const editRule = async (filename: string) => {
     try {
         const content = await window.api.readFileContent('rules', filename)
-        if (content) {
+        // Allow empty content (empty string is falsy, but valid for a file we want to edit)
+        if (content !== null) {
             currentEditFile.value = filename
-            editContent.value = JSON.stringify(JSON.parse(content), null, 2)
+            try {
+                 // If empty, default to empty object
+                editContent.value = content ? JSON.stringify(JSON.parse(content), null, 2) : '{}'
+            } catch (jsonErr) {
+                // If invalid JSON, just show text
+                editContent.value = content
+            }
             editDialogVisible.value = true
         }
     } catch (e) {

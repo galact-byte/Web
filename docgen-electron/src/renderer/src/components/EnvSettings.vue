@@ -44,7 +44,7 @@
       <div class="tips-box">
         <p><strong>使用说明：</strong></p>
         <ul>
-          <li>这些变量会在文档中自动替换对应的 <code v-text="placeholderExample"></code> 等占位符</li>
+          <li>这些变量会在文档中自动替换对应的占位符</li>
           <li>配置保存后会立即生效，影响后续所有文档生成</li>
           <li>可以在模板文档中使用这些占位符，无需每次手动填写</li>
         </ul>
@@ -86,7 +86,9 @@ const loadEnv = async () => {
 const saveEnv = async () => {
   saving.value = true
   try {
-    const result = await window.api.saveEnv(envVars.value)
+    // Fix: Clone object to remove Vue Proxy properties which cause 'object could not be cloned' error
+    const plainEnvVars = JSON.parse(JSON.stringify(envVars.value))
+    const result = await window.api.saveEnv(plainEnvVars)
     if (result.success) {
       ElMessage.success('环境变量保存成功')
     } else {

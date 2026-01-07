@@ -299,7 +299,16 @@ const generate = async () => {
             ElMessage.success('文档生成成功！')
         } else {
             console.error(res.error)
-            ElMessage.error('文档生成失败，请查看控制台')
+            // Show detailed error to user since they cannot see console in production
+            ElMessageBox.alert(
+                `错误信息:\n${res.error || res.output || 'Unknown Error'}`, 
+                '文档生成失败', 
+                {
+                    confirmButtonText: '确定',
+                    type: 'error',
+                    customStyle: { maxWidth: '90%' }
+                }
+            )
         }
     } catch (e) {
         ElMessage.error('调用失败: ' + e)
