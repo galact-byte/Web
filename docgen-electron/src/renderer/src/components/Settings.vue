@@ -104,6 +104,39 @@
         </div>
       </el-card>
 
+      <el-card class="settings-card" shadow="hover" style="margin-top: 24px;">
+        <template #header>
+          <div class="card-header">
+            <span>背景设置</span>
+          </div>
+        </template>
+
+        <div class="setting-item">
+          <div class="setting-label">
+            <el-icon><Picture /></el-icon>
+            <span>背景图片</span>
+          </div>
+          <div class="background-controls">
+            <el-button size="small" @click="selectBackgroundImage">选择图片</el-button>
+            <el-button size="small" type="danger" plain @click="clearBackgroundImage" v-if="backgroundImage">清除</el-button>
+          </div>
+        </div>
+
+        <el-divider v-if="backgroundImage" />
+
+        <div class="setting-item" v-if="backgroundImage">
+          <div class="setting-label">
+            <el-icon><View /></el-icon>
+            <span>背景透明度</span>
+          </div>
+          <el-slider v-model="backgroundOpacity" :min="0" :max="100" :step="5" style="width: 200px;" @change="handleBackgroundOpacityChange" />
+        </div>
+
+        <div v-if="backgroundImage" class="background-preview">
+          <img :src="backgroundImage" alt="背景预览" />
+        </div>
+      </el-card>
+
       <div class="reset-section">
         <el-button type="danger" plain @click="resetSettings">
           <el-icon><RefreshLeft /></el-icon> 恢复默认设置
@@ -116,7 +149,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Sunny, Discount, Document, MagicStick, Bell, QuestionFilled, RefreshLeft, Check } from '@element-plus/icons-vue'
+import { Sunny, Discount, Document, MagicStick, Bell, QuestionFilled, RefreshLeft, Check, Picture, View } from '@element-plus/icons-vue'
 
 // 设置状态
 const theme = ref('light')
@@ -125,6 +158,8 @@ const fontSize = ref('medium')
 const animations = ref(true)
 const notifications = ref(true)
 const showTips = ref(true)
+const backgroundImage = ref('')
+const backgroundOpacity = ref(30)
 
 // 主题颜色选项
 const themeColors = [
@@ -149,12 +184,15 @@ const loadSettings = () => {
     animations.value = settings.animations !== false
     notifications.value = settings.notifications !== false
     showTips.value = settings.showTips !== false
+    backgroundImage.value = settings.backgroundImage || ''
+    backgroundOpacity.value = settings.backgroundOpacity ?? 30
     
     // 应用设置
     applyTheme(theme.value)
     applyPrimaryColor(primaryColor.value)
     applyFontSize(fontSize.value)
     applyAnimations(animations.value)
+    applyBackgroundImage()
   }
 }
 
@@ -166,7 +204,9 @@ const saveSettings = () => {
     fontSize: fontSize.value,
     animations: animations.value,
     notifications: notifications.value,
-    showTips: showTips.value
+    showTips: showTips.value,
+    backgroundImage: backgroundImage.value,
+    backgroundOpacity: backgroundOpacity.value
   }
   localStorage.setItem('docgen-settings', JSON.stringify(settings))
 }
@@ -196,12 +236,12 @@ const applyPrimaryColor = (color: string) => {
 
 // 应用字体大小
 const applyFontSize = (size: string) => {
-  const sizes = {
+  const sizes: Record<string, string> = {
     small: '13px',
     medium: '14px',
     large: '16px'
   }
-  document.documentElement.style.setProperty('--base-font-size', sizes[size])
+  document.documentElement.style.setProperty('--base-font-size', sizes[size] || '14px')
 }
 
 // 应用动画设置
@@ -251,6 +291,61 @@ const handleShowTipsChange = () => {
   saveSettings()
 }
 
+// 选择背景图片
+const selectBackgroundImage = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/*'
+  input.onchange = (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        backgroundImage.value = ev.target?.result as string
+        applyBackgroundImage()
+        saveSettings()
+        ElMessage.success('背景图片已设置')
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+  input.click()
+}
+
+// 清除背景图片
+const clearBackgroundImage = () => {
+  backgroundImage.value = ''
+  backgroundOpacity.value = 30
+  applyBackgroundImage()
+  saveSettings()
+  ElMessage.success('背景图片已清除')
+}
+
+// 处理背景透明度变化
+const handleBackgroundOpacityChange = () => {
+  applyBackgroundImage()
+  saveSettings()
+}
+
+// 应用背景图片
+const applyBackgroundImage = () => {
+  const container = document.querySelector('.app-container') as HTMLElement
+  if (!container) return
+  
+  if (backgroundImage.value) {
+    const overlayOpacity = (100 - backgroundOpacity.value) / 100
+    container.style.backgroundImage = `linear-gradient(rgba(243, 244, 246, ${overlayOpacity}), rgba(243, 244, 246, ${overlayOpacity})), url(${backgroundImage.value})`
+    container.style.backgroundSize = 'cover'
+    container.style.backgroundPosition = 'center'
+    container.style.backgroundAttachment = 'fixed'
+  } else {
+    container.style.backgroundImage = ''
+    container.style.backgroundSize = ''
+    container.style.backgroundPosition = ''
+    container.style.backgroundAttachment = ''
+  }
+}
+
 // 恢复默认设置
 const resetSettings = async () => {
   try {
@@ -266,6 +361,8 @@ const resetSettings = async () => {
     animations.value = true
     notifications.value = true
     showTips.value = true
+    backgroundImage.value = ''
+    backgroundOpacity.value = 30
     
     localStorage.removeItem('docgen-settings')
     
@@ -273,6 +370,7 @@ const resetSettings = async () => {
     applyPrimaryColor('#4f46e5')
     applyFontSize('medium')
     applyAnimations(true)
+    applyBackgroundImage()
     
     ElMessage.success('已恢复默认设置')
   } catch {
@@ -372,5 +470,24 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   padding: 24px 0;
+}
+
+.background-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.background-preview {
+  margin-top: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 150px;
+}
+
+.background-preview img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
 }
 </style>

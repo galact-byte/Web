@@ -38,23 +38,35 @@ electron.ipcMain.handle("run-docgen", async (_event, { mode, data }) => {
     } catch (err) {
       return reject(`写入配置文件失败: ${err}`);
     }
+    let command = "";
+    let args = [];
+    let cwd = process.cwd();
+    const exePath = path.join(process.resourcesPath, "bin", "main3.exe");
     const scriptPath = path.join(process.cwd(), "main3.py");
-    if (!fs.existsSync(scriptPath)) {
-      return reject(`找不到 Python 脚本: ${scriptPath}`);
+    if (fs.existsSync(exePath)) {
+      console.log("Found executable at:", exePath);
+      command = exePath;
+      args = ["--mode", mode, "--config", filePath];
+      cwd = process.resourcesPath;
+    } else if (fs.existsSync(scriptPath)) {
+      console.log("Found python script at:", scriptPath);
+      command = "python";
+      args = ["-X", "utf8", "-E", "main3.py", "--mode", mode, "--config", filePath];
+    } else {
+      return reject(`无法找到文档生成程序。
+已尝试路径:
+1. executable: ${exePath}
+2. script: ${scriptPath}`);
     }
-    const pythonProcess = spawn(
-      "python",
-      ["-X", "utf8", "-E", "main3.py", "--mode", mode, "--config", filePath],
-      {
-        cwd: process.cwd(),
-        windowsHide: true,
-        env: {
-          ...process.env,
-          PYTHONUTF8: "1",
-          LANG: "C.UTF-8"
-        }
+    const pythonProcess = spawn(command, args, {
+      cwd,
+      windowsHide: true,
+      env: {
+        ...process.env,
+        PYTHONUTF8: "1",
+        LANG: "C.UTF-8"
       }
-    );
+    });
     let output = "";
     let errorOutput = "";
     pythonProcess.stdout.setEncoding("utf8");
@@ -170,37 +182,72 @@ electron.ipcMain.handle("write-file", async (_event, { path: path$1, data }) => 
   }
 });
 electron.ipcMain.handle("open-folder", async (_event, path$1) => {
-  const fullPath = path.join(process.cwd(), path$1);
-  if (fs.existsSync(fullPath)) {
-    await electron.shell.openPath(fullPath);
-    return true;
+  let fullPath = path.join(process.cwd(), path$1);
+  if (!fs.existsSync(fullPath)) {
+    const resourcesPath = path.join(process.resourcesPath, path$1);
+    if (fs.existsSync(resourcesPath)) {
+      fullPath = resourcesPath;
+    } else {
+      console.error(`Folder not found: ${path$1} (Checked: ${fullPath}, ${resourcesPath})`);
+      return false;
+    }
   }
-  return false;
+  console.log(`Opening folder: ${fullPath}`);
+  await electron.shell.openPath(fullPath);
+  return true;
 });
 electron.ipcMain.handle("list-files", async (_event, subDir) => {
   try {
-    const dirPath = path.join(process.cwd(), subDir);
+    const basePath = getBasePath();
+    const dirPath = path.join(basePath, subDir);
+    console.log(`[DEBUG] list-files: subDir=${subDir}, base=${basePath}, full=${dirPath}`);
     if (!fs.existsSync(dirPath)) {
+      console.log(`[DEBUG] list-files: Path not found!`);
       return [];
     }
     const files = fs.readdirSync(dirPath);
-    return files.map((file) => {
-      const stats = fs.statSync(path.join(dirPath, file));
-      const size = stats.size < 1024 ? `${stats.size} B` : `${(stats.size / 1024).toFixed(0)} KB`;
-      return {
-        name: file,
-        date: stats.mtime.toLocaleString("zh-CN").split(" ")[0],
-        size
-      };
-    });
+    const result = [];
+    for (const file of files) {
+      try {
+        const filePath = path.join(dirPath, file);
+        const stats = fs.statSync(filePath);
+        const size = stats.size < 1024 ? `${stats.size} B` : `${(stats.size / 1024).toFixed(0)} KB`;
+        result.push({
+          name: file,
+          date: stats.mtime.toLocaleString("zh-CN").split(" ")[0],
+          size
+        });
+      } catch (fileErr) {
+        console.error(`[DEBUG] Error stating file ${file}:`, fileErr);
+      }
+    }
+    console.log(`[DEBUG] list-files returning ${result.length} files`);
+    return result;
   } catch (err) {
     console.error(`列出文件失败 ${subDir}:`, err);
+    console.error(err);
     return [];
   }
 });
+const getBasePath = () => {
+  console.log("[DEBUG] getBasePath check:");
+  console.log("  cwd:", process.cwd());
+  console.log("  resourcesPath:", process.resourcesPath);
+  console.log("  app.isPackaged:", electron.app.isPackaged);
+  if (fs.existsSync(path.join(process.resourcesPath, "templates")) || fs.existsSync(path.join(process.resourcesPath, "rules"))) {
+    console.log("  -> MATCH: Found data in resourcesPath");
+    return process.resourcesPath;
+  }
+  if (electron.app.isPackaged) {
+    console.log("  -> MATCH: app.isPackaged is true");
+    return process.resourcesPath;
+  }
+  console.log("  -> MATCH: Defaulting to CWD");
+  return process.cwd();
+};
 electron.ipcMain.handle("open-file", async (_event, folder, filename) => {
   try {
-    const fullPath = path.join(process.cwd(), folder, filename);
+    const fullPath = path.join(getBasePath(), folder, filename);
     if (fs.existsSync(fullPath)) {
       await electron.shell.openPath(fullPath);
       return true;
@@ -213,7 +260,7 @@ electron.ipcMain.handle("open-file", async (_event, folder, filename) => {
 });
 electron.ipcMain.handle("read-file-content", async (_event, folder, filename) => {
   try {
-    const fullPath = path.join(process.cwd(), folder, filename);
+    const fullPath = path.join(getBasePath(), folder, filename);
     if (fs.existsSync(fullPath)) {
       return fs.readFileSync(fullPath, "utf-8");
     }
@@ -225,7 +272,7 @@ electron.ipcMain.handle("read-file-content", async (_event, folder, filename) =>
 });
 electron.ipcMain.handle("write-file-content", async (_event, folder, filename, content) => {
   try {
-    const fullPath = path.join(process.cwd(), folder, filename);
+    const fullPath = path.join(getBasePath(), folder, filename);
     fs.writeFileSync(fullPath, content, "utf-8");
     return true;
   } catch (err) {
@@ -235,12 +282,19 @@ electron.ipcMain.handle("write-file-content", async (_event, folder, filename, c
 });
 electron.ipcMain.handle("delete-file", async (_event, folder, filename) => {
   try {
-    const fullPath = path.join(process.cwd(), folder, filename);
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
-      return true;
+    const basePath = getBasePath();
+    const srcPath = path.join(basePath, folder, filename);
+    const trashDir = path.join(basePath, ".trash", folder);
+    const destPath = path.join(trashDir, filename);
+    if (!fs.existsSync(srcPath)) {
+      return false;
     }
-    return false;
+    if (!fs.existsSync(trashDir)) {
+      fs.mkdirSync(trashDir, { recursive: true });
+    }
+    fs.renameSync(srcPath, destPath);
+    console.log(`Moved to trash: ${filename}`);
+    return true;
   } catch (err) {
     console.error(`删除文件失败 ${filename}:`, err);
     return false;
@@ -248,7 +302,7 @@ electron.ipcMain.handle("delete-file", async (_event, folder, filename) => {
 });
 electron.ipcMain.handle("upload-file", async (_event, { folder, filename, content }) => {
   try {
-    const dirPath = path.join(process.cwd(), folder);
+    const dirPath = path.join(getBasePath(), folder);
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
     }
@@ -262,10 +316,36 @@ electron.ipcMain.handle("upload-file", async (_event, { folder, filename, conten
 });
 electron.ipcMain.handle("restore-file", async (_event, folder, filename) => {
   try {
-    console.log(`恢复文件: ${folder}/${filename}`);
+    const basePath = getBasePath();
+    const srcPath = path.join(basePath, ".trash", folder, filename);
+    const destDir = path.join(basePath, folder);
+    const destPath = path.join(destDir, filename);
+    if (!fs.existsSync(srcPath)) {
+      console.error(`Trash file not found: ${srcPath}`);
+      return false;
+    }
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+    fs.renameSync(srcPath, destPath);
+    console.log(`Restored file: ${filename}`);
     return true;
   } catch (err) {
     console.error(`恢复文件失败 ${filename}:`, err);
+    return false;
+  }
+});
+electron.ipcMain.handle("permanent-delete-file", async (_event, folder, filename) => {
+  try {
+    const basePath = getBasePath();
+    const filePath = path.join(basePath, ".trash", folder, filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error(`彻底删除文件失败 ${filename}:`, err);
     return false;
   }
 });

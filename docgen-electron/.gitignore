@@ -25,3 +25,5 @@ dist-ssr
 .env
 授权文档输出目录/
 history.json
+resources/
+dist_setup/

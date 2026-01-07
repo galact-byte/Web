@@ -3,7 +3,7 @@ var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
 var require_index_001 = __commonJS({
-  "assets/index-z6JNSG-K.js"(exports, module) {
+  "assets/index-Bih-v1lZ.js"(exports, module) {
     /**
     * @vue/shared v3.5.26
     * (c) 2018-present Yuxi (Evan) You and Vue contributors
@@ -11141,7 +11141,7 @@ var require_index_001 = __commonJS({
       }
       return target;
     };
-    const _sfc_main$2z = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2B = /* @__PURE__ */ defineComponent({
       __name: "teleport",
       props: teleportProps,
       setup(__props) {
@@ -11155,7 +11155,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Teleport = /* @__PURE__ */ _export_sfc$1(_sfc_main$2z, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/teleport/src/teleport.vue"]]);
+    var Teleport = /* @__PURE__ */ _export_sfc$1(_sfc_main$2B, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/teleport/src/teleport.vue"]]);
     const withInstall = (main, extra) => {
       main.install = (app2) => {
         for (const comp of [main, ...Object.values(extra != null ? extra : {})]) {
@@ -11396,7 +11396,7 @@ var require_index_001 = __commonJS({
       return container.scrollTop;
     };
     const COMPONENT_NAME$o = "ElAffix";
-    const _sfc_main$2y = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2A = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$o
       },
@@ -11540,7 +11540,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Affix = /* @__PURE__ */ _export_sfc$1(_sfc_main$2y, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/affix/src/affix.vue"]]);
+    var Affix = /* @__PURE__ */ _export_sfc$1(_sfc_main$2A, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/affix/src/affix.vue"]]);
     const ElAffix = withInstall(Affix);
     const iconProps = buildProps({
       size: {
@@ -11550,7 +11550,7 @@ var require_index_001 = __commonJS({
         type: String
       }
     });
-    const _sfc_main$2x = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2z = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElIcon",
         inheritAttrs: false
@@ -11585,7 +11585,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Icon = /* @__PURE__ */ _export_sfc$1(_sfc_main$2x, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/icon/src/icon.vue"]]);
+    var Icon = /* @__PURE__ */ _export_sfc$1(_sfc_main$2z, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/icon/src/icon.vue"]]);
     const ElIcon = withInstall(Icon);
     /*! Element Plus Icons Vue v2.3.2 */
     var _sfc_main6 = /* @__PURE__ */ defineComponent({
@@ -11667,6 +11667,29 @@ var require_index_001 = __commonJS({
         ]));
       }
     }), back_default = _sfc_main14;
+    var _sfc_main18 = /* @__PURE__ */ defineComponent({
+      name: "Bell",
+      __name: "bell",
+      setup(__props) {
+        return (_ctx, _cache) => (openBlock(), createElementBlock("svg", {
+          xmlns: "http://www.w3.org/2000/svg",
+          viewBox: "0 0 1024 1024"
+        }, [
+          createBaseVNode("path", {
+            fill: "currentColor",
+            d: "M512 64a64 64 0 0 1 64 64v64H448v-64a64 64 0 0 1 64-64"
+          }),
+          createBaseVNode("path", {
+            fill: "currentColor",
+            d: "M256 768h512V448a256 256 0 1 0-512 0zm256-640a320 320 0 0 1 320 320v384H192V448a320 320 0 0 1 320-320"
+          }),
+          createBaseVNode("path", {
+            fill: "currentColor",
+            d: "M96 768h832q32 0 32 32t-32 32H96q-32 0-32-32t32-32m352 128h128a64 64 0 0 1-128 0"
+          })
+        ]));
+      }
+    }), bell_default = _sfc_main18;
     var _sfc_main29 = /* @__PURE__ */ defineComponent({
       name: "Calendar",
       __name: "calendar",
@@ -11893,6 +11916,25 @@ var require_index_001 = __commonJS({
         ]));
       }
     }), delete_default = _sfc_main80;
+    var _sfc_main82 = /* @__PURE__ */ defineComponent({
+      name: "Discount",
+      __name: "discount",
+      setup(__props) {
+        return (_ctx, _cache) => (openBlock(), createElementBlock("svg", {
+          xmlns: "http://www.w3.org/2000/svg",
+          viewBox: "0 0 1024 1024"
+        }, [
+          createBaseVNode("path", {
+            fill: "currentColor",
+            d: "M224 704h576V318.336L552.512 115.84a64 64 0 0 0-81.024 0L224 318.336zm0 64v128h576V768zM593.024 66.304l259.2 212.096A32 32 0 0 1 864 303.168V928a32 32 0 0 1-32 32H192a32 32 0 0 1-32-32V303.168a32 32 0 0 1 11.712-24.768l259.2-212.096a128 128 0 0 1 162.112 0"
+          }),
+          createBaseVNode("path", {
+            fill: "currentColor",
+            d: "M512 448a64 64 0 1 0 0-128 64 64 0 0 0 0 128m0 64a128 128 0 1 1 0-256 128 128 0 0 1 0 256"
+          })
+        ]));
+      }
+    }), discount_default = _sfc_main82;
     var _sfc_main90 = /* @__PURE__ */ defineComponent({
       name: "Document",
       __name: "document",
@@ -12002,6 +12044,21 @@ var require_index_001 = __commonJS({
         ]));
       }
     }), loading_default = _sfc_main150;
+    var _sfc_main156 = /* @__PURE__ */ defineComponent({
+      name: "MagicStick",
+      __name: "magic-stick",
+      setup(__props) {
+        return (_ctx, _cache) => (openBlock(), createElementBlock("svg", {
+          xmlns: "http://www.w3.org/2000/svg",
+          viewBox: "0 0 1024 1024"
+        }, [
+          createBaseVNode("path", {
+            fill: "currentColor",
+            d: "M512 64h64v192h-64zm0 576h64v192h-64zM160 480v-64h192v64zm576 0v-64h192v64zM249.856 199.04l45.248-45.184L430.848 289.6 385.6 334.848 249.856 199.104zM657.152 606.4l45.248-45.248 135.744 135.744-45.248 45.248zM114.048 923.2 68.8 877.952l316.8-316.8 45.248 45.248zM702.4 334.848 657.152 289.6l135.744-135.744 45.248 45.248z"
+          })
+        ]));
+      }
+    }), magic_stick_default = _sfc_main156;
     var _sfc_main169 = /* @__PURE__ */ defineComponent({
       name: "Minus",
       __name: "minus",
@@ -12062,6 +12119,25 @@ var require_index_001 = __commonJS({
         ]));
       }
     }), picture_filled_default = _sfc_main195;
+    var _sfc_main197 = /* @__PURE__ */ defineComponent({
+      name: "Picture",
+      __name: "picture",
+      setup(__props) {
+        return (_ctx, _cache) => (openBlock(), createElementBlock("svg", {
+          xmlns: "http://www.w3.org/2000/svg",
+          viewBox: "0 0 1024 1024"
+        }, [
+          createBaseVNode("path", {
+            fill: "currentColor",
+            d: "M160 160v704h704V160zm-32-64h768a32 32 0 0 1 32 32v768a32 32 0 0 1-32 32H128a32 32 0 0 1-32-32V128a32 32 0 0 1 32-32"
+          }),
+          createBaseVNode("path", {
+            fill: "currentColor",
+            d: "M384 288q64 0 64 64t-64 64-64-64 64-64M185.408 876.992l-50.816-38.912L350.72 556.032a96 96 0 0 1 134.592-17.856l1.856 1.472 122.88 99.136a32 32 0 0 0 44.992-4.864l216-269.888 49.92 39.936-215.808 269.824-.256.32a96 96 0 0 1-135.04 14.464l-122.88-99.072-.64-.512a32 32 0 0 0-44.8 5.952z"
+          })
+        ]));
+      }
+    }), picture_default = _sfc_main197;
     var _sfc_main201 = /* @__PURE__ */ defineComponent({
       name: "Plus",
       __name: "plus",
@@ -12257,6 +12333,21 @@ var require_index_001 = __commonJS({
         ]));
       }
     }), success_filled_default = _sfc_main249;
+    var _sfc_main253 = /* @__PURE__ */ defineComponent({
+      name: "Sunny",
+      __name: "sunny",
+      setup(__props) {
+        return (_ctx, _cache) => (openBlock(), createElementBlock("svg", {
+          xmlns: "http://www.w3.org/2000/svg",
+          viewBox: "0 0 1024 1024"
+        }, [
+          createBaseVNode("path", {
+            fill: "currentColor",
+            d: "M512 704a192 192 0 1 0 0-384 192 192 0 0 0 0 384m0 64a256 256 0 1 1 0-512 256 256 0 0 1 0 512m0-704a32 32 0 0 1 32 32v64a32 32 0 0 1-64 0V96a32 32 0 0 1 32-32m0 768a32 32 0 0 1 32 32v64a32 32 0 1 1-64 0v-64a32 32 0 0 1 32-32M195.2 195.2a32 32 0 0 1 45.248 0l45.248 45.248a32 32 0 1 1-45.248 45.248L195.2 240.448a32 32 0 0 1 0-45.248m543.104 543.104a32 32 0 0 1 45.248 0l45.248 45.248a32 32 0 0 1-45.248 45.248l-45.248-45.248a32 32 0 0 1 0-45.248M64 512a32 32 0 0 1 32-32h64a32 32 0 0 1 0 64H96a32 32 0 0 1-32-32m768 0a32 32 0 0 1 32-32h64a32 32 0 1 1 0 64h-64a32 32 0 0 1-32-32M195.2 828.8a32 32 0 0 1 0-45.248l45.248-45.248a32 32 0 0 1 45.248 45.248L240.448 828.8a32 32 0 0 1-45.248 0m543.104-543.104a32 32 0 0 1 0-45.248l45.248-45.248a32 32 0 0 1 45.248 45.248l-45.248 45.248a32 32 0 0 1-45.248 0"
+          })
+        ]));
+      }
+    }), sunny_default = _sfc_main253;
     var _sfc_main262 = /* @__PURE__ */ defineComponent({
       name: "Timer",
       __name: "timer",
@@ -12434,7 +12525,7 @@ var require_index_001 = __commonJS({
     const alertEmits = {
       close: (evt) => evt instanceof MouseEvent
     };
-    const _sfc_main$2w = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2y = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElAlert"
       },
@@ -12557,7 +12648,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Alert = /* @__PURE__ */ _export_sfc$1(_sfc_main$2w, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/alert/src/alert.vue"]]);
+    var Alert = /* @__PURE__ */ _export_sfc$1(_sfc_main$2y, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/alert/src/alert.vue"]]);
     const ElAlert = withInstall(Alert);
     const isFirefox = () => isClient && /firefox/i.test(window.navigator.userAgent);
     const isAndroid = () => isClient && /android/i.test(window.navigator.userAgent);
@@ -13119,10 +13210,10 @@ var require_index_001 = __commonJS({
       }
       return [recordCursor, setCursor];
     }
-    const _hoisted_1$1i = ["id", "name", "minlength", "maxlength", "type", "disabled", "readonly", "autocomplete", "tabindex", "aria-label", "placeholder", "form", "autofocus", "role", "inputmode"];
-    const _hoisted_2$L = ["id", "name", "minlength", "maxlength", "tabindex", "disabled", "readonly", "autocomplete", "aria-label", "placeholder", "form", "autofocus", "rows", "role"];
+    const _hoisted_1$1k = ["id", "name", "minlength", "maxlength", "type", "disabled", "readonly", "autocomplete", "tabindex", "aria-label", "placeholder", "form", "autofocus", "role", "inputmode"];
+    const _hoisted_2$N = ["id", "name", "minlength", "maxlength", "tabindex", "disabled", "readonly", "autocomplete", "aria-label", "placeholder", "form", "autofocus", "rows", "role"];
     const COMPONENT_NAME$n = "ElInput";
-    const _sfc_main$2v = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2x = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$n,
         inheritAttrs: false
@@ -13513,7 +13604,7 @@ var require_index_001 = __commonJS({
                         onInput: handleInput,
                         onChange: handleChange,
                         onKeydown: handleKeydown
-                      }), null, 16, _hoisted_1$1i),
+                      }), null, 16, _hoisted_1$1k),
                       createCommentVNode(" suffix slot "),
                       suffixVisible.value ? (openBlock(), createElementBlock(
                         "span",
@@ -13658,7 +13749,7 @@ var require_index_001 = __commonJS({
                     onBlur: _cache[7] || (_cache[7] = (...args) => unref(handleBlur) && unref(handleBlur)(...args)),
                     onChange: handleChange,
                     onKeydown: handleKeydown
-                  }), null, 16, _hoisted_2$L),
+                  }), null, 16, _hoisted_2$N),
                   isWordLimitVisible.value ? (openBlock(), createElementBlock(
                     "span",
                     {
@@ -13681,7 +13772,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Input = /* @__PURE__ */ _export_sfc$1(_sfc_main$2v, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/input/src/input.vue"]]);
+    var Input = /* @__PURE__ */ _export_sfc$1(_sfc_main$2x, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/input/src/input.vue"]]);
     const ElInput = withInstall(Input);
     const GAP = 4;
     const BAR_MAP = {
@@ -13728,7 +13819,7 @@ var require_index_001 = __commonJS({
       always: Boolean
     });
     const COMPONENT_NAME$m = "Thumb";
-    const _sfc_main$2u = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2w = /* @__PURE__ */ defineComponent({
       __name: "thumb",
       props: thumbProps,
       setup(__props) {
@@ -13881,7 +13972,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Thumb = /* @__PURE__ */ _export_sfc$1(_sfc_main$2u, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/scrollbar/src/thumb.vue"]]);
+    var Thumb = /* @__PURE__ */ _export_sfc$1(_sfc_main$2w, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/scrollbar/src/thumb.vue"]]);
     const barProps = buildProps({
       always: {
         type: Boolean,
@@ -13892,7 +13983,7 @@ var require_index_001 = __commonJS({
         required: true
       }
     });
-    const _sfc_main$2t = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2v = /* @__PURE__ */ defineComponent({
       __name: "bar",
       props: barProps,
       setup(__props, { expose: __expose }) {
@@ -13955,7 +14046,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Bar = /* @__PURE__ */ _export_sfc$1(_sfc_main$2t, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/scrollbar/src/bar.vue"]]);
+    var Bar = /* @__PURE__ */ _export_sfc$1(_sfc_main$2v, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/scrollbar/src/bar.vue"]]);
     const scrollbarProps = buildProps({
       distance: {
         type: Number,
@@ -14011,9 +14102,9 @@ var require_index_001 = __commonJS({
         scrollLeft
       }) => [scrollTop, scrollLeft].every(isNumber)
     };
-    const _hoisted_1$1h = ["tabindex"];
+    const _hoisted_1$1j = ["tabindex"];
     const COMPONENT_NAME$l = "ElScrollbar";
-    const _sfc_main$2s = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2u = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$l
       },
@@ -14229,7 +14320,7 @@ var require_index_001 = __commonJS({
                   ]),
                   _: 3
                 }, 8, ["id", "class", "style", "role", "aria-label", "aria-orientation"]))
-              ], 46, _hoisted_1$1h),
+              ], 46, _hoisted_1$1j),
               !_ctx.native ? (openBlock(), createBlock(Bar, {
                 key: 0,
                 ref_key: "barRef",
@@ -14243,7 +14334,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Scrollbar = /* @__PURE__ */ _export_sfc$1(_sfc_main$2s, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/scrollbar/src/scrollbar.vue"]]);
+    var Scrollbar = /* @__PURE__ */ _export_sfc$1(_sfc_main$2u, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/scrollbar/src/scrollbar.vue"]]);
     const ElScrollbar = withInstall(Scrollbar);
     const POPPER_INJECTION_KEY = Symbol("popper");
     const POPPER_CONTENT_INJECTION_KEY = Symbol("popperContent");
@@ -14264,7 +14355,7 @@ var require_index_001 = __commonJS({
         default: "tooltip"
       }
     });
-    const _sfc_main$2r = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2t = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPopper",
         inheritAttrs: false
@@ -14292,8 +14383,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Popper = /* @__PURE__ */ _export_sfc$1(_sfc_main$2r, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popper/src/popper.vue"]]);
-    const _sfc_main$2q = /* @__PURE__ */ defineComponent({
+    var Popper = /* @__PURE__ */ _export_sfc$1(_sfc_main$2t, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popper/src/popper.vue"]]);
+    const _sfc_main$2s = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPopperArrow",
         inheritAttrs: false
@@ -14327,7 +14418,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ElPopperArrow = /* @__PURE__ */ _export_sfc$1(_sfc_main$2q, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popper/src/arrow.vue"]]);
+    var ElPopperArrow = /* @__PURE__ */ _export_sfc$1(_sfc_main$2s, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popper/src/arrow.vue"]]);
     const popperTriggerProps = buildProps({
       virtualRef: {
         type: definePropType(Object)
@@ -14431,7 +14522,7 @@ var require_index_001 = __commonJS({
         "class": ns.e("content")
       }, [s2]);
     }
-    const _sfc_main$2p = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2r = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPopperTrigger",
         inheritAttrs: false
@@ -14577,7 +14668,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ElPopperTrigger = /* @__PURE__ */ _export_sfc$1(_sfc_main$2p, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popper/src/trigger.vue"]]);
+    var ElPopperTrigger = /* @__PURE__ */ _export_sfc$1(_sfc_main$2r, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popper/src/trigger.vue"]]);
     const FOCUS_AFTER_TRAPPED = "focus-trap.focus-after-trapped";
     const FOCUS_AFTER_RELEASED = "focus-trap.focus-after-released";
     const FOCUSOUT_PREVENTED = "focus-trap.focusout-prevented";
@@ -14804,7 +14895,7 @@ var require_index_001 = __commonJS({
         }
       });
     };
-    const _sfc_main$2o = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2q = /* @__PURE__ */ defineComponent({
       name: "ElFocusTrap",
       inheritAttrs: false,
       props: {
@@ -15069,7 +15160,7 @@ var require_index_001 = __commonJS({
     function _sfc_render$l(_ctx, _cache, $props, $setup, $data, $options) {
       return renderSlot(_ctx.$slots, "default", { handleKeydown: _ctx.onKeydown });
     }
-    var ElFocusTrap = /* @__PURE__ */ _export_sfc$1(_sfc_main$2o, [["render", _sfc_render$l], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/focus-trap/src/focus-trap.vue"]]);
+    var ElFocusTrap = /* @__PURE__ */ _export_sfc$1(_sfc_main$2q, [["render", _sfc_render$l], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/focus-trap/src/focus-trap.vue"]]);
     var E$1 = "top", R = "bottom", W = "right", P$1 = "left", me = "auto", G = [E$1, R, W, P$1], U$1 = "start", J = "end", Xe = "clippingParents", je = "viewport", K = "popper", Ye = "reference", De = G.reduce(function(t, e) {
       return t.concat([e + "-" + U$1, e + "-" + J]);
     }, []), Ee = [].concat(G, [me]).reduce(function(t, e) {
@@ -16018,7 +16109,7 @@ var require_index_001 = __commonJS({
         updateZIndex
       };
     };
-    const _sfc_main$2n = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2p = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPopperContent"
       },
@@ -16152,7 +16243,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ElPopperContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$2n, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popper/src/content.vue"]]);
+    var ElPopperContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$2p, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popper/src/content.vue"]]);
     const ElPopper = withInstall(Popper);
     const TOOLTIP_INJECTION_KEY = Symbol("elTooltip");
     function useTimeout() {
@@ -16416,7 +16507,7 @@ var require_index_001 = __commonJS({
         isTriggerType(unref(trigger2), type) && handler(e);
       };
     };
-    const _sfc_main$2m = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2o = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTooltipTrigger"
       },
@@ -16510,7 +16601,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ElTooltipTrigger = /* @__PURE__ */ _export_sfc$1(_sfc_main$2m, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tooltip/src/trigger.vue"]]);
+    var ElTooltipTrigger = /* @__PURE__ */ _export_sfc$1(_sfc_main$2o, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tooltip/src/trigger.vue"]]);
     const usePopperContainerId = () => {
       const namespace = useGetDerivedNamespace();
       const idInjection = useIdInjection();
@@ -16552,7 +16643,7 @@ var require_index_001 = __commonJS({
         return [];
       return isArray$1(arr) ? arr : [arr];
     };
-    const _sfc_main$2l = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2n = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTooltipContent",
         inheritAttrs: false
@@ -16746,10 +16837,10 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ElTooltipContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$2l, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tooltip/src/content.vue"]]);
-    const _hoisted_1$1g = ["innerHTML"];
-    const _hoisted_2$K = { key: 1 };
-    const _sfc_main$2k = /* @__PURE__ */ defineComponent({
+    var ElTooltipContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$2n, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tooltip/src/content.vue"]]);
+    const _hoisted_1$1i = ["innerHTML"];
+    const _hoisted_2$M = { key: 1 };
+    const _sfc_main$2m = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTooltip"
       },
@@ -16900,9 +16991,9 @@ var require_index_001 = __commonJS({
                     _ctx.rawContent ? (openBlock(), createElementBlock("span", {
                       key: 0,
                       innerHTML: _ctx.content
-                    }, null, 8, _hoisted_1$1g)) : (openBlock(), createElementBlock(
+                    }, null, 8, _hoisted_1$1i)) : (openBlock(), createElementBlock(
                       "span",
-                      _hoisted_2$K,
+                      _hoisted_2$M,
                       toDisplayString(_ctx.content),
                       1
                     ))
@@ -16917,7 +17008,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Tooltip = /* @__PURE__ */ _export_sfc$1(_sfc_main$2k, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tooltip/src/tooltip.vue"]]);
+    var Tooltip = /* @__PURE__ */ _export_sfc$1(_sfc_main$2m, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tooltip/src/tooltip.vue"]]);
     const ElTooltip = withInstall(Tooltip);
     const autocompleteProps = buildProps({
       ...inputProps,
@@ -16975,11 +17066,11 @@ var require_index_001 = __commonJS({
       clear: () => true,
       select: (item) => isObject$2(item)
     };
-    const _hoisted_1$1f = ["aria-expanded", "aria-owns"];
-    const _hoisted_2$J = { key: 0 };
-    const _hoisted_3$m = ["id", "aria-selected", "onClick"];
+    const _hoisted_1$1h = ["aria-expanded", "aria-owns"];
+    const _hoisted_2$L = { key: 0 };
+    const _hoisted_3$o = ["id", "aria-selected", "onClick"];
     const COMPONENT_NAME$k = "ElAutocomplete";
-    const _sfc_main$2j = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2l = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$k,
         inheritAttrs: false
@@ -17327,7 +17418,7 @@ var require_index_001 = __commonJS({
                     role: "listbox"
                   }, {
                     default: withCtx(() => [
-                      suggestionLoading.value ? (openBlock(), createElementBlock("li", _hoisted_2$J, [
+                      suggestionLoading.value ? (openBlock(), createElementBlock("li", _hoisted_2$L, [
                         renderSlot(_ctx.$slots, "loading", {}, () => [
                           createVNode(unref(ElIcon), {
                             class: normalizeClass(unref(ns).is("loading"))
@@ -17356,7 +17447,7 @@ var require_index_001 = __commonJS({
                                 1
                               )
                             ])
-                          ], 10, _hoisted_3$m);
+                          ], 10, _hoisted_3$o);
                         }),
                         128
                       ))
@@ -17436,14 +17527,14 @@ var require_index_001 = __commonJS({
                     key: "3"
                   } : void 0
                 ]), 1040, ["model-value", "disabled"])
-              ], 14, _hoisted_1$1f)
+              ], 14, _hoisted_1$1h)
             ]),
             _: 3
           }, 8, ["visible", "placement", "popper-class", "popper-style", "teleported", "append-to", "transition"]);
         };
       }
     });
-    var Autocomplete = /* @__PURE__ */ _export_sfc$1(_sfc_main$2j, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/autocomplete/src/autocomplete.vue"]]);
+    var Autocomplete = /* @__PURE__ */ _export_sfc$1(_sfc_main$2l, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/autocomplete/src/autocomplete.vue"]]);
     const ElAutocomplete = withInstall(Autocomplete);
     const avatarProps = buildProps({
       size: {
@@ -17474,8 +17565,8 @@ var require_index_001 = __commonJS({
     const avatarEmits = {
       error: (evt) => evt instanceof Event
     };
-    const _hoisted_1$1e = ["src", "alt", "srcset"];
-    const _sfc_main$2i = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$1g = ["src", "alt", "srcset"];
+    const _sfc_main$2k = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElAvatar"
       },
@@ -17530,7 +17621,7 @@ var require_index_001 = __commonJS({
                 srcset: _ctx.srcSet,
                 style: normalizeStyle(fitStyle.value),
                 onError: handleError2
-              }, null, 44, _hoisted_1$1e)) : _ctx.icon ? (openBlock(), createBlock(unref(ElIcon), { key: 1 }, {
+              }, null, 44, _hoisted_1$1g)) : _ctx.icon ? (openBlock(), createBlock(unref(ElIcon), { key: 1 }, {
                 default: withCtx(() => [
                   (openBlock(), createBlock(resolveDynamicComponent(_ctx.icon)))
                 ]),
@@ -17542,7 +17633,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Avatar = /* @__PURE__ */ _export_sfc$1(_sfc_main$2i, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/avatar/src/avatar.vue"]]);
+    var Avatar = /* @__PURE__ */ _export_sfc$1(_sfc_main$2k, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/avatar/src/avatar.vue"]]);
     const ElAvatar = withInstall(Avatar);
     const backtopProps = {
       visibilityHeight: {
@@ -17599,7 +17690,7 @@ var require_index_001 = __commonJS({
       };
     };
     const COMPONENT_NAME$j = "ElBacktop";
-    const _sfc_main$2h = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2j = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$j
       },
@@ -17651,7 +17742,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Backtop = /* @__PURE__ */ _export_sfc$1(_sfc_main$2h, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/backtop/src/backtop.vue"]]);
+    var Backtop = /* @__PURE__ */ _export_sfc$1(_sfc_main$2j, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/backtop/src/backtop.vue"]]);
     const ElBacktop = withInstall(Backtop);
     const badgeProps = buildProps({
       value: {
@@ -17685,7 +17776,7 @@ var require_index_001 = __commonJS({
         type: String
       }
     });
-    const _sfc_main$2g = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2i = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElBadge"
       },
@@ -17763,7 +17854,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Badge = /* @__PURE__ */ _export_sfc$1(_sfc_main$2g, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/badge/src/badge.vue"]]);
+    var Badge = /* @__PURE__ */ _export_sfc$1(_sfc_main$2i, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/badge/src/badge.vue"]]);
     const ElBadge = withInstall(Badge);
     const breadcrumbKey = Symbol("breadcrumbKey");
     const breadcrumbProps = buildProps({
@@ -17775,8 +17866,8 @@ var require_index_001 = __commonJS({
         type: iconPropType
       }
     });
-    const _hoisted_1$1d = ["aria-label"];
-    const _sfc_main$2f = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$1f = ["aria-label"];
+    const _sfc_main$2h = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElBreadcrumb"
       },
@@ -17803,11 +17894,11 @@ var require_index_001 = __commonJS({
             role: "navigation"
           }, [
             renderSlot(_ctx.$slots, "default")
-          ], 10, _hoisted_1$1d);
+          ], 10, _hoisted_1$1f);
         };
       }
     });
-    var Breadcrumb = /* @__PURE__ */ _export_sfc$1(_sfc_main$2f, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/breadcrumb/src/breadcrumb.vue"]]);
+    var Breadcrumb = /* @__PURE__ */ _export_sfc$1(_sfc_main$2h, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/breadcrumb/src/breadcrumb.vue"]]);
     const breadcrumbItemProps = buildProps({
       to: {
         type: definePropType([String, Object]),
@@ -17815,7 +17906,7 @@ var require_index_001 = __commonJS({
       },
       replace: Boolean
     });
-    const _sfc_main$2e = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2g = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElBreadcrumbItem"
       },
@@ -17876,7 +17967,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var BreadcrumbItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$2e, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/breadcrumb/src/breadcrumb-item.vue"]]);
+    var BreadcrumbItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$2g, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/breadcrumb/src/breadcrumb-item.vue"]]);
     const ElBreadcrumb = withInstall(Breadcrumb, {
       BreadcrumbItem
     });
@@ -18991,7 +19082,7 @@ var require_index_001 = __commonJS({
         return styles;
       });
     }
-    const _sfc_main$2d = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2f = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElButton"
       },
@@ -19083,7 +19174,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Button = /* @__PURE__ */ _export_sfc$1(_sfc_main$2d, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/button/src/button.vue"]]);
+    var Button = /* @__PURE__ */ _export_sfc$1(_sfc_main$2f, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/button/src/button.vue"]]);
     const buttonGroupProps = {
       size: buttonProps.size,
       type: buttonProps.type,
@@ -19093,7 +19184,7 @@ var require_index_001 = __commonJS({
         default: "horizontal"
       }
     };
-    const _sfc_main$2c = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2e = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElButtonGroup"
       },
@@ -19123,7 +19214,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ButtonGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$2c, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/button/src/button-group.vue"]]);
+    var ButtonGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$2e, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/button/src/button-group.vue"]]);
     const ElButton = withInstall(Button, {
       ButtonGroup
     });
@@ -19696,9 +19787,9 @@ var require_index_001 = __commonJS({
         getSlotData
       };
     };
-    const _hoisted_1$1c = { key: 0 };
-    const _hoisted_2$I = ["onClick"];
-    const _sfc_main$2b = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$1e = { key: 0 };
+    const _hoisted_2$K = ["onClick"];
+    const _sfc_main$2d = /* @__PURE__ */ defineComponent({
       ...{
         name: "DateTable"
       },
@@ -19744,7 +19835,7 @@ var require_index_001 = __commonJS({
               cellpadding: "0"
             },
             [
-              !_ctx.hideHeader ? (openBlock(), createElementBlock("thead", _hoisted_1$1c, [
+              !_ctx.hideHeader ? (openBlock(), createElementBlock("thead", _hoisted_1$1e, [
                 createBaseVNode("tr", null, [
                   (openBlock(true), createElementBlock(
                     Fragment,
@@ -19807,7 +19898,7 @@ var require_index_001 = __commonJS({
                                 ],
                                 2
                               )
-                            ], 10, _hoisted_2$I);
+                            ], 10, _hoisted_2$K);
                           }),
                           128
                         ))
@@ -19824,7 +19915,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var DateTable$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$2b, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/calendar/src/date-table.vue"]]);
+    var DateTable$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$2d, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/calendar/src/date-table.vue"]]);
     const adjacentMonth = (start, end) => {
       const firstMonthLastDay = start.endOf("month");
       const lastMonthFirstDay = end.startOf("month");
@@ -19953,7 +20044,7 @@ var require_index_001 = __commonJS({
       [INPUT_EVENT]: (value) => isDate(value)
     };
     const COMPONENT_NAME$i = "ElCalendar";
-    const _sfc_main$2a = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2c = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$i
       },
@@ -20125,7 +20216,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Calendar = /* @__PURE__ */ _export_sfc$1(_sfc_main$2a, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/calendar/src/calendar.vue"]]);
+    var Calendar = /* @__PURE__ */ _export_sfc$1(_sfc_main$2c, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/calendar/src/calendar.vue"]]);
     const ElCalendar = withInstall(Calendar);
     const cardProps = buildProps({
       header: {
@@ -20149,7 +20240,7 @@ var require_index_001 = __commonJS({
         default: void 0
       }
     });
-    const _sfc_main$29 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2b = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCard"
       },
@@ -20218,7 +20309,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Card = /* @__PURE__ */ _export_sfc$1(_sfc_main$29, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/card/src/card.vue"]]);
+    var Card = /* @__PURE__ */ _export_sfc$1(_sfc_main$2b, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/card/src/card.vue"]]);
     const ElCard = withInstall(Card);
     const carouselProps = buildProps({
       initialIndex: {
@@ -20697,19 +20788,19 @@ var require_index_001 = __commonJS({
         throttledIndicatorHover
       };
     };
-    const _hoisted_1$1b = ["aria-label"];
-    const _hoisted_2$H = ["aria-label"];
-    const _hoisted_3$l = ["onMouseenter", "onClick"];
-    const _hoisted_4$g = ["aria-label"];
-    const _hoisted_5$c = { key: 0 };
-    const _hoisted_6$7 = {
+    const _hoisted_1$1d = ["aria-label"];
+    const _hoisted_2$J = ["aria-label"];
+    const _hoisted_3$n = ["onMouseenter", "onClick"];
+    const _hoisted_4$i = ["aria-label"];
+    const _hoisted_5$d = { key: 0 };
+    const _hoisted_6$8 = {
       key: 2,
       xmlns: "http://www.w3.org/2000/svg",
       version: "1.1",
       style: { "display": "none" }
     };
     const COMPONENT_NAME$h = "ElCarousel";
-    const _sfc_main$28 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$2a = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$h
       },
@@ -20821,7 +20912,7 @@ var require_index_001 = __commonJS({
                       ]),
                       _: 1
                     })
-                  ], 42, _hoisted_1$1b), [
+                  ], 42, _hoisted_1$1d), [
                     [vShow, (_ctx.arrow === "always" || unref(hover)) && (_ctx.loop || unref(activeIndex) > 0)]
                   ])
                 ]),
@@ -20847,7 +20938,7 @@ var require_index_001 = __commonJS({
                       ]),
                       _: 1
                     })
-                  ], 42, _hoisted_2$H), [
+                  ], 42, _hoisted_2$J), [
                     [
                       vShow,
                       (_ctx.arrow === "always" || unref(hover)) && (_ctx.loop || unref(activeIndex) < unref(items).length - 1)
@@ -20899,12 +20990,12 @@ var require_index_001 = __commonJS({
                             }, [
                               unref(hasLabel) ? (openBlock(), createElementBlock(
                                 "span",
-                                _hoisted_5$c,
+                                _hoisted_5$d,
                                 toDisplayString(item.props.label),
                                 1
                               )) : createCommentVNode("v-if", true)
-                            ], 10, _hoisted_4$g)
-                          ], 42, _hoisted_3$l)), [
+                            ], 10, _hoisted_4$i)
+                          ], 42, _hoisted_3$n)), [
                             [vShow, unref(isTwoLengthShow)(index)]
                           ]);
                         }),
@@ -20916,7 +21007,7 @@ var require_index_001 = __commonJS({
                 ]),
                 _: 1
               }),
-              _ctx.motionBlur ? (openBlock(), createElementBlock("svg", _hoisted_6$7, [..._cache[8] || (_cache[8] = [
+              _ctx.motionBlur ? (openBlock(), createElementBlock("svg", _hoisted_6$8, [..._cache[8] || (_cache[8] = [
                 createBaseVNode(
                   "defs",
                   null,
@@ -20943,7 +21034,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Carousel = /* @__PURE__ */ _export_sfc$1(_sfc_main$28, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/carousel/src/carousel.vue"]]);
+    var Carousel = /* @__PURE__ */ _export_sfc$1(_sfc_main$2a, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/carousel/src/carousel.vue"]]);
     const carouselItemProps = buildProps({
       name: { type: String, default: "" },
       label: {
@@ -21063,7 +21154,7 @@ var require_index_001 = __commonJS({
         handleItemClick
       };
     };
-    const _sfc_main$27 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$29 = /* @__PURE__ */ defineComponent({
       ...{
         name: CAROUSEL_ITEM_NAME
       },
@@ -21136,7 +21227,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var CarouselItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$27, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/carousel/src/carousel-item.vue"]]);
+    var CarouselItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$29, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/carousel/src/carousel-item.vue"]]);
     const ElCarousel = withInstall(Carousel, {
       CarouselItem
     });
@@ -21441,8 +21532,8 @@ var require_index_001 = __commonJS({
         onClickRoot
       };
     };
-    const _hoisted_1$1a = ["id", "indeterminate", "name", "tabindex", "disabled"];
-    const _sfc_main$26 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$1c = ["id", "indeterminate", "name", "tabindex", "disabled"];
+    const _sfc_main$28 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCheckbox"
       },
@@ -21527,7 +21618,7 @@ var require_index_001 = __commonJS({
                     onBlur: _cache[3] || (_cache[3] = ($event) => isFocused.value = false),
                     onClick: _cache[4] || (_cache[4] = withModifiers(() => {
                     }, ["stop"]))
-                  }), null, 16, _hoisted_1$1a), [
+                  }), null, 16, _hoisted_1$1c), [
                     [vModelCheckbox, unref(model)]
                   ]),
                   createBaseVNode(
@@ -21569,9 +21660,9 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Checkbox = /* @__PURE__ */ _export_sfc$1(_sfc_main$26, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/checkbox/src/checkbox.vue"]]);
-    const _hoisted_1$19 = ["name", "tabindex", "disabled"];
-    const _sfc_main$25 = /* @__PURE__ */ defineComponent({
+    var Checkbox = /* @__PURE__ */ _export_sfc$1(_sfc_main$28, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/checkbox/src/checkbox.vue"]]);
+    const _hoisted_1$1b = ["name", "tabindex", "disabled"];
+    const _sfc_main$27 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCheckboxButton"
       },
@@ -21643,7 +21734,7 @@ var require_index_001 = __commonJS({
                 onBlur: _cache[3] || (_cache[3] = ($event) => isFocused.value = false),
                 onClick: _cache[4] || (_cache[4] = withModifiers(() => {
                 }, ["stop"]))
-              }), null, 16, _hoisted_1$19), [
+              }), null, 16, _hoisted_1$1b), [
                 [vModelCheckbox, unref(model)]
               ]),
               _ctx.$slots.default || _ctx.label ? (openBlock(), createElementBlock(
@@ -21669,7 +21760,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var CheckboxButton = /* @__PURE__ */ _export_sfc$1(_sfc_main$25, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/checkbox/src/checkbox-button.vue"]]);
+    var CheckboxButton = /* @__PURE__ */ _export_sfc$1(_sfc_main$27, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/checkbox/src/checkbox-button.vue"]]);
     const checkboxGroupProps = buildProps({
       modelValue: {
         type: definePropType(Array),
@@ -21715,7 +21806,7 @@ var require_index_001 = __commonJS({
       value: "value",
       disabled: "disabled"
     };
-    const _sfc_main$24 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$26 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCheckboxGroup"
       },
@@ -21812,7 +21903,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var CheckboxGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$24, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/checkbox/src/checkbox-group.vue"]]);
+    var CheckboxGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$26, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/checkbox/src/checkbox-group.vue"]]);
     const ElCheckbox = withInstall(Checkbox, {
       CheckboxButton,
       CheckboxGroup
@@ -21902,8 +21993,8 @@ var require_index_001 = __commonJS({
         actualValue
       };
     };
-    const _hoisted_1$18 = ["value", "name", "disabled", "checked"];
-    const _sfc_main$23 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$1a = ["value", "name", "disabled", "checked"];
+    const _sfc_main$25 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElRadio"
       },
@@ -21958,7 +22049,7 @@ var require_index_001 = __commonJS({
                     onChange: handleChange,
                     onClick: _cache[3] || (_cache[3] = withModifiers(() => {
                     }, ["stop"]))
-                  }, null, 42, _hoisted_1$18), [
+                  }, null, 42, _hoisted_1$1a), [
                     [vModelRadio, unref(modelValue)]
                   ]),
                   createBaseVNode(
@@ -21995,12 +22086,12 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Radio = /* @__PURE__ */ _export_sfc$1(_sfc_main$23, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/radio/src/radio.vue"]]);
+    var Radio = /* @__PURE__ */ _export_sfc$1(_sfc_main$25, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/radio/src/radio.vue"]]);
     const radioButtonProps = buildProps({
       ...radioPropsBase
     });
-    const _hoisted_1$17 = ["value", "name", "disabled"];
-    const _sfc_main$22 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$19 = ["value", "name", "disabled"];
+    const _sfc_main$24 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElRadioButton"
       },
@@ -22045,7 +22136,7 @@ var require_index_001 = __commonJS({
                 onBlur: _cache[2] || (_cache[2] = ($event) => focus.value = false),
                 onClick: _cache[3] || (_cache[3] = withModifiers(() => {
                 }, ["stop"]))
-              }, null, 42, _hoisted_1$17), [
+              }, null, 42, _hoisted_1$19), [
                 [vModelRadio, unref(modelValue)]
               ]),
               createBaseVNode(
@@ -22072,7 +22163,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var RadioButton = /* @__PURE__ */ _export_sfc$1(_sfc_main$22, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/radio/src/radio-button.vue"]]);
+    var RadioButton = /* @__PURE__ */ _export_sfc$1(_sfc_main$24, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/radio/src/radio-button.vue"]]);
     const radioGroupProps = buildProps({
       id: {
         type: String,
@@ -22123,8 +22214,8 @@ var require_index_001 = __commonJS({
       value: "value",
       disabled: "disabled"
     };
-    const _hoisted_1$16 = ["id", "aria-label", "aria-labelledby"];
-    const _sfc_main$21 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$18 = ["id", "aria-label", "aria-labelledby"];
+    const _sfc_main$23 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElRadioGroup"
       },
@@ -22212,11 +22303,11 @@ var require_index_001 = __commonJS({
                 128
               ))
             ])
-          ], 10, _hoisted_1$16);
+          ], 10, _hoisted_1$18);
         };
       }
     });
-    var RadioGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$21, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/radio/src/radio-group.vue"]]);
+    var RadioGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$23, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/radio/src/radio-group.vue"]]);
     const ElRadio = withInstall(Radio, {
       RadioButton,
       RadioGroup
@@ -22261,8 +22352,8 @@ var require_index_001 = __commonJS({
         }, [label()]);
       }
     });
-    const _hoisted_1$15 = ["id", "aria-haspopup", "aria-owns", "aria-expanded", "tabindex"];
-    const _sfc_main$20 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$17 = ["id", "aria-haspopup", "aria-owns", "aria-expanded", "tabindex"];
+    const _sfc_main$22 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCascaderNode"
       },
@@ -22442,12 +22533,12 @@ var require_index_001 = __commonJS({
               ],
               64
             )) : createCommentVNode("v-if", true)
-          ], 42, _hoisted_1$15);
+          ], 42, _hoisted_1$17);
         };
       }
     });
-    var ElCascaderNode = /* @__PURE__ */ _export_sfc$1(_sfc_main$20, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/cascader-panel/src/node.vue"]]);
-    const _sfc_main$1$ = /* @__PURE__ */ defineComponent({
+    var ElCascaderNode = /* @__PURE__ */ _export_sfc$1(_sfc_main$22, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/cascader-panel/src/node.vue"]]);
+    const _sfc_main$21 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCascaderMenu"
       },
@@ -22600,7 +22691,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ElCascaderMenu = /* @__PURE__ */ _export_sfc$1(_sfc_main$1$, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/cascader-panel/src/menu.vue"]]);
+    var ElCascaderMenu = /* @__PURE__ */ _export_sfc$1(_sfc_main$21, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/cascader-panel/src/menu.vue"]]);
     let uid = 0;
     const calculatePathNodes = (node) => {
       const nodes = [node];
@@ -22868,7 +22959,7 @@ var require_index_001 = __commonJS({
       res.push(...newNodesCopy);
       return res;
     };
-    const _sfc_main$1_ = /* @__PURE__ */ defineComponent({
+    const _sfc_main$20 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCascaderPanel"
       },
@@ -23197,7 +23288,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var CascaderPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1_, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/cascader-panel/src/index.vue"]]);
+    var CascaderPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$20, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/cascader-panel/src/index.vue"]]);
     const ElCascaderPanel = withInstall(CascaderPanel);
     const tagProps = buildProps({
       type: {
@@ -23224,9 +23315,9 @@ var require_index_001 = __commonJS({
       close: (evt) => evt instanceof MouseEvent,
       click: (evt) => evt instanceof MouseEvent
     };
-    const _hoisted_1$14 = ["aria-label"];
-    const _hoisted_2$G = ["aria-label"];
-    const _sfc_main$1Z = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$16 = ["aria-label"];
+    const _hoisted_2$I = ["aria-label"];
+    const _sfc_main$1$ = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTag"
       },
@@ -23296,7 +23387,7 @@ var require_index_001 = __commonJS({
                   ]),
                   _: 1
                 })
-              ], 10, _hoisted_1$14)) : createCommentVNode("v-if", true)
+              ], 10, _hoisted_1$16)) : createCommentVNode("v-if", true)
             ],
             6
           )) : (openBlock(), createBlock(Transition, {
@@ -23337,7 +23428,7 @@ var require_index_001 = __commonJS({
                       ]),
                       _: 1
                     })
-                  ], 10, _hoisted_2$G)) : createCommentVNode("v-if", true)
+                  ], 10, _hoisted_2$I)) : createCommentVNode("v-if", true)
                 ],
                 6
               )
@@ -23347,7 +23438,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Tag = /* @__PURE__ */ _export_sfc$1(_sfc_main$1Z, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tag/src/tag.vue"]]);
+    var Tag = /* @__PURE__ */ _export_sfc$1(_sfc_main$1$, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tag/src/tag.vue"]]);
     const ElTag = withInstall(Tag);
     const cascaderProps = buildProps({
       ...CommonProps,
@@ -23513,9 +23604,9 @@ var require_index_001 = __commonJS({
         nodeList.delete(el);
       }
     };
-    const _hoisted_1$13 = ["placeholder"];
-    const _hoisted_2$F = ["onClick"];
-    const _sfc_main$1Y = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$15 = ["placeholder"];
+    const _hoisted_2$H = ["onClick"];
+    const _sfc_main$1_ = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCascader"
       },
@@ -24191,7 +24282,7 @@ var require_index_001 = __commonJS({
                         onCompositionstart: _cache[5] || (_cache[5] = (...args) => unref(handleComposition) && unref(handleComposition)(...args)),
                         onCompositionupdate: _cache[6] || (_cache[6] = (...args) => unref(handleComposition) && unref(handleComposition)(...args)),
                         onCompositionend: _cache[7] || (_cache[7] = (...args) => unref(handleComposition) && unref(handleComposition)(...args))
-                      }, null, 42, _hoisted_1$13)), [
+                      }, null, 42, _hoisted_1$15)), [
                         [vModelText, searchInputValue.value]
                       ]) : createCommentVNode("v-if", true)
                     ],
@@ -24273,7 +24364,7 @@ var require_index_001 = __commonJS({
                             _: 1
                           })) : createCommentVNode("v-if", true)
                         ])
-                      ], 10, _hoisted_2$F);
+                      ], 10, _hoisted_2$H);
                     }),
                     128
                   )) : renderSlot(_ctx.$slots, "empty", { key: 1 }, () => [
@@ -24310,7 +24401,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Cascader = /* @__PURE__ */ _export_sfc$1(_sfc_main$1Y, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/cascader/src/cascader.vue"]]);
+    var Cascader = /* @__PURE__ */ _export_sfc$1(_sfc_main$1_, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/cascader/src/cascader.vue"]]);
     const ElCascader = withInstall(Cascader);
     const checkTagProps = buildProps({
       checked: Boolean,
@@ -24325,7 +24416,7 @@ var require_index_001 = __commonJS({
       "update:checked": (value) => isBoolean(value),
       [CHANGE_EVENT]: (value) => isBoolean(value)
     };
-    const _sfc_main$1X = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1Z = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCheckTag"
       },
@@ -24364,7 +24455,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var CheckTag = /* @__PURE__ */ _export_sfc$1(_sfc_main$1X, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/check-tag/src/check-tag.vue"]]);
+    var CheckTag = /* @__PURE__ */ _export_sfc$1(_sfc_main$1Z, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/check-tag/src/check-tag.vue"]]);
     const ElCheckTag = withInstall(CheckTag);
     const colProps = buildProps({
       tag: {
@@ -24409,7 +24500,7 @@ var require_index_001 = __commonJS({
       }
     });
     const rowContextKey = Symbol("rowContextKey");
-    const _sfc_main$1W = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1Y = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCol"
       },
@@ -24468,7 +24559,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Col = /* @__PURE__ */ _export_sfc$1(_sfc_main$1W, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/col/src/col.vue"]]);
+    var Col = /* @__PURE__ */ _export_sfc$1(_sfc_main$1Y, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/col/src/col.vue"]]);
     const ElCol = withInstall(Col);
     const emitChangeFn = (value) => isNumber(value) || isString(value) || isArray$1(value);
     const collapseProps = buildProps({
@@ -24567,7 +24658,7 @@ var require_index_001 = __commonJS({
         rootKls
       };
     };
-    const _sfc_main$1V = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1X = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCollapse"
       },
@@ -24597,8 +24688,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Collapse = /* @__PURE__ */ _export_sfc$1(_sfc_main$1V, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/collapse/src/collapse.vue"]]);
-    const _sfc_main$1U = /* @__PURE__ */ defineComponent({
+    var Collapse = /* @__PURE__ */ _export_sfc$1(_sfc_main$1X, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/collapse/src/collapse.vue"]]);
+    const _sfc_main$1W = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCollapseTransition"
       },
@@ -24680,7 +24771,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var CollapseTransition = /* @__PURE__ */ _export_sfc$1(_sfc_main$1U, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/collapse-transition/src/collapse-transition.vue"]]);
+    var CollapseTransition = /* @__PURE__ */ _export_sfc$1(_sfc_main$1W, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/collapse-transition/src/collapse-transition.vue"]]);
     const ElCollapseTransition = withInstall(CollapseTransition);
     const collapseItemProps = buildProps({
       title: {
@@ -24778,9 +24869,9 @@ var require_index_001 = __commonJS({
         scopedHeadId
       };
     };
-    const _hoisted_1$12 = ["id", "aria-expanded", "aria-controls", "aria-describedby", "tabindex", "aria-disabled"];
-    const _hoisted_2$E = ["id", "aria-hidden", "aria-labelledby"];
-    const _sfc_main$1T = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$14 = ["id", "aria-expanded", "aria-controls", "aria-describedby", "tabindex", "aria-disabled"];
+    const _hoisted_2$G = ["id", "aria-hidden", "aria-labelledby"];
+    const _sfc_main$1V = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCollapseItem"
       },
@@ -24858,7 +24949,7 @@ var require_index_001 = __commonJS({
                     _: 1
                   }, 8, ["class"])
                 ])
-              ], 42, _hoisted_1$12),
+              ], 42, _hoisted_1$14),
               createVNode(unref(ElCollapseTransition), null, {
                 default: withCtx(() => [
                   withDirectives(createBaseVNode("div", {
@@ -24878,7 +24969,7 @@ var require_index_001 = __commonJS({
                       ],
                       2
                     )
-                  ], 10, _hoisted_2$E), [
+                  ], 10, _hoisted_2$G), [
                     [vShow, unref(isActive)]
                   ])
                 ]),
@@ -24890,7 +24981,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var CollapseItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$1T, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/collapse/src/collapse-item.vue"]]);
+    var CollapseItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$1V, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/collapse/src/collapse-item.vue"]]);
     const ElCollapse = withInstall(Collapse, {
       CollapseItem
     });
@@ -25145,10 +25236,10 @@ var require_index_001 = __commonJS({
         update
       };
     };
-    const _hoisted_1$11 = ["aria-label", "aria-valuenow", "aria-valuetext", "aria-orientation", "tabindex", "aria-disabled"];
+    const _hoisted_1$13 = ["aria-label", "aria-valuenow", "aria-valuetext", "aria-orientation", "tabindex", "aria-disabled"];
     const minValue$1 = 0;
     const maxValue$1 = 100;
-    const _sfc_main$1S = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1U = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElColorAlphaSlider"
       },
@@ -25220,18 +25311,18 @@ var require_index_001 = __commonJS({
                 tabindex: _ctx.disabled ? void 0 : 0,
                 "aria-disabled": _ctx.disabled,
                 onKeydown: _cache[1] || (_cache[1] = (...args) => unref(handleKeydown) && unref(handleKeydown)(...args))
-              }, null, 46, _hoisted_1$11)
+              }, null, 46, _hoisted_1$13)
             ],
             2
           );
         };
       }
     });
-    var AlphaSlider = /* @__PURE__ */ _export_sfc$1(_sfc_main$1S, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker-panel/src/components/alpha-slider.vue"]]);
-    const _hoisted_1$10 = ["aria-label", "aria-valuenow", "aria-valuetext", "aria-orientation", "tabindex", "aria-disabled"];
+    var AlphaSlider = /* @__PURE__ */ _export_sfc$1(_sfc_main$1U, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker-panel/src/components/alpha-slider.vue"]]);
+    const _hoisted_1$12 = ["aria-label", "aria-valuenow", "aria-valuetext", "aria-orientation", "tabindex", "aria-disabled"];
     const minValue = 0;
     const maxValue = 360;
-    const _sfc_main$1R = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1T = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElColorHueSlider"
       },
@@ -25295,14 +25386,14 @@ var require_index_001 = __commonJS({
                 tabindex: _ctx.disabled ? void 0 : 0,
                 "aria-disabled": _ctx.disabled,
                 onKeydown: _cache[1] || (_cache[1] = (...args) => unref(handleKeydown) && unref(handleKeydown)(...args))
-              }, null, 46, _hoisted_1$10)
+              }, null, 46, _hoisted_1$12)
             ],
             2
           );
         };
       }
     });
-    var HueSlider = /* @__PURE__ */ _export_sfc$1(_sfc_main$1R, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker-panel/src/components/hue-slider.vue"]]);
+    var HueSlider = /* @__PURE__ */ _export_sfc$1(_sfc_main$1T, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker-panel/src/components/hue-slider.vue"]]);
     const predefineProps = buildProps({
       colors: {
         type: definePropType(Array),
@@ -25489,8 +25580,8 @@ var require_index_001 = __commonJS({
         colorSelectorKls
       };
     };
-    const _hoisted_1$$ = ["disabled", "aria-label", "onClick"];
-    const _sfc_main$1Q = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$11 = ["disabled", "aria-label", "onClick"];
+    const _sfc_main$1S = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElColorPredefine"
       },
@@ -25537,7 +25628,7 @@ var require_index_001 = __commonJS({
                           null,
                           4
                         )
-                      ], 10, _hoisted_1$$);
+                      ], 10, _hoisted_1$11);
                     }),
                     128
                   ))
@@ -25550,7 +25641,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Predefine = /* @__PURE__ */ _export_sfc$1(_sfc_main$1Q, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker-panel/src/components/predefine.vue"]]);
+    var Predefine = /* @__PURE__ */ _export_sfc$1(_sfc_main$1S, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker-panel/src/components/predefine.vue"]]);
     const svPanelProps = buildProps({
       color: {
         type: definePropType(Object),
@@ -25698,8 +25789,8 @@ var require_index_001 = __commonJS({
         update
       };
     };
-    const _hoisted_1$_ = ["tabindex", "aria-disabled", "aria-label", "aria-valuenow", "aria-valuetext"];
-    const _sfc_main$1P = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$10 = ["tabindex", "aria-disabled", "aria-label", "aria-valuenow", "aria-valuetext"];
+    const _sfc_main$1R = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElSvPanel"
       },
@@ -25762,14 +25853,14 @@ var require_index_001 = __commonJS({
                 "aria-valuenow": `${unref(saturation)},${unref(brightness)}`,
                 "aria-valuetext": ariaValuetext.value,
                 onKeydown: _cache[0] || (_cache[0] = (...args) => unref(handleKeydown) && unref(handleKeydown)(...args))
-              }, null, 46, _hoisted_1$_)
+              }, null, 46, _hoisted_1$10)
             ],
             6
           );
         };
       }
     });
-    var SvPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1P, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker-panel/src/components/sv-panel.vue"]]);
+    var SvPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1R, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker-panel/src/components/sv-panel.vue"]]);
     const useCommonColor = (props2, emit2) => {
       const color = reactive(
         new Color({
@@ -25791,7 +25882,7 @@ var require_index_001 = __commonJS({
         color
       };
     };
-    const _sfc_main$1O = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1Q = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElColorPickerPanel"
       },
@@ -25936,7 +26027,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ColorPickerPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1O, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker-panel/src/color-picker-panel.vue"]]);
+    var ColorPickerPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1Q, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker-panel/src/color-picker-panel.vue"]]);
     const ElColorPickerPanel = withInstall(ColorPickerPanel);
     const colorPickerProps = buildProps({
       persistent: {
@@ -25980,8 +26071,8 @@ var require_index_001 = __commonJS({
       focus: (evt) => evt instanceof FocusEvent,
       blur: (evt) => evt instanceof FocusEvent
     };
-    const _hoisted_1$Z = ["id", "aria-label", "aria-labelledby", "aria-description", "aria-disabled", "tabindex"];
-    const _sfc_main$1N = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$$ = ["id", "aria-label", "aria-labelledby", "aria-description", "aria-disabled", "tabindex"];
+    const _sfc_main$1P = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElColorPicker"
       },
@@ -26339,14 +26430,14 @@ var require_index_001 = __commonJS({
                   ],
                   2
                 )
-              ], 16, _hoisted_1$Z)
+              ], 16, _hoisted_1$$)
             ]),
             _: 1
           }, 8, ["visible", "popper-class", "popper-style", "teleported", "transition", "persistent", "append-to"]);
         };
       }
     });
-    var ColorPicker = /* @__PURE__ */ _export_sfc$1(_sfc_main$1N, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker/src/color-picker.vue"]]);
+    var ColorPicker = /* @__PURE__ */ _export_sfc$1(_sfc_main$1P, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/color-picker/src/color-picker.vue"]]);
     const ElColorPicker = withInstall(ColorPicker);
     const configProviderProps = buildProps({
       a11y: {
@@ -26406,7 +26497,7 @@ var require_index_001 = __commonJS({
       }
     });
     const ElConfigProvider = withInstall(ConfigProvider);
-    const _sfc_main$1M = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1O = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElContainer"
       },
@@ -26451,8 +26542,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Container = /* @__PURE__ */ _export_sfc$1(_sfc_main$1M, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/container/src/container.vue"]]);
-    const _sfc_main$1L = /* @__PURE__ */ defineComponent({
+    var Container = /* @__PURE__ */ _export_sfc$1(_sfc_main$1O, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/container/src/container.vue"]]);
+    const _sfc_main$1N = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElAside"
       },
@@ -26484,8 +26575,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Aside = /* @__PURE__ */ _export_sfc$1(_sfc_main$1L, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/container/src/aside.vue"]]);
-    const _sfc_main$1K = /* @__PURE__ */ defineComponent({
+    var Aside = /* @__PURE__ */ _export_sfc$1(_sfc_main$1N, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/container/src/aside.vue"]]);
+    const _sfc_main$1M = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElFooter"
       },
@@ -26517,8 +26608,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Footer$2 = /* @__PURE__ */ _export_sfc$1(_sfc_main$1K, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/container/src/footer.vue"]]);
-    const _sfc_main$1J = /* @__PURE__ */ defineComponent({
+    var Footer$2 = /* @__PURE__ */ _export_sfc$1(_sfc_main$1M, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/container/src/footer.vue"]]);
+    const _sfc_main$1L = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElHeader"
       },
@@ -26552,8 +26643,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Header$2 = /* @__PURE__ */ _export_sfc$1(_sfc_main$1J, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/container/src/header.vue"]]);
-    const _sfc_main$1I = /* @__PURE__ */ defineComponent({
+    var Header$2 = /* @__PURE__ */ _export_sfc$1(_sfc_main$1L, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/container/src/header.vue"]]);
+    const _sfc_main$1K = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElMain"
       },
@@ -26574,7 +26665,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Main = /* @__PURE__ */ _export_sfc$1(_sfc_main$1I, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/container/src/main.vue"]]);
+    var Main = /* @__PURE__ */ _export_sfc$1(_sfc_main$1K, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/container/src/main.vue"]]);
     const ElContainer = withInstall(Container, {
       Aside,
       Footer: Footer$2,
@@ -26975,9 +27066,9 @@ var require_index_001 = __commonJS({
       endPlaceholder: String,
       disabled: Boolean
     });
-    const _hoisted_1$Y = ["id", "name", "placeholder", "value", "disabled"];
-    const _hoisted_2$D = ["id", "name", "placeholder", "value", "disabled"];
-    const _sfc_main$1H = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$_ = ["id", "name", "placeholder", "value", "disabled"];
+    const _hoisted_2$F = ["id", "name", "placeholder", "value", "disabled"];
+    const _sfc_main$1J = /* @__PURE__ */ defineComponent({
       ...{
         name: "PickerRangeTrigger",
         inheritAttrs: false
@@ -27082,7 +27173,7 @@ var require_index_001 = __commonJS({
                 disabled: _ctx.disabled,
                 onInput: handleStartInput,
                 onChange: handleStartChange
-              }), null, 16, _hoisted_1$Y),
+              }), null, 16, _hoisted_1$_),
               renderSlot(_ctx.$slots, "range-separator"),
               createBaseVNode("input", mergeProps(unref(attrs), {
                 id: _ctx.id && _ctx.id[1],
@@ -27095,7 +27186,7 @@ var require_index_001 = __commonJS({
                 disabled: _ctx.disabled,
                 onInput: handleEndInput,
                 onChange: handleEndChange
-              }), null, 16, _hoisted_2$D),
+              }), null, 16, _hoisted_2$F),
               renderSlot(_ctx.$slots, "suffix")
             ],
             38
@@ -27103,8 +27194,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var PickerRangeTrigger = /* @__PURE__ */ _export_sfc$1(_sfc_main$1H, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-picker/src/common/picker-range-trigger.vue"]]);
-    const _sfc_main$1G = /* @__PURE__ */ defineComponent({
+    var PickerRangeTrigger = /* @__PURE__ */ _export_sfc$1(_sfc_main$1J, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-picker/src/common/picker-range-trigger.vue"]]);
+    const _sfc_main$1I = /* @__PURE__ */ defineComponent({
       ...{
         name: "Picker"
       },
@@ -27684,7 +27775,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var CommonPicker = /* @__PURE__ */ _export_sfc$1(_sfc_main$1G, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-picker/src/common/picker.vue"]]);
+    var CommonPicker = /* @__PURE__ */ _export_sfc$1(_sfc_main$1I, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-picker/src/common/picker.vue"]]);
     const panelTimePickerProps = buildProps({
       ...timePanelSharedProps,
       datetimeRole: String,
@@ -27883,9 +27974,9 @@ var require_index_001 = __commonJS({
         el[SCOPE$4] = null;
       }
     };
-    const _hoisted_1$X = ["onClick"];
-    const _hoisted_2$C = ["onMouseenter"];
-    const _sfc_main$1F = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$Z = ["onClick"];
+    const _hoisted_2$E = ["onMouseenter"];
+    const _sfc_main$1H = /* @__PURE__ */ defineComponent({
       __name: "basic-time-spinner",
       props: basicTimeSpinnerProps,
       emits: [CHANGE_EVENT, "select-range", "set-option"],
@@ -28169,7 +28260,7 @@ var require_index_001 = __commonJS({
                               ],
                               64
                             ))
-                          ], 10, _hoisted_1$X);
+                          ], 10, _hoisted_1$Z);
                         }),
                         128
                       ))
@@ -28266,7 +28357,7 @@ var require_index_001 = __commonJS({
                       ],
                       2
                     )
-                  ], 42, _hoisted_2$C);
+                  ], 42, _hoisted_2$E);
                 }),
                 128
               )) : createCommentVNode("v-if", true)
@@ -28276,8 +28367,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var TimeSpinner = /* @__PURE__ */ _export_sfc$1(_sfc_main$1F, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-picker/src/time-picker-com/basic-time-spinner.vue"]]);
-    const _sfc_main$1E = /* @__PURE__ */ defineComponent({
+    var TimeSpinner = /* @__PURE__ */ _export_sfc$1(_sfc_main$1H, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-picker/src/time-picker-com/basic-time-spinner.vue"]]);
+    const _sfc_main$1G = /* @__PURE__ */ defineComponent({
       __name: "panel-time-pick",
       props: panelTimePickerProps,
       emits: ["pick", "select-range", "set-picker-option"],
@@ -28469,15 +28560,15 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var TimePickPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1E, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-picker/src/time-picker-com/panel-time-pick.vue"]]);
+    var TimePickPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1G, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-picker/src/time-picker-com/panel-time-pick.vue"]]);
     const panelTimeRangeProps = buildProps({
       ...timePanelSharedProps,
       parsedValue: {
         type: definePropType(Array)
       }
     });
-    const _hoisted_1$W = ["disabled"];
-    const _sfc_main$1D = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$Y = ["disabled"];
+    const _sfc_main$1F = /* @__PURE__ */ defineComponent({
       __name: "panel-time-range",
       props: panelTimeRangeProps,
       emits: ["pick", "select-range", "set-picker-option"],
@@ -28790,7 +28881,7 @@ var require_index_001 = __commonJS({
                     class: normalizeClass([unref(nsTime).be("panel", "btn"), "confirm"]),
                     disabled: btnConfirmDisabled.value,
                     onClick: _cache[1] || (_cache[1] = ($event) => handleConfirm())
-                  }, toDisplayString(unref(t)("el.datepicker.confirm")), 11, _hoisted_1$W)
+                  }, toDisplayString(unref(t)("el.datepicker.confirm")), 11, _hoisted_1$Y)
                 ],
                 2
               )
@@ -28800,7 +28891,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var TimeRangePanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1D, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-picker/src/time-picker-com/panel-time-range.vue"]]);
+    var TimeRangePanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1F, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-picker/src/time-picker-com/panel-time-range.vue"]]);
     dayjs.extend(customParseFormat);
     var TimePicker = /* @__PURE__ */ defineComponent({
       name: "ElTimePicker",
@@ -29637,10 +29728,10 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$V = ["aria-label"];
-    const _hoisted_2$B = ["aria-label"];
-    const _hoisted_3$k = ["aria-current", "aria-selected", "tabindex", "aria-disabled"];
-    const _sfc_main$1C = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$X = ["aria-label"];
+    const _hoisted_2$D = ["aria-label"];
+    const _hoisted_3$m = ["aria-current", "aria-selected", "tabindex", "aria-disabled"];
+    const _sfc_main$1E = /* @__PURE__ */ defineComponent({
       __name: "basic-date-table",
       props: basicDateTableProps,
       emits: basicDateTableEmits,
@@ -29711,7 +29802,7 @@ var require_index_001 = __commonJS({
                         key,
                         "aria-label": unref(t)("el.datepicker.weeksFull." + week),
                         scope: "col"
-                      }, toDisplayString(unref(t)("el.datepicker.weeks." + week)), 9, _hoisted_2$B);
+                      }, toDisplayString(unref(t)("el.datepicker.weeks." + week)), 9, _hoisted_2$D);
                     }),
                     128
                   ))
@@ -29743,7 +29834,7 @@ var require_index_001 = __commonJS({
                               onFocus: _cache[0] || (_cache[0] = (...args) => unref(handleFocus) && unref(handleFocus)(...args))
                             }, [
                               createVNode(unref(ElDatePickerCell), { cell }, null, 8, ["cell"])
-                            ], 42, _hoisted_3$k);
+                            ], 42, _hoisted_3$m);
                           }),
                           128
                         ))
@@ -29756,18 +29847,18 @@ var require_index_001 = __commonJS({
               ],
               512
             )
-          ], 42, _hoisted_1$V);
+          ], 42, _hoisted_1$X);
         };
       }
     });
-    var DateTable = /* @__PURE__ */ _export_sfc$1(_sfc_main$1C, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/basic-date-table.vue"]]);
+    var DateTable = /* @__PURE__ */ _export_sfc$1(_sfc_main$1E, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/basic-date-table.vue"]]);
     const basicMonthTableProps = buildProps({
       ...datePickerSharedProps,
       selectionMode: selectionModeWithDefault("month")
     });
-    const _hoisted_1$U = ["aria-label"];
-    const _hoisted_2$A = ["aria-selected", "aria-label", "tabindex", "onKeydown"];
-    const _sfc_main$1B = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$W = ["aria-label"];
+    const _hoisted_2$C = ["aria-selected", "aria-label", "tabindex", "onKeydown"];
+    const _sfc_main$1D = /* @__PURE__ */ defineComponent({
       __name: "basic-month-table",
       props: basicMonthTableProps,
       emits: ["changerange", "pick", "select"],
@@ -30003,7 +30094,7 @@ var require_index_001 = __commonJS({
                                 renderText: unref(t)("el.datepicker.months." + months.value[cell.text])
                               }
                             }, null, 8, ["cell"])
-                          ], 42, _hoisted_2$A);
+                          ], 42, _hoisted_2$C);
                         }),
                         128
                       ))
@@ -30014,18 +30105,18 @@ var require_index_001 = __commonJS({
               ],
               512
             )
-          ], 42, _hoisted_1$U);
+          ], 42, _hoisted_1$W);
         };
       }
     });
-    var MonthTable = /* @__PURE__ */ _export_sfc$1(_sfc_main$1B, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/basic-month-table.vue"]]);
+    var MonthTable = /* @__PURE__ */ _export_sfc$1(_sfc_main$1D, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/basic-month-table.vue"]]);
     const basicYearTableProps = buildProps({
       ...datePickerSharedProps,
       selectionMode: selectionModeWithDefault("year")
     });
-    const _hoisted_1$T = ["aria-label"];
-    const _hoisted_2$z = ["aria-selected", "aria-label", "tabindex", "onKeydown"];
-    const _sfc_main$1A = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$V = ["aria-label"];
+    const _hoisted_2$B = ["aria-selected", "aria-label", "tabindex", "onKeydown"];
+    const _sfc_main$1C = /* @__PURE__ */ defineComponent({
       __name: "basic-year-table",
       props: basicYearTableProps,
       emits: ["changerange", "pick", "select"],
@@ -30251,7 +30342,7 @@ var require_index_001 = __commonJS({
                             ]
                           }, [
                             createVNode(unref(ElDatePickerCell), { cell }, null, 8, ["cell"])
-                          ], 42, _hoisted_2$z);
+                          ], 42, _hoisted_2$B);
                         }),
                         128
                       ))
@@ -30262,19 +30353,19 @@ var require_index_001 = __commonJS({
               ],
               512
             )
-          ], 42, _hoisted_1$T);
+          ], 42, _hoisted_1$V);
         };
       }
     });
-    var YearTable = /* @__PURE__ */ _export_sfc$1(_sfc_main$1A, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/basic-year-table.vue"]]);
-    const _hoisted_1$S = ["disabled", "onClick"];
-    const _hoisted_2$y = ["aria-label", "disabled"];
-    const _hoisted_3$j = ["aria-label", "disabled"];
-    const _hoisted_4$f = ["tabindex", "aria-disabled"];
-    const _hoisted_5$b = ["tabindex", "aria-disabled"];
-    const _hoisted_6$6 = ["aria-label", "disabled"];
-    const _hoisted_7$4 = ["aria-label", "disabled"];
-    const _sfc_main$1z = /* @__PURE__ */ defineComponent({
+    var YearTable = /* @__PURE__ */ _export_sfc$1(_sfc_main$1C, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/basic-year-table.vue"]]);
+    const _hoisted_1$U = ["disabled", "onClick"];
+    const _hoisted_2$A = ["aria-label", "disabled"];
+    const _hoisted_3$l = ["aria-label", "disabled"];
+    const _hoisted_4$h = ["tabindex", "aria-disabled"];
+    const _hoisted_5$c = ["tabindex", "aria-disabled"];
+    const _hoisted_6$7 = ["aria-label", "disabled"];
+    const _hoisted_7$5 = ["aria-label", "disabled"];
+    const _sfc_main$1B = /* @__PURE__ */ defineComponent({
       __name: "panel-date-pick",
       props: panelDatePickProps,
       emits: ["pick", "set-picker-option", "panel-change"],
@@ -30783,7 +30874,7 @@ var require_index_001 = __commonJS({
                             disabled: unref(dateDisabled),
                             class: normalizeClass(unref(ppNs).e("shortcut")),
                             onClick: ($event) => handleShortcutClick(shortcut)
-                          }, toDisplayString(shortcut.text), 11, _hoisted_1$S);
+                          }, toDisplayString(shortcut.text), 11, _hoisted_1$U);
                         }),
                         128
                       ))
@@ -30883,7 +30974,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_2$y),
+                              ], 10, _hoisted_2$A),
                               withDirectives(createBaseVNode("button", {
                                 type: "button",
                                 "aria-label": unref(t)(`el.datepicker.prevMonth`),
@@ -30899,7 +30990,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_3$j), [
+                              ], 10, _hoisted_3$l), [
                                 [vShow, currentView.value === "date"]
                               ])
                             ],
@@ -30913,7 +31004,7 @@ var require_index_001 = __commonJS({
                             "aria-disabled": _ctx.disabled,
                             onKeydown: _cache[4] || (_cache[4] = withKeys(($event) => showPicker("year"), ["enter"])),
                             onClick: _cache[5] || (_cache[5] = ($event) => showPicker("year"))
-                          }, toDisplayString(yearLabel.value), 43, _hoisted_4$f),
+                          }, toDisplayString(yearLabel.value), 43, _hoisted_4$h),
                           withDirectives(createBaseVNode("span", {
                             role: "button",
                             "aria-live": "polite",
@@ -30925,7 +31016,7 @@ var require_index_001 = __commonJS({
                             ]),
                             onKeydown: _cache[6] || (_cache[6] = withKeys(($event) => showPicker("month"), ["enter"])),
                             onClick: _cache[7] || (_cache[7] = ($event) => showPicker("month"))
-                          }, toDisplayString(unref(t)(`el.datepicker.month${month.value + 1}`)), 43, _hoisted_5$b), [
+                          }, toDisplayString(unref(t)(`el.datepicker.month${month.value + 1}`)), 43, _hoisted_5$c), [
                             [vShow, currentView.value === "date"]
                           ]),
                           createBaseVNode(
@@ -30949,7 +31040,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_6$6), [
+                              ], 10, _hoisted_6$7), [
                                 [vShow, currentView.value === "date"]
                               ]),
                               createBaseVNode("button", {
@@ -30967,7 +31058,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_7$4)
+                              ], 10, _hoisted_7$5)
                             ],
                             2
                           )
@@ -31078,7 +31169,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var DatePickPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1z, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/panel-date-pick.vue"]]);
+    var DatePickPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1B, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/panel-date-pick.vue"]]);
     const panelDateRangeProps = buildProps({
       ...panelSharedProps,
       ...panelRangeSharedProps
@@ -31331,21 +31422,21 @@ var require_index_001 = __commonJS({
         adjustDateByView
       };
     };
-    const _hoisted_1$R = ["disabled", "onClick"];
-    const _hoisted_2$x = ["aria-label", "disabled"];
-    const _hoisted_3$i = ["aria-label", "disabled"];
-    const _hoisted_4$e = ["disabled", "aria-label"];
-    const _hoisted_5$a = ["disabled", "aria-label"];
-    const _hoisted_6$5 = ["tabindex", "aria-disabled"];
-    const _hoisted_7$3 = ["tabindex", "aria-disabled"];
-    const _hoisted_8$2 = ["disabled", "aria-label"];
-    const _hoisted_9$2 = ["disabled", "aria-label"];
-    const _hoisted_10$2 = ["aria-label", "disabled"];
-    const _hoisted_11$2 = ["disabled", "aria-label"];
-    const _hoisted_12$2 = ["tabindex", "aria-disabled"];
-    const _hoisted_13$1 = ["tabindex", "aria-disabled"];
+    const _hoisted_1$T = ["disabled", "onClick"];
+    const _hoisted_2$z = ["aria-label", "disabled"];
+    const _hoisted_3$k = ["aria-label", "disabled"];
+    const _hoisted_4$g = ["disabled", "aria-label"];
+    const _hoisted_5$b = ["disabled", "aria-label"];
+    const _hoisted_6$6 = ["tabindex", "aria-disabled"];
+    const _hoisted_7$4 = ["tabindex", "aria-disabled"];
+    const _hoisted_8$4 = ["disabled", "aria-label"];
+    const _hoisted_9$3 = ["disabled", "aria-label"];
+    const _hoisted_10$3 = ["aria-label", "disabled"];
+    const _hoisted_11$3 = ["disabled", "aria-label"];
+    const _hoisted_12$3 = ["tabindex", "aria-disabled"];
+    const _hoisted_13$2 = ["tabindex", "aria-disabled"];
     const unit$2 = "month";
-    const _sfc_main$1y = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1A = /* @__PURE__ */ defineComponent({
       __name: "panel-date-range",
       props: panelDateRangeProps,
       emits: [
@@ -31754,7 +31845,7 @@ var require_index_001 = __commonJS({
                             disabled: unref(dateRangeDisabled),
                             class: normalizeClass(unref(ppNs).e("shortcut")),
                             onClick: ($event) => unref(handleShortcutClick)(shortcut)
-                          }, toDisplayString(shortcut.text), 11, _hoisted_1$R);
+                          }, toDisplayString(shortcut.text), 11, _hoisted_1$T);
                         }),
                         128
                       ))
@@ -31930,7 +32021,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_2$x),
+                              ], 10, _hoisted_2$z),
                               withDirectives(createBaseVNode("button", {
                                 type: "button",
                                 class: normalizeClass([unref(ppNs).e("icon-btn"), "arrow-left"]),
@@ -31946,7 +32037,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_3$i), [
+                              ], 10, _hoisted_3$k), [
                                 [vShow, unref(leftCurrentView) === "date"]
                               ]),
                               _ctx.unlinkPanels ? (openBlock(), createElementBlock("button", {
@@ -31968,7 +32059,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_4$e)) : createCommentVNode("v-if", true),
+                              ], 10, _hoisted_4$g)) : createCommentVNode("v-if", true),
                               _ctx.unlinkPanels && unref(leftCurrentView) === "date" ? (openBlock(), createElementBlock("button", {
                                 key: 1,
                                 type: "button",
@@ -31988,7 +32079,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_5$a)) : createCommentVNode("v-if", true),
+                              ], 10, _hoisted_5$b)) : createCommentVNode("v-if", true),
                               createBaseVNode("div", null, [
                                 createBaseVNode("span", {
                                   role: "button",
@@ -31998,7 +32089,7 @@ var require_index_001 = __commonJS({
                                   "aria-disabled": _ctx.disabled,
                                   onKeydown: _cache[10] || (_cache[10] = withKeys(($event) => unref(showLeftPicker)("year"), ["enter"])),
                                   onClick: _cache[11] || (_cache[11] = ($event) => unref(showLeftPicker)("year"))
-                                }, toDisplayString(unref(leftYearLabel)), 43, _hoisted_6$5),
+                                }, toDisplayString(unref(leftYearLabel)), 43, _hoisted_6$6),
                                 withDirectives(createBaseVNode("span", {
                                   role: "button",
                                   "aria-live": "polite",
@@ -32010,7 +32101,7 @@ var require_index_001 = __commonJS({
                                   ]),
                                   onKeydown: _cache[12] || (_cache[12] = withKeys(($event) => unref(showLeftPicker)("month"), ["enter"])),
                                   onClick: _cache[13] || (_cache[13] = ($event) => unref(showLeftPicker)("month"))
-                                }, toDisplayString(unref(t)(`el.datepicker.month${leftDate.value.month() + 1}`)), 43, _hoisted_7$3), [
+                                }, toDisplayString(unref(t)(`el.datepicker.month${leftDate.value.month() + 1}`)), 43, _hoisted_7$4), [
                                   [vShow, unref(leftCurrentView) === "date"]
                                 ])
                               ])
@@ -32087,7 +32178,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_8$2)) : createCommentVNode("v-if", true),
+                              ], 10, _hoisted_8$4)) : createCommentVNode("v-if", true),
                               _ctx.unlinkPanels && unref(rightCurrentView) === "date" ? (openBlock(), createElementBlock("button", {
                                 key: 1,
                                 type: "button",
@@ -32104,7 +32195,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_9$2)) : createCommentVNode("v-if", true),
+                              ], 10, _hoisted_9$3)) : createCommentVNode("v-if", true),
                               createBaseVNode("button", {
                                 type: "button",
                                 "aria-label": unref(t)(`el.datepicker.nextYear`),
@@ -32120,7 +32211,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_10$2),
+                              ], 10, _hoisted_10$3),
                               withDirectives(createBaseVNode("button", {
                                 type: "button",
                                 class: normalizeClass([unref(ppNs).e("icon-btn"), "arrow-right"]),
@@ -32136,7 +32227,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_11$2), [
+                              ], 10, _hoisted_11$3), [
                                 [vShow, unref(rightCurrentView) === "date"]
                               ]),
                               createBaseVNode("div", null, [
@@ -32148,7 +32239,7 @@ var require_index_001 = __commonJS({
                                   "aria-disabled": _ctx.disabled,
                                   onKeydown: _cache[14] || (_cache[14] = withKeys(($event) => unref(showRightPicker)("year"), ["enter"])),
                                   onClick: _cache[15] || (_cache[15] = ($event) => unref(showRightPicker)("year"))
-                                }, toDisplayString(unref(rightYearLabel)), 43, _hoisted_12$2),
+                                }, toDisplayString(unref(rightYearLabel)), 43, _hoisted_12$3),
                                 withDirectives(createBaseVNode("span", {
                                   role: "button",
                                   "aria-live": "polite",
@@ -32160,7 +32251,7 @@ var require_index_001 = __commonJS({
                                   ]),
                                   onKeydown: _cache[16] || (_cache[16] = withKeys(($event) => unref(showRightPicker)("month"), ["enter"])),
                                   onClick: _cache[17] || (_cache[17] = ($event) => unref(showRightPicker)("month"))
-                                }, toDisplayString(unref(t)(`el.datepicker.month${rightDate.value.month() + 1}`)), 43, _hoisted_13$1), [
+                                }, toDisplayString(unref(t)(`el.datepicker.month${rightDate.value.month() + 1}`)), 43, _hoisted_13$2), [
                                   [vShow, unref(rightCurrentView) === "date"]
                                 ])
                               ])
@@ -32262,7 +32353,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var DateRangePickPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1y, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/panel-date-range.vue"]]);
+    var DateRangePickPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1A, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/panel-date-range.vue"]]);
     const panelMonthRangeProps = buildProps({
       ...panelRangeSharedProps
     });
@@ -32318,13 +32409,13 @@ var require_index_001 = __commonJS({
         rightYear
       };
     };
-    const _hoisted_1$Q = ["disabled", "onClick"];
-    const _hoisted_2$w = ["disabled"];
-    const _hoisted_3$h = ["disabled"];
-    const _hoisted_4$d = ["disabled"];
-    const _hoisted_5$9 = ["disabled"];
+    const _hoisted_1$S = ["disabled", "onClick"];
+    const _hoisted_2$y = ["disabled"];
+    const _hoisted_3$j = ["disabled"];
+    const _hoisted_4$f = ["disabled"];
+    const _hoisted_5$a = ["disabled"];
     const unit$1 = "year";
-    const _sfc_main$1x = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1z = /* @__PURE__ */ defineComponent({
       ...{
         name: "DatePickerMonthRange"
       },
@@ -32478,7 +32569,7 @@ var require_index_001 = __commonJS({
                             class: normalizeClass(unref(ppNs).e("shortcut")),
                             disabled: unref(monthRangeDisabled),
                             onClick: ($event) => unref(handleShortcutClick)(shortcut)
-                          }, toDisplayString(shortcut.text), 11, _hoisted_1$Q);
+                          }, toDisplayString(shortcut.text), 11, _hoisted_1$S);
                         }),
                         128
                       ))
@@ -32517,7 +32608,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_2$w),
+                              ], 10, _hoisted_2$y),
                               _ctx.unlinkPanels ? (openBlock(), createElementBlock("button", {
                                 key: 0,
                                 type: "button",
@@ -32536,7 +32627,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_3$h)) : createCommentVNode("v-if", true),
+                              ], 10, _hoisted_3$j)) : createCommentVNode("v-if", true),
                               createBaseVNode(
                                 "div",
                                 null,
@@ -32592,7 +32683,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_4$d)) : createCommentVNode("v-if", true),
+                              ], 10, _hoisted_4$f)) : createCommentVNode("v-if", true),
                               createBaseVNode("button", {
                                 type: "button",
                                 class: normalizeClass([unref(ppNs).e("icon-btn"), "d-arrow-right"]),
@@ -32607,7 +32698,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_5$9),
+                              ], 10, _hoisted_5$a),
                               createBaseVNode(
                                 "div",
                                 null,
@@ -32645,7 +32736,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var MonthRangePickPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1x, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/panel-month-range.vue"]]);
+    var MonthRangePickPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1z, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/panel-month-range.vue"]]);
     const panelYearRangeProps = buildProps({
       ...panelRangeSharedProps
     });
@@ -32704,14 +32795,14 @@ var require_index_001 = __commonJS({
         rightYear
       };
     };
-    const _hoisted_1$P = ["disabled", "onClick"];
-    const _hoisted_2$v = ["disabled"];
-    const _hoisted_3$g = ["disabled"];
-    const _hoisted_4$c = ["disabled"];
-    const _hoisted_5$8 = ["disabled"];
+    const _hoisted_1$R = ["disabled", "onClick"];
+    const _hoisted_2$x = ["disabled"];
+    const _hoisted_3$i = ["disabled"];
+    const _hoisted_4$e = ["disabled"];
+    const _hoisted_5$9 = ["disabled"];
     const step = 10;
     const unit = "year";
-    const _sfc_main$1w = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1y = /* @__PURE__ */ defineComponent({
       ...{
         name: "DatePickerYearRange"
       },
@@ -32894,7 +32985,7 @@ var require_index_001 = __commonJS({
                             class: normalizeClass(unref(ppNs).e("shortcut")),
                             disabled: unref(yearRangeDisabled),
                             onClick: ($event) => unref(handleShortcutClick)(shortcut)
-                          }, toDisplayString(shortcut.text), 11, _hoisted_1$P);
+                          }, toDisplayString(shortcut.text), 11, _hoisted_1$R);
                         }),
                         128
                       ))
@@ -32933,7 +33024,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_2$v),
+                              ], 10, _hoisted_2$x),
                               _ctx.unlinkPanels ? (openBlock(), createElementBlock("button", {
                                 key: 0,
                                 type: "button",
@@ -32949,7 +33040,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_3$g)) : createCommentVNode("v-if", true),
+                              ], 10, _hoisted_3$i)) : createCommentVNode("v-if", true),
                               createBaseVNode(
                                 "div",
                                 null,
@@ -33002,7 +33093,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_4$c)) : createCommentVNode("v-if", true),
+                              ], 10, _hoisted_4$e)) : createCommentVNode("v-if", true),
                               createBaseVNode("button", {
                                 type: "button",
                                 class: normalizeClass(rightPanelKls.value.arrowRightBtn),
@@ -33017,7 +33108,7 @@ var require_index_001 = __commonJS({
                                     _: 1
                                   })
                                 ])
-                              ], 10, _hoisted_5$8),
+                              ], 10, _hoisted_5$9),
                               createBaseVNode(
                                 "div",
                                 null,
@@ -33055,7 +33146,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var YearRangePickPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1w, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/panel-year-range.vue"]]);
+    var YearRangePickPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$1y, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/date-picker-panel/src/date-picker-com/panel-year-range.vue"]]);
     const getPanel = function(type) {
       switch (type) {
         case "daterange":
@@ -33343,8 +33434,8 @@ var require_index_001 = __commonJS({
         default: () => []
       }
     });
-    const _hoisted_1$O = { key: 1 };
-    const _sfc_main$1v = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$Q = { key: 1 };
+    const _sfc_main$1x = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElDescriptionsRow"
       },
@@ -33389,7 +33480,7 @@ var require_index_001 = __commonJS({
               ])
             ],
             64
-          )) : (openBlock(), createElementBlock("tr", _hoisted_1$O, [
+          )) : (openBlock(), createElementBlock("tr", _hoisted_1$Q, [
             (openBlock(true), createElementBlock(
               Fragment,
               null,
@@ -33432,7 +33523,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ElDescriptionsRow = /* @__PURE__ */ _export_sfc$1(_sfc_main$1v, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/descriptions/src/descriptions-row.vue"]]);
+    var ElDescriptionsRow = /* @__PURE__ */ _export_sfc$1(_sfc_main$1x, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/descriptions/src/descriptions-row.vue"]]);
     const descriptionProps = buildProps({
       border: Boolean,
       column: {
@@ -33458,7 +33549,7 @@ var require_index_001 = __commonJS({
       }
     });
     const COMPONENT_NAME$g = "ElDescriptionsItem";
-    const _sfc_main$1u = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1w = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElDescriptions"
       },
@@ -33619,7 +33710,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Descriptions = /* @__PURE__ */ _export_sfc$1(_sfc_main$1u, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/descriptions/src/description.vue"]]);
+    var Descriptions = /* @__PURE__ */ _export_sfc$1(_sfc_main$1w, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/descriptions/src/description.vue"]]);
     const columnAlignment = ["left", "center", "right"];
     const descriptionItemProps = buildProps({
       label: {
@@ -33896,10 +33987,10 @@ var require_index_001 = __commonJS({
         });
       };
     };
-    const _hoisted_1$N = ["aria-level"];
-    const _hoisted_2$u = ["aria-label"];
-    const _hoisted_3$f = ["id"];
-    const _sfc_main$1t = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$P = ["aria-level"];
+    const _hoisted_2$w = ["aria-label"];
+    const _hoisted_3$h = ["id"];
+    const _sfc_main$1v = /* @__PURE__ */ defineComponent({
       ...{ name: "ElDialogContent" },
       __name: "dialog-content",
       props: dialogContentProps,
@@ -33954,7 +34045,7 @@ var require_index_001 = __commonJS({
                       role: "heading",
                       "aria-level": _ctx.ariaLevel,
                       class: normalizeClass(unref(ns).e("title"))
-                    }, toDisplayString(_ctx.title), 11, _hoisted_1$N)
+                    }, toDisplayString(_ctx.title), 11, _hoisted_1$P)
                   ]),
                   _ctx.showClose ? (openBlock(), createElementBlock("button", {
                     key: 0,
@@ -33971,7 +34062,7 @@ var require_index_001 = __commonJS({
                       ]),
                       _: 1
                     }, 8, ["class"])
-                  ], 10, _hoisted_2$u)) : createCommentVNode("v-if", true)
+                  ], 10, _hoisted_2$w)) : createCommentVNode("v-if", true)
                 ],
                 2
               ),
@@ -33980,7 +34071,7 @@ var require_index_001 = __commonJS({
                 class: normalizeClass([unref(ns).e("body"), _ctx.bodyClass])
               }, [
                 renderSlot(_ctx.$slots, "default")
-              ], 10, _hoisted_3$f),
+              ], 10, _hoisted_3$h),
               _ctx.$slots.footer ? (openBlock(), createElementBlock(
                 "footer",
                 {
@@ -33998,7 +34089,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ElDialogContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$1t, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/dialog/src/dialog-content.vue"]]);
+    var ElDialogContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$1v, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/dialog/src/dialog-content.vue"]]);
     const dialogProps = buildProps({
       ...dialogContentProps,
       appendToBody: Boolean,
@@ -34362,8 +34453,8 @@ var require_index_001 = __commonJS({
         closing
       };
     };
-    const _hoisted_1$M = ["aria-label", "aria-labelledby", "aria-describedby"];
-    const _sfc_main$1s = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$O = ["aria-label", "aria-labelledby", "aria-describedby"];
+    const _sfc_main$1u = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElDialog",
         inheritAttrs: false
@@ -34522,7 +34613,7 @@ var require_index_001 = __commonJS({
                               ]),
                               _: 3
                             }, 8, ["trapped", "onFocusAfterTrapped", "onFocusAfterReleased", "onFocusoutPrevented", "onReleaseRequested"])
-                          ], 46, _hoisted_1$M)
+                          ], 46, _hoisted_1$O)
                         ]),
                         _: 3
                       }, 8, ["mask", "overlay-class", "z-index"]), [
@@ -34540,7 +34631,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Dialog = /* @__PURE__ */ _export_sfc$1(_sfc_main$1s, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/dialog/src/dialog.vue"]]);
+    var Dialog = /* @__PURE__ */ _export_sfc$1(_sfc_main$1u, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/dialog/src/dialog.vue"]]);
     const ElDialog = withInstall(Dialog);
     const dividerProps = buildProps({
       direction: {
@@ -34558,7 +34649,7 @@ var require_index_001 = __commonJS({
         default: "solid"
       }
     });
-    const _sfc_main$1r = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1t = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElDivider"
       },
@@ -34598,7 +34689,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Divider = /* @__PURE__ */ _export_sfc$1(_sfc_main$1r, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/divider/src/divider.vue"]]);
+    var Divider = /* @__PURE__ */ _export_sfc$1(_sfc_main$1t, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/divider/src/divider.vue"]]);
     const ElDivider = withInstall(Divider);
     const drawerProps = buildProps({
       ...dialogProps,
@@ -34718,11 +34809,11 @@ var require_index_001 = __commonJS({
         isHorizontal: isHorizontal2
       };
     }
-    const _hoisted_1$L = ["aria-label", "aria-labelledby", "aria-describedby"];
-    const _hoisted_2$t = ["id", "aria-level"];
-    const _hoisted_3$e = ["aria-label"];
-    const _hoisted_4$b = ["id"];
-    const _sfc_main$1q = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$N = ["aria-label", "aria-labelledby", "aria-describedby"];
+    const _hoisted_2$v = ["id", "aria-level"];
+    const _hoisted_3$g = ["aria-label"];
+    const _hoisted_4$d = ["id"];
+    const _sfc_main$1s = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElDrawer",
         inheritAttrs: false
@@ -34859,7 +34950,7 @@ var require_index_001 = __commonJS({
                                       role: "heading",
                                       "aria-level": _ctx.headerAriaLevel,
                                       class: normalizeClass(unref(ns).e("title"))
-                                    }, toDisplayString(_ctx.title), 11, _hoisted_2$t)
+                                    }, toDisplayString(_ctx.title), 11, _hoisted_2$v)
                                   ]) : renderSlot(_ctx.$slots, "title", { key: 1 }, () => [
                                     createCommentVNode(" DEPRECATED SLOT ")
                                   ]),
@@ -34878,7 +34969,7 @@ var require_index_001 = __commonJS({
                                       ]),
                                       _: 1
                                     }, 8, ["class"])
-                                  ], 10, _hoisted_3$e)) : createCommentVNode("v-if", true)
+                                  ], 10, _hoisted_3$g)) : createCommentVNode("v-if", true)
                                 ],
                                 2
                               )) : createCommentVNode("v-if", true),
@@ -34888,7 +34979,7 @@ var require_index_001 = __commonJS({
                                 class: normalizeClass([unref(ns).e("body"), _ctx.bodyClass])
                               }, [
                                 renderSlot(_ctx.$slots, "default")
-                              ], 10, _hoisted_4$b)) : createCommentVNode("v-if", true),
+                              ], 10, _hoisted_4$d)) : createCommentVNode("v-if", true),
                               _ctx.$slots.footer ? (openBlock(), createElementBlock(
                                 "div",
                                 {
@@ -34912,7 +35003,7 @@ var require_index_001 = __commonJS({
                                 null,
                                 6
                               )) : createCommentVNode("v-if", true)
-                            ], 16, _hoisted_1$L)
+                            ], 16, _hoisted_1$N)
                           ]),
                           _: 3
                         }, 8, ["trapped", "focus-trap-el", "focus-start-el", "onFocusAfterTrapped", "onFocusAfterReleased", "onFocusoutPrevented", "onReleaseRequested"])
@@ -34931,23 +35022,23 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Drawer = /* @__PURE__ */ _export_sfc$1(_sfc_main$1q, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/drawer/src/drawer.vue"]]);
+    var Drawer = /* @__PURE__ */ _export_sfc$1(_sfc_main$1s, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/drawer/src/drawer.vue"]]);
     const ElDrawer = withInstall(Drawer);
-    const _sfc_main$1p = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1r = /* @__PURE__ */ defineComponent({
       inheritAttrs: false
     });
     function _sfc_render$k(_ctx, _cache, $props, $setup, $data, $options) {
       return renderSlot(_ctx.$slots, "default");
     }
-    var Collection = /* @__PURE__ */ _export_sfc$1(_sfc_main$1p, [["render", _sfc_render$k], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/collection/src/collection.vue"]]);
-    const _sfc_main$1o = /* @__PURE__ */ defineComponent({
+    var Collection = /* @__PURE__ */ _export_sfc$1(_sfc_main$1r, [["render", _sfc_render$k], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/collection/src/collection.vue"]]);
+    const _sfc_main$1q = /* @__PURE__ */ defineComponent({
       name: "ElCollectionItem",
       inheritAttrs: false
     });
     function _sfc_render$j(_ctx, _cache, $props, $setup, $data, $options) {
       return renderSlot(_ctx.$slots, "default");
     }
-    var CollectionItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$1o, [["render", _sfc_render$j], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/collection/src/collection-item.vue"]]);
+    var CollectionItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$1q, [["render", _sfc_render$j], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/collection/src/collection-item.vue"]]);
     const COLLECTION_ITEM_SIGN = `data-el-collection-item`;
     const createCollectionWithScope = (name) => {
       const COLLECTION_NAME = `El${name}Collection`;
@@ -35069,7 +35160,7 @@ var require_index_001 = __commonJS({
     const CURRENT_TAB_ID_CHANGE_EVT = "currentTabIdChange";
     const ENTRY_FOCUS_EVT = "rovingFocusGroup.entryFocus";
     const EVT_OPTS = { bubbles: false, cancelable: true };
-    const _sfc_main$1n = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1p = /* @__PURE__ */ defineComponent({
       name: "ElRovingFocusGroupImpl",
       inheritAttrs: false,
       props: rovingFocusGroupProps,
@@ -35203,8 +35294,8 @@ var require_index_001 = __commonJS({
     function _sfc_render$i(_ctx, _cache, $props, $setup, $data, $options) {
       return renderSlot(_ctx.$slots, "default");
     }
-    var ElRovingFocusGroupImpl = /* @__PURE__ */ _export_sfc$1(_sfc_main$1n, [["render", _sfc_render$i], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/roving-focus-group/src/roving-focus-group-impl.vue"]]);
-    const _sfc_main$1m = /* @__PURE__ */ defineComponent({
+    var ElRovingFocusGroupImpl = /* @__PURE__ */ _export_sfc$1(_sfc_main$1p, [["render", _sfc_render$i], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/roving-focus-group/src/roving-focus-group-impl.vue"]]);
+    const _sfc_main$1o = /* @__PURE__ */ defineComponent({
       name: "ElRovingFocusGroup",
       components: {
         ElFocusGroupCollection: ElCollection,
@@ -35231,7 +35322,7 @@ var require_index_001 = __commonJS({
         _: 3
       });
     }
-    var ElRovingFocusGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$1m, [["render", _sfc_render$h], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/roving-focus-group/src/roving-focus-group.vue"]]);
+    var ElRovingFocusGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$1o, [["render", _sfc_render$h], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/roving-focus-group/src/roving-focus-group.vue"]]);
     const dropdownProps = buildProps({
       trigger: {
         ...useTooltipTriggerProps.trigger,
@@ -35336,7 +35427,7 @@ var require_index_001 = __commonJS({
     const DROPDOWN_INJECTION_KEY = Symbol("elDropdown");
     const DROPDOWN_INSTANCE_INJECTION_KEY = "elDropdown";
     const { ButtonGroup: ElButtonGroup } = ElButton;
-    const _sfc_main$1l = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1n = /* @__PURE__ */ defineComponent({
       name: "ElDropdown",
       components: {
         ElButton,
@@ -35583,8 +35674,8 @@ var require_index_001 = __commonJS({
         2
       );
     }
-    var Dropdown = /* @__PURE__ */ _export_sfc$1(_sfc_main$1l, [["render", _sfc_render$g], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/dropdown/src/dropdown.vue"]]);
-    const _sfc_main$1k = /* @__PURE__ */ defineComponent({
+    var Dropdown = /* @__PURE__ */ _export_sfc$1(_sfc_main$1n, [["render", _sfc_render$g], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/dropdown/src/dropdown.vue"]]);
+    const _sfc_main$1m = /* @__PURE__ */ defineComponent({
       components: {
         ElRovingFocusCollectionItem: ElCollectionItem
       },
@@ -35668,8 +35759,8 @@ var require_index_001 = __commonJS({
         _: 3
       }, 8, ["id", "focusable", "active"]);
     }
-    var ElRovingFocusItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$1k, [["render", _sfc_render$f], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/roving-focus-group/src/roving-focus-item.vue"]]);
-    const _sfc_main$1j = /* @__PURE__ */ defineComponent({
+    var ElRovingFocusItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$1m, [["render", _sfc_render$f], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/roving-focus-group/src/roving-focus-item.vue"]]);
+    const _sfc_main$1l = /* @__PURE__ */ defineComponent({
       name: "DropdownItemImpl",
       components: {
         ElIcon
@@ -35727,7 +35818,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$K = ["aria-disabled", "tabindex", "role"];
+    const _hoisted_1$M = ["aria-disabled", "tabindex", "role"];
     function _sfc_render$e(_ctx, _cache, $props, $setup, $data, $options) {
       const _component_el_icon = resolveComponent("el-icon");
       return openBlock(), createElementBlock(
@@ -35763,12 +35854,12 @@ var require_index_001 = __commonJS({
               _: 1
             })) : createCommentVNode("v-if", true),
             renderSlot(_ctx.$slots, "default")
-          ], 16, _hoisted_1$K)
+          ], 16, _hoisted_1$M)
         ],
         64
       );
     }
-    var ElDropdownItemImpl = /* @__PURE__ */ _export_sfc$1(_sfc_main$1j, [["render", _sfc_render$e], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/dropdown/src/dropdown-item-impl.vue"]]);
+    var ElDropdownItemImpl = /* @__PURE__ */ _export_sfc$1(_sfc_main$1l, [["render", _sfc_render$e], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/dropdown/src/dropdown-item-impl.vue"]]);
     const useDropdown = () => {
       const elDropdown = inject(
         DROPDOWN_INSTANCE_INJECTION_KEY,
@@ -35780,7 +35871,7 @@ var require_index_001 = __commonJS({
         _elDropdownSize
       };
     };
-    const _sfc_main$1i = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1k = /* @__PURE__ */ defineComponent({
       name: "ElDropdownItem",
       components: {
         ElRovingFocusItem,
@@ -35872,8 +35963,8 @@ var require_index_001 = __commonJS({
         _: 3
       }, 8, ["focusable"]);
     }
-    var DropdownItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$1i, [["render", _sfc_render$d], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/dropdown/src/dropdown-item.vue"]]);
-    const _sfc_main$1h = /* @__PURE__ */ defineComponent({
+    var DropdownItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$1k, [["render", _sfc_render$d], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/dropdown/src/dropdown-item.vue"]]);
+    const _sfc_main$1j = /* @__PURE__ */ defineComponent({
       name: "ElDropdownMenu",
       props: dropdownMenuProps,
       setup(props2) {
@@ -35935,7 +36026,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$J = ["role", "aria-labelledby"];
+    const _hoisted_1$L = ["role", "aria-labelledby"];
     function _sfc_render$c(_ctx, _cache, $props, $setup, $data, $options) {
       return openBlock(), createElementBlock("ul", {
         ref: _ctx.dropdownListWrapperRef,
@@ -35950,49 +36041,49 @@ var require_index_001 = __commonJS({
         onMousedown: _cache[3] || (_cache[3] = withModifiers((...args) => _ctx.onMousedown && _ctx.onMousedown(...args), ["self"]))
       }, [
         renderSlot(_ctx.$slots, "default")
-      ], 46, _hoisted_1$J);
+      ], 46, _hoisted_1$L);
     }
-    var DropdownMenu = /* @__PURE__ */ _export_sfc$1(_sfc_main$1h, [["render", _sfc_render$c], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/dropdown/src/dropdown-menu.vue"]]);
+    var DropdownMenu = /* @__PURE__ */ _export_sfc$1(_sfc_main$1j, [["render", _sfc_render$c], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/dropdown/src/dropdown-menu.vue"]]);
     const ElDropdown = withInstall(Dropdown, {
       DropdownItem,
       DropdownMenu
     });
     const ElDropdownItem = withNoopInstall(DropdownItem);
     const ElDropdownMenu = withNoopInstall(DropdownMenu);
-    const _hoisted_1$I = {
+    const _hoisted_1$K = {
       viewBox: "0 0 79 86",
       version: "1.1",
       xmlns: "http://www.w3.org/2000/svg",
       "xmlns:xlink": "http://www.w3.org/1999/xlink"
     };
-    const _hoisted_2$s = ["id"];
-    const _hoisted_3$d = ["stop-color"];
-    const _hoisted_4$a = ["stop-color"];
-    const _hoisted_5$7 = ["id"];
-    const _hoisted_6$4 = ["stop-color"];
-    const _hoisted_7$2 = ["stop-color"];
-    const _hoisted_8$1 = ["id"];
-    const _hoisted_9$1 = {
+    const _hoisted_2$u = ["id"];
+    const _hoisted_3$f = ["stop-color"];
+    const _hoisted_4$c = ["stop-color"];
+    const _hoisted_5$8 = ["id"];
+    const _hoisted_6$5 = ["stop-color"];
+    const _hoisted_7$3 = ["stop-color"];
+    const _hoisted_8$3 = ["id"];
+    const _hoisted_9$2 = {
       stroke: "none",
       "stroke-width": "1",
       fill: "none",
       "fill-rule": "evenodd"
     };
-    const _hoisted_10$1 = { transform: "translate(-1268.000000, -535.000000)" };
-    const _hoisted_11$1 = { transform: "translate(1268.000000, 535.000000)" };
-    const _hoisted_12$1 = ["fill"];
-    const _hoisted_13 = ["fill"];
-    const _hoisted_14 = { transform: "translate(34.500000, 31.500000) scale(-1, 1) rotate(-25.000000) translate(-34.500000, -31.500000) translate(7.000000, 10.000000)" };
-    const _hoisted_15 = ["fill"];
-    const _hoisted_16 = ["fill"];
-    const _hoisted_17 = ["fill"];
-    const _hoisted_18 = ["fill"];
-    const _hoisted_19 = ["fill"];
-    const _hoisted_20 = { transform: "translate(53.000000, 45.000000)" };
-    const _hoisted_21 = ["fill", "xlink:href"];
-    const _hoisted_22 = ["fill", "mask"];
-    const _hoisted_23 = ["fill"];
-    const _sfc_main$1g = /* @__PURE__ */ defineComponent({
+    const _hoisted_10$2 = { transform: "translate(-1268.000000, -535.000000)" };
+    const _hoisted_11$2 = { transform: "translate(1268.000000, 535.000000)" };
+    const _hoisted_12$2 = ["fill"];
+    const _hoisted_13$1 = ["fill"];
+    const _hoisted_14$1 = { transform: "translate(34.500000, 31.500000) scale(-1, 1) rotate(-25.000000) translate(-34.500000, -31.500000) translate(7.000000, 10.000000)" };
+    const _hoisted_15$1 = ["fill"];
+    const _hoisted_16$1 = ["fill"];
+    const _hoisted_17$1 = ["fill"];
+    const _hoisted_18$1 = ["fill"];
+    const _hoisted_19$1 = ["fill"];
+    const _hoisted_20$1 = { transform: "translate(53.000000, 45.000000)" };
+    const _hoisted_21$1 = ["fill", "xlink:href"];
+    const _hoisted_22$1 = ["fill", "mask"];
+    const _hoisted_23$1 = ["fill"];
+    const _sfc_main$1i = /* @__PURE__ */ defineComponent({
       ...{
         name: "ImgEmpty"
       },
@@ -36001,7 +36092,7 @@ var require_index_001 = __commonJS({
         const ns = useNamespace("empty");
         const id = useId();
         return (_ctx, _cache) => {
-          return openBlock(), createElementBlock("svg", _hoisted_1$I, [
+          return openBlock(), createElementBlock("svg", _hoisted_1$K, [
             createBaseVNode("defs", null, [
               createBaseVNode("linearGradient", {
                 id: `linearGradient-1-${unref(id)}`,
@@ -36013,12 +36104,12 @@ var require_index_001 = __commonJS({
                 createBaseVNode("stop", {
                   "stop-color": `var(${unref(ns).cssVarBlockName("fill-color-1")})`,
                   offset: "0%"
-                }, null, 8, _hoisted_3$d),
+                }, null, 8, _hoisted_3$f),
                 createBaseVNode("stop", {
                   "stop-color": `var(${unref(ns).cssVarBlockName("fill-color-4")})`,
                   offset: "100%"
-                }, null, 8, _hoisted_4$a)
-              ], 8, _hoisted_2$s),
+                }, null, 8, _hoisted_4$c)
+              ], 8, _hoisted_2$u),
               createBaseVNode("linearGradient", {
                 id: `linearGradient-2-${unref(id)}`,
                 x1: "0%",
@@ -36029,42 +36120,42 @@ var require_index_001 = __commonJS({
                 createBaseVNode("stop", {
                   "stop-color": `var(${unref(ns).cssVarBlockName("fill-color-1")})`,
                   offset: "0%"
-                }, null, 8, _hoisted_6$4),
+                }, null, 8, _hoisted_6$5),
                 createBaseVNode("stop", {
                   "stop-color": `var(${unref(ns).cssVarBlockName("fill-color-6")})`,
                   offset: "100%"
-                }, null, 8, _hoisted_7$2)
-              ], 8, _hoisted_5$7),
+                }, null, 8, _hoisted_7$3)
+              ], 8, _hoisted_5$8),
               createBaseVNode("rect", {
                 id: `path-3-${unref(id)}`,
                 x: "0",
                 y: "0",
                 width: "17",
                 height: "36"
-              }, null, 8, _hoisted_8$1)
+              }, null, 8, _hoisted_8$3)
             ]),
-            createBaseVNode("g", _hoisted_9$1, [
-              createBaseVNode("g", _hoisted_10$1, [
-                createBaseVNode("g", _hoisted_11$1, [
+            createBaseVNode("g", _hoisted_9$2, [
+              createBaseVNode("g", _hoisted_10$2, [
+                createBaseVNode("g", _hoisted_11$2, [
                   createBaseVNode("path", {
                     d: "M39.5,86 C61.3152476,86 79,83.9106622 79,81.3333333 C79,78.7560045 57.3152476,78 35.5,78 C13.6847524,78 0,78.7560045 0,81.3333333 C0,83.9106622 17.6847524,86 39.5,86 Z",
                     fill: `var(${unref(ns).cssVarBlockName("fill-color-3")})`
-                  }, null, 8, _hoisted_12$1),
+                  }, null, 8, _hoisted_12$2),
                   createBaseVNode("polygon", {
                     fill: `var(${unref(ns).cssVarBlockName("fill-color-7")})`,
                     transform: "translate(27.500000, 51.500000) scale(1, -1) translate(-27.500000, -51.500000) ",
                     points: "13 58 53 58 42 45 2 45"
-                  }, null, 8, _hoisted_13),
-                  createBaseVNode("g", _hoisted_14, [
+                  }, null, 8, _hoisted_13$1),
+                  createBaseVNode("g", _hoisted_14$1, [
                     createBaseVNode("polygon", {
                       fill: `var(${unref(ns).cssVarBlockName("fill-color-7")})`,
                       transform: "translate(11.500000, 5.000000) scale(1, -1) translate(-11.500000, -5.000000) ",
                       points: "2.84078316e-14 3 18 3 23 7 5 7"
-                    }, null, 8, _hoisted_15),
+                    }, null, 8, _hoisted_15$1),
                     createBaseVNode("polygon", {
                       fill: `var(${unref(ns).cssVarBlockName("fill-color-5")})`,
                       points: "-3.69149156e-15 7 38 7 38 43 -3.69149156e-15 43"
-                    }, null, 8, _hoisted_16),
+                    }, null, 8, _hoisted_16$1),
                     createBaseVNode("rect", {
                       fill: `url(#linearGradient-1-${unref(id)})`,
                       transform: "translate(46.500000, 25.000000) scale(-1, 1) translate(-46.500000, -25.000000) ",
@@ -36072,12 +36163,12 @@ var require_index_001 = __commonJS({
                       y: "7",
                       width: "17",
                       height: "36"
-                    }, null, 8, _hoisted_17),
+                    }, null, 8, _hoisted_17$1),
                     createBaseVNode("polygon", {
                       fill: `var(${unref(ns).cssVarBlockName("fill-color-2")})`,
                       transform: "translate(39.500000, 3.500000) scale(-1, 1) translate(-39.500000, -3.500000) ",
                       points: "24 7 41 7 55 -3.63806207e-12 38 -3.63806207e-12"
-                    }, null, 8, _hoisted_18)
+                    }, null, 8, _hoisted_18$1)
                   ]),
                   createBaseVNode("rect", {
                     fill: `url(#linearGradient-2-${unref(id)})`,
@@ -36085,25 +36176,25 @@ var require_index_001 = __commonJS({
                     y: "45",
                     width: "40",
                     height: "36"
-                  }, null, 8, _hoisted_19),
-                  createBaseVNode("g", _hoisted_20, [
+                  }, null, 8, _hoisted_19$1),
+                  createBaseVNode("g", _hoisted_20$1, [
                     createBaseVNode("use", {
                       fill: `var(${unref(ns).cssVarBlockName("fill-color-8")})`,
                       transform: "translate(8.500000, 18.000000) scale(-1, 1) translate(-8.500000, -18.000000) ",
                       "xlink:href": `#path-3-${unref(id)}`
-                    }, null, 8, _hoisted_21),
+                    }, null, 8, _hoisted_21$1),
                     createBaseVNode("polygon", {
                       fill: `var(${unref(ns).cssVarBlockName("fill-color-9")})`,
                       mask: `url(#mask-4-${unref(id)})`,
                       transform: "translate(12.000000, 9.000000) scale(-1, 1) translate(-12.000000, -9.000000) ",
                       points: "7 0 24 0 20 18 7 16.5"
-                    }, null, 8, _hoisted_22)
+                    }, null, 8, _hoisted_22$1)
                   ]),
                   createBaseVNode("polygon", {
                     fill: `var(${unref(ns).cssVarBlockName("fill-color-2")})`,
                     transform: "translate(66.000000, 51.500000) scale(-1, 1) translate(-66.000000, -51.500000) ",
                     points: "62 45 79 45 70 58 53 58"
-                  }, null, 8, _hoisted_23)
+                  }, null, 8, _hoisted_23$1)
                 ])
               ])
             ])
@@ -36111,7 +36202,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ImgEmpty = /* @__PURE__ */ _export_sfc$1(_sfc_main$1g, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/empty/src/img-empty.vue"]]);
+    var ImgEmpty = /* @__PURE__ */ _export_sfc$1(_sfc_main$1i, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/empty/src/img-empty.vue"]]);
     const emptyProps = buildProps({
       image: {
         type: String,
@@ -36123,9 +36214,9 @@ var require_index_001 = __commonJS({
         default: ""
       }
     });
-    const _hoisted_1$H = ["src"];
-    const _hoisted_2$r = { key: 1 };
-    const _sfc_main$1f = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$J = ["src"];
+    const _hoisted_2$t = { key: 1 };
+    const _sfc_main$1h = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElEmpty"
       },
@@ -36159,7 +36250,7 @@ var require_index_001 = __commonJS({
                     key: 0,
                     src: _ctx.image,
                     ondragstart: "return false"
-                  }, null, 8, _hoisted_1$H)) : renderSlot(_ctx.$slots, "image", { key: 1 }, () => [
+                  }, null, 8, _hoisted_1$J)) : renderSlot(_ctx.$slots, "image", { key: 1 }, () => [
                     createVNode(ImgEmpty)
                   ])
                 ],
@@ -36173,7 +36264,7 @@ var require_index_001 = __commonJS({
                 [
                   _ctx.$slots.description ? renderSlot(_ctx.$slots, "description", { key: 0 }) : (openBlock(), createElementBlock(
                     "p",
-                    _hoisted_2$r,
+                    _hoisted_2$t,
                     toDisplayString(emptyDescription.value),
                     1
                   ))
@@ -36197,7 +36288,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Empty$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$1f, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/empty/src/empty.vue"]]);
+    var Empty$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$1h, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/empty/src/empty.vue"]]);
     const ElEmpty = withInstall(Empty$1);
     const formMetaProps = buildProps({
       size: {
@@ -36293,7 +36384,7 @@ var require_index_001 = __commonJS({
       ) : fields;
     };
     const COMPONENT_NAME$f = "ElForm";
-    const _sfc_main$1e = /* @__PURE__ */ defineComponent({
+    const _sfc_main$1g = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$f
       },
@@ -36453,7 +36544,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Form = /* @__PURE__ */ _export_sfc$1(_sfc_main$1e, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/form/src/form.vue"]]);
+    var Form = /* @__PURE__ */ _export_sfc$1(_sfc_main$1g, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/form/src/form.vue"]]);
     function _extends() {
       _extends = Object.assign ? Object.assign.bind() : function(target) {
         for (var i = 1; i < arguments.length; i++) {
@@ -37620,8 +37711,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$G = ["role", "aria-labelledby"];
-    const _sfc_main$1d = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$I = ["role", "aria-labelledby"];
+    const _sfc_main$1f = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElFormItem"
       },
@@ -37957,11 +38048,11 @@ var require_index_001 = __commonJS({
               ],
               6
             )
-          ], 10, _hoisted_1$G);
+          ], 10, _hoisted_1$I);
         };
       }
     });
-    var FormItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$1d, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/form/src/form-item.vue"]]);
+    var FormItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$1f, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/form/src/form-item.vue"]]);
     const ElForm = withInstall(Form, {
       FormItem
     });
@@ -38015,8 +38106,8 @@ var require_index_001 = __commonJS({
       switch: (index) => isNumber(index),
       rotate: (deg) => isNumber(deg)
     };
-    const _hoisted_1$F = ["src", "crossorigin"];
-    const _sfc_main$1c = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$H = ["src", "crossorigin"];
+    const _sfc_main$1e = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElImageViewer"
       },
@@ -38537,7 +38628,7 @@ var require_index_001 = __commonJS({
                                 onError: handleImgError,
                                 onMousedown: handleMouseDown,
                                 onTouchstart: handleTouchStart
-                              }, null, 46, _hoisted_1$F))
+                              }, null, 46, _hoisted_1$H))
                             ],
                             2
                           ),
@@ -38557,7 +38648,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ImageViewer = /* @__PURE__ */ _export_sfc$1(_sfc_main$1c, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/image-viewer/src/image-viewer.vue"]]);
+    var ImageViewer = /* @__PURE__ */ _export_sfc$1(_sfc_main$1e, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/image-viewer/src/image-viewer.vue"]]);
     const ElImageViewer = withInstall(ImageViewer);
     const imageProps = buildProps({
       hideOnClickModal: Boolean,
@@ -38626,9 +38717,9 @@ var require_index_001 = __commonJS({
       close: () => true,
       show: () => true
     };
-    const _hoisted_1$E = ["src", "loading", "crossorigin"];
-    const _hoisted_2$q = { key: 0 };
-    const _sfc_main$1b = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$G = ["src", "loading", "crossorigin"];
+    const _hoisted_2$s = { key: 0 };
+    const _sfc_main$1d = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElImage",
         inheritAttrs: false
@@ -38814,7 +38905,7 @@ var require_index_001 = __commonJS({
                     onClick: clickHandler,
                     onLoad: handleLoad,
                     onError: handleError2
-                  }), null, 16, _hoisted_1$E)) : createCommentVNode("v-if", true),
+                  }), null, 16, _hoisted_1$G)) : createCommentVNode("v-if", true),
                   isLoading.value ? (openBlock(), createElementBlock(
                     "div",
                     {
@@ -38864,7 +38955,7 @@ var require_index_001 = __commonJS({
                       renderSlot(_ctx.$slots, "toolbar", normalizeProps(guardReactiveProps(toolbar)))
                     ]),
                     default: withCtx(() => [
-                      _ctx.$slots.viewer ? (openBlock(), createElementBlock("div", _hoisted_2$q, [
+                      _ctx.$slots.viewer ? (openBlock(), createElementBlock("div", _hoisted_2$s, [
                         renderSlot(_ctx.$slots, "viewer")
                       ])) : createCommentVNode("v-if", true)
                     ]),
@@ -38894,7 +38985,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Image$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$1b, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/image/src/image.vue"]]);
+    var Image$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$1d, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/image/src/image.vue"]]);
     const ElImage = withInstall(Image$1);
     const inputNumberProps = buildProps({
       id: {
@@ -38965,9 +39056,9 @@ var require_index_001 = __commonJS({
       [INPUT_EVENT]: (val) => isNumber(val) || isNil(val),
       [UPDATE_MODEL_EVENT]: (val) => isNumber(val) || isNil(val)
     };
-    const _hoisted_1$D = ["aria-label"];
-    const _hoisted_2$p = ["aria-label"];
-    const _sfc_main$1a = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$F = ["aria-label"];
+    const _hoisted_2$r = ["aria-label"];
+    const _sfc_main$1c = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElInputNumber"
       },
@@ -39282,7 +39373,7 @@ var require_index_001 = __commonJS({
                     _: 1
                   })
                 ])
-              ], 42, _hoisted_1$D)), [
+              ], 42, _hoisted_1$F)), [
                 [unref(vRepeatClick), decrease]
               ]) : createCommentVNode("v-if", true),
               _ctx.controls ? withDirectives((openBlock(), createElementBlock("span", {
@@ -39300,7 +39391,7 @@ var require_index_001 = __commonJS({
                     _: 1
                   })
                 ])
-              ], 42, _hoisted_2$p)), [
+              ], 42, _hoisted_2$r)), [
                 [unref(vRepeatClick), increase]
               ]) : createCommentVNode("v-if", true),
               createVNode(unref(ElInput), {
@@ -39349,7 +39440,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var InputNumber = /* @__PURE__ */ _export_sfc$1(_sfc_main$1a, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/input-number/src/input-number.vue"]]);
+    var InputNumber = /* @__PURE__ */ _export_sfc$1(_sfc_main$1c, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/input-number/src/input-number.vue"]]);
     const ElInputNumber = withInstall(InputNumber);
     const inputTagProps = buildProps({
       modelValue: {
@@ -39833,9 +39924,9 @@ var require_index_001 = __commonJS({
         innerRef
       };
     }
-    const _hoisted_1$C = ["id", "minlength", "maxlength", "disabled", "readonly", "autocomplete", "tabindex", "placeholder", "autofocus", "ariaLabel"];
-    const _hoisted_2$o = ["textContent"];
-    const _sfc_main$19 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$E = ["id", "minlength", "maxlength", "disabled", "readonly", "autocomplete", "tabindex", "placeholder", "autofocus", "ariaLabel"];
+    const _hoisted_2$q = ["textContent"];
+    const _sfc_main$1b = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElInputTag",
         inheritAttrs: false
@@ -40093,7 +40184,7 @@ var require_index_001 = __commonJS({
                         onInput: _cache[5] || (_cache[5] = (...args) => unref(handleInput) && unref(handleInput)(...args)),
                         onKeydown: _cache[6] || (_cache[6] = (...args) => unref(handleKeydown) && unref(handleKeydown)(...args)),
                         onKeyup: _cache[7] || (_cache[7] = (...args) => unref(handleKeyup) && unref(handleKeyup)(...args))
-                      }), null, 16, _hoisted_1$C), [
+                      }), null, 16, _hoisted_1$E), [
                         [vModelText, unref(inputValue)]
                       ]),
                       createBaseVNode("span", {
@@ -40102,7 +40193,7 @@ var require_index_001 = __commonJS({
                         "aria-hidden": "true",
                         class: normalizeClass(unref(ns).e("input-calculator")),
                         textContent: toDisplayString(unref(inputValue))
-                      }, null, 10, _hoisted_2$o)
+                      }, null, 10, _hoisted_2$q)
                     ],
                     2
                   ),
@@ -40162,7 +40253,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var InputTag = /* @__PURE__ */ _export_sfc$1(_sfc_main$19, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/input-tag/src/input-tag.vue"]]);
+    var InputTag = /* @__PURE__ */ _export_sfc$1(_sfc_main$1b, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/input-tag/src/input-tag.vue"]]);
     const ElInputTag = withInstall(InputTag);
     const linkProps = buildProps({
       type: {
@@ -40188,8 +40279,8 @@ var require_index_001 = __commonJS({
     const linkEmits = {
       click: (evt) => evt instanceof MouseEvent
     };
-    const _hoisted_1$B = ["href", "target"];
-    const _sfc_main$18 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$D = ["href", "target"];
+    const _sfc_main$1a = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElLink"
       },
@@ -40257,11 +40348,11 @@ var require_index_001 = __commonJS({
               2
             )) : createCommentVNode("v-if", true),
             _ctx.$slots.icon ? renderSlot(_ctx.$slots, "icon", { key: 2 }) : createCommentVNode("v-if", true)
-          ], 10, _hoisted_1$B);
+          ], 10, _hoisted_1$D);
         };
       }
     });
-    var Link = /* @__PURE__ */ _export_sfc$1(_sfc_main$18, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/link/src/link.vue"]]);
+    var Link = /* @__PURE__ */ _export_sfc$1(_sfc_main$1a, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/link/src/link.vue"]]);
     const ElLink = withInstall(Link);
     let SubMenu$1 = class SubMenu {
       constructor(parent2, domNode) {
@@ -40386,7 +40477,7 @@ var require_index_001 = __commonJS({
         });
       }
     };
-    const _sfc_main$17 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$19 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElMenuCollapseTransition"
       },
@@ -40441,7 +40532,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ElMenuCollapseTransition = /* @__PURE__ */ _export_sfc$1(_sfc_main$17, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/menu/src/menu-collapse-transition.vue"]]);
+    var ElMenuCollapseTransition = /* @__PURE__ */ _export_sfc$1(_sfc_main$19, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/menu/src/menu-collapse-transition.vue"]]);
     function useMenu(instance, currentIndex) {
       const indexPath = computed(() => {
         let parent2 = instance.parent;
@@ -41233,7 +41324,7 @@ var require_index_001 = __commonJS({
       click: (item) => isString(item.index) && isArray$1(item.indexPath)
     };
     const COMPONENT_NAME$c = "ElMenuItem";
-    const _sfc_main$16 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$18 = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$c
       },
@@ -41343,11 +41434,11 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var MenuItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$16, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/menu/src/menu-item.vue"]]);
+    var MenuItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$18, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/menu/src/menu-item.vue"]]);
     const menuItemGroupProps = {
       title: String
     };
-    const _sfc_main$15 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$17 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElMenuItemGroup"
       },
@@ -41391,7 +41482,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var MenuItemGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$15, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/menu/src/menu-item-group.vue"]]);
+    var MenuItemGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$17, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/menu/src/menu-item-group.vue"]]);
     const ElMenu = withInstall(Menu, {
       MenuItem,
       MenuItemGroup,
@@ -41414,8 +41505,8 @@ var require_index_001 = __commonJS({
     const pageHeaderEmits = {
       back: () => true
     };
-    const _hoisted_1$A = ["aria-label"];
-    const _sfc_main$14 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$C = ["aria-label"];
+    const _sfc_main$16 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPageHeader"
       },
@@ -41488,7 +41579,7 @@ var require_index_001 = __commonJS({
                                 _: 1
                               })) : createCommentVNode("v-if", true)
                             ])
-                          ], 10, _hoisted_1$A)) : createCommentVNode("v-if", true),
+                          ], 10, _hoisted_1$C)) : createCommentVNode("v-if", true),
                           createBaseVNode(
                             "div",
                             {
@@ -41557,7 +41648,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var PageHeader = /* @__PURE__ */ _export_sfc$1(_sfc_main$14, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/page-header/src/page-header.vue"]]);
+    var PageHeader = /* @__PURE__ */ _export_sfc$1(_sfc_main$16, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/page-header/src/page-header.vue"]]);
     const ElPageHeader = withInstall(PageHeader);
     const elPaginationKey = Symbol("elPaginationKey");
     const paginationPrevProps = buildProps({
@@ -41576,9 +41667,9 @@ var require_index_001 = __commonJS({
     const paginationPrevEmits = {
       click: (evt) => evt instanceof MouseEvent
     };
-    const _hoisted_1$z = ["disabled", "aria-label", "aria-disabled"];
-    const _hoisted_2$n = { key: 0 };
-    const _sfc_main$13 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$B = ["disabled", "aria-label", "aria-disabled"];
+    const _hoisted_2$p = { key: 0 };
+    const _sfc_main$15 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPaginationPrev"
       },
@@ -41602,7 +41693,7 @@ var require_index_001 = __commonJS({
           }, [
             _ctx.prevText ? (openBlock(), createElementBlock(
               "span",
-              _hoisted_2$n,
+              _hoisted_2$p,
               toDisplayString(_ctx.prevText),
               1
             )) : (openBlock(), createBlock(unref(ElIcon), { key: 1 }, {
@@ -41611,11 +41702,11 @@ var require_index_001 = __commonJS({
               ]),
               _: 1
             }))
-          ], 8, _hoisted_1$z);
+          ], 8, _hoisted_1$B);
         };
       }
     });
-    var Prev = /* @__PURE__ */ _export_sfc$1(_sfc_main$13, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/prev.vue"]]);
+    var Prev = /* @__PURE__ */ _export_sfc$1(_sfc_main$15, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/prev.vue"]]);
     const paginationNextProps = buildProps({
       disabled: Boolean,
       currentPage: {
@@ -41633,9 +41724,9 @@ var require_index_001 = __commonJS({
         type: iconPropType
       }
     });
-    const _hoisted_1$y = ["disabled", "aria-label", "aria-disabled"];
-    const _hoisted_2$m = { key: 0 };
-    const _sfc_main$12 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$A = ["disabled", "aria-label", "aria-disabled"];
+    const _hoisted_2$o = { key: 0 };
+    const _sfc_main$14 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPaginationNext"
       },
@@ -41659,7 +41750,7 @@ var require_index_001 = __commonJS({
           }, [
             _ctx.nextText ? (openBlock(), createElementBlock(
               "span",
-              _hoisted_2$m,
+              _hoisted_2$o,
               toDisplayString(_ctx.nextText),
               1
             )) : (openBlock(), createBlock(unref(ElIcon), { key: 1 }, {
@@ -41668,11 +41759,11 @@ var require_index_001 = __commonJS({
               ]),
               _: 1
             }))
-          ], 8, _hoisted_1$y);
+          ], 8, _hoisted_1$A);
         };
       }
     });
-    var Next = /* @__PURE__ */ _export_sfc$1(_sfc_main$12, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/next.vue"]]);
+    var Next = /* @__PURE__ */ _export_sfc$1(_sfc_main$14, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/next.vue"]]);
     const defaultProps$4 = {
       label: "label",
       value: "value",
@@ -41809,7 +41900,7 @@ var require_index_001 = __commonJS({
         updateOption
       };
     }
-    const _sfc_main$11 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$13 = /* @__PURE__ */ defineComponent({
       name: COMPONENT_NAME$b,
       componentName: COMPONENT_NAME$b,
       props: optionProps,
@@ -41874,7 +41965,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$x = ["id", "aria-disabled", "aria-selected"];
+    const _hoisted_1$z = ["id", "aria-disabled", "aria-selected"];
     function _sfc_render$b(_ctx, _cache, $props, $setup, $data, $options) {
       return withDirectives((openBlock(), createElementBlock("li", {
         id: _ctx.id,
@@ -41895,12 +41986,12 @@ var require_index_001 = __commonJS({
             1
           )
         ])
-      ], 42, _hoisted_1$x)), [
+      ], 42, _hoisted_1$z)), [
         [vShow, _ctx.visible]
       ]);
     }
-    var Option = /* @__PURE__ */ _export_sfc$1(_sfc_main$11, [["render", _sfc_render$b], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select/src/option.vue"]]);
-    const _sfc_main$10 = /* @__PURE__ */ defineComponent({
+    var Option = /* @__PURE__ */ _export_sfc$1(_sfc_main$13, [["render", _sfc_render$b], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select/src/option.vue"]]);
+    const _sfc_main$12 = /* @__PURE__ */ defineComponent({
       name: "ElSelectDropdown",
       componentName: "ElSelectDropdown",
       setup() {
@@ -41967,7 +42058,7 @@ var require_index_001 = __commonJS({
         6
       );
     }
-    var ElSelectMenu$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$10, [["render", _sfc_render$a], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select/src/select-dropdown.vue"]]);
+    var ElSelectMenu$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$12, [["render", _sfc_render$a], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select/src/select-dropdown.vue"]]);
     const useSelect$2 = (props2, emit2) => {
       const { t } = useLocale();
       const contentId = useId();
@@ -42913,7 +43004,7 @@ var require_index_001 = __commonJS({
     ({
       "popup-scroll": scrollbarEmits.scroll
     });
-    const _sfc_main$$ = /* @__PURE__ */ defineComponent({
+    const _sfc_main$11 = /* @__PURE__ */ defineComponent({
       name: "ElOptionGroup",
       componentName: "ElOptionGroup",
       props: {
@@ -43007,7 +43098,7 @@ var require_index_001 = __commonJS({
         [vShow, _ctx.visible]
       ]);
     }
-    var OptionGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$$, [["render", _sfc_render$9], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select/src/option-group.vue"]]);
+    var OptionGroup = /* @__PURE__ */ _export_sfc$1(_sfc_main$11, [["render", _sfc_render$9], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select/src/option-group.vue"]]);
     const COMPONENT_NAME$a = "ElSelect";
     const warnHandlerMap = /* @__PURE__ */ new WeakMap();
     const createSelectWarnHandler = (appContext) => {
@@ -43038,7 +43129,7 @@ var require_index_001 = __commonJS({
       }
       return record;
     };
-    const _sfc_main$_ = /* @__PURE__ */ defineComponent({
+    const _sfc_main$10 = /* @__PURE__ */ defineComponent({
       name: COMPONENT_NAME$a,
       componentName: COMPONENT_NAME$a,
       components: {
@@ -43178,9 +43269,9 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$w = ["id", "name", "disabled", "autocomplete", "tabindex", "readonly", "aria-activedescendant", "aria-controls", "aria-expanded", "aria-label"];
-    const _hoisted_2$l = ["textContent"];
-    const _hoisted_3$c = { key: 1 };
+    const _hoisted_1$y = ["id", "name", "disabled", "autocomplete", "tabindex", "readonly", "aria-activedescendant", "aria-controls", "aria-expanded", "aria-label"];
+    const _hoisted_2$n = ["textContent"];
+    const _hoisted_3$e = { key: 1 };
     function _sfc_render$8(_ctx, _cache, $props, $setup, $data, $options) {
       const _component_el_tag = resolveComponent("el-tag");
       const _component_el_tooltip = resolveComponent("el-tooltip");
@@ -43464,7 +43555,7 @@ var require_index_001 = __commonJS({
                               onCompositionend: _cache[4] || (_cache[4] = (...args) => _ctx.handleCompositionEnd && _ctx.handleCompositionEnd(...args)),
                               onInput: _cache[5] || (_cache[5] = (...args) => _ctx.onInput && _ctx.onInput(...args)),
                               onClick: _cache[6] || (_cache[6] = withModifiers((...args) => _ctx.toggleMenu && _ctx.toggleMenu(...args), ["stop"]))
-                            }, null, 46, _hoisted_1$w), [
+                            }, null, 46, _hoisted_1$y), [
                               [vModelText, _ctx.states.inputValue]
                             ]),
                             _ctx.filterable ? (openBlock(), createElementBlock("span", {
@@ -43473,7 +43564,7 @@ var require_index_001 = __commonJS({
                               "aria-hidden": "true",
                               class: normalizeClass(_ctx.nsSelect.e("input-calculator")),
                               textContent: toDisplayString(_ctx.states.inputValue)
-                            }, null, 10, _hoisted_2$l)) : createCommentVNode("v-if", true)
+                            }, null, 10, _hoisted_2$n)) : createCommentVNode("v-if", true)
                           ],
                           2
                         ),
@@ -43505,7 +43596,7 @@ var require_index_001 = __commonJS({
                               )
                             ]) : (openBlock(), createElementBlock(
                               "span",
-                              _hoisted_3$c,
+                              _hoisted_3$e,
                               toDisplayString(_ctx.currentPlaceholder),
                               1
                             ))
@@ -43717,7 +43808,7 @@ var require_index_001 = __commonJS({
         [_directive_click_outside, _ctx.handleClickOutside, _ctx.popperRef]
       ]);
     }
-    var Select$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$_, [["render", _sfc_render$8], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select/src/select.vue"]]);
+    var Select$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$10, [["render", _sfc_render$8], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select/src/select.vue"]]);
     const ElSelect = withInstall(Select$1, {
       Option,
       OptionGroup
@@ -43748,7 +43839,7 @@ var require_index_001 = __commonJS({
       },
       appendSizeTo: String
     });
-    const _sfc_main$Z = /* @__PURE__ */ defineComponent({
+    const _sfc_main$$ = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPaginationSizes"
       },
@@ -43827,15 +43918,15 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Sizes = /* @__PURE__ */ _export_sfc$1(_sfc_main$Z, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/sizes.vue"]]);
+    var Sizes = /* @__PURE__ */ _export_sfc$1(_sfc_main$$, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/sizes.vue"]]);
     const paginationJumperProps = buildProps({
       size: {
         type: String,
         values: componentSizes
       }
     });
-    const _hoisted_1$v = ["disabled"];
-    const _sfc_main$Y = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$x = ["disabled"];
+    const _sfc_main$_ = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPaginationJumper"
       },
@@ -43892,19 +43983,19 @@ var require_index_001 = __commonJS({
               toDisplayString(unref(t)("el.pagination.pageClassifier")),
               3
             )
-          ], 10, _hoisted_1$v);
+          ], 10, _hoisted_1$x);
         };
       }
     });
-    var Jumper = /* @__PURE__ */ _export_sfc$1(_sfc_main$Y, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/jumper.vue"]]);
+    var Jumper = /* @__PURE__ */ _export_sfc$1(_sfc_main$_, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/jumper.vue"]]);
     const paginationTotalProps = buildProps({
       total: {
         type: Number,
         default: 1e3
       }
     });
-    const _hoisted_1$u = ["disabled"];
-    const _sfc_main$X = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$w = ["disabled"];
+    const _sfc_main$Z = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPaginationTotal"
       },
@@ -43920,11 +44011,11 @@ var require_index_001 = __commonJS({
             disabled: unref(disabled)
           }, toDisplayString(unref(t)("el.pagination.total", {
             total: _ctx.total
-          })), 11, _hoisted_1$u);
+          })), 11, _hoisted_1$w);
         };
       }
     });
-    var Total = /* @__PURE__ */ _export_sfc$1(_sfc_main$X, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/total.vue"]]);
+    var Total = /* @__PURE__ */ _export_sfc$1(_sfc_main$Z, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/total.vue"]]);
     const paginationPagerProps = buildProps({
       currentPage: {
         type: Number,
@@ -43940,12 +44031,12 @@ var require_index_001 = __commonJS({
       },
       disabled: Boolean
     });
-    const _hoisted_1$t = ["aria-current", "aria-label", "tabindex"];
-    const _hoisted_2$k = ["tabindex", "aria-label"];
-    const _hoisted_3$b = ["aria-current", "aria-label", "tabindex"];
-    const _hoisted_4$9 = ["tabindex", "aria-label"];
-    const _hoisted_5$6 = ["aria-current", "aria-label", "tabindex"];
-    const _sfc_main$W = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$v = ["aria-current", "aria-label", "tabindex"];
+    const _hoisted_2$m = ["tabindex", "aria-label"];
+    const _hoisted_3$d = ["aria-current", "aria-label", "tabindex"];
+    const _hoisted_4$b = ["tabindex", "aria-label"];
+    const _hoisted_5$7 = ["aria-current", "aria-label", "tabindex"];
+    const _sfc_main$Y = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPaginationPager"
       },
@@ -44104,7 +44195,7 @@ var require_index_001 = __commonJS({
                 "aria-current": _ctx.currentPage === 1,
                 "aria-label": unref(t)("el.pagination.currentPage", { pager: 1 }),
                 tabindex: tabindex.value
-              }, " 1 ", 10, _hoisted_1$t)) : createCommentVNode("v-if", true),
+              }, " 1 ", 10, _hoisted_1$v)) : createCommentVNode("v-if", true),
               showPrevMore.value ? (openBlock(), createElementBlock("li", {
                 key: 1,
                 class: normalizeClass(prevMoreKls.value),
@@ -44116,7 +44207,7 @@ var require_index_001 = __commonJS({
                 onBlur: _cache[3] || (_cache[3] = ($event) => quickPrevFocus.value = false)
               }, [
                 (quickPrevHover.value || quickPrevFocus.value) && !_ctx.disabled ? (openBlock(), createBlock(unref(d_arrow_left_default), { key: 0 })) : (openBlock(), createBlock(unref(more_filled_default), { key: 1 }))
-              ], 42, _hoisted_2$k)) : createCommentVNode("v-if", true),
+              ], 42, _hoisted_2$m)) : createCommentVNode("v-if", true),
               (openBlock(true), createElementBlock(
                 Fragment,
                 null,
@@ -44130,7 +44221,7 @@ var require_index_001 = __commonJS({
                     "aria-current": _ctx.currentPage === pager,
                     "aria-label": unref(t)("el.pagination.currentPage", { pager }),
                     tabindex: tabindex.value
-                  }, toDisplayString(pager), 11, _hoisted_3$b);
+                  }, toDisplayString(pager), 11, _hoisted_3$d);
                 }),
                 128
               )),
@@ -44145,7 +44236,7 @@ var require_index_001 = __commonJS({
                 onBlur: _cache[7] || (_cache[7] = ($event) => quickNextFocus.value = false)
               }, [
                 (quickNextHover.value || quickNextFocus.value) && !_ctx.disabled ? (openBlock(), createBlock(unref(d_arrow_right_default), { key: 0 })) : (openBlock(), createBlock(unref(more_filled_default), { key: 1 }))
-              ], 42, _hoisted_4$9)) : createCommentVNode("v-if", true),
+              ], 42, _hoisted_4$b)) : createCommentVNode("v-if", true),
               _ctx.pageCount > 1 ? (openBlock(), createElementBlock("li", {
                 key: 3,
                 class: normalizeClass([[
@@ -44155,14 +44246,14 @@ var require_index_001 = __commonJS({
                 "aria-current": _ctx.currentPage === _ctx.pageCount,
                 "aria-label": unref(t)("el.pagination.currentPage", { pager: _ctx.pageCount }),
                 tabindex: tabindex.value
-              }, toDisplayString(_ctx.pageCount), 11, _hoisted_5$6)) : createCommentVNode("v-if", true)
+              }, toDisplayString(_ctx.pageCount), 11, _hoisted_5$7)) : createCommentVNode("v-if", true)
             ],
             34
           );
         };
       }
     });
-    var Pager = /* @__PURE__ */ _export_sfc$1(_sfc_main$W, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/pager.vue"]]);
+    var Pager = /* @__PURE__ */ _export_sfc$1(_sfc_main$Y, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/pagination/src/components/pager.vue"]]);
     const isAbsent = (v2) => typeof v2 !== "number";
     const paginationProps = buildProps({
       pageSize: Number,
@@ -44511,7 +44602,7 @@ var require_index_001 = __commonJS({
       confirm: (e) => e instanceof MouseEvent,
       cancel: (e) => e instanceof MouseEvent
     };
-    const _sfc_main$V = /* @__PURE__ */ defineComponent({
+    const _sfc_main$X = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPopconfirm"
       },
@@ -44665,7 +44756,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Popconfirm = /* @__PURE__ */ _export_sfc$1(_sfc_main$V, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popconfirm/src/popconfirm.vue"]]);
+    var Popconfirm = /* @__PURE__ */ _export_sfc$1(_sfc_main$X, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popconfirm/src/popconfirm.vue"]]);
     const ElPopconfirm = withInstall(Popconfirm);
     const popoverProps = buildProps({
       trigger: useTooltipTriggerProps.trigger,
@@ -44730,7 +44821,7 @@ var require_index_001 = __commonJS({
       "after-leave": () => true
     };
     const updateEventKeyRaw = `onUpdate:visible`;
-    const _sfc_main$U = /* @__PURE__ */ defineComponent({
+    const _sfc_main$W = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElPopover"
       },
@@ -44844,7 +44935,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Popover = /* @__PURE__ */ _export_sfc$1(_sfc_main$U, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popover/src/popover.vue"]]);
+    var Popover = /* @__PURE__ */ _export_sfc$1(_sfc_main$W, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/popover/src/popover.vue"]]);
     const attachEvents = (el, binding) => {
       const popperComponent = binding.arg || binding.value;
       const popover = popperComponent == null ? void 0 : popperComponent.popperRef;
@@ -44918,12 +45009,12 @@ var require_index_001 = __commonJS({
         default: (percentage) => `${percentage}%`
       }
     });
-    const _hoisted_1$s = ["aria-valuenow"];
-    const _hoisted_2$j = { viewBox: "0 0 100 100" };
-    const _hoisted_3$a = ["d", "stroke", "stroke-linecap", "stroke-width"];
-    const _hoisted_4$8 = ["d", "stroke", "opacity", "stroke-linecap", "stroke-width"];
-    const _hoisted_5$5 = { key: 0 };
-    const _sfc_main$T = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$u = ["aria-valuenow"];
+    const _hoisted_2$l = { viewBox: "0 0 100 100" };
+    const _hoisted_3$c = ["d", "stroke", "stroke-linecap", "stroke-width"];
+    const _hoisted_4$a = ["d", "stroke", "opacity", "stroke-linecap", "stroke-width"];
+    const _hoisted_5$6 = { key: 0 };
+    const _sfc_main$V = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElProgress"
       },
@@ -45116,7 +45207,7 @@ var require_index_001 = __commonJS({
                 style: normalizeStyle({ height: `${_ctx.width}px`, width: `${_ctx.width}px` })
               },
               [
-                (openBlock(), createElementBlock("svg", _hoisted_2$j, [
+                (openBlock(), createElementBlock("svg", _hoisted_2$l, [
                   createBaseVNode("path", {
                     class: normalizeClass(unref(ns).be("circle", "track")),
                     d: trackPath.value,
@@ -45125,7 +45216,7 @@ var require_index_001 = __commonJS({
                     "stroke-width": relativeStrokeWidth.value,
                     fill: "none",
                     style: normalizeStyle(trailPathStyle.value)
-                  }, null, 14, _hoisted_3$a),
+                  }, null, 14, _hoisted_3$c),
                   createBaseVNode("path", {
                     class: normalizeClass(unref(ns).be("circle", "path")),
                     d: trackPath.value,
@@ -45135,7 +45226,7 @@ var require_index_001 = __commonJS({
                     "stroke-linecap": _ctx.strokeLinecap,
                     "stroke-width": relativeStrokeWidth.value,
                     style: normalizeStyle(circlePathStyle.value)
-                  }, null, 14, _hoisted_4$8)
+                  }, null, 14, _hoisted_4$a)
                 ]))
               ],
               6
@@ -45151,7 +45242,7 @@ var require_index_001 = __commonJS({
                 renderSlot(_ctx.$slots, "default", { percentage: _ctx.percentage }, () => [
                   !_ctx.status ? (openBlock(), createElementBlock(
                     "span",
-                    _hoisted_5$5,
+                    _hoisted_5$6,
                     toDisplayString(content.value),
                     1
                   )) : (openBlock(), createBlock(unref(ElIcon), { key: 1 }, {
@@ -45164,11 +45255,11 @@ var require_index_001 = __commonJS({
               ],
               6
             )) : createCommentVNode("v-if", true)
-          ], 10, _hoisted_1$s);
+          ], 10, _hoisted_1$u);
         };
       }
     });
-    var Progress = /* @__PURE__ */ _export_sfc$1(_sfc_main$T, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/progress/src/progress.vue"]]);
+    var Progress = /* @__PURE__ */ _export_sfc$1(_sfc_main$V, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/progress/src/progress.vue"]]);
     const ElProgress = withInstall(Progress);
     const rateProps = buildProps({
       modelValue: {
@@ -45248,9 +45339,9 @@ var require_index_001 = __commonJS({
       [CHANGE_EVENT]: (value) => isNumber(value),
       [UPDATE_MODEL_EVENT]: (value) => isNumber(value)
     };
-    const _hoisted_1$r = ["id", "aria-label", "aria-labelledby", "aria-valuenow", "aria-valuetext", "aria-valuemax"];
-    const _hoisted_2$i = ["onMousemove", "onClick"];
-    const _sfc_main$S = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$t = ["id", "aria-label", "aria-labelledby", "aria-valuenow", "aria-valuetext", "aria-valuemax"];
+    const _hoisted_2$k = ["onMousemove", "onClick"];
+    const _sfc_main$U = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElRate"
       },
@@ -45512,7 +45603,7 @@ var require_index_001 = __commonJS({
                     ]),
                     _: 2
                   }, 1032, ["class"])
-                ], 42, _hoisted_2$i);
+                ], 42, _hoisted_2$k);
               }),
               128
             )),
@@ -45526,11 +45617,11 @@ var require_index_001 = __commonJS({
               toDisplayString(text.value),
               7
             )) : createCommentVNode("v-if", true)
-          ], 46, _hoisted_1$r);
+          ], 46, _hoisted_1$t);
         };
       }
     });
-    var Rate = /* @__PURE__ */ _export_sfc$1(_sfc_main$S, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/rate/src/rate.vue"]]);
+    var Rate = /* @__PURE__ */ _export_sfc$1(_sfc_main$U, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/rate/src/rate.vue"]]);
     const ElRate = withInstall(Rate);
     const IconMap = {
       primary: "icon-primary",
@@ -45561,7 +45652,7 @@ var require_index_001 = __commonJS({
         default: "info"
       }
     });
-    const _sfc_main$R = /* @__PURE__ */ defineComponent({
+    const _sfc_main$T = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElResult"
       },
@@ -45654,7 +45745,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Result = /* @__PURE__ */ _export_sfc$1(_sfc_main$R, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/result/src/result.vue"]]);
+    var Result = /* @__PURE__ */ _export_sfc$1(_sfc_main$T, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/result/src/result.vue"]]);
     const ElResult = withInstall(Result);
     const RowJustify = [
       "start",
@@ -45684,7 +45775,7 @@ var require_index_001 = __commonJS({
         values: RowAlign
       }
     });
-    const _sfc_main$Q = /* @__PURE__ */ defineComponent({
+    const _sfc_main$S = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElRow"
       },
@@ -45723,9 +45814,9 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Row$2 = /* @__PURE__ */ _export_sfc$1(_sfc_main$Q, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/row/src/row.vue"]]);
+    var Row$2 = /* @__PURE__ */ _export_sfc$1(_sfc_main$S, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/row/src/row.vue"]]);
     const ElRow = withInstall(Row$2);
-    const _sfc_main$P = /* @__PURE__ */ defineComponent({
+    const _sfc_main$R = /* @__PURE__ */ defineComponent({
       props: {
         item: {
           type: Object,
@@ -45754,7 +45845,7 @@ var require_index_001 = __commonJS({
         7
       );
     }
-    var GroupItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$P, [["render", _sfc_render$7], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select-v2/src/group-item.vue"]]);
+    var GroupItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$R, [["render", _sfc_render$7], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select-v2/src/group-item.vue"]]);
     function useOption(props2, { emit: emit2 }) {
       return {
         hoverItem: () => {
@@ -45939,7 +46030,7 @@ var require_index_001 = __commonJS({
     const selectV2InjectionKey = Symbol(
       "ElSelectV2Injection"
     );
-    const _sfc_main$O = /* @__PURE__ */ defineComponent({
+    const _sfc_main$Q = /* @__PURE__ */ defineComponent({
       props: optionV2Props,
       emits: optionV2Emits,
       setup(props2, { emit: emit2 }) {
@@ -45957,7 +46048,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$q = ["id", "aria-selected", "aria-disabled"];
+    const _hoisted_1$s = ["id", "aria-selected", "aria-disabled"];
     function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
       return openBlock(), createElementBlock("li", {
         id: `${_ctx.contentId}-${_ctx.index}`,
@@ -45989,9 +46080,9 @@ var require_index_001 = __commonJS({
             1
           )
         ])
-      ], 46, _hoisted_1$q);
+      ], 46, _hoisted_1$s);
     }
-    var OptionItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$O, [["render", _sfc_render$6], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select-v2/src/option-item.vue"]]);
+    var OptionItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$Q, [["render", _sfc_render$6], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select-v2/src/option-item.vue"]]);
     var safeIsNaN = Number.isNaN || function ponyfill(value) {
       return typeof value === "number" && value !== value;
     };
@@ -48223,7 +48314,7 @@ var require_index_001 = __commonJS({
         handleCompositionUpdate
       };
     };
-    const _sfc_main$N = /* @__PURE__ */ defineComponent({
+    const _sfc_main$P = /* @__PURE__ */ defineComponent({
       name: "ElSelectV2",
       components: {
         ElSelectMenu,
@@ -48283,9 +48374,9 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$p = ["id", "autocomplete", "tabindex", "aria-expanded", "aria-label", "disabled", "aria-controls", "aria-activedescendant", "readonly", "name"];
-    const _hoisted_2$h = ["textContent"];
-    const _hoisted_3$9 = { key: 1 };
+    const _hoisted_1$r = ["id", "autocomplete", "tabindex", "aria-expanded", "aria-label", "disabled", "aria-controls", "aria-activedescendant", "readonly", "name"];
+    const _hoisted_2$j = ["textContent"];
+    const _hoisted_3$b = { key: 1 };
     function _sfc_render$5(_ctx, _cache, $props, $setup, $data, $options) {
       const _component_el_tag = resolveComponent("el-tag");
       const _component_el_tooltip = resolveComponent("el-tooltip");
@@ -48570,7 +48661,7 @@ var require_index_001 = __commonJS({
                                 _cache[9] || (_cache[9] = withKeys(withModifiers((...args) => _ctx.handleDel && _ctx.handleDel(...args), ["stop"]), ["delete"]))
                               ],
                               onClick: _cache[10] || (_cache[10] = withModifiers((...args) => _ctx.toggleMenu && _ctx.toggleMenu(...args), ["stop"]))
-                            }, null, 46, _hoisted_1$p), [
+                            }, null, 46, _hoisted_1$r), [
                               [vModelText, _ctx.states.inputValue]
                             ]),
                             _ctx.filterable ? (openBlock(), createElementBlock("span", {
@@ -48579,7 +48670,7 @@ var require_index_001 = __commonJS({
                               "aria-hidden": "true",
                               class: normalizeClass(_ctx.nsSelect.e("input-calculator")),
                               textContent: toDisplayString(_ctx.states.inputValue)
-                            }, null, 10, _hoisted_2$h)) : createCommentVNode("v-if", true)
+                            }, null, 10, _hoisted_2$j)) : createCommentVNode("v-if", true)
                           ],
                           2
                         ),
@@ -48611,7 +48702,7 @@ var require_index_001 = __commonJS({
                               )
                             ]) : (openBlock(), createElementBlock(
                               "span",
-                              _hoisted_3$9,
+                              _hoisted_3$b,
                               toDisplayString(_ctx.currentPlaceholder),
                               1
                             ))
@@ -48773,7 +48864,7 @@ var require_index_001 = __commonJS({
         [_directive_click_outside, _ctx.handleClickOutside, _ctx.popperRef]
       ]);
     }
-    var Select = /* @__PURE__ */ _export_sfc$1(_sfc_main$N, [["render", _sfc_render$5], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select-v2/src/select.vue"]]);
+    var Select = /* @__PURE__ */ _export_sfc$1(_sfc_main$P, [["render", _sfc_render$5], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/select-v2/src/select.vue"]]);
     const ElSelectV2 = withInstall(Select);
     const skeletonProps = buildProps({
       animated: Boolean,
@@ -48810,7 +48901,7 @@ var require_index_001 = __commonJS({
         default: "text"
       }
     });
-    const _sfc_main$M = /* @__PURE__ */ defineComponent({
+    const _sfc_main$O = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElSkeletonItem"
       },
@@ -48832,7 +48923,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var SkeletonItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$M, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/skeleton/src/skeleton-item.vue"]]);
+    var SkeletonItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$O, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/skeleton/src/skeleton-item.vue"]]);
     const useThrottleRender = (loading, throttle2 = 0) => {
       if (throttle2 === 0)
         return loading;
@@ -48875,7 +48966,7 @@ var require_index_001 = __commonJS({
       );
       return throttled;
     };
-    const _sfc_main$L = /* @__PURE__ */ defineComponent({
+    const _sfc_main$N = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElSkeleton"
       },
@@ -48937,7 +49028,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Skeleton = /* @__PURE__ */ _export_sfc$1(_sfc_main$L, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/skeleton/src/skeleton.vue"]]);
+    var Skeleton = /* @__PURE__ */ _export_sfc$1(_sfc_main$N, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/skeleton/src/skeleton.vue"]]);
     const ElSkeleton = withInstall(Skeleton, {
       SkeletonItem
     });
@@ -49287,8 +49378,8 @@ var require_index_001 = __commonJS({
         setPosition
       };
     };
-    const _hoisted_1$o = ["tabindex"];
-    const _sfc_main$K = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$q = ["tabindex"];
+    const _sfc_main$M = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElSliderButton"
       },
@@ -49382,11 +49473,11 @@ var require_index_001 = __commonJS({
               ]),
               _: 1
             }, 8, ["visible", "placement", "popper-class", "disabled", "persistent"])
-          ], 46, _hoisted_1$o);
+          ], 46, _hoisted_1$q);
         };
       }
     });
-    var SliderButton = /* @__PURE__ */ _export_sfc$1(_sfc_main$K, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/slider/src/button.vue"]]);
+    var SliderButton = /* @__PURE__ */ _export_sfc$1(_sfc_main$M, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/slider/src/button.vue"]]);
     const sliderMarkerProps = buildProps({
       mark: {
         type: definePropType([String, Object]),
@@ -49721,9 +49812,9 @@ var require_index_001 = __commonJS({
         sliderWrapper
       };
     };
-    const _hoisted_1$n = ["id", "role", "aria-label", "aria-labelledby"];
-    const _hoisted_2$g = { key: 1 };
-    const _sfc_main$J = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$p = ["id", "role", "aria-label", "aria-labelledby"];
+    const _hoisted_2$i = { key: 1 };
+    const _sfc_main$L = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElSlider"
       },
@@ -49901,7 +49992,7 @@ var require_index_001 = __commonJS({
                   "aria-disabled": unref(sliderDisabled),
                   "onUpdate:modelValue": unref(setSecondValue)
                 }, null, 8, ["model-value", "vertical", "tooltip-class", "placement", "aria-label", "aria-valuemin", "aria-valuemax", "aria-valuenow", "aria-valuetext", "aria-orientation", "aria-disabled", "onUpdate:modelValue"])) : createCommentVNode("v-if", true),
-                _ctx.showStops ? (openBlock(), createElementBlock("div", _hoisted_2$g, [
+                _ctx.showStops ? (openBlock(), createElementBlock("div", _hoisted_2$i, [
                   (openBlock(true), createElementBlock(
                     Fragment,
                     null,
@@ -49986,11 +50077,11 @@ var require_index_001 = __commonJS({
               "onUpdate:modelValue": unref(setFirstValue),
               onChange: unref(emitChange)
             }, null, 8, ["model-value", "class", "step", "disabled", "controls", "min", "max", "precision", "size", "onUpdate:modelValue", "onChange"])) : createCommentVNode("v-if", true)
-          ], 10, _hoisted_1$n);
+          ], 10, _hoisted_1$p);
         };
       }
     });
-    var Slider = /* @__PURE__ */ _export_sfc$1(_sfc_main$J, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/slider/src/slider.vue"]]);
+    var Slider = /* @__PURE__ */ _export_sfc$1(_sfc_main$L, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/slider/src/slider.vue"]]);
     const ElSlider = withInstall(Slider);
     const spaceItemProps = buildProps({
       prefixCls: {
@@ -50242,7 +50333,7 @@ var require_index_001 = __commonJS({
         type: definePropType([String, Object, Array])
       }
     });
-    const _sfc_main$I = /* @__PURE__ */ defineComponent({
+    const _sfc_main$K = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElStatistic"
       },
@@ -50348,7 +50439,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Statistic = /* @__PURE__ */ _export_sfc$1(_sfc_main$I, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/statistic/src/statistic.vue"]]);
+    var Statistic = /* @__PURE__ */ _export_sfc$1(_sfc_main$K, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/statistic/src/statistic.vue"]]);
     const ElStatistic = withInstall(Statistic);
     const countdownProps = buildProps({
       format: {
@@ -50399,7 +50490,7 @@ var require_index_001 = __commonJS({
       }, format2);
       return replacedText.replace(escapeRegex, "$1");
     };
-    const _sfc_main$H = /* @__PURE__ */ defineComponent({
+    const _sfc_main$J = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElCountdown"
       },
@@ -50477,7 +50568,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Countdown = /* @__PURE__ */ _export_sfc$1(_sfc_main$H, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/countdown/src/countdown.vue"]]);
+    var Countdown = /* @__PURE__ */ _export_sfc$1(_sfc_main$J, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/countdown/src/countdown.vue"]]);
     const ElCountdown = withInstall(Countdown);
     const stepsProps = buildProps({
       space: {
@@ -50514,7 +50605,7 @@ var require_index_001 = __commonJS({
       [CHANGE_EVENT]: (newVal, oldVal) => [newVal, oldVal].every(isNumber)
     };
     const STEPS_INJECTION_KEY = "ElSteps";
-    const _sfc_main$G = /* @__PURE__ */ defineComponent({
+    const _sfc_main$I = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElSteps"
       },
@@ -50558,7 +50649,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Steps = /* @__PURE__ */ _export_sfc$1(_sfc_main$G, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/steps/src/steps.vue"]]);
+    var Steps = /* @__PURE__ */ _export_sfc$1(_sfc_main$I, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/steps/src/steps.vue"]]);
     const stepProps = buildProps({
       title: {
         type: String,
@@ -50577,7 +50668,7 @@ var require_index_001 = __commonJS({
         default: ""
       }
     });
-    const _sfc_main$F = /* @__PURE__ */ defineComponent({
+    const _sfc_main$H = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElStep"
       },
@@ -50827,7 +50918,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Step = /* @__PURE__ */ _export_sfc$1(_sfc_main$F, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/steps/src/item.vue"]]);
+    var Step = /* @__PURE__ */ _export_sfc$1(_sfc_main$H, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/steps/src/item.vue"]]);
     const ElSteps = withInstall(Steps, {
       Step
     });
@@ -50902,13 +50993,13 @@ var require_index_001 = __commonJS({
       [CHANGE_EVENT]: (val) => isBoolean(val) || isString(val) || isNumber(val),
       [INPUT_EVENT]: (val) => isBoolean(val) || isString(val) || isNumber(val)
     };
-    const _hoisted_1$m = ["id", "aria-checked", "aria-disabled", "aria-label", "name", "true-value", "false-value", "disabled", "tabindex"];
-    const _hoisted_2$f = ["aria-hidden"];
-    const _hoisted_3$8 = { key: 1 };
-    const _hoisted_4$7 = { key: 1 };
-    const _hoisted_5$4 = ["aria-hidden"];
+    const _hoisted_1$o = ["id", "aria-checked", "aria-disabled", "aria-label", "name", "true-value", "false-value", "disabled", "tabindex"];
+    const _hoisted_2$h = ["aria-hidden"];
+    const _hoisted_3$a = { key: 1 };
+    const _hoisted_4$9 = { key: 1 };
+    const _hoisted_5$5 = ["aria-hidden"];
     const COMPONENT_NAME$9 = "ElSwitch";
-    const _sfc_main$E = /* @__PURE__ */ defineComponent({
+    const _sfc_main$G = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$9
       },
@@ -51050,7 +51141,7 @@ var require_index_001 = __commonJS({
                 tabindex: _ctx.tabindex,
                 onChange: handleChange,
                 onKeydown: withKeys(switchValue, ["enter"])
-              }, null, 42, _hoisted_1$m),
+              }, null, 42, _hoisted_1$o),
               !_ctx.inlinePrompt && (_ctx.inactiveIcon || _ctx.inactiveText || _ctx.$slots.inactive) ? (openBlock(), createElementBlock(
                 "span",
                 {
@@ -51068,7 +51159,7 @@ var require_index_001 = __commonJS({
                     !_ctx.inactiveIcon && _ctx.inactiveText ? (openBlock(), createElementBlock("span", {
                       key: 1,
                       "aria-hidden": checked.value
-                    }, toDisplayString(_ctx.inactiveText), 9, _hoisted_2$f)) : createCommentVNode("v-if", true)
+                    }, toDisplayString(_ctx.inactiveText), 9, _hoisted_2$h)) : createCommentVNode("v-if", true)
                   ])
                 ],
                 2
@@ -51103,7 +51194,7 @@ var require_index_001 = __commonJS({
                             })) : createCommentVNode("v-if", true),
                             !_ctx.inactiveIcon && _ctx.inactiveText ? (openBlock(), createElementBlock(
                               "span",
-                              _hoisted_3$8,
+                              _hoisted_3$a,
                               toDisplayString(_ctx.inactiveText),
                               1
                             )) : createCommentVNode("v-if", true)
@@ -51126,7 +51217,7 @@ var require_index_001 = __commonJS({
                             })) : createCommentVNode("v-if", true),
                             !_ctx.activeIcon && _ctx.activeText ? (openBlock(), createElementBlock(
                               "span",
-                              _hoisted_4$7,
+                              _hoisted_4$9,
                               toDisplayString(_ctx.activeText),
                               1
                             )) : createCommentVNode("v-if", true)
@@ -51189,7 +51280,7 @@ var require_index_001 = __commonJS({
                     !_ctx.activeIcon && _ctx.activeText ? (openBlock(), createElementBlock("span", {
                       key: 1,
                       "aria-hidden": !checked.value
-                    }, toDisplayString(_ctx.activeText), 9, _hoisted_5$4)) : createCommentVNode("v-if", true)
+                    }, toDisplayString(_ctx.activeText), 9, _hoisted_5$5)) : createCommentVNode("v-if", true)
                   ])
                 ],
                 2
@@ -51200,7 +51291,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Switch = /* @__PURE__ */ _export_sfc$1(_sfc_main$E, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/switch/src/switch.vue"]]);
+    var Switch = /* @__PURE__ */ _export_sfc$1(_sfc_main$G, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/switch/src/switch.vue"]]);
     const ElSwitch = withInstall(Switch);
     const getCell = function(event) {
       var _a;
@@ -52972,7 +53063,7 @@ var require_index_001 = __commonJS({
         });
       }
     }
-    const _sfc_main$D = /* @__PURE__ */ defineComponent({
+    const _sfc_main$F = /* @__PURE__ */ defineComponent({
       name: "ElTableFilterPanel",
       components: {
         ElCheckbox,
@@ -53172,10 +53263,10 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$l = ["disabled"];
-    const _hoisted_2$e = ["tabindex", "aria-checked"];
-    const _hoisted_3$7 = ["tabindex", "aria-checked", "onClick"];
-    const _hoisted_4$6 = ["aria-label"];
+    const _hoisted_1$n = ["disabled"];
+    const _hoisted_2$g = ["tabindex", "aria-checked"];
+    const _hoisted_3$9 = ["tabindex", "aria-checked", "onClick"];
+    const _hoisted_4$8 = ["aria-label"];
     function _sfc_render$4(_ctx, _cache, $props, $setup, $data, $options) {
       const _component_el_checkbox = resolveComponent("el-checkbox");
       const _component_el_checkbox_group = resolveComponent("el-checkbox-group");
@@ -53266,7 +53357,7 @@ var require_index_001 = __commonJS({
                     disabled: _ctx.filteredValue.length === 0,
                     type: "button",
                     onClick: _cache[1] || (_cache[1] = (...args) => _ctx.handleConfirm && _ctx.handleConfirm(...args))
-                  }, toDisplayString(_ctx.t("el.table.confirmFilter")), 11, _hoisted_1$l),
+                  }, toDisplayString(_ctx.t("el.table.confirmFilter")), 11, _hoisted_1$n),
                   createBaseVNode(
                     "button",
                     {
@@ -53301,7 +53392,7 @@ var require_index_001 = __commonJS({
                 tabindex: _ctx.checkedIndex === 0 ? 0 : -1,
                 "aria-checked": _ctx.isPropAbsent(_ctx.filterValue),
                 onClick: _cache[3] || (_cache[3] = ($event) => _ctx.handleSelect(null, 0))
-              }, toDisplayString(_ctx.t("el.table.clearFilter")), 11, _hoisted_2$e),
+              }, toDisplayString(_ctx.t("el.table.clearFilter")), 11, _hoisted_2$g),
               (openBlock(true), createElementBlock(
                 Fragment,
                 null,
@@ -53313,7 +53404,7 @@ var require_index_001 = __commonJS({
                     tabindex: _ctx.checkedIndex === idx + 1 ? 0 : -1,
                     "aria-checked": _ctx.isActive(filter),
                     onClick: ($event) => _ctx.handleSelect(filter.value, idx + 1)
-                  }, toDisplayString(filter.text), 11, _hoisted_3$7);
+                  }, toDisplayString(filter.text), 11, _hoisted_3$9);
                 }),
                 128
               ))
@@ -53340,13 +53431,13 @@ var require_index_001 = __commonJS({
                 ]),
                 _: 3
               })
-            ], 10, _hoisted_4$6)
+            ], 10, _hoisted_4$8)
           ];
         }),
         _: 3
       }, 8, ["placement", "popper-class", "append-to", "onShow", "onHide"]);
     }
-    var FilterPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$D, [["render", _sfc_render$4], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/table/src/filter-panel.vue"]]);
+    var FilterPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$F, [["render", _sfc_render$4], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/table/src/filter-panel.vue"]]);
     function useLayoutObserver(root2) {
       const instance = getCurrentInstance();
       onBeforeMount(() => {
@@ -54302,8 +54393,8 @@ var require_index_001 = __commonJS({
         getColspanRealWidth
       };
     }
-    const _hoisted_1$k = ["colspan", "rowspan"];
-    const _sfc_main$C = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$m = ["colspan", "rowspan"];
+    const _sfc_main$E = /* @__PURE__ */ defineComponent({
       ...{
         name: "TableTdWrapper"
       },
@@ -54325,11 +54416,11 @@ var require_index_001 = __commonJS({
             rowspan: __props.rowspan
           }, [
             renderSlot(_ctx.$slots, "default")
-          ], 8, _hoisted_1$k);
+          ], 8, _hoisted_1$m);
         };
       }
     });
-    var TdWrapper = /* @__PURE__ */ _export_sfc$1(_sfc_main$C, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/table/src/table-body/td-wrapper.vue"]]);
+    var TdWrapper = /* @__PURE__ */ _export_sfc$1(_sfc_main$E, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/table/src/table-body/td-wrapper.vue"]]);
     function useRender$1(props2) {
       const parent2 = inject(TABLE_INJECTION_KEY);
       const ns = useNamespace("table");
@@ -55475,7 +55566,7 @@ var require_index_001 = __commonJS({
       }
     };
     let tableIdSeed = 1;
-    const _sfc_main$B = /* @__PURE__ */ defineComponent({
+    const _sfc_main$D = /* @__PURE__ */ defineComponent({
       name: "ElTable",
       directives: {
         Mousewheel
@@ -55627,8 +55718,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$j = ["data-prefix"];
-    const _hoisted_2$d = {
+    const _hoisted_1$l = ["data-prefix"];
+    const _hoisted_2$f = {
       ref: "hiddenColumns",
       class: "hidden-columns"
     };
@@ -55673,7 +55764,7 @@ var require_index_001 = __commonJS({
           [
             createBaseVNode(
               "div",
-              _hoisted_2$d,
+              _hoisted_2$f,
               [
                 renderSlot(_ctx.$slots, "default")
               ],
@@ -55892,9 +55983,9 @@ var require_index_001 = __commonJS({
         ), [
           [vShow, _ctx.resizeProxyVisible]
         ])
-      ], 46, _hoisted_1$j);
+      ], 46, _hoisted_1$l);
     }
-    var Table$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$B, [["render", _sfc_render$3], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/table/src/table.vue"]]);
+    var Table$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$D, [["render", _sfc_render$3], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/table/src/table.vue"]]);
     const defaultClassNames = {
       selection: "table-column--selection",
       expand: "table__expand-column"
@@ -59845,7 +59936,7 @@ var require_index_001 = __commonJS({
       }
     });
     const COMPONENT_NAME$4 = "ElTabBar";
-    const _sfc_main$A = /* @__PURE__ */ defineComponent({
+    const _sfc_main$C = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$4
       },
@@ -59938,7 +60029,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var TabBar = /* @__PURE__ */ _export_sfc$1(_sfc_main$A, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tabs/src/tab-bar.vue"]]);
+    var TabBar = /* @__PURE__ */ _export_sfc$1(_sfc_main$C, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tabs/src/tab-bar.vue"]]);
     const tabNavProps = buildProps({
       panes: {
         type: definePropType(Array),
@@ -60430,9 +60521,9 @@ var require_index_001 = __commonJS({
       disabled: Boolean,
       lazy: Boolean
     });
-    const _hoisted_1$i = ["id", "aria-hidden", "aria-labelledby"];
+    const _hoisted_1$k = ["id", "aria-hidden", "aria-labelledby"];
     const COMPONENT_NAME$2 = "ElTabPane";
-    const _sfc_main$z = /* @__PURE__ */ defineComponent({
+    const _sfc_main$B = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$2
       },
@@ -60506,13 +60597,13 @@ var require_index_001 = __commonJS({
             "aria-labelledby": `tab-${paneName.value}`
           }, [
             renderSlot(_ctx.$slots, "default")
-          ], 10, _hoisted_1$i)), [
+          ], 10, _hoisted_1$k)), [
             [vShow, active.value]
           ]) : createCommentVNode("v-if", true);
         };
       }
     });
-    var TabPane = /* @__PURE__ */ _export_sfc$1(_sfc_main$z, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tabs/src/tab-pane.vue"]]);
+    var TabPane = /* @__PURE__ */ _export_sfc$1(_sfc_main$B, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tabs/src/tab-pane.vue"]]);
     const ElTabs = withInstall(Tabs, {
       TabPane
     });
@@ -60537,7 +60628,7 @@ var require_index_001 = __commonJS({
         default: "span"
       }
     });
-    const _sfc_main$y = /* @__PURE__ */ defineComponent({
+    const _sfc_main$A = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElText"
       },
@@ -60598,7 +60689,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Text = /* @__PURE__ */ _export_sfc$1(_sfc_main$y, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/text/src/text.vue"]]);
+    var Text = /* @__PURE__ */ _export_sfc$1(_sfc_main$A, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/text/src/text.vue"]]);
     const ElText = withInstall(Text);
     const timeSelectProps = buildProps({
       format: {
@@ -60718,7 +60809,7 @@ var require_index_001 = __commonJS({
       next.minutes = next.minutes % 60;
       return formatTime(next);
     };
-    const _sfc_main$x = /* @__PURE__ */ defineComponent({
+    const _sfc_main$z = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTimeSelect"
       },
@@ -60844,7 +60935,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var TimeSelect = /* @__PURE__ */ _export_sfc$1(_sfc_main$x, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-select/src/time-select.vue"]]);
+    var TimeSelect = /* @__PURE__ */ _export_sfc$1(_sfc_main$z, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/time-select/src/time-select.vue"]]);
     const ElTimeSelect = withInstall(TimeSelect);
     const TIMELINE_INJECTION_KEY = "timeline";
     const Timeline = /* @__PURE__ */ defineComponent({
@@ -60902,7 +60993,7 @@ var require_index_001 = __commonJS({
       },
       hollow: Boolean
     });
-    const _sfc_main$w = /* @__PURE__ */ defineComponent({
+    const _sfc_main$y = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTimelineItem"
       },
@@ -61008,7 +61099,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var TimelineItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$w, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/timeline/src/timeline-item.vue"]]);
+    var TimelineItem = /* @__PURE__ */ _export_sfc$1(_sfc_main$y, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/timeline/src/timeline-item.vue"]]);
     const ElTimeline = withInstall(Timeline, {
       TimelineItem
     });
@@ -61211,7 +61302,7 @@ var require_index_001 = __commonJS({
         handleAllCheckedChange
       };
     };
-    const _sfc_main$v = /* @__PURE__ */ defineComponent({
+    const _sfc_main$x = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTransferPanel"
       },
@@ -61373,7 +61464,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var TransferPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$v, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/transfer/src/transfer-panel.vue"]]);
+    var TransferPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$x, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/transfer/src/transfer-panel.vue"]]);
     const useComputedData = (props2) => {
       const propsAlias = usePropsAlias(props2);
       const dataObj = computed(
@@ -61458,9 +61549,9 @@ var require_index_001 = __commonJS({
         onTargetCheckedChange
       };
     };
-    const _hoisted_1$h = { key: 0 };
-    const _hoisted_2$c = { key: 0 };
-    const _sfc_main$u = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$j = { key: 0 };
+    const _hoisted_2$e = { key: 0 };
+    const _sfc_main$w = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTransfer"
       },
@@ -61586,7 +61677,7 @@ var require_index_001 = __commonJS({
                       }),
                       !unref(isUndefined)(_ctx.buttonTexts[0]) ? (openBlock(), createElementBlock(
                         "span",
-                        _hoisted_1$h,
+                        _hoisted_1$j,
                         toDisplayString(_ctx.buttonTexts[0]),
                         1
                       )) : createCommentVNode("v-if", true)
@@ -61602,7 +61693,7 @@ var require_index_001 = __commonJS({
                     default: withCtx(() => [
                       !unref(isUndefined)(_ctx.buttonTexts[1]) ? (openBlock(), createElementBlock(
                         "span",
-                        _hoisted_2$c,
+                        _hoisted_2$e,
                         toDisplayString(_ctx.buttonTexts[1]),
                         1
                       )) : createCommentVNode("v-if", true),
@@ -61646,7 +61737,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Transfer = /* @__PURE__ */ _export_sfc$1(_sfc_main$u, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/transfer/src/transfer.vue"]]);
+    var Transfer = /* @__PURE__ */ _export_sfc$1(_sfc_main$w, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/transfer/src/transfer.vue"]]);
     const ElTransfer = withInstall(Transfer);
     const NODE_KEY = "$treeNodeId";
     const markNodeData = function(node, data) {
@@ -62461,7 +62552,7 @@ var require_index_001 = __commonJS({
     const ROOT_TREE_INJECTION_KEY$1 = "RootTree";
     const NODE_INSTANCE_INJECTION_KEY = "NodeInstance";
     const TREE_NODE_MAP_INJECTION_KEY = "TreeNodeMap";
-    const _sfc_main$t = /* @__PURE__ */ defineComponent({
+    const _sfc_main$v = /* @__PURE__ */ defineComponent({
       name: "ElTreeNodeContent",
       props: {
         node: {
@@ -62489,7 +62580,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var NodeContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$t, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree/src/tree-node-content.vue"]]);
+    var NodeContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$v, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree/src/tree-node-content.vue"]]);
     function useNodeExpandEventBroadcast(props2) {
       const parentNodeMap = inject(
         TREE_NODE_MAP_INJECTION_KEY,
@@ -62708,7 +62799,7 @@ var require_index_001 = __commonJS({
         dragState
       };
     }
-    const _sfc_main$s = /* @__PURE__ */ defineComponent({
+    const _sfc_main$u = /* @__PURE__ */ defineComponent({
       name: "ElTreeNode",
       components: {
         ElCollapseTransition,
@@ -62925,8 +63016,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$g = ["aria-expanded", "aria-disabled", "aria-checked", "draggable", "data-key"];
-    const _hoisted_2$b = ["aria-expanded"];
+    const _hoisted_1$i = ["aria-expanded", "aria-disabled", "aria-checked", "draggable", "data-key"];
+    const _hoisted_2$d = ["aria-expanded"];
     function _sfc_render$2(_ctx, _cache, $props, $setup, $data, $options) {
       const _component_el_icon = resolveComponent("el-icon");
       const _component_el_checkbox = resolveComponent("el-checkbox");
@@ -63034,17 +63125,17 @@ var require_index_001 = __commonJS({
                 }),
                 128
               ))
-            ], 10, _hoisted_2$b)), [
+            ], 10, _hoisted_2$d)), [
               [vShow, _ctx.expanded]
             ]) : createCommentVNode("v-if", true)
           ]),
           _: 1
         })
-      ], 42, _hoisted_1$g)), [
+      ], 42, _hoisted_1$i)), [
         [vShow, _ctx.node.visible]
       ]);
     }
-    var ElTreeNode$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$s, [["render", _sfc_render$2], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree/src/tree-node.vue"]]);
+    var ElTreeNode$1 = /* @__PURE__ */ _export_sfc$1(_sfc_main$u, [["render", _sfc_render$2], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree/src/tree-node.vue"]]);
     function useKeydown({ el$ }, store) {
       const ns = useNamespace("tree");
       onMounted(() => {
@@ -63235,7 +63326,7 @@ var require_index_001 = __commonJS({
       "node-drag-enter": (draggingNode, dropNode, evt) => draggingNode && dropNode && evt,
       "node-drag-over": (draggingNode, dropNode, evt) => draggingNode && dropNode && evt
     };
-    const _sfc_main$r = /* @__PURE__ */ defineComponent({
+    const _sfc_main$t = /* @__PURE__ */ defineComponent({
       name: "ElTree",
       components: { ElTreeNode: ElTreeNode$1 },
       props: treeProps$1,
@@ -63531,7 +63622,7 @@ var require_index_001 = __commonJS({
         2
       );
     }
-    var Tree = /* @__PURE__ */ _export_sfc$1(_sfc_main$r, [["render", _sfc_render$1], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree/src/tree.vue"]]);
+    var Tree = /* @__PURE__ */ _export_sfc$1(_sfc_main$t, [["render", _sfc_render$1], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree/src/tree.vue"]]);
     const ElTree = withInstall(Tree);
     const useSelect = (props2, { attrs, emit: emit2 }, {
       select,
@@ -63922,7 +64013,7 @@ var require_index_001 = __commonJS({
         return () => void 0;
       }
     });
-    const _sfc_main$q = /* @__PURE__ */ defineComponent({
+    const _sfc_main$s = /* @__PURE__ */ defineComponent({
       name: "ElTreeSelect",
       inheritAttrs: false,
       props: {
@@ -63995,7 +64086,7 @@ var require_index_001 = __commonJS({
         );
       }
     });
-    var TreeSelect = /* @__PURE__ */ _export_sfc$1(_sfc_main$q, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree-select/src/tree-select.vue"]]);
+    var TreeSelect = /* @__PURE__ */ _export_sfc$1(_sfc_main$s, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree-select/src/tree-select.vue"]]);
     const ElTreeSelect = withInstall(TreeSelect);
     const ROOT_TREE_INJECTION_KEY = Symbol();
     const EMPTY_NODE = {
@@ -64708,8 +64799,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$f = ["aria-expanded", "aria-disabled", "aria-checked", "data-key"];
-    const _sfc_main$p = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$h = ["aria-expanded", "aria-disabled", "aria-checked", "data-key"];
+    const _sfc_main$r = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTreeNode"
       },
@@ -64830,12 +64921,12 @@ var require_index_001 = __commonJS({
               ],
               6
             )
-          ], 42, _hoisted_1$f);
+          ], 42, _hoisted_1$h);
         };
       }
     });
-    var ElTreeNode = /* @__PURE__ */ _export_sfc$1(_sfc_main$p, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree-v2/src/tree-node.vue"]]);
-    const _sfc_main$o = /* @__PURE__ */ defineComponent({
+    var ElTreeNode = /* @__PURE__ */ _export_sfc$1(_sfc_main$r, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree-v2/src/tree-node.vue"]]);
+    const _sfc_main$q = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTreeV2"
       },
@@ -64979,7 +65070,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var TreeV2 = /* @__PURE__ */ _export_sfc$1(_sfc_main$o, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree-v2/src/tree.vue"]]);
+    var TreeV2 = /* @__PURE__ */ _export_sfc$1(_sfc_main$q, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tree-v2/src/tree.vue"]]);
     const ElTreeV2 = withInstall(TreeV2);
     const uploadContextKey = Symbol("uploadContextKey");
     const SCOPE$2 = "ElUpload";
@@ -65185,13 +65276,13 @@ var require_index_001 = __commonJS({
     const uploadListEmits = {
       remove: (file) => !!file
     };
-    const _hoisted_1$e = ["tabindex", "aria-disabled", "onKeydown"];
-    const _hoisted_2$a = ["src", "crossorigin"];
-    const _hoisted_3$6 = ["onClick"];
-    const _hoisted_4$5 = ["title"];
-    const _hoisted_5$3 = ["onClick"];
-    const _hoisted_6$3 = ["onClick"];
-    const _sfc_main$n = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$g = ["tabindex", "aria-disabled", "onKeydown"];
+    const _hoisted_2$c = ["src", "crossorigin"];
+    const _hoisted_3$8 = ["onClick"];
+    const _hoisted_4$7 = ["title"];
+    const _hoisted_5$4 = ["onClick"];
+    const _hoisted_6$4 = ["onClick"];
+    const _sfc_main$p = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElUploadList"
       },
@@ -65251,7 +65342,7 @@ var require_index_001 = __commonJS({
                         src: file.url,
                         crossorigin: _ctx.crossorigin,
                         alt: ""
-                      }, null, 10, _hoisted_2$a)) : createCommentVNode("v-if", true),
+                      }, null, 10, _hoisted_2$c)) : createCommentVNode("v-if", true),
                       file.status === "uploading" || _ctx.listType !== "picture-card" ? (openBlock(), createElementBlock(
                         "div",
                         {
@@ -65274,8 +65365,8 @@ var require_index_001 = __commonJS({
                             createBaseVNode("span", {
                               class: normalizeClass(unref(nsUpload).be("list", "item-file-name")),
                               title: file.name
-                            }, toDisplayString(file.name), 11, _hoisted_4$5)
-                          ], 10, _hoisted_3$6),
+                            }, toDisplayString(file.name), 11, _hoisted_4$7)
+                          ], 10, _hoisted_3$8),
                           file.status === "uploading" ? (openBlock(), createBlock(unref(ElProgress), {
                             key: 0,
                             type: _ctx.listType === "picture-card" ? "circle" : "line",
@@ -65353,7 +65444,7 @@ var require_index_001 = __commonJS({
                               ]),
                               _: 1
                             }, 8, ["class"])
-                          ], 10, _hoisted_5$3),
+                          ], 10, _hoisted_5$4),
                           !unref(disabled) ? (openBlock(), createElementBlock("span", {
                             key: 0,
                             class: normalizeClass(unref(nsUpload).be("list", "item-delete")),
@@ -65367,12 +65458,12 @@ var require_index_001 = __commonJS({
                               ]),
                               _: 1
                             }, 8, ["class"])
-                          ], 10, _hoisted_6$3)) : createCommentVNode("v-if", true)
+                          ], 10, _hoisted_6$4)) : createCommentVNode("v-if", true)
                         ],
                         2
                       )) : createCommentVNode("v-if", true)
                     ])
-                  ], 42, _hoisted_1$e);
+                  ], 42, _hoisted_1$g);
                 }),
                 128
               )),
@@ -65383,7 +65474,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var UploadList = /* @__PURE__ */ _export_sfc$1(_sfc_main$n, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/upload/src/upload-list.vue"]]);
+    var UploadList = /* @__PURE__ */ _export_sfc$1(_sfc_main$p, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/upload/src/upload-list.vue"]]);
     const uploadDraggerProps = buildProps({
       disabled: {
         type: Boolean,
@@ -65394,7 +65485,7 @@ var require_index_001 = __commonJS({
       file: (file) => isArray$1(file)
     };
     const COMPONENT_NAME$1 = "ElUploadDrag";
-    const _sfc_main$m = /* @__PURE__ */ defineComponent({
+    const _sfc_main$o = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME$1
       },
@@ -65455,7 +65546,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var UploadDragger = /* @__PURE__ */ _export_sfc$1(_sfc_main$m, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/upload/src/upload-dragger.vue"]]);
+    var UploadDragger = /* @__PURE__ */ _export_sfc$1(_sfc_main$o, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/upload/src/upload-dragger.vue"]]);
     const uploadContentProps = buildProps({
       ...uploadBaseProps,
       beforeUpload: {
@@ -65489,9 +65580,9 @@ var require_index_001 = __commonJS({
         default: NOOP
       }
     });
-    const _hoisted_1$d = ["tabindex", "aria-disabled", "onKeydown"];
-    const _hoisted_2$9 = ["name", "disabled", "multiple", "accept"];
-    const _sfc_main$l = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$f = ["tabindex", "aria-disabled", "onKeydown"];
+    const _hoisted_2$b = ["name", "disabled", "multiple", "accept"];
+    const _sfc_main$n = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElUploadContent",
         inheritAttrs: false
@@ -65681,12 +65772,12 @@ var require_index_001 = __commonJS({
               onChange: handleChange,
               onClick: _cache[0] || (_cache[0] = withModifiers(() => {
               }, ["stop"]))
-            }, null, 42, _hoisted_2$9)
-          ], 42, _hoisted_1$d);
+            }, null, 42, _hoisted_2$b)
+          ], 42, _hoisted_1$f);
         };
       }
     });
-    var UploadContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$l, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/upload/src/upload-content.vue"]]);
+    var UploadContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$n, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/upload/src/upload-content.vue"]]);
     const SCOPE$1 = "ElUpload";
     const revokeFileObjectURL = (file) => {
       var _a;
@@ -65834,7 +65925,7 @@ var require_index_001 = __commonJS({
         revokeFileObjectURL
       };
     };
-    const _sfc_main$k = /* @__PURE__ */ defineComponent({
+    const _sfc_main$m = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElUpload"
       },
@@ -65964,7 +66055,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Upload = /* @__PURE__ */ _export_sfc$1(_sfc_main$k, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/upload/src/upload.vue"]]);
+    var Upload = /* @__PURE__ */ _export_sfc$1(_sfc_main$m, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/upload/src/upload.vue"]]);
     const ElUpload = withInstall(Upload);
     const watermarkProps = buildProps({
       zIndex: {
@@ -66133,7 +66224,7 @@ var require_index_001 = __commonJS({
       }
       return getClips;
     }
-    const _sfc_main$j = /* @__PURE__ */ defineComponent({
+    const _sfc_main$l = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElWatermark"
       },
@@ -66373,7 +66464,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Watermark = /* @__PURE__ */ _export_sfc$1(_sfc_main$j, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/watermark/src/watermark.vue"]]);
+    var Watermark = /* @__PURE__ */ _export_sfc$1(_sfc_main$l, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/watermark/src/watermark.vue"]]);
     const ElWatermark = withInstall(Watermark);
     const maskProps = buildProps({
       zIndex: {
@@ -67990,12 +68081,12 @@ var require_index_001 = __commonJS({
         }
       };
     };
-    const _hoisted_1$c = { style: {
+    const _hoisted_1$e = { style: {
       width: "100%",
       height: "100%"
     } };
-    const _hoisted_2$8 = ["d"];
-    const _sfc_main$i = /* @__PURE__ */ defineComponent({
+    const _hoisted_2$a = ["d"];
+    const _sfc_main$k = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTourMask",
         inheritAttrs: false
@@ -68054,12 +68145,12 @@ var require_index_001 = __commonJS({
               style: maskStyle.value
             }, _ctx.$attrs),
             [
-              (openBlock(), createElementBlock("svg", _hoisted_1$c, [
+              (openBlock(), createElementBlock("svg", _hoisted_1$e, [
                 createBaseVNode("path", {
                   class: normalizeClass(unref(ns).e("hollow")),
                   style: normalizeStyle(pathStyle.value),
                   d: path.value
-                }, null, 14, _hoisted_2$8)
+                }, null, 14, _hoisted_2$a)
               ]))
             ],
             16
@@ -68067,7 +68158,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ElTourMask = /* @__PURE__ */ _export_sfc$1(_sfc_main$i, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tour/src/mask.vue"]]);
+    var ElTourMask = /* @__PURE__ */ _export_sfc$1(_sfc_main$k, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tour/src/mask.vue"]]);
     const tourStrategies = ["absolute", "fixed"];
     const tourPlacements = [
       "top-start",
@@ -68111,8 +68202,8 @@ var require_index_001 = __commonJS({
     const tourContentEmits = {
       close: () => true
     };
-    const _hoisted_1$b = ["data-side"];
-    const _sfc_main$h = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$d = ["data-side"];
+    const _sfc_main$j = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTourContent"
       },
@@ -68188,11 +68279,11 @@ var require_index_001 = __commonJS({
               null,
               6
             )) : createCommentVNode("v-if", true)
-          ], 14, _hoisted_1$b);
+          ], 14, _hoisted_1$d);
         };
       }
     });
-    var ElTourContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$h, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tour/src/content.vue"]]);
+    var ElTourContent = /* @__PURE__ */ _export_sfc$1(_sfc_main$j, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tour/src/content.vue"]]);
     var ElTourSteps = /* @__PURE__ */ defineComponent({
       name: "ElTourSteps",
       props: {
@@ -68299,7 +68390,7 @@ var require_index_001 = __commonJS({
       finish: () => true,
       change: (current) => isNumber(current)
     };
-    const _sfc_main$g = /* @__PURE__ */ defineComponent({
+    const _sfc_main$i = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTour"
       },
@@ -68470,7 +68561,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Tour = /* @__PURE__ */ _export_sfc$1(_sfc_main$g, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tour/src/tour.vue"]]);
+    var Tour = /* @__PURE__ */ _export_sfc$1(_sfc_main$i, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tour/src/tour.vue"]]);
     const tourStepProps = buildProps({
       target: {
         type: definePropType([String, Object, Function])
@@ -68513,8 +68604,8 @@ var require_index_001 = __commonJS({
     const tourStepEmits = {
       close: () => true
     };
-    const _hoisted_1$a = ["aria-label"];
-    const _sfc_main$f = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$c = ["aria-label"];
+    const _sfc_main$h = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElTourStep"
       },
@@ -68635,7 +68726,7 @@ var require_index_001 = __commonJS({
                   ]),
                   _: 1
                 }, 8, ["class"])
-              ], 10, _hoisted_1$a)) : createCommentVNode("v-if", true),
+              ], 10, _hoisted_1$c)) : createCommentVNode("v-if", true),
               createBaseVNode(
                 "header",
                 {
@@ -68758,7 +68849,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var TourStep = /* @__PURE__ */ _export_sfc$1(_sfc_main$f, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tour/src/step.vue"]]);
+    var TourStep = /* @__PURE__ */ _export_sfc$1(_sfc_main$h, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/tour/src/step.vue"]]);
     const ElTour = withInstall(Tour, {
       TourStep
     });
@@ -68830,7 +68921,7 @@ var require_index_001 = __commonJS({
       };
       return throttle2;
     }
-    const _sfc_main$e = /* @__PURE__ */ defineComponent({
+    const _sfc_main$g = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElAnchor"
       },
@@ -69055,13 +69146,13 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Anchor = /* @__PURE__ */ _export_sfc$1(_sfc_main$e, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/anchor/src/anchor.vue"]]);
+    var Anchor = /* @__PURE__ */ _export_sfc$1(_sfc_main$g, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/anchor/src/anchor.vue"]]);
     const anchorLinkProps = buildProps({
       title: String,
       href: String
     });
-    const _hoisted_1$9 = ["href"];
-    const _sfc_main$d = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$b = ["href"];
+    const _sfc_main$f = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElAnchorLink"
       },
@@ -69135,7 +69226,7 @@ var require_index_001 = __commonJS({
                     1
                   )
                 ])
-              ], 10, _hoisted_1$9),
+              ], 10, _hoisted_1$b),
               _ctx.$slots["sub-link"] && unref(direction2) === "vertical" ? (openBlock(), createElementBlock(
                 "div",
                 {
@@ -69153,7 +69244,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var AnchorLink = /* @__PURE__ */ _export_sfc$1(_sfc_main$d, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/anchor/src/anchor-link.vue"]]);
+    var AnchorLink = /* @__PURE__ */ _export_sfc$1(_sfc_main$f, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/anchor/src/anchor-link.vue"]]);
     const ElAnchor = withInstall(Anchor, {
       AnchorLink
     });
@@ -69198,9 +69289,9 @@ var require_index_001 = __commonJS({
       [UPDATE_MODEL_EVENT]: (val) => isString(val) || isNumber(val) || isBoolean(val),
       [CHANGE_EVENT]: (val) => isString(val) || isNumber(val) || isBoolean(val)
     };
-    const _hoisted_1$8 = ["id", "aria-label", "aria-labelledby"];
-    const _hoisted_2$7 = ["name", "disabled", "checked", "onChange"];
-    const _sfc_main$c = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$a = ["id", "aria-label", "aria-labelledby"];
+    const _hoisted_2$9 = ["name", "disabled", "checked", "onChange"];
+    const _sfc_main$e = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElSegmented"
       },
@@ -69366,7 +69457,7 @@ var require_index_001 = __commonJS({
                           disabled: getDisabled(item),
                           checked: getSelected(item),
                           onChange: ($event) => handleChange($event, item)
-                        }, null, 42, _hoisted_2$7),
+                        }, null, 42, _hoisted_2$9),
                         createBaseVNode(
                           "div",
                           {
@@ -69393,11 +69484,11 @@ var require_index_001 = __commonJS({
               ],
               2
             )
-          ], 10, _hoisted_1$8)) : createCommentVNode("v-if", true);
+          ], 10, _hoisted_1$a)) : createCommentVNode("v-if", true);
         };
       }
     });
-    var Segmented = /* @__PURE__ */ _export_sfc$1(_sfc_main$c, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/segmented/src/segmented.vue"]]);
+    var Segmented = /* @__PURE__ */ _export_sfc$1(_sfc_main$e, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/segmented/src/segmented.vue"]]);
     const ElSegmented = withInstall(Segmented);
     const filterOption = (pattern, option) => {
       const lowerCase = pattern.toLowerCase();
@@ -69630,8 +69721,8 @@ var require_index_001 = __commonJS({
     const mentionDropdownEmits = {
       select: (option) => isString(option.value)
     };
-    const _hoisted_1$7 = ["id", "aria-disabled", "aria-selected", "onMousemove", "onClick"];
-    const _sfc_main$b = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$9 = ["id", "aria-disabled", "aria-selected", "onMousemove", "onClick"];
+    const _sfc_main$d = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElMentionDropdown"
       },
@@ -69786,7 +69877,7 @@ var require_index_001 = __commonJS({
                             )
                           ];
                         })
-                      ], 42, _hoisted_1$7);
+                      ], 42, _hoisted_1$9);
                     }),
                     128
                   ))
@@ -69828,8 +69919,8 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var ElMentionDropdown = /* @__PURE__ */ _export_sfc$1(_sfc_main$b, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/mention/src/mention-dropdown.vue"]]);
-    const _sfc_main$a = /* @__PURE__ */ defineComponent({
+    var ElMentionDropdown = /* @__PURE__ */ _export_sfc$1(_sfc_main$d, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/mention/src/mention-dropdown.vue"]]);
+    const _sfc_main$c = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElMention",
         inheritAttrs: false
@@ -70140,7 +70231,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Mention = /* @__PURE__ */ _export_sfc$1(_sfc_main$a, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/mention/src/mention.vue"]]);
+    var Mention = /* @__PURE__ */ _export_sfc$1(_sfc_main$c, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/mention/src/mention.vue"]]);
     const ElMention = withInstall(Mention);
     const splitterProps = buildProps({
       layout: {
@@ -70343,7 +70434,7 @@ var require_index_001 = __commonJS({
         onCollapse
       };
     }
-    const _sfc_main$9 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$b = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElSplitter"
       },
@@ -70448,7 +70539,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var Splitter = /* @__PURE__ */ _export_sfc$1(_sfc_main$9, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/splitter/src/splitter.vue"]]);
+    var Splitter = /* @__PURE__ */ _export_sfc$1(_sfc_main$b, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/splitter/src/splitter.vue"]]);
     function getCollapsible(collapsible) {
       if (collapsible && isObject$2(collapsible)) {
         return collapsible;
@@ -70467,7 +70558,7 @@ var require_index_001 = __commonJS({
       }
       return false;
     }
-    const _sfc_main$8 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$a = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElSplitterBar"
       },
@@ -70626,7 +70717,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var SplitBar = /* @__PURE__ */ _export_sfc$1(_sfc_main$8, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/splitter/src/split-bar.vue"]]);
+    var SplitBar = /* @__PURE__ */ _export_sfc$1(_sfc_main$a, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/splitter/src/split-bar.vue"]]);
     const splitterPanelProps = buildProps({
       min: {
         type: [String, Number]
@@ -70647,7 +70738,7 @@ var require_index_001 = __commonJS({
       "update:size": (value) => typeof value === "number" || typeof value === "string"
     };
     const COMPONENT_NAME = "ElSplitterPanel";
-    const _sfc_main$7 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$9 = /* @__PURE__ */ defineComponent({
       ...{
         name: COMPONENT_NAME
       },
@@ -70823,7 +70914,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var SplitPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$7, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/splitter/src/split-panel.vue"]]);
+    var SplitPanel = /* @__PURE__ */ _export_sfc$1(_sfc_main$9, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/splitter/src/split-panel.vue"]]);
     const ElSplitter = withInstall(Splitter, {
       SplitPanel
     });
@@ -71530,9 +71621,9 @@ var require_index_001 = __commonJS({
       const idx = instances.findIndex((instance) => instance.id === id);
       return idx > 0 ? 16 : offset2;
     };
-    const _hoisted_1$6 = ["id"];
-    const _hoisted_2$6 = ["innerHTML"];
-    const _sfc_main$6 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$8 = ["id"];
+    const _hoisted_2$8 = ["innerHTML"];
+    const _sfc_main$8 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElMessage"
       },
@@ -71686,7 +71777,7 @@ var require_index_001 = __commonJS({
                       createBaseVNode("p", {
                         class: normalizeClass(unref(ns).e("content")),
                         innerHTML: _ctx.message
-                      }, null, 10, _hoisted_2$6)
+                      }, null, 10, _hoisted_2$8)
                     ],
                     2112
                   ))
@@ -71701,7 +71792,7 @@ var require_index_001 = __commonJS({
                   ]),
                   _: 1
                 }, 8, ["class"])) : createCommentVNode("v-if", true)
-              ], 46, _hoisted_1$6), [
+              ], 46, _hoisted_1$8), [
                 [vShow, visible.value]
               ])
             ]),
@@ -71710,7 +71801,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var MessageConstructor = /* @__PURE__ */ _export_sfc$1(_sfc_main$6, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/message/src/message.vue"]]);
+    var MessageConstructor = /* @__PURE__ */ _export_sfc$1(_sfc_main$8, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/message/src/message.vue"]]);
     let seed$1 = 1;
     const normalizeAppendTo = (normalized) => {
       const appendTo = normalized.appendTo;
@@ -71913,7 +72004,7 @@ var require_index_001 = __commonJS({
         }
       }
     };
-    const _sfc_main$5 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$7 = /* @__PURE__ */ defineComponent({
       name: "ElMessageBox",
       directives: {
         TrapFocus
@@ -72199,9 +72290,9 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const _hoisted_1$5 = ["aria-label", "aria-describedby"];
-    const _hoisted_2$5 = ["aria-label"];
-    const _hoisted_3$5 = ["id"];
+    const _hoisted_1$7 = ["aria-label", "aria-describedby"];
+    const _hoisted_2$7 = ["aria-label"];
+    const _hoisted_3$7 = ["id"];
     function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
       const _component_el_icon = resolveComponent("el-icon");
       const _component_el_input = resolveComponent("el-input");
@@ -72303,7 +72394,7 @@ var require_index_001 = __commonJS({
                                 ]),
                                 _: 1
                               }, 8, ["class"])
-                            ], 42, _hoisted_2$5)) : createCommentVNode("v-if", true)
+                            ], 42, _hoisted_2$7)) : createCommentVNode("v-if", true)
                           ],
                           2
                         )) : createCommentVNode("v-if", true),
@@ -72383,7 +72474,7 @@ var require_index_001 = __commonJS({
                           ), [
                             [vShow, _ctx.showInput]
                           ])
-                        ], 10, _hoisted_3$5),
+                        ], 10, _hoisted_3$7),
                         createBaseVNode(
                           "div",
                           {
@@ -72439,7 +72530,7 @@ var require_index_001 = __commonJS({
                   ]),
                   _: 3
                 }, 8, ["trapped", "focus-trap-el", "focus-start-el", "onReleaseRequested"])
-              ], 42, _hoisted_1$5)
+              ], 42, _hoisted_1$7)
             ]),
             _: 3
           }, 8, ["z-index", "overlay-class", "mask"]), [
@@ -72449,7 +72540,7 @@ var require_index_001 = __commonJS({
         _: 3
       });
     }
-    var MessageBoxConstructor = /* @__PURE__ */ _export_sfc$1(_sfc_main$5, [["render", _sfc_render], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/message-box/src/index.vue"]]);
+    var MessageBoxConstructor = /* @__PURE__ */ _export_sfc$1(_sfc_main$7, [["render", _sfc_render], ["__file", "/home/runner/work/element-plus/element-plus/packages/components/message-box/src/index.vue"]]);
     const messageInstance = /* @__PURE__ */ new Map();
     const getAppendToElement = (props2) => {
       let appendTo = document.body;
@@ -72675,11 +72766,11 @@ var require_index_001 = __commonJS({
     const notificationEmits = {
       destroy: () => true
     };
-    const _hoisted_1$4 = ["id"];
-    const _hoisted_2$4 = ["textContent"];
-    const _hoisted_3$4 = { key: 0 };
-    const _hoisted_4$4 = ["innerHTML"];
-    const _sfc_main$4 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$6 = ["id"];
+    const _hoisted_2$6 = ["textContent"];
+    const _hoisted_3$6 = { key: 0 };
+    const _hoisted_4$6 = ["innerHTML"];
+    const _sfc_main$6 = /* @__PURE__ */ defineComponent({
       ...{
         name: "ElNotification"
       },
@@ -72790,7 +72881,7 @@ var require_index_001 = __commonJS({
                     createBaseVNode("h2", {
                       class: normalizeClass(unref(ns).e("title")),
                       textContent: toDisplayString(_ctx.title)
-                    }, null, 10, _hoisted_2$4),
+                    }, null, 10, _hoisted_2$6),
                     withDirectives(createBaseVNode(
                       "div",
                       {
@@ -72801,7 +72892,7 @@ var require_index_001 = __commonJS({
                         renderSlot(_ctx.$slots, "default", {}, () => [
                           !_ctx.dangerouslyUseHTMLString ? (openBlock(), createElementBlock(
                             "p",
-                            _hoisted_3$4,
+                            _hoisted_3$6,
                             toDisplayString(_ctx.message),
                             1
                           )) : (openBlock(), createElementBlock(
@@ -72809,7 +72900,7 @@ var require_index_001 = __commonJS({
                             { key: 1 },
                             [
                               createCommentVNode(" Caution here, message could've been compromised, never use user's input as message "),
-                              createBaseVNode("p", { innerHTML: _ctx.message }, null, 8, _hoisted_4$4)
+                              createBaseVNode("p", { innerHTML: _ctx.message }, null, 8, _hoisted_4$6)
                             ],
                             2112
                           ))
@@ -72832,7 +72923,7 @@ var require_index_001 = __commonJS({
                   ],
                   2
                 )
-              ], 46, _hoisted_1$4), [
+              ], 46, _hoisted_1$6), [
                 [vShow, visible.value]
               ])
             ]),
@@ -72841,7 +72932,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    var NotificationConstructor = /* @__PURE__ */ _export_sfc$1(_sfc_main$4, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/notification/src/notification.vue"]]);
+    var NotificationConstructor = /* @__PURE__ */ _export_sfc$1(_sfc_main$6, [["__file", "/home/runner/work/element-plus/element-plus/packages/components/notification/src/notification.vue"]]);
     const notifications = {
       "top-left": [],
       "top-right": [],
@@ -72965,11 +73056,11 @@ var require_index_001 = __commonJS({
       ElPopoverDirective
     ];
     var installer = makeInstaller([...Components, ...Plugins]);
-    const _hoisted_1$3 = { class: "single-project" };
-    const _hoisted_2$3 = { class: "page-header" };
-    const _hoisted_3$3 = { class: "actions" };
-    const _hoisted_4$3 = { class: "card-header" };
-    const _sfc_main$3 = /* @__PURE__ */ defineComponent({
+    const _hoisted_1$5 = { class: "single-project" };
+    const _hoisted_2$5 = { class: "page-header" };
+    const _hoisted_3$5 = { class: "actions" };
+    const _hoisted_4$5 = { class: "card-header" };
+    const _sfc_main$5 = /* @__PURE__ */ defineComponent({
       __name: "SingleProject",
       setup(__props) {
         const form = ref({
@@ -73018,6 +73109,46 @@ var require_index_001 = __commonJS({
           historyVisible.value = false;
           ElMessage.success("已加载历史记录");
         };
+        const deleteHistory = async (index) => {
+          try {
+            await ElMessageBox.confirm("确定要删除这条历史记录吗？", "确认删除", {
+              confirmButtonText: "删除",
+              cancelButtonText: "取消",
+              type: "warning"
+            });
+            historyList.value.splice(index, 1);
+            const plainHistory = JSON.parse(JSON.stringify(historyList.value));
+            const success = await window.api.saveFile("history.json", plainHistory);
+            if (success) {
+              ElMessage.success("已删除");
+            } else {
+              ElMessage.error("删除失败，未能保存到文件");
+            }
+          } catch (e) {
+          }
+        };
+        const clearAllHistory = async () => {
+          try {
+            await ElMessageBox.confirm(
+              `确定要清空所有 ${historyList.value.length} 条历史记录吗？此操作不可恢复！`,
+              "警告",
+              {
+                confirmButtonText: "清空",
+                cancelButtonText: "取消",
+                type: "error"
+              }
+            );
+            historyList.value = [];
+            const success = await window.api.saveFile("history.json", []);
+            if (success) {
+              ElMessage.success("已清空所有历史记录");
+              historyVisible.value = false;
+            } else {
+              ElMessage.error("清空失败，未能保存到文件");
+            }
+          } catch (e) {
+          }
+        };
         const openOutputFolder = async () => {
           try {
             const success = await window.api.openFolder("授权文档输出目录");
@@ -73042,7 +73173,16 @@ var require_index_001 = __commonJS({
               ElMessage.success("文档生成成功！");
             } else {
               console.error(res.error);
-              ElMessage.error("文档生成失败，请查看控制台");
+              ElMessageBox.alert(
+                `错误信息:
+${res.error || res.output || "Unknown Error"}`,
+                "文档生成失败",
+                {
+                  confirmButtonText: "确定",
+                  type: "error",
+                  customStyle: { maxWidth: "90%" }
+                }
+              );
             }
           } catch (e) {
             ElMessage.error("调用失败: " + e);
@@ -73066,13 +73206,13 @@ var require_index_001 = __commonJS({
           const _component_el_option = resolveComponent("el-option");
           const _component_el_select = resolveComponent("el-select");
           const _component_el_form = resolveComponent("el-form");
-          return openBlock(), createElementBlock("div", _hoisted_1$3, [
-            createBaseVNode("div", _hoisted_2$3, [
-              _cache[13] || (_cache[13] = createBaseVNode("div", { class: "title-group" }, [
+          return openBlock(), createElementBlock("div", _hoisted_1$5, [
+            createBaseVNode("div", _hoisted_2$5, [
+              _cache[14] || (_cache[14] = createBaseVNode("div", { class: "title-group" }, [
                 createBaseVNode("h2", null, "单项目生成"),
                 createBaseVNode("p", { class: "subtitle" }, "填写项目信息以生成相关文档")
               ], -1)),
-              createBaseVNode("div", _hoisted_3$3, [
+              createBaseVNode("div", _hoisted_3$5, [
                 createVNode(_component_el_button, {
                   onClick: openOutputFolder,
                   size: "large"
@@ -73084,7 +73224,7 @@ var require_index_001 = __commonJS({
                       ]),
                       _: 1
                     }),
-                    _cache[9] || (_cache[9] = createTextVNode(" 打开输出目录 ", -1))
+                    _cache[10] || (_cache[10] = createTextVNode(" 打开输出目录 ", -1))
                   ]),
                   _: 1
                 }),
@@ -73099,7 +73239,7 @@ var require_index_001 = __commonJS({
                       ]),
                       _: 1
                     }),
-                    _cache[10] || (_cache[10] = createTextVNode(" 清空表单 ", -1))
+                    _cache[11] || (_cache[11] = createTextVNode(" 清空表单 ", -1))
                   ]),
                   _: 1
                 }),
@@ -73114,7 +73254,7 @@ var require_index_001 = __commonJS({
                       ]),
                       _: 1
                     }),
-                    _cache[11] || (_cache[11] = createTextVNode(" 加载历史数据 ", -1))
+                    _cache[12] || (_cache[12] = createTextVNode(" 加载历史数据 ", -1))
                   ]),
                   _: 1
                 }),
@@ -73131,7 +73271,7 @@ var require_index_001 = __commonJS({
                       ]),
                       _: 1
                     }),
-                    _cache[12] || (_cache[12] = createTextVNode(" 开始生成 ", -1))
+                    _cache[13] || (_cache[13] = createTextVNode(" 开始生成 ", -1))
                   ]),
                   _: 1
                 }, 8, ["loading"])
@@ -73139,10 +73279,30 @@ var require_index_001 = __commonJS({
             ]),
             createVNode(_component_el_dialog, {
               modelValue: historyVisible.value,
-              "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => historyVisible.value = $event),
+              "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => historyVisible.value = $event),
               title: "历史记录 (最近10条)",
-              width: "600px"
+              width: "700px"
             }, {
+              footer: withCtx(() => [
+                createVNode(_component_el_button, {
+                  onClick: _cache[0] || (_cache[0] = ($event) => historyVisible.value = false)
+                }, {
+                  default: withCtx(() => [..._cache[17] || (_cache[17] = [
+                    createTextVNode("关闭", -1)
+                  ])]),
+                  _: 1
+                }),
+                createVNode(_component_el_button, {
+                  type: "danger",
+                  onClick: clearAllHistory,
+                  disabled: historyList.value.length === 0
+                }, {
+                  default: withCtx(() => [..._cache[18] || (_cache[18] = [
+                    createTextVNode(" 清空所有历史 ", -1)
+                  ])]),
+                  _: 1
+                }, 8, ["disabled"])
+              ]),
               default: withCtx(() => [
                 createVNode(_component_el_table, {
                   data: historyList.value,
@@ -73153,26 +73313,39 @@ var require_index_001 = __commonJS({
                   default: withCtx(() => [
                     createVNode(_component_el_table_column, {
                       prop: "data.项目名称",
-                      label: "项目名称"
+                      label: "项目名称",
+                      "min-width": "200"
                     }),
                     createVNode(_component_el_table_column, {
                       prop: "timestamp",
                       label: "生成时间",
-                      width: "200"
+                      width: "180"
                     }),
                     createVNode(_component_el_table_column, {
                       label: "操作",
-                      width: "100",
+                      width: "180",
                       align: "center"
                     }, {
                       default: withCtx((scope) => [
                         createVNode(_component_el_button, {
                           link: "",
                           type: "primary",
+                          size: "small",
                           onClick: withModifiers(($event) => selectHistory(scope.row), ["stop"])
                         }, {
-                          default: withCtx(() => [..._cache[14] || (_cache[14] = [
-                            createTextVNode("加载", -1)
+                          default: withCtx(() => [..._cache[15] || (_cache[15] = [
+                            createTextVNode(" 加载 ", -1)
+                          ])]),
+                          _: 1
+                        }, 8, ["onClick"]),
+                        createVNode(_component_el_button, {
+                          link: "",
+                          type: "danger",
+                          size: "small",
+                          onClick: withModifiers(($event) => deleteHistory(scope.$index), ["stop"])
+                        }, {
+                          default: withCtx(() => [..._cache[16] || (_cache[16] = [
+                            createTextVNode(" 删除 ", -1)
                           ])]),
                           _: 1
                         }, 8, ["onClick"])
@@ -73200,7 +73373,7 @@ var require_index_001 = __commonJS({
                           class: "section-card",
                           shadow: "hover"
                         }, {
-                          header: withCtx(() => [..._cache[15] || (_cache[15] = [
+                          header: withCtx(() => [..._cache[19] || (_cache[19] = [
                             createBaseVNode("div", { class: "card-header" }, [
                               createBaseVNode("span", null, "基本信息")
                             ], -1)
@@ -73210,7 +73383,7 @@ var require_index_001 = __commonJS({
                               default: withCtx(() => [
                                 createVNode(_component_el_input, {
                                   modelValue: form.value.项目编号,
-                                  "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => form.value.项目编号 = $event),
+                                  "onUpdate:modelValue": _cache[2] || (_cache[2] = ($event) => form.value.项目编号 = $event),
                                   placeholder: "请输入项目编号",
                                   size: "large"
                                 }, null, 8, ["modelValue"])
@@ -73221,7 +73394,7 @@ var require_index_001 = __commonJS({
                               default: withCtx(() => [
                                 createVNode(_component_el_input, {
                                   modelValue: form.value.项目名称,
-                                  "onUpdate:modelValue": _cache[2] || (_cache[2] = ($event) => form.value.项目名称 = $event),
+                                  "onUpdate:modelValue": _cache[3] || (_cache[3] = ($event) => form.value.项目名称 = $event),
                                   placeholder: "请输入项目名称",
                                   size: "large"
                                 }, null, 8, ["modelValue"])
@@ -73232,7 +73405,7 @@ var require_index_001 = __commonJS({
                               default: withCtx(() => [
                                 createVNode(_component_el_input, {
                                   modelValue: form.value.单位名称,
-                                  "onUpdate:modelValue": _cache[3] || (_cache[3] = ($event) => form.value.单位名称 = $event),
+                                  "onUpdate:modelValue": _cache[4] || (_cache[4] = ($event) => form.value.单位名称 = $event),
                                   placeholder: "请输入单位名称",
                                   size: "large"
                                 }, null, 8, ["modelValue"])
@@ -73247,7 +73420,7 @@ var require_index_001 = __commonJS({
                           shadow: "hover",
                           style: { "margin-top": "24px" }
                         }, {
-                          header: withCtx(() => [..._cache[16] || (_cache[16] = [
+                          header: withCtx(() => [..._cache[20] || (_cache[20] = [
                             createBaseVNode("div", { class: "card-header" }, [
                               createBaseVNode("span", null, "联系信息（环境恢复）")
                             ], -1)
@@ -73261,7 +73434,7 @@ var require_index_001 = __commonJS({
                                       default: withCtx(() => [
                                         createVNode(_component_el_input, {
                                           modelValue: form.value.委托单位联系人,
-                                          "onUpdate:modelValue": _cache[4] || (_cache[4] = ($event) => form.value.委托单位联系人 = $event),
+                                          "onUpdate:modelValue": _cache[5] || (_cache[5] = ($event) => form.value.委托单位联系人 = $event),
                                           placeholder: "请输入联系人",
                                           size: "large"
                                         }, null, 8, ["modelValue"])
@@ -73277,7 +73450,7 @@ var require_index_001 = __commonJS({
                                       default: withCtx(() => [
                                         createVNode(_component_el_input, {
                                           modelValue: form.value.委托单位联系方式,
-                                          "onUpdate:modelValue": _cache[5] || (_cache[5] = ($event) => form.value.委托单位联系方式 = $event),
+                                          "onUpdate:modelValue": _cache[6] || (_cache[6] = ($event) => form.value.委托单位联系方式 = $event),
                                           size: "large"
                                         }, null, 8, ["modelValue"])
                                       ]),
@@ -73301,7 +73474,7 @@ var require_index_001 = __commonJS({
                           class: "section-card",
                           shadow: "hover"
                         }, {
-                          header: withCtx(() => [..._cache[17] || (_cache[17] = [
+                          header: withCtx(() => [..._cache[21] || (_cache[21] = [
                             createBaseVNode("div", { class: "card-header" }, [
                               createBaseVNode("span", null, "业务详情（自愿放弃声明）")
                             ], -1)
@@ -73311,7 +73484,7 @@ var require_index_001 = __commonJS({
                               default: withCtx(() => [
                                 createVNode(_component_el_input, {
                                   modelValue: form.value.具体业务名称,
-                                  "onUpdate:modelValue": _cache[6] || (_cache[6] = ($event) => form.value.具体业务名称 = $event),
+                                  "onUpdate:modelValue": _cache[7] || (_cache[7] = ($event) => form.value.具体业务名称 = $event),
                                   type: "textarea",
                                   rows: 3,
                                   size: "large"
@@ -73327,7 +73500,7 @@ var require_index_001 = __commonJS({
                                       default: withCtx(() => [
                                         createVNode(_component_el_input, {
                                           modelValue: form.value.业务影响,
-                                          "onUpdate:modelValue": _cache[7] || (_cache[7] = ($event) => form.value.业务影响 = $event),
+                                          "onUpdate:modelValue": _cache[8] || (_cache[8] = ($event) => form.value.业务影响 = $event),
                                           placeholder: "默认为: 中断、停机等",
                                           size: "large"
                                         }, null, 8, ["modelValue"])
@@ -73343,7 +73516,7 @@ var require_index_001 = __commonJS({
                                       default: withCtx(() => [
                                         createVNode(_component_el_input, {
                                           modelValue: form.value.影响后果,
-                                          "onUpdate:modelValue": _cache[8] || (_cache[8] = ($event) => form.value.影响后果 = $event),
+                                          "onUpdate:modelValue": _cache[9] || (_cache[9] = ($event) => form.value.影响后果 = $event),
                                           placeholder: "默认为: 业务中断等",
                                           size: "large"
                                         }, null, 8, ["modelValue"])
@@ -73365,8 +73538,8 @@ var require_index_001 = __commonJS({
                           style: { "margin-top": "24px" }
                         }, {
                           header: withCtx(() => [
-                            createBaseVNode("div", _hoisted_4$3, [
-                              _cache[19] || (_cache[19] = createBaseVNode("span", null, "系统列表", -1)),
+                            createBaseVNode("div", _hoisted_4$5, [
+                              _cache[23] || (_cache[23] = createBaseVNode("span", null, "系统列表", -1)),
                               createVNode(_component_el_button, {
                                 type: "primary",
                                 link: "",
@@ -73379,7 +73552,7 @@ var require_index_001 = __commonJS({
                                     ]),
                                     _: 1
                                   }),
-                                  _cache[18] || (_cache[18] = createTextVNode(" 添加系统 ", -1))
+                                  _cache[22] || (_cache[22] = createTextVNode(" 添加系统 ", -1))
                                 ]),
                                 _: 1
                               })
@@ -73475,32 +73648,32 @@ var require_index_001 = __commonJS({
       }
       return target;
     };
-    const SingleProject = /* @__PURE__ */ _export_sfc(_sfc_main$3, [["__scopeId", "data-v-30d31089"]]);
-    const _hoisted_1$2 = { class: "multi-project" };
-    const _hoisted_2$2 = { class: "page-header" };
-    const _hoisted_3$2 = { class: "actions" };
-    const _hoisted_4$2 = { style: { "font-weight": "500" } };
-    const _hoisted_5$2 = {
+    const SingleProject = /* @__PURE__ */ _export_sfc(_sfc_main$5, [["__scopeId", "data-v-ac50d16b"]]);
+    const _hoisted_1$4 = { class: "multi-project" };
+    const _hoisted_2$4 = { class: "page-header" };
+    const _hoisted_3$4 = { class: "actions" };
+    const _hoisted_4$4 = { style: { "font-weight": "500" } };
+    const _hoisted_5$3 = {
       key: 0,
       class: "empty-state"
     };
-    const _hoisted_6$2 = { class: "footer-tip" };
-    const _hoisted_7$1 = { class: "dialog-footer" };
-    const _hoisted_8 = {
+    const _hoisted_6$3 = { class: "footer-tip" };
+    const _hoisted_7$2 = { class: "dialog-footer" };
+    const _hoisted_8$2 = {
       key: 0,
       style: { "padding": "40px", "text-align": "center", "color": "#909399" }
     };
-    const _hoisted_9 = { class: "history-card-header" };
-    const _hoisted_10 = { class: "history-projects" };
-    const _hoisted_11 = {
+    const _hoisted_9$1 = { class: "history-card-header" };
+    const _hoisted_10$1 = { class: "history-projects" };
+    const _hoisted_11$1 = {
       key: 0,
       style: { "color": "#909399" }
     };
-    const _hoisted_12 = {
+    const _hoisted_12$1 = {
       key: 0,
       style: { "padding": "40px", "text-align": "center", "color": "#909399" }
     };
-    const _sfc_main$2 = /* @__PURE__ */ defineComponent({
+    const _sfc_main$4 = /* @__PURE__ */ defineComponent({
       __name: "MultiProject",
       setup(__props) {
         const projects = ref([]);
@@ -73810,13 +73983,13 @@ var require_index_001 = __commonJS({
           const _component_el_dialog = resolveComponent("el-dialog");
           const _component_el_timeline_item = resolveComponent("el-timeline-item");
           const _component_el_timeline = resolveComponent("el-timeline");
-          return openBlock(), createElementBlock("div", _hoisted_1$2, [
-            createBaseVNode("div", _hoisted_2$2, [
+          return openBlock(), createElementBlock("div", _hoisted_1$4, [
+            createBaseVNode("div", _hoisted_2$4, [
               _cache[22] || (_cache[22] = createBaseVNode("div", { class: "title-group" }, [
                 createBaseVNode("h2", null, "多项目批量生成"),
                 createBaseVNode("p", { class: "subtitle" }, "批量处理 Projects.json 中的所有项目")
               ], -1)),
-              createBaseVNode("div", _hoisted_3$2, [
+              createBaseVNode("div", _hoisted_3$4, [
                 createVNode(_component_el_button, { onClick: openOutputFolder }, {
                   default: withCtx(() => [
                     createVNode(_component_el_icon, { class: "el-icon--left" }, {
@@ -73964,7 +74137,7 @@ var require_index_001 = __commonJS({
                       "show-overflow-tooltip": ""
                     }, {
                       default: withCtx((scope) => [
-                        createBaseVNode("span", _hoisted_4$2, toDisplayString(scope.row.项目名称), 1)
+                        createBaseVNode("span", _hoisted_4$4, toDisplayString(scope.row.项目名称), 1)
                       ]),
                       _: 1
                     }),
@@ -74027,13 +74200,13 @@ var require_index_001 = __commonJS({
                   ]),
                   _: 1
                 }, 8, ["data"]),
-                projects.value.length === 0 ? (openBlock(), createElementBlock("div", _hoisted_5$2, [
+                projects.value.length === 0 ? (openBlock(), createElementBlock("div", _hoisted_5$3, [
                   createVNode(_component_el_empty, { description: "暂无项目数据" })
                 ])) : createCommentVNode("", true)
               ]),
               _: 1
             }),
-            createBaseVNode("div", _hoisted_6$2, [
+            createBaseVNode("div", _hoisted_6$3, [
               createVNode(_component_el_alert, {
                 title: "提示:点击'批量生成'将处理列表中的所有项目",
                 type: "info",
@@ -74049,7 +74222,7 @@ var require_index_001 = __commonJS({
               top: "5vh"
             }, {
               footer: withCtx(() => [
-                createBaseVNode("span", _hoisted_7$1, [
+                createBaseVNode("span", _hoisted_7$2, [
                   createVNode(_component_el_button, {
                     onClick: _cache[9] || (_cache[9] = ($event) => dialogVisible.value = false)
                   }, {
@@ -74338,7 +74511,7 @@ var require_index_001 = __commonJS({
                   ]),
                   _: 1
                 }, 8, ["data"]),
-                recycleBin.value.length === 0 ? (openBlock(), createElementBlock("div", _hoisted_8, " 回收站是空的 ")) : createCommentVNode("", true)
+                recycleBin.value.length === 0 ? (openBlock(), createElementBlock("div", _hoisted_8$2, " 回收站是空的 ")) : createCommentVNode("", true)
               ]),
               _: 1
             }, 8, ["modelValue"]),
@@ -74371,7 +74544,7 @@ var require_index_001 = __commonJS({
                         default: withCtx(() => [
                           createVNode(_component_el_card, { shadow: "hover" }, {
                             default: withCtx(() => [
-                              createBaseVNode("div", _hoisted_9, [
+                              createBaseVNode("div", _hoisted_9$1, [
                                 createBaseVNode("span", null, "共 " + toDisplayString(record.data.projects?.length || 0) + " 个项目", 1),
                                 createVNode(_component_el_button, {
                                   type: "primary",
@@ -74384,7 +74557,7 @@ var require_index_001 = __commonJS({
                                   _: 1
                                 }, 8, ["onClick"])
                               ]),
-                              createBaseVNode("div", _hoisted_10, [
+                              createBaseVNode("div", _hoisted_10$1, [
                                 (openBlock(true), createElementBlock(Fragment, null, renderList((record.data.projects || []).slice(0, 5), (proj, pIdx) => {
                                   return openBlock(), createBlock(_component_el_tag, {
                                     key: pIdx,
@@ -74396,7 +74569,7 @@ var require_index_001 = __commonJS({
                                     _: 2
                                   }, 1024);
                                 }), 128)),
-                                (record.data.projects?.length || 0) > 5 ? (openBlock(), createElementBlock("span", _hoisted_11, " ... 等 " + toDisplayString(record.data.projects.length) + " 个项目 ", 1)) : createCommentVNode("", true)
+                                (record.data.projects?.length || 0) > 5 ? (openBlock(), createElementBlock("span", _hoisted_11$1, " ... 等 " + toDisplayString(record.data.projects.length) + " 个项目 ", 1)) : createCommentVNode("", true)
                               ])
                             ]),
                             _: 2
@@ -74408,7 +74581,7 @@ var require_index_001 = __commonJS({
                   ]),
                   _: 1
                 }),
-                historyRecords.value.length === 0 ? (openBlock(), createElementBlock("div", _hoisted_12, " 暂无历史记录 ")) : createCommentVNode("", true)
+                historyRecords.value.length === 0 ? (openBlock(), createElementBlock("div", _hoisted_12$1, " 暂无历史记录 ")) : createCommentVNode("", true)
               ]),
               _: 1
             }, 8, ["modelValue"])
@@ -74416,15 +74589,19 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const MultiProject = /* @__PURE__ */ _export_sfc(_sfc_main$2, [["__scopeId", "data-v-a0521150"]]);
-    const _hoisted_1$1 = { class: "template-manager" };
-    const _hoisted_2$1 = { class: "page-header" };
-    const _hoisted_3$1 = { class: "actions" };
-    const _hoisted_4$1 = { class: "content-wrapper" };
-    const _hoisted_5$1 = { class: "icon-wrapper doc" };
-    const _hoisted_6$1 = { class: "file-name" };
-    const _hoisted_7 = { class: "file-name" };
-    const _sfc_main$1 = /* @__PURE__ */ defineComponent({
+    const MultiProject = /* @__PURE__ */ _export_sfc(_sfc_main$4, [["__scopeId", "data-v-a0521150"]]);
+    const _hoisted_1$3 = { class: "template-manager" };
+    const _hoisted_2$3 = { class: "page-header" };
+    const _hoisted_3$3 = { class: "actions" };
+    const _hoisted_4$3 = { class: "content-wrapper" };
+    const _hoisted_5$2 = { class: "icon-wrapper doc" };
+    const _hoisted_6$2 = { class: "file-name" };
+    const _hoisted_7$1 = { class: "file-name" };
+    const _hoisted_8$1 = {
+      key: 0,
+      style: { "padding": "40px", "text-align": "center", "color": "#909399" }
+    };
+    const _sfc_main$3 = /* @__PURE__ */ defineComponent({
       __name: "TemplateManager",
       setup(__props) {
         const activeTab = ref("templates");
@@ -74436,10 +74613,12 @@ var require_index_001 = __commonJS({
         const editContent = ref("");
         const loadFiles = async () => {
           try {
-            templates.value = await window.api.listFiles("templates");
-            rules2.value = await window.api.listFiles("rules");
+            const templatesList = await window.api.listFiles("templates");
+            templates.value = templatesList;
+            const rulesList = await window.api.listFiles("rules");
+            rules2.value = rulesList;
           } catch (e) {
-            console.error("Failed to load files:", e);
+            ElMessage.error("加载文件列表失败: " + e);
           }
         };
         const previewTemplate = async (filename) => {
@@ -74449,15 +74628,71 @@ var require_index_001 = __commonJS({
               ElMessage.error("无法打开文件");
             }
           } catch (e) {
-            ElMessage.error("打开失败: " + e);
+            ElMessage.error("打开文件失败: " + e);
+          }
+        };
+        const clearRecycleBin = async () => {
+          try {
+            await ElMessageBox.confirm("确定要清空回收站吗？此操作无法撤销。", "警告", {
+              confirmButtonText: "清空",
+              cancelButtonText: "取消",
+              type: "warning"
+            });
+            for (const file of recycleBin.value) {
+              await window.api.permanentDeleteFile(file.folder, file.name);
+            }
+            recycleBin.value = [];
+            ElMessage.success("回收站已清空");
+          } catch (e) {
+          }
+        };
+        const recycleBin = ref([]);
+        const recycleBinVisible = ref(false);
+        const showRecycleBin = () => {
+          recycleBinVisible.value = true;
+        };
+        const restoreFile = async (file) => {
+          try {
+            const success = await window.api.restoreFile(file.folder, file.name);
+            if (success) {
+              recycleBin.value = recycleBin.value.filter((f2) => f2 !== file);
+              ElMessage.success("文件已恢复");
+              await loadFiles();
+            } else {
+              ElMessage.error("恢复失败");
+            }
+          } catch (e) {
+            ElMessage.error("恢复失败: " + e);
+          }
+        };
+        const permanentDelete = async (index) => {
+          try {
+            await ElMessageBox.confirm("彻底删除后无法恢复，确定吗？", "警告", {
+              confirmButtonText: "彻底删除",
+              cancelButtonText: "取消",
+              type: "error"
+            });
+            const file = recycleBin.value[index];
+            const success = await window.api.permanentDeleteFile(file.folder, file.name);
+            if (success) {
+              recycleBin.value.splice(index, 1);
+              ElMessage.success("已彻底删除");
+            } else {
+              ElMessage.error("删除失败");
+            }
+          } catch (e) {
           }
         };
         const editRule = async (filename) => {
           try {
             const content = await window.api.readFileContent("rules", filename);
-            if (content) {
+            if (content !== null) {
               currentEditFile.value = filename;
-              editContent.value = JSON.stringify(JSON.parse(content), null, 2);
+              try {
+                editContent.value = content ? JSON.stringify(JSON.parse(content), null, 2) : "{}";
+              } catch (jsonErr) {
+                editContent.value = content;
+              }
               editDialogVisible.value = true;
             }
           } catch (e) {
@@ -74486,9 +74721,15 @@ var require_index_001 = __commonJS({
               cancelButtonText: "取消",
               type: "warning"
             });
+            recycleBin.value.push({
+              name: filename,
+              folder: "templates",
+              deletedAt: (/* @__PURE__ */ new Date()).toLocaleString("zh-CN"),
+              type: "docx"
+            });
             const success = await window.api.deleteFile("templates", filename);
             if (success) {
-              ElMessage.success("已删除");
+              ElMessage.success("已删除（可在回收站中恢复）");
               await loadFiles();
             } else {
               ElMessage.error("删除失败");
@@ -74503,9 +74744,15 @@ var require_index_001 = __commonJS({
               cancelButtonText: "取消",
               type: "warning"
             });
+            recycleBin.value.push({
+              name: filename,
+              folder: "rules",
+              deletedAt: (/* @__PURE__ */ new Date()).toLocaleString("zh-CN"),
+              type: "json"
+            });
             const success = await window.api.deleteFile("rules", filename);
             if (success) {
-              ElMessage.success("已删除");
+              ElMessage.success("已删除（可在回收站中恢复）");
               await loadFiles();
             } else {
               ElMessage.error("删除失败");
@@ -74562,6 +74809,7 @@ var require_index_001 = __commonJS({
         });
         return (_ctx, _cache) => {
           const _component_el_icon = resolveComponent("el-icon");
+          const _component_el_badge = resolveComponent("el-badge");
           const _component_el_button = resolveComponent("el-button");
           const _component_el_table_column = resolveComponent("el-table-column");
           const _component_el_table = resolveComponent("el-table");
@@ -74569,200 +74817,219 @@ var require_index_001 = __commonJS({
           const _component_el_tabs = resolveComponent("el-tabs");
           const _component_el_input = resolveComponent("el-input");
           const _component_el_dialog = resolveComponent("el-dialog");
-          return openBlock(), createElementBlock(Fragment, null, [
-            createBaseVNode("div", _hoisted_1$1, [
-              createBaseVNode("div", _hoisted_2$1, [
-                _cache[5] || (_cache[5] = createBaseVNode("div", { class: "title-group" }, [
-                  createBaseVNode("h2", null, "模板资源"),
-                  createBaseVNode("p", { class: "subtitle" }, "管理用于生成的 Word 模板与 JSON 替换规则")
-                ], -1)),
-                createBaseVNode("div", _hoisted_3$1, [
-                  createBaseVNode("input", {
-                    ref_key: "fileInput",
-                    ref: fileInput,
-                    type: "file",
-                    accept: ".docx,.json",
-                    style: { "display": "none" },
-                    onChange: handleFileSelect,
-                    multiple: ""
-                  }, null, 544),
-                  createVNode(_component_el_button, {
-                    type: "primary",
-                    size: "large",
-                    onClick: triggerFileSelect
-                  }, {
-                    default: withCtx(() => [
-                      createVNode(_component_el_icon, { class: "el-icon--left" }, {
-                        default: withCtx(() => [
-                          createVNode(unref(upload_default))
-                        ]),
-                        _: 1
-                      }),
-                      _cache[4] || (_cache[4] = createTextVNode(" 上传资源 ", -1))
-                    ]),
-                    _: 1
-                  })
-                ])
-              ]),
-              createBaseVNode("div", _hoisted_4$1, [
-                createVNode(_component_el_tabs, {
-                  modelValue: activeTab.value,
-                  "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => activeTab.value = $event),
-                  class: "custom-tabs"
+          const _component_el_tag = resolveComponent("el-tag");
+          return openBlock(), createElementBlock("div", _hoisted_1$3, [
+            createBaseVNode("div", _hoisted_2$3, [
+              _cache[8] || (_cache[8] = createBaseVNode("div", { class: "title-group" }, [
+                createBaseVNode("h2", null, "模板资源"),
+                createBaseVNode("p", { class: "subtitle" }, "管理用于生成的 Word 模板与 JSON 替换规则")
+              ], -1)),
+              createBaseVNode("div", _hoisted_3$3, [
+                createVNode(_component_el_button, {
+                  onClick: showRecycleBin,
+                  size: "large"
                 }, {
                   default: withCtx(() => [
-                    createVNode(_component_el_tab_pane, {
-                      label: "文档模板 (.docx)",
-                      name: "templates"
-                    }, {
+                    createVNode(_component_el_icon, { class: "el-icon--left" }, {
                       default: withCtx(() => [
-                        createVNode(_component_el_table, {
-                          data: templates.value,
-                          style: { "width": "100%" },
-                          "show-header": true,
-                          "row-class-name": "file-row"
-                        }, {
-                          default: withCtx(() => [
-                            createVNode(_component_el_table_column, { width: "60" }, {
-                              default: withCtx(() => [
-                                createBaseVNode("div", _hoisted_5$1, [
-                                  createVNode(_component_el_icon, null, {
-                                    default: withCtx(() => [
-                                      createVNode(unref(document_default))
-                                    ]),
-                                    _: 1
-                                  })
-                                ])
-                              ]),
-                              _: 1
-                            }),
-                            createVNode(_component_el_table_column, {
-                              prop: "name",
-                              label: "文件名",
-                              "min-width": "300"
-                            }, {
-                              default: withCtx((scope) => [
-                                createBaseVNode("span", _hoisted_6$1, toDisplayString(scope.row.name), 1)
-                              ]),
-                              _: 1
-                            }),
-                            createVNode(_component_el_table_column, {
-                              prop: "date",
-                              label: "修改时间",
-                              width: "180"
-                            }),
-                            createVNode(_component_el_table_column, {
-                              prop: "size",
-                              label: "大小",
-                              width: "100"
-                            }),
-                            createVNode(_component_el_table_column, {
-                              align: "right",
-                              width: "150"
-                            }, {
-                              default: withCtx((scope) => [
-                                createVNode(_component_el_button, {
-                                  link: "",
-                                  type: "primary",
-                                  onClick: ($event) => previewTemplate(scope.row.name)
-                                }, {
-                                  default: withCtx(() => [..._cache[6] || (_cache[6] = [
-                                    createTextVNode("预览", -1)
-                                  ])]),
-                                  _: 1
-                                }, 8, ["onClick"]),
-                                createVNode(_component_el_button, {
-                                  link: "",
-                                  type: "danger",
-                                  onClick: ($event) => deleteTemplate(scope.row.name)
-                                }, {
-                                  default: withCtx(() => [..._cache[7] || (_cache[7] = [
-                                    createTextVNode("删除", -1)
-                                  ])]),
-                                  _: 1
-                                }, 8, ["onClick"])
-                              ]),
-                              _: 1
-                            })
-                          ]),
-                          _: 1
-                        }, 8, ["data"])
+                        createVNode(unref(delete_default))
                       ]),
                       _: 1
                     }),
-                    createVNode(_component_el_tab_pane, {
-                      label: "生成规则 (.json)",
-                      name: "rules"
-                    }, {
-                      default: withCtx(() => [
-                        createVNode(_component_el_table, {
-                          data: rules2.value,
-                          style: { "width": "100%" },
-                          "show-header": true,
-                          "row-class-name": "file-row"
-                        }, {
-                          default: withCtx(() => [
-                            createVNode(_component_el_table_column, { width: "60" }, {
-                              default: withCtx(() => [..._cache[8] || (_cache[8] = [
-                                createBaseVNode("div", { class: "icon-wrapper json" }, [
-                                  createBaseVNode("span", { class: "json-tag" }, "{}")
-                                ], -1)
-                              ])]),
-                              _: 1
-                            }),
-                            createVNode(_component_el_table_column, {
-                              prop: "name",
-                              label: "文件名",
-                              "min-width": "300"
-                            }, {
-                              default: withCtx((scope) => [
-                                createBaseVNode("span", _hoisted_7, toDisplayString(scope.row.name), 1)
-                              ]),
-                              _: 1
-                            }),
-                            createVNode(_component_el_table_column, {
-                              prop: "date",
-                              label: "修改时间",
-                              width: "180"
-                            }),
-                            createVNode(_component_el_table_column, {
-                              align: "right",
-                              width: "150"
-                            }, {
-                              default: withCtx((scope) => [
-                                createVNode(_component_el_button, {
-                                  link: "",
-                                  type: "primary",
-                                  onClick: ($event) => editRule(scope.row.name)
-                                }, {
-                                  default: withCtx(() => [..._cache[9] || (_cache[9] = [
-                                    createTextVNode("编辑", -1)
-                                  ])]),
-                                  _: 1
-                                }, 8, ["onClick"]),
-                                createVNode(_component_el_button, {
-                                  link: "",
-                                  type: "danger",
-                                  onClick: ($event) => deleteRule(scope.row.name)
-                                }, {
-                                  default: withCtx(() => [..._cache[10] || (_cache[10] = [
-                                    createTextVNode("删除", -1)
-                                  ])]),
-                                  _: 1
-                                }, 8, ["onClick"])
-                              ]),
-                              _: 1
-                            })
-                          ]),
-                          _: 1
-                        }, 8, ["data"])
-                      ]),
-                      _: 1
-                    })
+                    _cache[6] || (_cache[6] = createTextVNode(" 回收站 ", -1)),
+                    recycleBin.value.length > 0 ? (openBlock(), createBlock(_component_el_badge, {
+                      key: 0,
+                      value: recycleBin.value.length,
+                      style: { "margin-left": "8px" }
+                    }, null, 8, ["value"])) : createCommentVNode("", true)
                   ]),
                   _: 1
-                }, 8, ["modelValue"])
+                }),
+                createBaseVNode("input", {
+                  ref_key: "fileInput",
+                  ref: fileInput,
+                  type: "file",
+                  accept: ".docx,.json",
+                  style: { "display": "none" },
+                  onChange: handleFileSelect,
+                  multiple: ""
+                }, null, 544),
+                createVNode(_component_el_button, {
+                  type: "primary",
+                  size: "large",
+                  onClick: triggerFileSelect
+                }, {
+                  default: withCtx(() => [
+                    createVNode(_component_el_icon, { class: "el-icon--left" }, {
+                      default: withCtx(() => [
+                        createVNode(unref(upload_default))
+                      ]),
+                      _: 1
+                    }),
+                    _cache[7] || (_cache[7] = createTextVNode(" 上传资源 ", -1))
+                  ]),
+                  _: 1
+                })
               ])
+            ]),
+            createBaseVNode("div", _hoisted_4$3, [
+              createVNode(_component_el_tabs, {
+                modelValue: activeTab.value,
+                "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => activeTab.value = $event),
+                class: "custom-tabs"
+              }, {
+                default: withCtx(() => [
+                  createVNode(_component_el_tab_pane, {
+                    label: "文档模板 (.docx)",
+                    name: "templates"
+                  }, {
+                    default: withCtx(() => [
+                      createVNode(_component_el_table, {
+                        data: templates.value,
+                        style: { "width": "100%" },
+                        "show-header": true,
+                        "row-class-name": "file-row"
+                      }, {
+                        default: withCtx(() => [
+                          createVNode(_component_el_table_column, { width: "60" }, {
+                            default: withCtx(() => [
+                              createBaseVNode("div", _hoisted_5$2, [
+                                createVNode(_component_el_icon, null, {
+                                  default: withCtx(() => [
+                                    createVNode(unref(document_default))
+                                  ]),
+                                  _: 1
+                                })
+                              ])
+                            ]),
+                            _: 1
+                          }),
+                          createVNode(_component_el_table_column, {
+                            prop: "name",
+                            label: "文件名",
+                            "min-width": "300"
+                          }, {
+                            default: withCtx((scope) => [
+                              createBaseVNode("span", _hoisted_6$2, toDisplayString(scope.row.name), 1)
+                            ]),
+                            _: 1
+                          }),
+                          createVNode(_component_el_table_column, {
+                            prop: "date",
+                            label: "修改时间",
+                            width: "180"
+                          }),
+                          createVNode(_component_el_table_column, {
+                            prop: "size",
+                            label: "大小",
+                            width: "100"
+                          }),
+                          createVNode(_component_el_table_column, {
+                            align: "right",
+                            width: "150"
+                          }, {
+                            default: withCtx((scope) => [
+                              createVNode(_component_el_button, {
+                                link: "",
+                                type: "primary",
+                                onClick: ($event) => previewTemplate(scope.row.name)
+                              }, {
+                                default: withCtx(() => [..._cache[9] || (_cache[9] = [
+                                  createTextVNode("预览", -1)
+                                ])]),
+                                _: 1
+                              }, 8, ["onClick"]),
+                              createVNode(_component_el_button, {
+                                link: "",
+                                type: "danger",
+                                onClick: ($event) => deleteTemplate(scope.row.name)
+                              }, {
+                                default: withCtx(() => [..._cache[10] || (_cache[10] = [
+                                  createTextVNode("删除", -1)
+                                ])]),
+                                _: 1
+                              }, 8, ["onClick"])
+                            ]),
+                            _: 1
+                          })
+                        ]),
+                        _: 1
+                      }, 8, ["data"])
+                    ]),
+                    _: 1
+                  }),
+                  createVNode(_component_el_tab_pane, {
+                    label: "生成规则 (.json)",
+                    name: "rules"
+                  }, {
+                    default: withCtx(() => [
+                      createVNode(_component_el_table, {
+                        data: rules2.value,
+                        style: { "width": "100%" },
+                        "show-header": true,
+                        "row-class-name": "file-row"
+                      }, {
+                        default: withCtx(() => [
+                          createVNode(_component_el_table_column, { width: "60" }, {
+                            default: withCtx(() => [..._cache[11] || (_cache[11] = [
+                              createBaseVNode("div", { class: "icon-wrapper json" }, [
+                                createBaseVNode("span", { class: "json-tag" }, "{}")
+                              ], -1)
+                            ])]),
+                            _: 1
+                          }),
+                          createVNode(_component_el_table_column, {
+                            prop: "name",
+                            label: "文件名",
+                            "min-width": "300"
+                          }, {
+                            default: withCtx((scope) => [
+                              createBaseVNode("span", _hoisted_7$1, toDisplayString(scope.row.name), 1)
+                            ]),
+                            _: 1
+                          }),
+                          createVNode(_component_el_table_column, {
+                            prop: "date",
+                            label: "修改时间",
+                            width: "180"
+                          }),
+                          createVNode(_component_el_table_column, {
+                            align: "right",
+                            width: "150"
+                          }, {
+                            default: withCtx((scope) => [
+                              createVNode(_component_el_button, {
+                                link: "",
+                                type: "primary",
+                                onClick: ($event) => editRule(scope.row.name)
+                              }, {
+                                default: withCtx(() => [..._cache[12] || (_cache[12] = [
+                                  createTextVNode("编辑", -1)
+                                ])]),
+                                _: 1
+                              }, 8, ["onClick"]),
+                              createVNode(_component_el_button, {
+                                link: "",
+                                type: "danger",
+                                onClick: ($event) => deleteRule(scope.row.name)
+                              }, {
+                                default: withCtx(() => [..._cache[13] || (_cache[13] = [
+                                  createTextVNode("删除", -1)
+                                ])]),
+                                _: 1
+                              }, 8, ["onClick"])
+                            ]),
+                            _: 1
+                          })
+                        ]),
+                        _: 1
+                      }, 8, ["data"])
+                    ]),
+                    _: 1
+                  })
+                ]),
+                _: 1
+              }, 8, ["modelValue"])
             ]),
             createVNode(_component_el_dialog, {
               modelValue: editDialogVisible.value,
@@ -74774,7 +75041,7 @@ var require_index_001 = __commonJS({
                 createVNode(_component_el_button, {
                   onClick: _cache[2] || (_cache[2] = ($event) => editDialogVisible.value = false)
                 }, {
-                  default: withCtx(() => [..._cache[11] || (_cache[11] = [
+                  default: withCtx(() => [..._cache[14] || (_cache[14] = [
                     createTextVNode("取消", -1)
                   ])]),
                   _: 1
@@ -74783,7 +75050,7 @@ var require_index_001 = __commonJS({
                   type: "primary",
                   onClick: saveEdit
                 }, {
-                  default: withCtx(() => [..._cache[12] || (_cache[12] = [
+                  default: withCtx(() => [..._cache[15] || (_cache[15] = [
                     createTextVNode("保存", -1)
                   ])]),
                   _: 1
@@ -74800,12 +75067,785 @@ var require_index_001 = __commonJS({
                 }, null, 8, ["modelValue"])
               ]),
               _: 1
-            }, 8, ["modelValue", "title"])
-          ], 64);
+            }, 8, ["modelValue", "title"]),
+            createVNode(_component_el_dialog, {
+              modelValue: recycleBinVisible.value,
+              "onUpdate:modelValue": _cache[5] || (_cache[5] = ($event) => recycleBinVisible.value = $event),
+              title: "回收站",
+              width: "800px"
+            }, {
+              footer: withCtx(() => [
+                createVNode(_component_el_button, {
+                  onClick: _cache[4] || (_cache[4] = ($event) => recycleBinVisible.value = false)
+                }, {
+                  default: withCtx(() => [..._cache[18] || (_cache[18] = [
+                    createTextVNode("关闭", -1)
+                  ])]),
+                  _: 1
+                }),
+                createVNode(_component_el_button, {
+                  type: "danger",
+                  onClick: clearRecycleBin,
+                  disabled: recycleBin.value.length === 0
+                }, {
+                  default: withCtx(() => [..._cache[19] || (_cache[19] = [
+                    createTextVNode(" 清空回收站 ", -1)
+                  ])]),
+                  _: 1
+                }, 8, ["disabled"])
+              ]),
+              default: withCtx(() => [
+                createVNode(_component_el_table, {
+                  data: recycleBin.value,
+                  style: { "width": "100%" }
+                }, {
+                  default: withCtx(() => [
+                    createVNode(_component_el_table_column, {
+                      type: "index",
+                      width: "60",
+                      align: "center",
+                      label: "#"
+                    }),
+                    createVNode(_component_el_table_column, {
+                      prop: "name",
+                      label: "文件名",
+                      "min-width": "200"
+                    }),
+                    createVNode(_component_el_table_column, {
+                      prop: "type",
+                      label: "类型",
+                      width: "100"
+                    }, {
+                      default: withCtx((scope) => [
+                        createVNode(_component_el_tag, {
+                          type: scope.row.type === "docx" ? "primary" : "warning"
+                        }, {
+                          default: withCtx(() => [
+                            createTextVNode(toDisplayString(scope.row.type), 1)
+                          ]),
+                          _: 2
+                        }, 1032, ["type"])
+                      ]),
+                      _: 1
+                    }),
+                    createVNode(_component_el_table_column, {
+                      prop: "deletedAt",
+                      label: "删除时间",
+                      width: "180"
+                    }),
+                    createVNode(_component_el_table_column, {
+                      label: "操作",
+                      width: "180",
+                      align: "center"
+                    }, {
+                      default: withCtx((scope) => [
+                        createVNode(_component_el_button, {
+                          link: "",
+                          type: "success",
+                          onClick: ($event) => restoreFile(scope.row)
+                        }, {
+                          default: withCtx(() => [..._cache[16] || (_cache[16] = [
+                            createTextVNode("恢复", -1)
+                          ])]),
+                          _: 1
+                        }, 8, ["onClick"]),
+                        createVNode(_component_el_button, {
+                          link: "",
+                          type: "danger",
+                          onClick: ($event) => permanentDelete(scope.$index)
+                        }, {
+                          default: withCtx(() => [..._cache[17] || (_cache[17] = [
+                            createTextVNode("彻底删除", -1)
+                          ])]),
+                          _: 1
+                        }, 8, ["onClick"])
+                      ]),
+                      _: 1
+                    })
+                  ]),
+                  _: 1
+                }, 8, ["data"]),
+                recycleBin.value.length === 0 ? (openBlock(), createElementBlock("div", _hoisted_8$1, " 回收站是空的 ")) : createCommentVNode("", true)
+              ]),
+              _: 1
+            }, 8, ["modelValue"])
+          ]);
         };
       }
     });
-    const TemplateManager = /* @__PURE__ */ _export_sfc(_sfc_main$1, [["__scopeId", "data-v-1d4b7e79"]]);
+    const TemplateManager = /* @__PURE__ */ _export_sfc(_sfc_main$3, [["__scopeId", "data-v-21753ffd"]]);
+    const _hoisted_1$2 = { class: "settings" };
+    const _hoisted_2$2 = { class: "settings-content" };
+    const _hoisted_3$2 = { class: "setting-item" };
+    const _hoisted_4$2 = { class: "setting-label" };
+    const _hoisted_5$1 = { class: "setting-item" };
+    const _hoisted_6$1 = { class: "setting-label" };
+    const _hoisted_7 = { class: "color-picker-group" };
+    const _hoisted_8 = ["onClick"];
+    const _hoisted_9 = { class: "setting-item" };
+    const _hoisted_10 = { class: "setting-label" };
+    const _hoisted_11 = { class: "setting-item" };
+    const _hoisted_12 = { class: "setting-label" };
+    const _hoisted_13 = { class: "setting-item" };
+    const _hoisted_14 = { class: "setting-label" };
+    const _hoisted_15 = { class: "setting-item" };
+    const _hoisted_16 = { class: "setting-label" };
+    const _hoisted_17 = { class: "setting-item" };
+    const _hoisted_18 = { class: "setting-label" };
+    const _hoisted_19 = { class: "background-controls" };
+    const _hoisted_20 = {
+      key: 1,
+      class: "setting-item"
+    };
+    const _hoisted_21 = { class: "setting-label" };
+    const _hoisted_22 = {
+      key: 2,
+      class: "background-preview"
+    };
+    const _hoisted_23 = ["src"];
+    const _hoisted_24 = { class: "reset-section" };
+    const _sfc_main$2 = /* @__PURE__ */ defineComponent({
+      __name: "Settings",
+      setup(__props) {
+        const theme = ref("light");
+        const primaryColor = ref("#4f46e5");
+        const fontSize = ref("medium");
+        const animations = ref(true);
+        const notifications2 = ref(true);
+        const showTips = ref(true);
+        const backgroundImage = ref("");
+        const backgroundOpacity = ref(30);
+        const themeColors = [
+          { name: "靛蓝", value: "#4f46e5" },
+          { name: "蓝色", value: "#3b82f6" },
+          { name: "紫色", value: "#8b5cf6" },
+          { name: "粉色", value: "#ec4899" },
+          { name: "红色", value: "#ef4444" },
+          { name: "橙色", value: "#f59e0b" },
+          { name: "绿色", value: "#10b981" },
+          { name: "青色", value: "#06b6d4" }
+        ];
+        const loadSettings = () => {
+          const savedSettings = localStorage.getItem("docgen-settings");
+          if (savedSettings) {
+            const settings = JSON.parse(savedSettings);
+            theme.value = settings.theme || "light";
+            primaryColor.value = settings.primaryColor || "#4f46e5";
+            fontSize.value = settings.fontSize || "medium";
+            animations.value = settings.animations !== false;
+            notifications2.value = settings.notifications !== false;
+            showTips.value = settings.showTips !== false;
+            backgroundImage.value = settings.backgroundImage || "";
+            backgroundOpacity.value = settings.backgroundOpacity ?? 30;
+            applyTheme(theme.value);
+            applyPrimaryColor(primaryColor.value);
+            applyFontSize(fontSize.value);
+            applyAnimations(animations.value);
+            applyBackgroundImage();
+          }
+        };
+        const saveSettings = () => {
+          const settings = {
+            theme: theme.value,
+            primaryColor: primaryColor.value,
+            fontSize: fontSize.value,
+            animations: animations.value,
+            notifications: notifications2.value,
+            showTips: showTips.value,
+            backgroundImage: backgroundImage.value,
+            backgroundOpacity: backgroundOpacity.value
+          };
+          localStorage.setItem("docgen-settings", JSON.stringify(settings));
+        };
+        const applyTheme = (themeValue) => {
+          const html = document.documentElement;
+          if (themeValue === "dark") {
+            html.classList.add("dark");
+          } else if (themeValue === "light") {
+            html.classList.remove("dark");
+          } else if (themeValue === "auto") {
+            const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            if (isDark) {
+              html.classList.add("dark");
+            } else {
+              html.classList.remove("dark");
+            }
+          }
+        };
+        const applyPrimaryColor = (color) => {
+          document.documentElement.style.setProperty("--primary-color", color);
+        };
+        const applyFontSize = (size) => {
+          const sizes = {
+            small: "13px",
+            medium: "14px",
+            large: "16px"
+          };
+          document.documentElement.style.setProperty("--base-font-size", sizes[size] || "14px");
+        };
+        const applyAnimations = (enabled) => {
+          if (enabled) {
+            document.documentElement.style.removeProperty("--transition-duration");
+          } else {
+            document.documentElement.style.setProperty("--transition-duration", "0s");
+          }
+        };
+        const handleThemeChange = (value) => {
+          applyTheme(value);
+          saveSettings();
+          ElMessage.success("主题已更新");
+        };
+        const handleColorChange = (color) => {
+          primaryColor.value = color;
+          applyPrimaryColor(color);
+          saveSettings();
+          ElMessage.success("主题色已更新");
+        };
+        const handleFontSizeChange = (value) => {
+          applyFontSize(value);
+          saveSettings();
+          ElMessage.success("字体大小已更新");
+        };
+        const handleAnimationChange = (value) => {
+          applyAnimations(value);
+          saveSettings();
+        };
+        const handleNotificationChange = () => {
+          saveSettings();
+        };
+        const handleShowTipsChange = () => {
+          saveSettings();
+        };
+        const selectBackgroundImage = () => {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = "image/*";
+          input.onchange = (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                backgroundImage.value = ev.target?.result;
+                applyBackgroundImage();
+                saveSettings();
+                ElMessage.success("背景图片已设置");
+              };
+              reader.readAsDataURL(file);
+            }
+          };
+          input.click();
+        };
+        const clearBackgroundImage = () => {
+          backgroundImage.value = "";
+          backgroundOpacity.value = 30;
+          applyBackgroundImage();
+          saveSettings();
+          ElMessage.success("背景图片已清除");
+        };
+        const handleBackgroundOpacityChange = () => {
+          applyBackgroundImage();
+          saveSettings();
+        };
+        const applyBackgroundImage = () => {
+          const container = document.querySelector(".app-container");
+          if (!container) return;
+          if (backgroundImage.value) {
+            const overlayOpacity = (100 - backgroundOpacity.value) / 100;
+            container.style.backgroundImage = `linear-gradient(rgba(243, 244, 246, ${overlayOpacity}), rgba(243, 244, 246, ${overlayOpacity})), url(${backgroundImage.value})`;
+            container.style.backgroundSize = "cover";
+            container.style.backgroundPosition = "center";
+            container.style.backgroundAttachment = "fixed";
+          } else {
+            container.style.backgroundImage = "";
+            container.style.backgroundSize = "";
+            container.style.backgroundPosition = "";
+            container.style.backgroundAttachment = "";
+          }
+        };
+        const resetSettings = async () => {
+          try {
+            await ElMessageBox.confirm("确定要恢复默认设置吗？", "确认", {
+              confirmButtonText: "确定",
+              cancelButtonText: "取消",
+              type: "warning"
+            });
+            theme.value = "light";
+            primaryColor.value = "#4f46e5";
+            fontSize.value = "medium";
+            animations.value = true;
+            notifications2.value = true;
+            showTips.value = true;
+            backgroundImage.value = "";
+            backgroundOpacity.value = 30;
+            localStorage.removeItem("docgen-settings");
+            applyTheme("light");
+            applyPrimaryColor("#4f46e5");
+            applyFontSize("medium");
+            applyAnimations(true);
+            applyBackgroundImage();
+            ElMessage.success("已恢复默认设置");
+          } catch {
+          }
+        };
+        onMounted(() => {
+          loadSettings();
+        });
+        return (_ctx, _cache) => {
+          const _component_el_icon = resolveComponent("el-icon");
+          const _component_el_radio_button = resolveComponent("el-radio-button");
+          const _component_el_radio_group = resolveComponent("el-radio-group");
+          const _component_el_divider = resolveComponent("el-divider");
+          const _component_el_card = resolveComponent("el-card");
+          const _component_el_switch = resolveComponent("el-switch");
+          const _component_el_button = resolveComponent("el-button");
+          const _component_el_slider = resolveComponent("el-slider");
+          return openBlock(), createElementBlock("div", _hoisted_1$2, [
+            _cache[27] || (_cache[27] = createBaseVNode("div", { class: "page-header" }, [
+              createBaseVNode("div", { class: "title-group" }, [
+                createBaseVNode("h2", null, "外观设置"),
+                createBaseVNode("p", { class: "subtitle" }, "个性化您的 DocGen Pro 体验")
+              ])
+            ], -1)),
+            createBaseVNode("div", _hoisted_2$2, [
+              createVNode(_component_el_card, {
+                class: "settings-card",
+                shadow: "hover"
+              }, {
+                header: withCtx(() => [..._cache[6] || (_cache[6] = [
+                  createBaseVNode("div", { class: "card-header" }, [
+                    createBaseVNode("span", null, "主题设置")
+                  ], -1)
+                ])]),
+                default: withCtx(() => [
+                  createBaseVNode("div", _hoisted_3$2, [
+                    createBaseVNode("div", _hoisted_4$2, [
+                      createVNode(_component_el_icon, null, {
+                        default: withCtx(() => [
+                          createVNode(unref(sunny_default))
+                        ]),
+                        _: 1
+                      }),
+                      _cache[7] || (_cache[7] = createBaseVNode("span", null, "主题模式", -1))
+                    ]),
+                    createVNode(_component_el_radio_group, {
+                      modelValue: theme.value,
+                      "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => theme.value = $event),
+                      onChange: handleThemeChange
+                    }, {
+                      default: withCtx(() => [
+                        createVNode(_component_el_radio_button, { label: "light" }, {
+                          default: withCtx(() => [..._cache[8] || (_cache[8] = [
+                            createTextVNode("浅色", -1)
+                          ])]),
+                          _: 1
+                        }),
+                        createVNode(_component_el_radio_button, { label: "dark" }, {
+                          default: withCtx(() => [..._cache[9] || (_cache[9] = [
+                            createTextVNode("深色", -1)
+                          ])]),
+                          _: 1
+                        }),
+                        createVNode(_component_el_radio_button, { label: "auto" }, {
+                          default: withCtx(() => [..._cache[10] || (_cache[10] = [
+                            createTextVNode("跟随系统", -1)
+                          ])]),
+                          _: 1
+                        })
+                      ]),
+                      _: 1
+                    }, 8, ["modelValue"])
+                  ]),
+                  createVNode(_component_el_divider),
+                  createBaseVNode("div", _hoisted_5$1, [
+                    createBaseVNode("div", _hoisted_6$1, [
+                      createVNode(_component_el_icon, null, {
+                        default: withCtx(() => [
+                          createVNode(unref(discount_default))
+                        ]),
+                        _: 1
+                      }),
+                      _cache[11] || (_cache[11] = createBaseVNode("span", null, "主题色", -1))
+                    ]),
+                    createBaseVNode("div", _hoisted_7, [
+                      (openBlock(), createElementBlock(Fragment, null, renderList(themeColors, (color) => {
+                        return createBaseVNode("div", {
+                          key: color.value,
+                          class: normalizeClass(["color-option", { active: primaryColor.value === color.value }]),
+                          style: normalizeStyle({ backgroundColor: color.value }),
+                          onClick: ($event) => handleColorChange(color.value)
+                        }, [
+                          primaryColor.value === color.value ? (openBlock(), createBlock(_component_el_icon, {
+                            key: 0,
+                            color: "#fff"
+                          }, {
+                            default: withCtx(() => [
+                              createVNode(unref(check_default))
+                            ]),
+                            _: 1
+                          })) : createCommentVNode("", true)
+                        ], 14, _hoisted_8);
+                      }), 64))
+                    ])
+                  ])
+                ]),
+                _: 1
+              }),
+              createVNode(_component_el_card, {
+                class: "settings-card",
+                shadow: "hover",
+                style: { "margin-top": "24px" }
+              }, {
+                header: withCtx(() => [..._cache[12] || (_cache[12] = [
+                  createBaseVNode("div", { class: "card-header" }, [
+                    createBaseVNode("span", null, "显示设置")
+                  ], -1)
+                ])]),
+                default: withCtx(() => [
+                  createBaseVNode("div", _hoisted_9, [
+                    createBaseVNode("div", _hoisted_10, [
+                      createVNode(_component_el_icon, null, {
+                        default: withCtx(() => [
+                          createVNode(unref(document_default))
+                        ]),
+                        _: 1
+                      }),
+                      _cache[13] || (_cache[13] = createBaseVNode("span", null, "字体大小", -1))
+                    ]),
+                    createVNode(_component_el_radio_group, {
+                      modelValue: fontSize.value,
+                      "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => fontSize.value = $event),
+                      onChange: handleFontSizeChange
+                    }, {
+                      default: withCtx(() => [
+                        createVNode(_component_el_radio_button, { label: "small" }, {
+                          default: withCtx(() => [..._cache[14] || (_cache[14] = [
+                            createTextVNode("小", -1)
+                          ])]),
+                          _: 1
+                        }),
+                        createVNode(_component_el_radio_button, { label: "medium" }, {
+                          default: withCtx(() => [..._cache[15] || (_cache[15] = [
+                            createTextVNode("中", -1)
+                          ])]),
+                          _: 1
+                        }),
+                        createVNode(_component_el_radio_button, { label: "large" }, {
+                          default: withCtx(() => [..._cache[16] || (_cache[16] = [
+                            createTextVNode("大", -1)
+                          ])]),
+                          _: 1
+                        })
+                      ]),
+                      _: 1
+                    }, 8, ["modelValue"])
+                  ]),
+                  createVNode(_component_el_divider),
+                  createBaseVNode("div", _hoisted_11, [
+                    createBaseVNode("div", _hoisted_12, [
+                      createVNode(_component_el_icon, null, {
+                        default: withCtx(() => [
+                          createVNode(unref(magic_stick_default))
+                        ]),
+                        _: 1
+                      }),
+                      _cache[17] || (_cache[17] = createBaseVNode("span", null, "动画效果", -1))
+                    ]),
+                    createVNode(_component_el_switch, {
+                      modelValue: animations.value,
+                      "onUpdate:modelValue": _cache[2] || (_cache[2] = ($event) => animations.value = $event),
+                      onChange: handleAnimationChange
+                    }, null, 8, ["modelValue"])
+                  ])
+                ]),
+                _: 1
+              }),
+              createVNode(_component_el_card, {
+                class: "settings-card",
+                shadow: "hover",
+                style: { "margin-top": "24px" }
+              }, {
+                header: withCtx(() => [..._cache[18] || (_cache[18] = [
+                  createBaseVNode("div", { class: "card-header" }, [
+                    createBaseVNode("span", null, "其他设置")
+                  ], -1)
+                ])]),
+                default: withCtx(() => [
+                  createBaseVNode("div", _hoisted_13, [
+                    createBaseVNode("div", _hoisted_14, [
+                      createVNode(_component_el_icon, null, {
+                        default: withCtx(() => [
+                          createVNode(unref(bell_default))
+                        ]),
+                        _: 1
+                      }),
+                      _cache[19] || (_cache[19] = createBaseVNode("span", null, "消息通知", -1))
+                    ]),
+                    createVNode(_component_el_switch, {
+                      modelValue: notifications2.value,
+                      "onUpdate:modelValue": _cache[3] || (_cache[3] = ($event) => notifications2.value = $event),
+                      onChange: handleNotificationChange
+                    }, null, 8, ["modelValue"])
+                  ]),
+                  createVNode(_component_el_divider),
+                  createBaseVNode("div", _hoisted_15, [
+                    createBaseVNode("div", _hoisted_16, [
+                      createVNode(_component_el_icon, null, {
+                        default: withCtx(() => [
+                          createVNode(unref(question_filled_default))
+                        ]),
+                        _: 1
+                      }),
+                      _cache[20] || (_cache[20] = createBaseVNode("span", null, "显示提示信息", -1))
+                    ]),
+                    createVNode(_component_el_switch, {
+                      modelValue: showTips.value,
+                      "onUpdate:modelValue": _cache[4] || (_cache[4] = ($event) => showTips.value = $event),
+                      onChange: handleShowTipsChange
+                    }, null, 8, ["modelValue"])
+                  ])
+                ]),
+                _: 1
+              }),
+              createVNode(_component_el_card, {
+                class: "settings-card",
+                shadow: "hover",
+                style: { "margin-top": "24px" }
+              }, {
+                header: withCtx(() => [..._cache[21] || (_cache[21] = [
+                  createBaseVNode("div", { class: "card-header" }, [
+                    createBaseVNode("span", null, "背景设置")
+                  ], -1)
+                ])]),
+                default: withCtx(() => [
+                  createBaseVNode("div", _hoisted_17, [
+                    createBaseVNode("div", _hoisted_18, [
+                      createVNode(_component_el_icon, null, {
+                        default: withCtx(() => [
+                          createVNode(unref(picture_default))
+                        ]),
+                        _: 1
+                      }),
+                      _cache[22] || (_cache[22] = createBaseVNode("span", null, "背景图片", -1))
+                    ]),
+                    createBaseVNode("div", _hoisted_19, [
+                      createVNode(_component_el_button, {
+                        size: "small",
+                        onClick: selectBackgroundImage
+                      }, {
+                        default: withCtx(() => [..._cache[23] || (_cache[23] = [
+                          createTextVNode("选择图片", -1)
+                        ])]),
+                        _: 1
+                      }),
+                      backgroundImage.value ? (openBlock(), createBlock(_component_el_button, {
+                        key: 0,
+                        size: "small",
+                        type: "danger",
+                        plain: "",
+                        onClick: clearBackgroundImage
+                      }, {
+                        default: withCtx(() => [..._cache[24] || (_cache[24] = [
+                          createTextVNode("清除", -1)
+                        ])]),
+                        _: 1
+                      })) : createCommentVNode("", true)
+                    ])
+                  ]),
+                  backgroundImage.value ? (openBlock(), createBlock(_component_el_divider, { key: 0 })) : createCommentVNode("", true),
+                  backgroundImage.value ? (openBlock(), createElementBlock("div", _hoisted_20, [
+                    createBaseVNode("div", _hoisted_21, [
+                      createVNode(_component_el_icon, null, {
+                        default: withCtx(() => [
+                          createVNode(unref(view_default))
+                        ]),
+                        _: 1
+                      }),
+                      _cache[25] || (_cache[25] = createBaseVNode("span", null, "背景透明度", -1))
+                    ]),
+                    createVNode(_component_el_slider, {
+                      modelValue: backgroundOpacity.value,
+                      "onUpdate:modelValue": _cache[5] || (_cache[5] = ($event) => backgroundOpacity.value = $event),
+                      min: 0,
+                      max: 100,
+                      step: 5,
+                      style: { "width": "200px" },
+                      onChange: handleBackgroundOpacityChange
+                    }, null, 8, ["modelValue"])
+                  ])) : createCommentVNode("", true),
+                  backgroundImage.value ? (openBlock(), createElementBlock("div", _hoisted_22, [
+                    createBaseVNode("img", {
+                      src: backgroundImage.value,
+                      alt: "背景预览"
+                    }, null, 8, _hoisted_23)
+                  ])) : createCommentVNode("", true)
+                ]),
+                _: 1
+              }),
+              createBaseVNode("div", _hoisted_24, [
+                createVNode(_component_el_button, {
+                  type: "danger",
+                  plain: "",
+                  onClick: resetSettings
+                }, {
+                  default: withCtx(() => [
+                    createVNode(_component_el_icon, null, {
+                      default: withCtx(() => [
+                        createVNode(unref(refresh_left_default))
+                      ]),
+                      _: 1
+                    }),
+                    _cache[26] || (_cache[26] = createTextVNode(" 恢复默认设置 ", -1))
+                  ]),
+                  _: 1
+                })
+              ])
+            ])
+          ]);
+        };
+      }
+    });
+    const Settings = /* @__PURE__ */ _export_sfc(_sfc_main$2, [["__scopeId", "data-v-45081fc3"]]);
+    const _hoisted_1$1 = { class: "env-settings" };
+    const _hoisted_2$1 = { class: "card-header" };
+    const _hoisted_3$1 = { class: "tips-box" };
+    const _hoisted_4$1 = ["textContent"];
+    const _sfc_main$1 = /* @__PURE__ */ defineComponent({
+      __name: "EnvSettings",
+      setup(__props) {
+        const envVars = ref({
+          CLIENT_COMPANY: "",
+          EVAL_CONTACT: "",
+          EVAL_PHONE: ""
+        });
+        const saving = ref(false);
+        const placeholderExample = ref("{{CLIENT_COMPANY}}");
+        const loadEnv = async () => {
+          try {
+            const result = await window.api.loadEnv();
+            if (result.success && result.data) {
+              envVars.value = {
+                CLIENT_COMPANY: result.data.CLIENT_COMPANY || "",
+                EVAL_CONTACT: result.data.EVAL_CONTACT || "",
+                EVAL_PHONE: result.data.EVAL_PHONE || ""
+              };
+            }
+          } catch (e) {
+            console.error("加载环境变量失败:", e);
+          }
+        };
+        const saveEnv = async () => {
+          saving.value = true;
+          try {
+            const plainEnvVars = JSON.parse(JSON.stringify(envVars.value));
+            const result = await window.api.saveEnv(plainEnvVars);
+            if (result.success) {
+              ElMessage.success("环境变量保存成功");
+            } else {
+              ElMessage.error("保存失败: " + result.message);
+            }
+          } catch (e) {
+            ElMessage.error("保存失败: " + e);
+          } finally {
+            saving.value = false;
+          }
+        };
+        onMounted(() => {
+          loadEnv();
+        });
+        return (_ctx, _cache) => {
+          const _component_el_button = resolveComponent("el-button");
+          const _component_el_alert = resolveComponent("el-alert");
+          const _component_el_input = resolveComponent("el-input");
+          const _component_el_form_item = resolveComponent("el-form-item");
+          const _component_el_form = resolveComponent("el-form");
+          const _component_el_card = resolveComponent("el-card");
+          return openBlock(), createElementBlock("div", _hoisted_1$1, [
+            createVNode(_component_el_card, {
+              class: "settings-card",
+              shadow: "hover"
+            }, {
+              header: withCtx(() => [
+                createBaseVNode("div", _hoisted_2$1, [
+                  _cache[4] || (_cache[4] = createBaseVNode("span", null, "环境变量配置", -1)),
+                  createVNode(_component_el_button, {
+                    type: "primary",
+                    size: "small",
+                    onClick: saveEnv,
+                    loading: saving.value
+                  }, {
+                    default: withCtx(() => [..._cache[3] || (_cache[3] = [
+                      createTextVNode(" 保存配置 ", -1)
+                    ])]),
+                    _: 1
+                  }, 8, ["loading"])
+                ])
+              ]),
+              default: withCtx(() => [
+                createVNode(_component_el_alert, {
+                  title: "这些变量将被用于所有文档生成",
+                  type: "info",
+                  closable: false,
+                  style: { "margin-bottom": "20px" }
+                }),
+                createVNode(_component_el_form, { "label-width": "140px" }, {
+                  default: withCtx(() => [
+                    createVNode(_component_el_form_item, { label: "委托单位名称" }, {
+                      default: withCtx(() => [
+                        createVNode(_component_el_input, {
+                          modelValue: envVars.value.CLIENT_COMPANY,
+                          "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => envVars.value.CLIENT_COMPANY = $event),
+                          placeholder: "例如：xxx公司"
+                        }, null, 8, ["modelValue"])
+                      ]),
+                      _: 1
+                    }),
+                    createVNode(_component_el_form_item, { label: "测评联系人" }, {
+                      default: withCtx(() => [
+                        createVNode(_component_el_input, {
+                          modelValue: envVars.value.EVAL_CONTACT,
+                          "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => envVars.value.EVAL_CONTACT = $event),
+                          placeholder: "例如：张三"
+                        }, null, 8, ["modelValue"])
+                      ]),
+                      _: 1
+                    }),
+                    createVNode(_component_el_form_item, { label: "联系电话" }, {
+                      default: withCtx(() => [
+                        createVNode(_component_el_input, {
+                          modelValue: envVars.value.EVAL_PHONE,
+                          "onUpdate:modelValue": _cache[2] || (_cache[2] = ($event) => envVars.value.EVAL_PHONE = $event),
+                          placeholder: "例如：138xxxxxxxx"
+                        }, null, 8, ["modelValue"])
+                      ]),
+                      _: 1
+                    })
+                  ]),
+                  _: 1
+                }),
+                createBaseVNode("div", _hoisted_3$1, [
+                  _cache[9] || (_cache[9] = createBaseVNode("p", null, [
+                    createBaseVNode("strong", null, "使用说明：")
+                  ], -1)),
+                  createBaseVNode("ul", null, [
+                    createBaseVNode("li", null, [
+                      _cache[5] || (_cache[5] = createTextVNode("这些变量会在文档中自动替换对应的 ", -1)),
+                      createBaseVNode("code", {
+                        textContent: toDisplayString(placeholderExample.value)
+                      }, null, 8, _hoisted_4$1),
+                      _cache[6] || (_cache[6] = createTextVNode(" 等占位符", -1))
+                    ]),
+                    _cache[7] || (_cache[7] = createBaseVNode("li", null, "配置保存后会立即生效，影响后续所有文档生成", -1)),
+                    _cache[8] || (_cache[8] = createBaseVNode("li", null, "可以在模板文档中使用这些占位符，无需每次手动填写", -1))
+                  ])
+                ])
+              ]),
+              _: 1
+            })
+          ]);
+        };
+      }
+    });
+    const EnvSettings = /* @__PURE__ */ _export_sfc(_sfc_main$1, [["__scopeId", "data-v-3914da26"]]);
     const _hoisted_1 = { class: "app-container" };
     const _hoisted_2 = { class: "layout-wrapper" };
     const _hoisted_3 = { class: "sidebar" };
@@ -74819,7 +75859,9 @@ var require_index_001 = __commonJS({
         const menuItems = [
           { index: "1", label: "单项目生成", icon: document_default },
           { index: "2", label: "多项目生成", icon: files_default },
-          { index: "3", label: "模板管理", icon: setting_default }
+          { index: "3", label: "模板管理", icon: setting_default },
+          { index: "4", label: "环境变量", icon: setting_default },
+          { index: "5", label: "外观设置", icon: setting_default }
         ];
         const currentComponent = computed(() => {
           switch (activeMenu.value) {
@@ -74829,6 +75871,10 @@ var require_index_001 = __commonJS({
               return MultiProject;
             case "3":
               return TemplateManager;
+            case "4":
+              return EnvSettings;
+            case "5":
+              return Settings;
             default:
               return SingleProject;
           }
@@ -74860,7 +75906,7 @@ var require_index_001 = __commonJS({
                   mode: "out-in"
                 }, {
                   default: withCtx(() => [
-                    (openBlock(), createBlock(resolveDynamicComponent(currentComponent.value)))
+                    (openBlock(), createBlock(resolveDynamicComponent(currentComponent.value), { key: activeMenu.value }))
                   ]),
                   _: 1
                 })
@@ -74870,7 +75916,7 @@ var require_index_001 = __commonJS({
         };
       }
     });
-    const App = /* @__PURE__ */ _export_sfc(_sfc_main, [["__scopeId", "data-v-e323d768"]]);
+    const App = /* @__PURE__ */ _export_sfc(_sfc_main, [["__scopeId", "data-v-d21229fd"]]);
     const app = createApp(App);
     app.use(installer);
     app.mount("#app");
