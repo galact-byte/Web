@@ -1,0 +1,887 @@
+{
+  "last_link_id": 70,
+  "last_node_id": 35,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [
+        -900,
+        -250
+      ],
+      "size": [
+        350,
+        82
+      ],
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            1
+          ],
+          "label": "MODEL"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader"
+      },
+      "widgets_values": [
+        "svdq-int4_r128-qwen-image.safetensors",
+        "default"
+      ],
+      "title": "UNET加载器 (INT4量化模型)"
+    },
+    {
+      "id": 2,
+      "type": "CLIPLoader",
+      "pos": [
+        -900,
+        -130
+      ],
+      "size": [
+        350,
+        82
+      ],
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            2,
+            3
+          ],
+          "label": "CLIP"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader"
+      },
+      "widgets_values": [
+        "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "qwen2_vl"
+      ],
+      "title": "CLIP加载器 (Qwen2.5-VL)"
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [
+        -900,
+        -10
+      ],
+      "size": [
+        350,
+        60
+      ],
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "label": "VAE"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "qwen_image_vae.safetensors"
+      ],
+      "title": "VAE加载器"
+    },
+    {
+      "id": 4,
+      "type": "LoraLoaderModelOnly",
+      "pos": [
+        -500,
+        -250
+      ],
+      "size": [
+        350,
+        82
+      ],
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1,
+          "label": "model"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            8
+          ],
+          "label": "MODEL"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoraLoaderModelOnly"
+      },
+      "widgets_values": [
+        "PanelPainter_v3_Qwen2511.safetensors",
+        0.55
+      ],
+      "title": "LoRA加载器 - PanelPainter v3"
+    },
+    {
+      "id": 10,
+      "type": "VHS_LoadImagesPath",
+      "pos": [
+        -900,
+        100
+      ],
+      "size": [
+        350,
+        130
+      ],
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            10,
+            11
+          ],
+          "label": "黑白漫画"
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null,
+          "label": "MASK"
+        },
+        {
+          "name": "INT",
+          "type": "INT",
+          "links": null,
+          "label": "图片数量"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VHS_LoadImagesPath"
+      },
+      "widgets_values": [
+        "D:/manga_colorization/input/",
+        "*",
+        0,
+        0,
+        "Disabled"
+      ],
+      "title": "★ 批量加载漫画页面 (修改路径)"
+    },
+    {
+      "id": 20,
+      "type": "LoadImage",
+      "pos": [
+        -900,
+        280
+      ],
+      "size": [
+        250,
+        250
+      ],
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            20
+          ],
+          "label": "IMAGE"
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null,
+          "label": "MASK"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "fern_ref_1.png",
+        "image"
+      ],
+      "title": "参考图1 - 菲伦法袍"
+    },
+    {
+      "id": 21,
+      "type": "LoadImage",
+      "pos": [
+        -620,
+        280
+      ],
+      "size": [
+        250,
+        250
+      ],
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            21
+          ],
+          "label": "IMAGE"
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null,
+          "label": "MASK"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "fern_ref_2.png",
+        "image"
+      ],
+      "title": "参考图2 - 其他服装(可选)"
+    },
+    {
+      "id": 22,
+      "type": "LoadImage",
+      "pos": [
+        -340,
+        280
+      ],
+      "size": [
+        250,
+        250
+      ],
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            22
+          ],
+          "label": "IMAGE"
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null,
+          "label": "MASK"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "fern_ref_3.png",
+        "image"
+      ],
+      "title": "参考图3 - 其他场景(可选)"
+    },
+    {
+      "id": 12,
+      "type": "Text",
+      "pos": [
+        -500,
+        -130
+      ],
+      "size": [
+        450,
+        200
+      ],
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "string",
+          "type": "STRING",
+          "links": [
+            13
+          ],
+          "label": "string"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Text"
+      },
+      "widgets_values": [
+        "Colorize this manga panel using the exact same colors as the reference image. Copy the character's purple hair color and pale skin tone directly from the reference. Keep all original line art and Japanese text unchanged. Smooth anime-style flat coloring with soft shadows."
+      ],
+      "title": "★ 正向提示词"
+    },
+    {
+      "id": 25,
+      "type": "Text",
+      "pos": [
+        -500,
+        100
+      ],
+      "size": [
+        450,
+        150
+      ],
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "string",
+          "type": "STRING",
+          "links": [
+            25
+          ],
+          "label": "string"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Text"
+      },
+      "widgets_values": [
+        "different colors from reference, wrong hair color, wrong skin tone, altered line art, removed text, blurry, noisy, oversaturated, neon colors"
+      ],
+      "title": "★ 负向提示词"
+    },
+    {
+      "id": 13,
+      "type": "TextEncodeQwenImageEditPlus",
+      "pos": [
+        0,
+        -200
+      ],
+      "size": [
+        400,
+        220
+      ],
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 2,
+          "label": "clip"
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 4,
+          "label": "vae"
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 10,
+          "label": "黑白漫画"
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": 20,
+          "label": "参考图1"
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": 21,
+          "label": "参考图2"
+        },
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "link": 13,
+          "label": "prompt",
+          "widget": {
+            "name": "prompt"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            14
+          ],
+          "label": "CONDITIONING"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEditPlus"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "title": "正向条件编码 (带参考图)"
+    },
+    {
+      "id": 14,
+      "type": "TextEncodeQwenImageEditPlus",
+      "pos": [
+        0,
+        80
+      ],
+      "size": [
+        400,
+        180
+      ],
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 3,
+          "label": "clip"
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 5,
+          "label": "vae"
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "link": 25,
+          "label": "prompt",
+          "widget": {
+            "name": "prompt"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            15
+          ],
+          "label": "CONDITIONING"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEditPlus"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "title": "负向条件编码"
+    },
+    {
+      "id": 15,
+      "type": "VAEEncode",
+      "pos": [
+        450,
+        150
+      ],
+      "size": [
+        150,
+        46
+      ],
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 11,
+          "label": "pixels"
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 6,
+          "label": "vae"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            16
+          ],
+          "label": "LATENT"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEEncode"
+      },
+      "title": "VAE编码"
+    },
+    {
+      "id": 16,
+      "type": "KSampler",
+      "pos": [
+        450,
+        -200
+      ],
+      "size": [
+        300,
+        300
+      ],
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 8,
+          "label": "model"
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 14,
+          "label": "正向"
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 15,
+          "label": "负向"
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 16,
+          "label": "latent"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            17
+          ],
+          "label": "LATENT"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        123456789,
+        "randomize",
+        5,
+        1.2,
+        "euler_ancestral",
+        "beta",
+        0.88
+      ],
+      "title": "★ K采样器 (调参)"
+    },
+    {
+      "id": 17,
+      "type": "VAEDecode",
+      "pos": [
+        800,
+        -100
+      ],
+      "size": [
+        150,
+        46
+      ],
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 17,
+          "label": "samples"
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 7,
+          "label": "vae"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            18
+          ],
+          "label": "IMAGE"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "title": "VAE解码"
+    },
+    {
+      "id": 18,
+      "type": "SaveImage",
+      "pos": [
+        1000,
+        -200
+      ],
+      "size": [
+        400,
+        450
+      ],
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 18,
+          "label": "images"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "colored/frieren_fern"
+      ],
+      "title": "保存上色结果"
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      4,
+      0,
+      "MODEL"
+    ],
+    [
+      2,
+      2,
+      0,
+      13,
+      0,
+      "CLIP"
+    ],
+    [
+      3,
+      2,
+      0,
+      14,
+      0,
+      "CLIP"
+    ],
+    [
+      4,
+      3,
+      0,
+      13,
+      1,
+      "VAE"
+    ],
+    [
+      5,
+      3,
+      0,
+      14,
+      1,
+      "VAE"
+    ],
+    [
+      6,
+      3,
+      0,
+      15,
+      1,
+      "VAE"
+    ],
+    [
+      7,
+      3,
+      0,
+      17,
+      1,
+      "VAE"
+    ],
+    [
+      8,
+      4,
+      0,
+      16,
+      0,
+      "MODEL"
+    ],
+    [
+      10,
+      10,
+      0,
+      13,
+      2,
+      "IMAGE"
+    ],
+    [
+      11,
+      10,
+      0,
+      15,
+      0,
+      "IMAGE"
+    ],
+    [
+      13,
+      12,
+      0,
+      13,
+      5,
+      "STRING"
+    ],
+    [
+      14,
+      13,
+      0,
+      16,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      15,
+      14,
+      0,
+      16,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      16,
+      15,
+      0,
+      16,
+      3,
+      "LATENT"
+    ],
+    [
+      17,
+      16,
+      0,
+      17,
+      0,
+      "LATENT"
+    ],
+    [
+      18,
+      17,
+      0,
+      18,
+      0,
+      "IMAGE"
+    ],
+    [
+      20,
+      20,
+      0,
+      13,
+      3,
+      "IMAGE"
+    ],
+    [
+      21,
+      21,
+      0,
+      13,
+      4,
+      "IMAGE"
+    ],
+    [
+      25,
+      25,
+      0,
+      14,
+      5,
+      "STRING"
+    ]
+  ],
+  "groups": [
+    {
+      "title": "模型加载区",
+      "bounding": [
+        -950,
+        -300,
+        500,
+        360
+      ],
+      "color": "#3f789e"
+    },
+    {
+      "title": "输入漫画 & 参考图",
+      "bounding": [
+        -950,
+        60,
+        600,
+        500
+      ],
+      "color": "#88A"
+    },
+    {
+      "title": "提示词区",
+      "bounding": [
+        -550,
+        -180,
+        500,
+        350
+      ],
+      "color": "#A8A"
+    },
+    {
+      "title": "采样生成区",
+      "bounding": [
+        400,
+        -250,
+        370,
+        500
+      ],
+      "color": "#8A8"
+    },
+    {
+      "title": "输出区",
+      "bounding": [
+        950,
+        -250,
+        500,
+        550
+      ],
+      "color": "#A88"
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7,
+      "offset": [
+        1000,
+        500
+      ]
+    }
+  },
+  "version": 0.4
+}
