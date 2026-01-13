@@ -120,7 +120,14 @@ ipcMain.handle('run-docgen', async (_event, { mode, data }) => {
 })
 
 // 💾 保存历史记录
+// 💾 保存历史记录
 function saveToHistory(data: any) {
+    // 验证数据有效性
+    if (!data || !data['项目名称'] || !String(data['项目名称']).trim()) {
+        console.log('项目名称为空，跳过保存历史记录')
+        return
+    }
+
     const historyFile = join(process.cwd(), 'history.json')
     console.log(`Saving history to: ${historyFile}`)
 
