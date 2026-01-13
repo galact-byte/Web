@@ -43,6 +43,11 @@ ipcMain.handle('run-docgen', async (_event, { mode, data }) => {
         // 写入配置文件
         try {
             fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+
+            // 单项目模式时保存到历史记录
+            if (mode === '1') {
+                saveToHistory(data)
+            }
         } catch (err) {
             return reject(`写入配置文件失败: ${err}`)
         }
@@ -103,10 +108,6 @@ ipcMain.handle('run-docgen', async (_event, { mode, data }) => {
 
         pythonProcess.on('close', (code: number) => {
             if (code === 0) {
-                // 单项目模式时保存到历史记录
-                if (mode === '1') {
-                    saveToHistory(data)
-                }
                 resolve({ success: true, output })
             } else {
                 resolve({ success: false, output, error: errorOutput })
@@ -208,6 +209,12 @@ ipcMain.handle('save-file', async (_event, { filename, data }) => {
     try {
         const filePath = join(process.cwd(), filename)
         console.log(`Saving file to: ${filePath}`)
+
+        if (filename === 'history.json') {
+            const preview = Array.isArray(data) ? `Array[${data.length}]` : (typeof data === 'string' ? data.slice(0, 50) : JSON.stringify(data).slice(0, 50));
+            console.log(`[DEBUG] save-file history.json content: ${preview}`)
+        }
+
         const content = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
         fs.writeFileSync(filePath, content, 'utf-8')
         console.log(`File saved successfully: ${filename}`)

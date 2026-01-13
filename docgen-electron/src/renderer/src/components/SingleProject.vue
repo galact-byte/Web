@@ -177,7 +177,7 @@ const form = ref<any>({
     "系统": []
 })
 
-const resetForm = () => {
+const resetForm = async () => {
     form.value = {
         "项目编号": "",
         "项目名称": "",
@@ -189,6 +189,14 @@ const resetForm = () => {
         "影响后果": "",
         "系统": []
     }
+    
+    // 同时清空 information.json 文件
+    try {
+        await window.api.saveFile('information.json', form.value)
+    } catch (e) {
+        console.error('清空配置文件失败:', e)
+    }
+    
     ElMessage.success('表单已清空')
 }
 
