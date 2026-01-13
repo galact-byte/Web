@@ -200,8 +200,14 @@ const openHistory = async () => {
     try {
         const history = await window.api.getHistory()
         if (history && history.length > 0) {
-            historyList.value = history
-            historyVisible.value = true
+            // 过滤掉无效的历史记录
+            historyList.value = history.filter((item: any) => item.data && item.data['项目名称'] && String(item.data['项目名称']).trim())
+            
+            if (historyList.value.length > 0) {
+                historyVisible.value = true
+            } else {
+                ElMessage.info('暂无有效历史记录')
+            }
         } else {
             ElMessage.info('暂无历史记录')
         }

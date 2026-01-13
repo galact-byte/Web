@@ -211,6 +211,12 @@ const saveSettings = () => {
   localStorage.setItem('docgen-settings', JSON.stringify(settings))
 }
 
+// function to convert hex to rgb
+const hexToRgb = (hex: string) => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '79, 70, 229'
+}
+
 // 应用主题
 const applyTheme = (themeValue: string) => {
   const html = document.documentElement
@@ -232,25 +238,25 @@ const applyTheme = (themeValue: string) => {
 // 应用主题色
 const applyPrimaryColor = (color: string) => {
   document.documentElement.style.setProperty('--primary-color', color)
+  document.documentElement.style.setProperty('--primary-color-rgb', hexToRgb(color))
 }
 
 // 应用字体大小
 const applyFontSize = (size: string) => {
   const sizes: Record<string, string> = {
-    small: '13px',
+    small: '12px',
     medium: '14px',
     large: '16px'
   }
-  document.documentElement.style.setProperty('--base-font-size', sizes[size] || '14px')
+  const val = sizes[size] || '14px'
+  document.documentElement.style.setProperty('--base-font-size', val)
+  document.documentElement.style.setProperty('--el-font-size-base', val)
 }
 
 // 应用动画设置
 const applyAnimations = (enabled: boolean) => {
-  if (enabled) {
-    document.documentElement.style.removeProperty('--transition-duration')
-  } else {
-    document.documentElement.style.setProperty('--transition-duration', '0s')
-  }
+  const duration = enabled ? '0.3s' : '0s'
+  document.documentElement.style.setProperty('--transition-duration', duration)
 }
 
 // 处理主题变化
@@ -332,17 +338,27 @@ const applyBackgroundImage = () => {
   const container = document.querySelector('.app-container') as HTMLElement
   if (!container) return
   
+  // convert opacity 0-100 to 0-1, but reversed logic?
+  // User wants "Transparency" or "Opacity"?
+  // If text is "Background Transparency", usually 100% means fully transparent.
+  // Code says: "背景透明度" (Background Transparency).
+  // Current logic in Settings.vue: `overlayOpacity = (100 - val)/100`. So 100 val = 0 overlay opacity = Transparent Overlay? No.
+  // Let's assume standard behavior:
+  // If I set "Transparency", I expect higher value = more transparent content.
+  // So `--content-opacity` should be `(100 - transparency) / 100`.
+  // If value is 30, opacity is 0.7.
+  
+  const opacity = (100 - backgroundOpacity.value) / 100
+  document.documentElement.style.setProperty('--content-opacity', opacity.toString())
+  
   if (backgroundImage.value) {
-    const overlayOpacity = (100 - backgroundOpacity.value) / 100
-    container.style.backgroundImage = `linear-gradient(rgba(243, 244, 246, ${overlayOpacity}), rgba(243, 244, 246, ${overlayOpacity})), url(${backgroundImage.value})`
+    container.style.backgroundImage = `url(${backgroundImage.value})`
     container.style.backgroundSize = 'cover'
     container.style.backgroundPosition = 'center'
     container.style.backgroundAttachment = 'fixed'
   } else {
     container.style.backgroundImage = ''
-    container.style.backgroundSize = ''
-    container.style.backgroundPosition = ''
-    container.style.backgroundAttachment = ''
+    document.documentElement.style.setProperty('--content-opacity', '1')
   }
 }
 
@@ -412,6 +428,14 @@ onMounted(() => {
 
 .settings-card {
   border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+}
+
+:global(.dark) .settings-card {
+  background-color: rgba(30, 30, 45, 0.85);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .card-header {
