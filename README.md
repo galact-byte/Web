@@ -33,7 +33,17 @@
 - **启动命令**: `npm run dev`
 - **构建命令**: `npm run build`
 
-### 4. test/ - 测试代码
+### 4. Program/ - 项目完结单管理平台
+- **技术栈**: FastAPI + Vue 3 + Vite + SQLAlchemy
+- **用途**: 在线项目完结单管理系统
+- **特性**:
+  - 经理/员工角色区分
+  - 项目录入与分发
+  - 贡献率填写
+  - Excel/Word 批量导出
+- **启动命令**: 见 `Program/README.md`
+
+### 5. test/ - 测试代码
 - **用途**: 各类测试和实验代码
 
 ---
@@ -75,6 +85,7 @@ npm run dev
 |------|----------|-------|----------|
 | ai-client | Tauri + Vue 3 | Vanilla CSS | Vite |
 | docgen-electron | Electron + Vue 3 | Element Plus | electron-vite |
+| Program | FastAPI + Vue 3 | Vanilla CSS | Vite |
 | front | Vanilla JS/CSS | - | - |
 
 
