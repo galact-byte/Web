@@ -19,7 +19,7 @@
       />
 
       <el-form label-width="140px">
-        <el-form-item label="委托单位名称">
+        <el-form-item label="委托测评单位名称">
           <el-input 
             v-model="envVars.CLIENT_COMPANY" 
             placeholder="例如：xxx公司"

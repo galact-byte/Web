@@ -177,7 +177,7 @@ const form = ref<any>({
     "系统": []
 })
 
-const resetForm = () => {
+const resetForm = async () => {
     form.value = {
         "项目编号": "",
         "项目名称": "",
@@ -189,6 +189,14 @@ const resetForm = () => {
         "影响后果": "",
         "系统": []
     }
+    
+    // 同时清空 information.json 文件
+    try {
+        await window.api.saveFile('information.json', form.value)
+    } catch (e) {
+        console.error('清空配置文件失败:', e)
+    }
+    
     ElMessage.success('表单已清空')
 }
 
@@ -200,8 +208,14 @@ const openHistory = async () => {
     try {
         const history = await window.api.getHistory()
         if (history && history.length > 0) {
-            historyList.value = history
-            historyVisible.value = true
+            // 过滤掉无效的历史记录
+            historyList.value = history.filter((item: any) => item.data && item.data['项目名称'] && String(item.data['项目名称']).trim())
+            
+            if (historyList.value.length > 0) {
+                historyVisible.value = true
+            } else {
+                ElMessage.info('暂无有效历史记录')
+            }
         } else {
             ElMessage.info('暂无历史记录')
         }
