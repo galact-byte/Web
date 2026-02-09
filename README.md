@@ -64,6 +64,12 @@ npm install
 # 文档生成客户端
 cd docgen-electron
 npm install
+
+# 项目完结单管理平台
+cd Program/backend
+pip install fastapi uvicorn sqlalchemy python-jose[cryptography] passlib[bcrypt] python-multipart openpyxl python-docx
+cd ../frontend
+npm install
 ```
 
 ### 启动项目
@@ -74,6 +80,13 @@ npm run tauri dev
 
 # 文档生成客户端开发模式
 cd docgen-electron
+npm run dev
+
+# 项目完结单管理平台
+cd Program/backend
+uvicorn app.main:app --reload --port 8000
+# 另开终端
+cd Program/frontend
 npm run dev
 ```
 
