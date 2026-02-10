@@ -25,17 +25,17 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-:: ---- 安装后端依赖（首次运行时） ----
+:: ---- 安装后端依赖 ----
 echo [1/4] 检查后端依赖...
-python -c "import fastapi" >nul 2>nul
-if %ERRORLEVEL% neq 0 (
+if not exist "%ROOT%backend\.deps_installed" (
     echo       正在安装后端依赖...
-    pip install fastapi uvicorn sqlalchemy "python-jose[cryptography]" "passlib[bcrypt]" python-multipart openpyxl python-docx
+    pip install -r "%ROOT%backend\requirements.txt"
     if %ERRORLEVEL% neq 0 (
         echo [错误] 后端依赖安装失败
         pause
         exit /b 1
     )
+    echo. > "%ROOT%backend\.deps_installed"
 )
 echo       后端依赖 OK
 
@@ -70,14 +70,19 @@ start "前端 - Vite" cmd /c "title 前端 - Vite && npx vite --host"
 timeout /t 3 /nobreak >nul
 
 echo.
-echo ============================================
-echo   启动完成！
-echo   前端: http://localhost:5173
-echo   后端: http://localhost:8000
-echo   API文档: http://localhost:8000/docs
-echo ============================================
+echo.============================================
+echo.  [OK] Started!
+echo.  Frontend - http://localhost:5173
+echo.  Backend  - http://localhost:8000
+echo.  API Docs - http://localhost:8000/docs
+echo.============================================
 echo.
-echo 按任意键打开浏览器...
+echo.Press any key to open browser...
 pause >nul
 
 start http://localhost:5173
+
+echo.
+echo.If the browser did not open, visit http://localhost:5173
+echo.Closing this window will NOT stop the services.
+pause >nul
