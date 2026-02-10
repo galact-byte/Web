@@ -39,6 +39,12 @@ const routes = [
     meta: { requiresAuth: true, requiresManager: true }
   },
   {
+    path: '/workload',
+    name: 'Workload',
+    component: () => import('../views/Workload.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/export',
     name: 'Export',
     component: () => import('../views/Export.vue'),
@@ -60,7 +66,7 @@ const router = createRouter({
 // 导航守卫
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
-  
+
   if (to.meta.requiresAuth && !userStore.isLoggedIn) {
     next('/login')
   } else if (to.meta.requiresGuest && userStore.isLoggedIn) {

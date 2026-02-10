@@ -63,15 +63,16 @@ export const projectsApi = {
   create: (data) => api.post('/api/projects/', data),
   update: (id, data) => api.put(`/api/projects/${id}`, data),
   delete: (id) => api.delete(`/api/projects/${id}`),
-  
+
   // 系统
   addSystem: (projectId, data) => api.post(`/api/projects/${projectId}/systems`, data),
   deleteSystem: (projectId, systemId) => api.delete(`/api/projects/${projectId}/systems/${systemId}`),
-  
+
   // 分配
   assign: (projectId, data) => api.post(`/api/projects/${projectId}/assign`, data),
   getAssignments: (projectId) => api.get(`/api/projects/${projectId}/assignments`),
-  updateContribution: (projectId, data) => api.put(`/api/projects/${projectId}/contribution`, data)
+  updateContribution: (projectId, data) => api.put(`/api/projects/${projectId}/contribution`, data),
+  getWorkloadStats: (year, quarter) => api.get('/api/projects/workload-stats', { params: { year, quarter } })
 }
 
 // ============ 导出 API ============
