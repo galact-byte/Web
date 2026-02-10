@@ -1,9 +1,12 @@
 """
 项目路由
 """
+import re
+from datetime import date
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import extract
 
 from app.database import get_db
 from app.models import User, Project, System, ProjectAssignment, ProjectStatus
@@ -14,6 +17,87 @@ from app.schemas import (
 from app.services.auth import get_current_user, get_current_manager
 
 router = APIRouter(prefix="/api/projects", tags=["项目"])
+
+
+# ============ 贡献率解析工具 ============
+
+# 匹配 "姓名XX%" 格式，支持: 张三85%、张三 85%、张三：85%、张三:85%、张三（85%）
+_CONTRIBUTION_PATTERN = re.compile(
+    r'([\u4e00-\u9fa5a-zA-Z]{2,10})\s*[：:（(]?\s*(\d+(?:\.\d+)?)\s*%'
+)
+
+
+def parse_contribution(text: str) -> list[dict]:
+    """解析贡献率文本，返回 [{name, percentage}]"""
+    if not text:
+        return []
+    results = []
+    for m in _CONTRIBUTION_PATTERN.finditer(text):
+        name = m.group(1).strip()
+        pct = float(m.group(2))
+        results.append({"name": name, "percentage": pct})
+    return results
+
+
+def get_quarter(d: date) -> tuple[int, int]:
+    """返回 (year, quarter)"""
+    return d.year, (d.month - 1) // 3 + 1
+
+
+@router.get("/workload-stats")
+async def get_workload_stats(
+    year: int = Query(..., description="年份"),
+    quarter: int = Query(..., ge=1, le=4, description="季度 1-4"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取季度工作量统计。
+    按 approval_date（审批完成时间）归属季度。
+    解析每个项目分配的 contribution 文本，汇总每个人员的总贡献率。
+    """
+    # 计算季度的起止月份
+    start_month = (quarter - 1) * 3 + 1
+    end_month = quarter * 3
+
+    # 查询该季度内有 approval_date 的项目的所有分配
+    assignments = db.query(ProjectAssignment).join(Project).options(
+        joinedload(ProjectAssignment.project),
+        joinedload(ProjectAssignment.assignee)
+    ).filter(
+        extract('year', Project.approval_date) == year,
+        extract('month', Project.approval_date) >= start_month,
+        extract('month', Project.approval_date) <= end_month
+    ).all()
+
+    # 按人员汇总
+    person_map: dict[str, dict] = {}  # name -> {total, projects: []}
+
+    for a in assignments:
+        entries = parse_contribution(a.contribution)
+        project_name = a.project.project_name if a.project else "未知项目"
+        project_code = a.project.project_code if a.project else ""
+
+        for entry in entries:
+            name = entry["name"]
+            pct = entry["percentage"]
+            if name not in person_map:
+                person_map[name] = {"name": name, "total_contribution": 0, "projects": []}
+            person_map[name]["total_contribution"] += pct
+            person_map[name]["projects"].append({
+                "project_name": project_name,
+                "project_code": project_code,
+                "contribution": pct
+            })
+
+    # 按总贡献率降序排列
+    result = sorted(person_map.values(), key=lambda x: x["total_contribution"], reverse=True)
+
+    return {
+        "year": year,
+        "quarter": quarter,
+        "stats": result
+    }
 
 
 def project_to_response(project: Project, db: Session) -> ProjectResponse:
