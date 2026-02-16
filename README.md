@@ -1,6 +1,6 @@
 # Programs - 个人项目集合
 
-本仓库包含我的个人学习和项目开发代码，主要涵盖前端学习、AI 客户端和文档生成工具等内容。
+本仓库包含我的个人学习和项目开发代码，主要涵盖前端学习、AI 客户端、文档生成工具和 Android 应用等内容。
 
 ---
 
@@ -43,7 +43,18 @@
   - Excel/Word 批量导出
 - **启动命令**: 见 `Program/README.md`
 
-### 5. test/ - 测试代码
+### 5. Reduce/ - 短视频时间控制 App (Reduce)
+- **技术栈**: Kotlin 1.9 + Jetpack Compose + Material 3
+- **用途**: 控制刷短视频时间，识别"刷短视频"行为（竖屏 + 连续滑动），超时后温和拦截
+- **特性**:
+  - 行为识别：通过屏幕方向和滚动频率判断，横屏看普通视频不受影响
+  - 灵活限制：支持 0~240 分钟每日时限
+  - 限制理由：预设/自定义理由，超时弹窗展示
+  - 温和拦截：遮罩提示倒计时后自动回到桌面
+  - 预设目标：内置抖音、快手、小红书、B站、微博、YouTube、TikTok 等
+- **构建命令**: 双击 `build-release.bat` 或见 `Reduce/README.md`
+
+### 6. test/ - 测试代码
 - **用途**: 各类测试和实验代码
 
 ---
@@ -54,6 +65,7 @@
 - Node.js 18+
 - Python 3.8+ (docgen-electron 需要)
 - Rust (ai-client 构建需要)
+- JDK 17 + Android SDK 34 (Reduce 构建需要)
 
 ### 安装依赖
 ```bash
@@ -70,6 +82,10 @@ cd Program/backend
 pip install fastapi uvicorn sqlalchemy python-jose[cryptography] passlib[bcrypt] python-multipart openpyxl python-docx
 cd ../frontend
 npm install
+
+# Reduce (短视频时间控制)
+# 环境要求: JDK 17 + Android SDK 34
+# 双击 Reduce/build-release.bat 一键构建
 ```
 
 ### 启动项目
@@ -99,6 +115,7 @@ npm run dev
 | ai-client | Tauri + Vue 3 | Vanilla CSS | Vite |
 | docgen-electron | Electron + Vue 3 | Element Plus | electron-vite |
 | Program | FastAPI + Vue 3 | Vanilla CSS | Vite |
+| Reduce | Kotlin + Jetpack Compose | Material 3 | Gradle |
 | front | Vanilla JS/CSS | - | - |
 
 
