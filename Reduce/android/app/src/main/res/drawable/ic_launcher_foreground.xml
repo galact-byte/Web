@@ -1,0 +1,71 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 1. 梦幻背景星光 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:alpha="0.4"
+        android:pathData="M85,30 l1,3 l3,1 l-3,1 l-1,3 l-1,-3 l-3,-1 l3,-1 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:alpha="0.3"
+        android:pathData="M20,50 l1,2 l2,1 l-2,1 l-1,2 l-1,-2 l-2,-1 l 2,-1 z" />
+
+    <!-- 2. 二次元少女轮廓 (简约Q版) -->
+    
+    <!-- 头发后部 (深蓝色) -->
+    <path
+        android:fillColor="#1A237E"
+        android:pathData="M54,25 c-15,0 -25,10 -25,25 l0,15 c0,5 5,10 10,10 l30,0 c5,0 10,-5 10,-10 l0,-15 c0,-15 -10,-25 -25,-25 z" />
+
+    <!-- 脸部 (白色/浅肤色感) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,35 c-10,0 -18,8 -18,18 s8,18 18,18 s18,-8 18,-18 s-8,-18 -18,-18 z" />
+
+    <!-- 标志性的二次元刘海 (深蓝色) -->
+    <path
+        android:fillColor="#1A237E"
+        android:pathData="M36,45 q5,-10 18,-10 t18,10 l-5,5 q-10,-5 -13,5 t-13,-5 z" />
+    <path
+        android:fillColor="#1A237E"
+        android:pathData="M48,35 l6,12 l6,-12 z" />
+
+    <!-- 萌萌的大眼睛 -->
+    <path
+        android:fillColor="#1A237E"
+        android:pathData="M44,53 a3,4 0 1,0 0,8 a3,4 0 1,0 0,-8 z" /> <!-- 左眼 -->
+    <path
+        android:fillColor="#1A237E"
+        android:pathData="M64,53 a3,4 0 1,0 0,8 a3,4 0 1,0 0,-8 z" /> <!-- 右眼 -->
+    
+    <!-- 眼中高光 (让眼神亮起来) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M45,55 a1,1 0 1,0 0,2 a1,1 0 1,0 0,-2 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M65,55 a1,1 0 1,0 0,2 a1,1 0 1,0 0,-2 z" />
+
+    <!-- 小小的红晕 (增加可爱感) -->
+    <path
+        android:fillColor="#FFCDD2"
+        android:alpha="0.6"
+        android:pathData="M40,62 a3,2 0 1,0 0,4 a3,2 0 1,0 0,-4 z" />
+    <path
+        android:fillColor="#FFCDD2"
+        android:alpha="0.6"
+        android:pathData="M68,62 a3,2 0 1,0 0,4 a3,2 0 1,0 0,-4 z" />
+
+    <!-- 3. 装饰：头上的蓝色蝴蝶结 -->
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M68,30 c2,-4 8,-4 8,2 c0,4 -6,4 -8,0 z" />
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M78,30 c-2,-4 -8,-4 -8,2 c0,4 6,4 8,0 z" />
+
+</vector>

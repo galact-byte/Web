@@ -1,0 +1,90 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Reduce</string>
+    <string name="app_title">Reduce - 短视频限制</string>
+    <string name="app_subtitle">控制分心，优先完成今天真正重要的事。</string>
+    <string name="section_status">权限与状态</string>
+    <string name="section_limit_rule">限制规则</string>
+    <string name="section_targets">目标应用</string>
+    <string name="section_reason">限制理由</string>
+    <string name="section_actions">操作</string>
+
+    <string name="permission_status">权限状态</string>
+    <string name="enabled">已开启</string>
+    <string name="disabled">未开启</string>
+    <string name="permission_usage">使用情况访问：%1$s</string>
+    <string name="permission_overlay">悬浮窗权限：%1$s</string>
+    <string name="permission_accessibility">无障碍服务：%1$s</string>
+    <string name="permission_battery">后台电量优化豁免：%1$s</string>
+
+    <string name="only_portrait">只在竖屏计入</string>
+    <string name="behavior_mode">仅按短视频行为识别（推荐）</string>
+    <string name="limit_minutes">每日限制分钟数（支持 0=完全禁刷）</string>
+    <string name="reason_prefix">限制理由：%1$s</string>
+    <string name="reason_custom">自定义</string>
+    <string name="reason_custom_label">自定义理由</string>
+    <string name="save_settings">保存设置</string>
+    <string name="current_reason">当前理由：%1$s</string>
+
+    <string name="today_used">今日已计时：%1$d 秒</string>
+    <string name="refresh_usage">刷新计时</string>
+    <string name="reset_usage">清零计时</string>
+    <string name="target_packages">目标应用（名称或包名，逗号分隔）</string>
+    <string name="target_preset_add">从预设添加目标应用</string>
+    <string name="target_add_selected">添加所选应用</string>
+    <string name="current_top_package">当前前台包名：%1$s</string>
+    <string name="detect_package">识别并填入当前应用名</string>
+    <string name="reason_title">限制理由</string>
+
+    <string name="open_usage_access">开启使用情况访问</string>
+    <string name="open_overlay">开启悬浮窗权限</string>
+    <string name="open_accessibility">开启无障碍服务</string>
+    <string name="open_battery_optimization">关闭电池优化限制</string>
+    <string name="enable_limit">启用限制</string>
+    <string name="disable_limit">关闭限制</string>
+
+    <string name="toast_need_usage_permission">请先开启使用情况访问</string>
+    <string name="toast_need_overlay_permission">请先开启悬浮窗权限</string>
+    <string name="toast_limit_enabled">限制已启用</string>
+    <string name="toast_limit_disabled">限制已关闭</string>
+    <string name="toast_detect_fill_ok">已填入当前应用名</string>
+    <string name="toast_detect_fill_empty">请先切到目标应用，再返回点击识别</string>
+    <string name="toast_target_invalid">目标应用不能是本应用，请重新识别</string>
+    <string name="toast_target_required">关闭行为识别时，请至少填写一个目标应用</string>
+    <string name="toast_save_ok">设置已保存</string>
+
+    <string name="accessibility_desc">用于检测短视频行为并执行拦截</string>
+
+    <string-array name="reason_presets">
+        <item>备考学习</item>
+        <item>早睡早起</item>
+        <item>专注工作</item>
+        <item>减少分心</item>
+        <item>自定义</item>
+    </string-array>
+
+    <string-array name="target_app_presets">
+        <item>抖音</item>
+        <item>抖音极速版</item>
+        <item>快手</item>
+        <item>快手极速版</item>
+        <item>小红书</item>
+        <item>哔哩哔哩</item>
+        <item>微信视频号</item>
+        <item>微博</item>
+        <item>YouTube</item>
+        <item>TikTok</item>
+    </string-array>
+
+    <string-array name="blocking_quotes">
+        <item>一寸光阴一寸金，寸金难买寸光阴。</item>
+        <item>种一棵树最好的时间是十年前，其次是现在。</item>
+        <item>专注是决定你将做什么，以及不做什么。—— 乔布斯</item>
+        <item>你交换出的每一分钟，都是你不可再生的生命。</item>
+        <item>自律是自由的代价，也是自由的保障。</item>
+        <item>别让那些不创造价值的东西，偷走你的时间。</item>
+        <item>Time is what we want most, but what we use worst.</item>
+        <item>Focus is a matter of deciding what things you are not going to do.</item>
+        <item>The cost of a thing is the amount of life which is required to be exchanged for it.</item>
+    </string-array>
+</resources>
