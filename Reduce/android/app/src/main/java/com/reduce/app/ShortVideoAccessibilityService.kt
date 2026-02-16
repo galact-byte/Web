@@ -15,7 +15,15 @@ class ShortVideoAccessibilityService : AccessibilityService() {
             setLatestPackage(pkg)
         }
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_SCROLLED -> ShortVideoBehaviorSignals.onScroll(pkg)
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                val cls = event.className?.toString() ?: ""
+                val isTextRelated = cls.contains("EditText", ignoreCase = true)
+                        || cls.contains("Editor", ignoreCase = true)
+                        || cls.contains("Input", ignoreCase = true)
+                if (!isTextRelated) {
+                    ShortVideoBehaviorSignals.onScroll(pkg)
+                }
+            }
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
                 ShortVideoBehaviorSignals.onWindowChanged(pkg)
