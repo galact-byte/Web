@@ -1,5 +1,6 @@
 package com.reduce.app
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -44,7 +45,6 @@ object LimitMonitor {
         UsageTracker.resetIfNewDay(context)
 
         if (!PermissionUtils.hasUsageAccess(context)) return
-        if (System.currentTimeMillis() < coolDownUntilMs) return
         if (UsageUtils.isSelfAppForeground(context)) return
 
         if (SettingsStore.getOnlyPortrait(context)) {
@@ -56,7 +56,6 @@ object LimitMonitor {
         if (topPackage == context.packageName) return
         if (ignoredPackages.contains(topPackage)) return
         if (UsageUtils.isHomeApp(context, topPackage)) return
-        if (suppressPackage == topPackage && System.currentTimeMillis() < suppressUntilMs) return
 
         val behaviorMode = SettingsStore.isBehaviorMode(context)
         val targets = SettingsStore.getTargetPackages(context)
@@ -76,6 +75,9 @@ object LimitMonitor {
         // 0 minute means no short-video use is allowed today.
         val isOverLimit = if (limitSeconds == 0) used >= 1 else used >= limitSeconds
         if (isOverLimit) {
+            val now = System.currentTimeMillis()
+            if (now < coolDownUntilMs) return
+            if (suppressPackage == topPackage && now < suppressUntilMs) return
             triggerBlock(context, topPackage)
         }
     }
@@ -96,7 +98,7 @@ object LimitMonitor {
             reason = reason,
             seconds = 5
         ) {
-            goHome(context)
+            goHome(context, topPackage)
             // Prevent repeated popups caused by delayed foreground package updates.
             coolDownUntilMs = System.currentTimeMillis() + 8_000L
             suppressPackage = topPackage
@@ -105,16 +107,18 @@ object LimitMonitor {
         }
     }
 
-    private fun goHome(context: Context) {
+    private fun goHome(context: Context, topPackage: String) {
         val service = ShortVideoAccessibilityService.instance
         if (service != null) {
             service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
-            return
+        } else {
+            val intent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
         }
-        val intent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_HOME)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(intent)
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        am.killBackgroundProcesses(topPackage)
     }
 }
