@@ -9,4 +9,10 @@ const pinia = createPinia()
 
 app.use(pinia)
 app.use(router)
+// 应用保存的主题
+const savedTheme = localStorage.getItem('theme')
+if (savedTheme) {
+    document.documentElement.setAttribute('data-theme', savedTheme)
+}
+
 app.mount('#app')

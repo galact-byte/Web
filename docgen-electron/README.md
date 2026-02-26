@@ -1,44 +1,79 @@
 # DocGenPro
 
-## 简介
-DocGenPro 是一个基于 Python `docx` 库的文档生成工具，支持使用模板文件和自定义规则快速生成文档。适用于自动化文档创建、批量生成报告等场景。
-这里用来制作等保测评中过程文档
-## 特性
-- **模板驱动**：支持基于 `.docx` 模板文件生成文档
-- **自定义规则**：支持根据手写规则填充内容
-- **支持表格**：支持文档中的表格，可参考`20`的规则
-- **自动化处理**：减少重复性手工操作，提高工作效率
+基于模板的 Word 文档批量生成工具，提供图形化界面，适用于等保测评授权文档等标准化文档的快速生成。
 
-## 安装
+## ✨ 特性
 
-使用 pip 安装所需的依赖：
-```sh
-pip install python-docx
+- 🖥️ **图形化界面** - 基于 Electron + Vue 3 + Element Plus，操作简单直观
+- 📝 **模板驱动** - 支持 `.docx` 模板，通过 JSON 规则定义填充逻辑
+- 📊 **表格支持** - 自动处理文档中的表格内容填充
+- 🚀 **批量生成** - 一次填写信息，批量输出多份文档
+
+## 📦 安装
+
+### 环境要求
+
+- Node.js 18+
+- Python 3.8+（仅开发时需要）
+
+### 安装依赖
+
+```bash
+npm install
 ```
 
-## 使用方法
+## 🚀 使用
 
-`template` 文件夹中有多个文档模板，`rules`有多个规则，每个规则用于处理一个模板。
+### 开发模式
 
-1. 填写要补充的信息
-
-使用前需要填写`information.json`，这里用来做等保测评过程文档，所以多了一个`Projects.json`，可以批量导出
-
-2. 运行
-
-
-```
-python main.py
+```bash
+npm run dev
 ```
 
-3. 在输出目录中寻找文档
+### 打包发布
 
-## 适用场景
+```bash
+# 1. 打包 Python 核心（如有修改）
+pip install pyinstaller
+pyinstaller --onefile --distpath resources/bin -n main3 main3.py
 
-- 自动化文档的生成
-- 批量合同创建
-- 证书、通知书等标准化文档处理
+# 2. 打包 Electron 应用
+npm run build
+```
 
-## 许可证
-本项目采用 MIT 许可证开源，欢迎贡献改进！
+打包后的安装程序位于 `dist_setup` 目录。
 
+## 📁 项目结构
+
+```
+docgen-electron/
+├── src/
+│   ├── main/          # Electron 主进程
+│   ├── preload/       # 预加载脚本
+│   └── renderer/      # Vue 3 前端界面
+├── templates/         # Word 文档模板 (.docx)
+├── rules/             # 填充规则 (.json)
+├── information.json   # 项目信息配置
+└── Projects.json      # 批量项目配置
+```
+
+## 📋 内置模板
+
+| 模板 | 说明 |
+|------|------|
+| 08 | 风险告知与规避方案 |
+| 11 | 现场测评授权书 |
+| 13 | 自愿放弃验证测试声明 |
+| 14 | 工具测试授权书 |
+| 17 | 渗透测试授权书 |
+| 20 | 测评环境恢复确认表 |
+
+## 🛠️ 技术栈
+
+- **前端**: Vue 3 + Element Plus + Pinia
+- **桌面框架**: Electron 28 + electron-vite
+- **文档处理**: Python + python-docx
+
+## 📄 许可证
+
+MIT License

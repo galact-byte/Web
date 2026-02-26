@@ -1,0 +1,20 @@
+# Build outputs
+/app/build/
+/build/
+
+# Gradle
+.gradle/
+
+# Local config
+local.properties
+
+# Signing
+keystore.properties
+*.jks
+*.keystore
+
+# IDE
+.idea/caches/
+.idea/workspace.xml
+.idea/libraries/
+*.iml
