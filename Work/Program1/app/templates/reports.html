@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h2>自动报告生成</h2>
+  <div class="row">
+    <div><label>系统ID*</label><input id="systemId" type="number" /></div>
+    <div>
+      <label>报告类型*</label>
+      <select id="reportType">
+        <option value="grading_report">定级报告</option>
+        <option value="filing_form">定级备案表</option>
+        <option value="expert_review_form">专家评审意见表</option>
+      </select>
+    </div>
+    <div><label>生成人</label><input id="reportActor" value="tester" /></div>
+    <div><label>&nbsp;</label><button onclick="generateReport()">生成报告</button></div>
+  </div>
+  <pre class="result" id="reportResult"></pre>
+</div>
+
+<div class="panel">
+  <h2>报告审核流转</h2>
+  <div class="row">
+    <div><label>报告ID</label><input id="reportId" type="number" /></div>
+    <div><label>审核人</label><input id="reviewer" value="leader" /></div>
+    <div><label>操作</label>
+      <select id="reviewAction">
+        <option value="approve">通过</option>
+        <option value="reject">驳回</option>
+      </select>
+    </div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="reviewReport()">执行审核</button></div>
+  </div>
+  <br />
+  <button onclick="submitReport()">先提交审核</button>
+  <pre class="result" id="reviewResult"></pre>
+</div>
+
+<div class="panel">
+  <h2>报告列表</h2>
+  <button class="btn-lite" onclick="loadReports()">刷新列表</button>
+  <br /><br />
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>标题</th><th>类型</th><th>版本</th><th>状态</th><th>导出</th>
+      </tr>
+    </thead>
+    <tbody id="reportTable"></tbody>
+  </table>
+</div>
+
+<script>
+async function generateReport() {
+  const systemId = document.getElementById('systemId').value;
+  const reportType = document.getElementById('reportType').value;
+  const actor = document.getElementById('reportActor').value.trim() || 'tester';
+  const url = `/api/reports/generate?system_id=${systemId}&report_type=${reportType}&actor=${encodeURIComponent(actor)}`;
+  const res = await fetch(url, {method: 'POST'});
+  const data = await res.json();
+  document.getElementById('reportResult').textContent = JSON.stringify(data, null, 2);
+  if (res.ok) {
+    document.getElementById('reportId').value = data.data.id;
+    loadReports();
+  }
+}
+
+async function submitReport() {
+  const reportId = document.getElementById('reportId').value;
+  const reviewer = document.getElementById('reviewer').value.trim() || 'leader';
+  const res = await fetch(`/api/reports/${reportId}/submit?actor=tester&reviewer=${encodeURIComponent(reviewer)}`, {method: 'POST'});
+  const data = await res.json();
+  document.getElementById('reviewResult').textContent = JSON.stringify(data, null, 2);
+  loadReports();
+}
+
+async function reviewReport() {
+  const reportId = document.getElementById('reportId').value;
+  const reviewer = document.getElementById('reviewer').value.trim() || 'leader';
+  const action = document.getElementById('reviewAction').value;
+  const res = await fetch(`/api/reports/${reportId}/review?actor=${encodeURIComponent(reviewer)}&action=${action}&comment=页面操作`, {method: 'POST'});
+  const data = await res.json();
+  document.getElementById('reviewResult').textContent = JSON.stringify(data, null, 2);
+  loadReports();
+}
+
+async function loadReports() {
+  const res = await fetch('/api/reports');
+  const data = await res.json();
+  document.getElementById('reportTable').innerHTML = data.items.map(i => `
+    <tr>
+      <td>${i.id}</td>
+      <td>${i.title}</td>
+      <td>${i.report_type}</td>
+      <td>V${i.version_no}</td>
+      <td>${i.status}</td>
+      <td>
+        <a href="/api/reports/${i.id}/export/word" target="_blank">Word</a> |
+        <a href="/api/reports/${i.id}/export/pdf" target="_blank">PDF</a>
+      </td>
+    </tr>
+  `).join('');
+}
+
+loadReports();
+</script>
+{% endblock %}

@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+jinja2
+python-multipart
+openpyxl
+python-docx
+httpx
+reportlab
+pytest
+pymysql

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h2>系统信息录入</h2>
+  <div class="grid grid-3">
+    <div><label>关联单位ID*</label><input id="organizationId" type="number" /></div>
+    <div><label>系统名称*</label><input id="systemName" /></div>
+    <div><label>拟定等级*</label>
+      <select id="proposedLevel">
+        <option value="1">1级</option><option value="2">2级</option><option value="3" selected>3级</option>
+        <option value="4">4级</option><option value="5">5级</option>
+      </select>
+    </div>
+    <div><label>系统类型</label><input id="systemType" /></div>
+    <div><label>部署方式</label><input id="deploymentMode" placeholder="本地部署/云平台部署/混合部署" /></div>
+    <div><label>录入人</label><input id="createdBy" value="tester" /></div>
+    <div class="grid-3" style="grid-column: 1 / -1;">
+      <div><label>业务描述</label><textarea id="businessDescription"></textarea></div>
+      <div><label>定级依据</label><textarea id="levelBasis"></textarea></div>
+      <div><label>定级理由</label><textarea id="levelReason"></textarea></div>
+    </div>
+  </div>
+  <br />
+  <button onclick="createSystem()">保存系统</button>
+  <pre class="result" id="sysResult"></pre>
+</div>
+
+<div class="panel">
+  <h2>系统列表</h2>
+  <div class="row">
+    <div><label>系统名称</label><input id="searchSystemName" /></div>
+    <div><label>系统编号</label><input id="searchSystemCode" /></div>
+    <div><label>单位名称</label><input id="searchOrganizationName" /></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="loadSystems()">查询</button></div>
+  </div>
+  <br />
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>系统名称</th><th>系统编号</th><th>单位</th><th>等级</th><th>部署方式</th><th>状态</th>
+      </tr>
+    </thead>
+    <tbody id="sysTable"></tbody>
+  </table>
+</div>
+
+<script>
+function formSystemPayload() {
+  return {
+    organization_id: Number(document.getElementById('organizationId').value),
+    system_name: document.getElementById('systemName').value.trim(),
+    proposed_level: Number(document.getElementById('proposedLevel').value),
+    system_type: document.getElementById('systemType').value.trim() || null,
+    deployment_mode: document.getElementById('deploymentMode').value.trim() || null,
+    business_description: document.getElementById('businessDescription').value.trim() || null,
+    level_basis: document.getElementById('levelBasis').value.trim() || null,
+    level_reason: document.getElementById('levelReason').value.trim() || null,
+    created_by: document.getElementById('createdBy').value.trim() || 'tester'
+  };
+}
+
+async function createSystem() {
+  const payload = formSystemPayload();
+  const res = await fetch('/api/systems', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  document.getElementById('sysResult').textContent = JSON.stringify(data, null, 2);
+  if (res.ok) loadSystems();
+}
+
+async function loadSystems() {
+  const params = new URLSearchParams();
+  const systemName = document.getElementById('searchSystemName').value.trim();
+  const systemCode = document.getElementById('searchSystemCode').value.trim();
+  const organizationName = document.getElementById('searchOrganizationName').value.trim();
+  if (systemName) params.set('system_name', systemName);
+  if (systemCode) params.set('system_code', systemCode);
+  if (organizationName) params.set('organization_name', organizationName);
+  const res = await fetch('/api/systems?' + params.toString());
+  const data = await res.json();
+  document.getElementById('sysTable').innerHTML = data.items.map(i => `
+    <tr>
+      <td>${i.id}</td>
+      <td>${i.system_name}</td>
+      <td>${i.system_code}</td>
+      <td>${i.organization_name || ''}</td>
+      <td>${i.proposed_level}级</td>
+      <td>${i.deployment_mode || ''}</td>
+      <td>${i.archived ? '已归档' : '在用'}</td>
+    </tr>
+  `).join('');
+}
+
+loadSystems();
+</script>
+{% endblock %}

@@ -1,0 +1,25 @@
+# Python 虚拟环境
+.venv/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 数据库文件
+*.db
+
+# 导出临时文件
+exports/
+
+# 上传附件
+uploads/
+
+# IDE / 编辑器
+.omc/
+.vscode/
+.idea/
+GEMINI.md
+
+# 需求文档
+需求.docx
