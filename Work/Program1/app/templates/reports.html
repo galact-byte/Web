@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 <div class="panel">
   <h2>自动报告生成</h2>
@@ -12,16 +12,35 @@
         <option value="expert_review_form">专家评审意见表</option>
       </select>
     </div>
+    <div><label>模板ID(可选)</label><input id="templateId" type="number" /></div>
     <div><label>生成人</label><input id="reportActor" value="tester" /></div>
     <div><label>&nbsp;</label><button onclick="generateReport()">生成报告</button></div>
   </div>
-  <pre class="result" id="reportResult"></pre>
+  <div class="result" id="reportResult">可在此查看操作结果。</div>
+</div>
+
+<div class="panel">
+  <h2>报告章节管理</h2>
+  <div class="row">
+    <div><label>报告ID</label><input id="reportId" type="number" /></div>
+    <div><label>章节名称</label><input id="sectionName" placeholder="新章节名称" /></div>
+    <div><label>章节内容(JSON可选)</label><input id="sectionContent" placeholder='{"字段":"值"}' /></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="addSection()">新增章节</button></div>
+  </div>
+  <div class="row">
+    <div><label>删除章节索引</label><input id="deleteSectionIndex" type="number" min="0" /></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="deleteSection()">删除章节</button></div>
+    <div><label>从索引</label><input id="fromIndex" type="number" min="0" /></div>
+    <div><label>到索引</label><input id="toIndex" type="number" min="0" /></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="reorderSection()">调整顺序</button></div>
+  </div>
+  <button class="btn-lite" onclick="showReportSections()">查看章节</button>
+  <div class="result" id="sectionResult">可在此查看章节摘要。</div>
 </div>
 
 <div class="panel">
   <h2>报告审核流转</h2>
   <div class="row">
-    <div><label>报告ID</label><input id="reportId" type="number" /></div>
     <div><label>审核人</label><input id="reviewer" value="leader" /></div>
     <div><label>操作</label>
       <select id="reviewAction">
@@ -30,61 +49,182 @@
       </select>
     </div>
     <div><label>&nbsp;</label><button class="btn-lite" onclick="reviewReport()">执行审核</button></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="submitReport()">提交审核</button></div>
   </div>
-  <br />
-  <button onclick="submitReport()">先提交审核</button>
-  <pre class="result" id="reviewResult"></pre>
+  <div class="result" id="reviewResult">可在此查看审核操作结果。</div>
+</div>
+
+<div class="panel">
+  <h2>签章设置</h2>
+  <div class="row">
+    <div><label>公司签章</label><input id="companySeal" placeholder="公司电子签章ID/名称" /></div>
+    <div><label>测评师签章</label><input id="evaluatorSeal" placeholder="测评师签章ID/名称" /></div>
+    <div><label>签章位置</label><input id="sealPosition" placeholder="第3页右下角" /></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="setSignature()">保存签章</button></div>
+  </div>
+  <div class="result" id="signatureResult">可在此查看签章保存结果。</div>
 </div>
 
 <div class="panel">
   <h2>报告列表</h2>
+  <div class="row">
+    <div><label>PDF密码（可选）</label><input id="pdfPassword" placeholder="导出PDF时加密" /></div>
+  </div>
+  <br />
   <button class="btn-lite" onclick="loadReports()">刷新列表</button>
   <br /><br />
   <table>
     <thead>
       <tr>
-        <th>ID</th><th>标题</th><th>类型</th><th>版本</th><th>状态</th><th>导出</th>
+        <th>ID</th><th>标题</th><th>类型</th><th>版本</th><th>状态</th><th>导出</th><th>操作</th>
       </tr>
     </thead>
     <tbody id="reportTable"></tbody>
   </table>
 </div>
 
+<div class="panel">
+  <h2>版本差异对比</h2>
+  <div class="row">
+    <div><label>左侧报告ID</label><input id="compareLeftId" type="number" /></div>
+    <div><label>右侧报告ID</label><input id="compareRightId" type="number" /></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="compareReports()">对比差异</button></div>
+  </div>
+  <div class="result" id="compareResult">可在此查看版本差异摘要。</div>
+</div>
+
 <script>
+function msg(data, fallback='操作失败') {
+  if (!data) return fallback;
+  if (typeof data.detail === 'string') return data.detail;
+  if (data.detail) return '请求参数不合法';
+  return data.message || fallback;
+}
+
 async function generateReport() {
   const systemId = document.getElementById('systemId').value;
   const reportType = document.getElementById('reportType').value;
+  const templateId = document.getElementById('templateId').value.trim();
   const actor = document.getElementById('reportActor').value.trim() || 'tester';
-  const url = `/api/reports/generate?system_id=${systemId}&report_type=${reportType}&actor=${encodeURIComponent(actor)}`;
+  const suffix = templateId ? `&template_id=${encodeURIComponent(templateId)}` : '';
+  const url = `/api/reports/generate?system_id=${systemId}&report_type=${reportType}&actor=${encodeURIComponent(actor)}${suffix}`;
   const res = await fetch(url, {method: 'POST'});
   const data = await res.json();
-  document.getElementById('reportResult').textContent = JSON.stringify(data, null, 2);
-  if (res.ok) {
-    document.getElementById('reportId').value = data.data.id;
-    loadReports();
+  if (!res.ok) {
+    document.getElementById('reportResult').textContent = `生成失败：${msg(data)}`;
+    return;
   }
+  document.getElementById('reportResult').textContent = `生成成功：报告ID=${data?.data?.id || '-'}，版本 V${data?.data?.version_no || '-'}`;
+  document.getElementById('reportId').value = data.data.id;
+  loadReports();
+  showReportSections();
+}
+
+async function setSignature() {
+  const reportId = getReportId();
+  if (!reportId) return;
+  const payload = {
+    '公司签章': document.getElementById('companySeal').value.trim(),
+    '测评师签章': document.getElementById('evaluatorSeal').value.trim(),
+    '签章位置': document.getElementById('sealPosition').value.trim(),
+    '签章日期': new Date().toISOString().slice(0, 10)
+  };
+  const res = await fetch(`/api/reports/${reportId}/signature?actor=tester`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  document.getElementById('signatureResult').textContent = res.ok ? (data.message || '签章已保存') : `保存失败：${msg(data)}`;
+}
+
+function getReportId() {
+  return document.getElementById('reportId').value.trim();
 }
 
 async function submitReport() {
-  const reportId = document.getElementById('reportId').value;
+  const reportId = getReportId();
   const reviewer = document.getElementById('reviewer').value.trim() || 'leader';
   const res = await fetch(`/api/reports/${reportId}/submit?actor=tester&reviewer=${encodeURIComponent(reviewer)}`, {method: 'POST'});
   const data = await res.json();
-  document.getElementById('reviewResult').textContent = JSON.stringify(data, null, 2);
+  document.getElementById('reviewResult').textContent = res.ok ? (data.message || '已提交审核') : `提交失败：${msg(data)}`;
   loadReports();
 }
 
 async function reviewReport() {
-  const reportId = document.getElementById('reportId').value;
+  const reportId = getReportId();
   const reviewer = document.getElementById('reviewer').value.trim() || 'leader';
   const action = document.getElementById('reviewAction').value;
   const res = await fetch(`/api/reports/${reportId}/review?actor=${encodeURIComponent(reviewer)}&action=${action}&comment=页面操作`, {method: 'POST'});
   const data = await res.json();
-  document.getElementById('reviewResult').textContent = JSON.stringify(data, null, 2);
+  document.getElementById('reviewResult').textContent = res.ok ? (data.message || '审核完成') : `审核失败：${msg(data)}`;
   loadReports();
 }
 
+async function showReportSections() {
+  const reportId = getReportId();
+  if (!reportId) return;
+  const res = await fetch(`/api/reports/${reportId}`);
+  const data = await res.json();
+  if (!res.ok) {
+    document.getElementById('sectionResult').textContent = `读取失败：${msg(data)}`;
+    return;
+  }
+  const sections = (data.content && data.content['章节']) || [];
+  const names = sections.map((s, idx) => `${idx}. ${s['名称'] || '未命名章节'}`).join(' | ');
+  document.getElementById('sectionResult').textContent = sections.length ? `章节数：${sections.length}。${names}` : '当前报告暂无章节。';
+}
+
+function parseSectionContent() {
+  const raw = document.getElementById('sectionContent').value.trim();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    return {text: raw};
+  }
+}
+
+async function addSection() {
+  const reportId = getReportId();
+  const name = document.getElementById('sectionName').value.trim();
+  if (!name) {
+    alert('请填写章节名称');
+    return;
+  }
+  const payload = {name, content: parseSectionContent()};
+  const res = await fetch(`/api/reports/${reportId}/sections?actor=tester`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  document.getElementById('sectionResult').textContent = res.ok ? (data.message || '章节新增成功') : `新增失败：${msg(data)}`;
+  showReportSections();
+}
+
+async function deleteSection() {
+  const reportId = getReportId();
+  const idx = document.getElementById('deleteSectionIndex').value;
+  const res = await fetch(`/api/reports/${reportId}/sections/${idx}?actor=tester`, {method: 'DELETE'});
+  const data = await res.json();
+  document.getElementById('sectionResult').textContent = res.ok ? (data.message || '章节删除成功') : `删除失败：${msg(data)}`;
+  showReportSections();
+}
+
+async function reorderSection() {
+  const reportId = getReportId();
+  const fromIndex = document.getElementById('fromIndex').value;
+  const toIndex = document.getElementById('toIndex').value;
+  const res = await fetch(`/api/reports/${reportId}/sections/reorder?from_index=${fromIndex}&to_index=${toIndex}&actor=tester`, {method: 'POST'});
+  const data = await res.json();
+  document.getElementById('sectionResult').textContent = res.ok ? (data.message || '章节顺序已调整') : `调整失败：${msg(data)}`;
+  showReportSections();
+}
+
 async function loadReports() {
+  const pdfPassword = document.getElementById('pdfPassword').value.trim();
+  const pdfSuffix = pdfPassword ? `?password=${encodeURIComponent(pdfPassword)}` : '';
   const res = await fetch('/api/reports');
   const data = await res.json();
   document.getElementById('reportTable').innerHTML = data.items.map(i => `
@@ -96,10 +236,41 @@ async function loadReports() {
       <td>${i.status}</td>
       <td>
         <a href="/api/reports/${i.id}/export/word" target="_blank">Word</a> |
-        <a href="/api/reports/${i.id}/export/pdf" target="_blank">PDF</a>
+        <a href="/api/reports/${i.id}/export/pdf${pdfSuffix}" target="_blank">PDF</a>
+      </td>
+      <td>
+        <button class="btn-lite" onclick="useReportId(${i.id})">设为当前</button>
       </td>
     </tr>
   `).join('');
+}
+
+function useReportId(id) {
+  document.getElementById('reportId').value = id;
+  if (!document.getElementById('compareLeftId').value) {
+    document.getElementById('compareLeftId').value = id;
+  } else {
+    document.getElementById('compareRightId').value = id;
+  }
+  showReportSections();
+}
+
+async function compareReports() {
+  const left = document.getElementById('compareLeftId').value.trim();
+  const right = document.getElementById('compareRightId').value.trim();
+  if (!left || !right) {
+    alert('请先填写两个报告ID');
+    return;
+  }
+  const res = await fetch(`/api/reports/${left}/compare/${right}`);
+  const data = await res.json();
+  if (!res.ok) {
+    document.getElementById('compareResult').textContent = `对比失败：${msg(data)}`;
+    return;
+  }
+  const s = data.summary || {};
+  document.getElementById('compareResult').textContent =
+    `字段变化 ${s.field_change_count || 0} 项，新增章节 ${s.section_added_count || 0} 项，删除章节 ${s.section_removed_count || 0} 项，章节内容变化 ${s.section_changed_count || 0} 项。`;
 }
 
 loadReports();

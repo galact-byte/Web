@@ -18,8 +18,10 @@
   </div>
   <br />
   <button onclick="createOrg()">保存单位</button>
+  <input id="orgWordFile" type="file" accept=".docx" />
+  <button class="btn-lite" onclick="importOrgWord()">Word导入</button>
   <p class="hint">必填字段未填或格式错误会被接口拦截。</p>
-  <pre class="result" id="orgResult"></pre>
+  <div class="result" id="orgResult">可在此查看操作结果。</div>
 </div>
 
 <div class="panel">
@@ -34,14 +36,95 @@
   <table>
     <thead>
       <tr>
-        <th>ID</th><th>单位名称</th><th>信用代码</th><th>行业</th><th>备案地区</th><th>状态</th>
+        <th>ID</th><th>单位名称</th><th>信用代码</th><th>行业</th><th>备案地区</th><th>状态</th><th>操作</th>
       </tr>
     </thead>
     <tbody id="orgTable"></tbody>
   </table>
 </div>
 
+<div class="panel">
+  <h2>单位回收站（30天）</h2>
+  <button class="btn-lite" onclick="loadRecycleOrgs()">刷新回收站</button>
+  <button class="btn-lite" onclick="cleanupRecycleOrgs()">清理已过期</button>
+  <br /><br />
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>单位名称</th><th>删除人</th><th>删除时间</th><th>剩余天数</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="orgRecycleTable"></tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>单位删除申请</h2>
+  <button class="btn-lite" onclick="loadOrgDeleteRequests()">刷新申请列表</button>
+  <br /><br />
+  <table>
+    <thead>
+      <tr>
+        <th>申请ID</th><th>单位ID</th><th>申请人</th><th>状态</th><th>原因</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="orgDeleteReqTable"></tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>客户采集链接</h2>
+  <div class="row">
+    <div><label>关联单位ID（可空）</label><input id="collectionOrgId" type="number" /></div>
+    <div><label>有效天数</label><input id="collectionDays" type="number" value="7" /></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="createCollectionLink()">生成链接</button></div>
+  </div>
+  <div class="result" id="collectionResult">可在此查看链接生成结果。</div>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>关联单位</th><th>过期时间</th><th>链接</th>
+      </tr>
+    </thead>
+    <tbody id="collectionTable"></tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>客户提交审核</h2>
+  <button class="btn-lite" onclick="loadSubmissions()">刷新提交记录</button>
+  <br /><br />
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>状态</th><th>填报人</th><th>提交时间</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="submissionTable"></tbody>
+  </table>
+</div>
+
 <script>
+function authHeaders() {
+  const token = localStorage.getItem('auth_token') || '';
+  return token ? {'X-Auth-Token': token} : {};
+}
+
+function apiErrorText(data) {
+  if (!data) return '请求失败';
+  if (typeof data.detail === 'string') return data.detail;
+  if (data.detail && typeof data.detail === 'object') return '请求参数不合法';
+  return data.message || '请求失败';
+}
+
+function setOrgResult(text) {
+  document.getElementById('orgResult').textContent = text;
+}
+
+function setCollectionResult(text) {
+  document.getElementById('collectionResult').textContent = text;
+}
+
 function formOrgPayload() {
   return {
     name: document.getElementById('name').value.trim(),
@@ -63,12 +146,34 @@ async function createOrg() {
   const payload = formOrgPayload();
   const res = await fetch('/api/organizations', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', ...authHeaders()},
     body: JSON.stringify(payload)
   });
   const data = await res.json();
-  document.getElementById('orgResult').textContent = JSON.stringify(data, null, 2);
-  if (res.ok) loadOrgs();
+  if (!res.ok) {
+    setOrgResult(`保存失败：${apiErrorText(data)}`);
+    return;
+  }
+  setOrgResult(`保存成功：单位ID=${data?.data?.id || '-'}`);
+  loadOrgs();
+}
+
+async function importOrgWord() {
+  const file = document.getElementById('orgWordFile').files[0];
+  if (!file) {
+    alert('请选择Word文件');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch('/api/organizations/import/word?actor=tester', {method: 'POST', body: fd});
+  const data = await res.json();
+  if (!res.ok) {
+    setOrgResult(`导入失败：${apiErrorText(data)}`);
+    return;
+  }
+  setOrgResult(data.message || 'Word导入成功');
+  loadOrgs();
 }
 
 async function loadOrgs() {
@@ -79,7 +184,7 @@ async function loadOrgs() {
   if (name) params.set('name', name);
   if (credit) params.set('credit_code', credit);
   if (industry) params.set('industry', industry);
-  const res = await fetch('/api/organizations?' + params.toString());
+  const res = await fetch('/api/organizations?' + params.toString(), {headers: authHeaders()});
   const data = await res.json();
   document.getElementById('orgTable').innerHTML = data.items.map(i => `
     <tr>
@@ -89,10 +194,169 @@ async function loadOrgs() {
       <td>${i.industry}</td>
       <td>${i.filing_region}</td>
       <td>${i.archived ? '已归档' : '在用'}</td>
+      <td>
+        <button class="btn-lite" onclick="archiveOrg(${i.id})">归档</button>
+        <button class="btn-lite" onclick="deleteOrg(${i.id})">删除</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function archiveOrg(id) {
+  const res = await fetch(`/api/organizations/${id}/archive?actor=tester`, {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    alert(apiErrorText(data));
+    return;
+  }
+  loadOrgs();
+}
+
+async function deleteOrg(id) {
+  const reason = prompt('请输入删除原因（可空）', '') || '';
+  const res = await fetch(`/api/organizations/${id}/delete-request?actor=tester&reason=${encodeURIComponent(reason)}`, {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setOrgResult(`提交删除申请失败：${apiErrorText(data)}`);
+    return;
+  }
+  setOrgResult('删除申请已提交，等待管理员审核。');
+  loadOrgDeleteRequests();
+}
+
+async function loadRecycleOrgs() {
+  const res = await fetch('/api/organizations/recycle-bin/list', {headers: authHeaders()});
+  const data = await res.json();
+  document.getElementById('orgRecycleTable').innerHTML = data.items.map(i => `
+    <tr>
+      <td>${i.id}</td>
+      <td>${i.name}</td>
+      <td>${i.deleted_by || ''}</td>
+      <td>${i.deleted_at || ''}</td>
+      <td>${i.days_left}</td>
+      <td><button class="btn-lite" onclick="restoreOrg(${i.id})">恢复</button></td>
+    </tr>
+  `).join('');
+}
+
+async function restoreOrg(id) {
+  const res = await fetch(`/api/organizations/${id}/restore?actor=tester`, {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setOrgResult(`恢复失败：${apiErrorText(data)}`);
+    return;
+  }
+  setOrgResult('单位已从回收站恢复。');
+  loadOrgs();
+  loadRecycleOrgs();
+}
+
+async function cleanupRecycleOrgs() {
+  if (!confirm('仅清理超过30天且无关联系统的单位，继续吗？')) return;
+  const res = await fetch('/api/organizations/recycle-bin/cleanup?actor=admin', {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setOrgResult(`清理失败：${apiErrorText(data)}`);
+    return;
+  }
+  setOrgResult(`清理完成：已清理 ${data.purged || 0} 条，跳过 ${data.skipped?.length || 0} 条。`);
+  loadRecycleOrgs();
+}
+
+async function loadOrgDeleteRequests() {
+  const res = await fetch('/api/delete-requests?entity_type=organization', {headers: authHeaders()});
+  const data = await res.json();
+  document.getElementById('orgDeleteReqTable').innerHTML = (data.items || []).map(i => `
+    <tr>
+      <td>${i.id}</td>
+      <td>${i.entity_id}</td>
+      <td>${i.requested_by || ''}</td>
+      <td>${i.status}</td>
+      <td>${i.reason || ''}</td>
+      <td>
+        ${i.status === 'pending' ? `
+          <button class="btn-lite" onclick="reviewOrgDeleteReq(${i.id}, 'approve')">通过</button>
+          <button class="btn-lite" onclick="reviewOrgDeleteReq(${i.id}, 'reject')">驳回</button>
+        ` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function reviewOrgDeleteReq(id, action) {
+  const comment = action === 'reject' ? (prompt('请输入驳回原因', '') || '') : '';
+  const res = await fetch(`/api/delete-requests/${id}/review?action=${action}&actor=admin&comment=${encodeURIComponent(comment)}`, {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setOrgResult(`审核失败：${apiErrorText(data)}`);
+    return;
+  }
+  setOrgResult('删除申请审核完成。');
+  loadOrgDeleteRequests();
+  loadOrgs();
+  loadRecycleOrgs();
+}
+
+async function createCollectionLink() {
+  const orgId = document.getElementById('collectionOrgId').value.trim();
+  const days = document.getElementById('collectionDays').value.trim() || '7';
+  const params = new URLSearchParams({expires_days: days, actor: 'tester'});
+  if (orgId) params.set('organization_id', orgId);
+  const res = await fetch('/api/organizations/collection-links?' + params.toString(), {method: 'POST'});
+  const data = await res.json();
+  if (!res.ok) {
+    setCollectionResult(`生成失败：${apiErrorText(data)}`);
+    return;
+  }
+  const url = data?.data?.collect_url || '';
+  setCollectionResult(url ? `生成成功：${url}` : '生成成功。');
+  loadCollectionLinks();
+}
+
+async function loadCollectionLinks() {
+  const res = await fetch('/api/organizations/collection-links');
+  const data = await res.json();
+  document.getElementById('collectionTable').innerHTML = data.items.map(i => `
+    <tr>
+      <td>${i.id}</td>
+      <td>${i.organization_id || ''}</td>
+      <td>${i.expires_at}</td>
+      <td><a href="${i.collect_url}" target="_blank">打开</a></td>
+    </tr>
+  `).join('');
+}
+
+async function reviewSubmission(id, action) {
+  const comment = action === 'reject' ? prompt('请输入驳回意见', '') || '' : '';
+  const params = new URLSearchParams({action, actor: 'tester', comment});
+  const res = await fetch(`/api/organizations/submissions/${id}/review?` + params.toString(), {method: 'POST'});
+  const data = await res.json();
+  alert(data.message || data.detail || '操作完成');
+  loadSubmissions();
+  loadOrgs();
+}
+
+async function loadSubmissions() {
+  const res = await fetch('/api/organizations/submissions?status=pending');
+  const data = await res.json();
+  document.getElementById('submissionTable').innerHTML = data.items.map(i => `
+    <tr>
+      <td>${i.id}</td>
+      <td>${i.status}</td>
+      <td>${i.submitter || ''}</td>
+      <td>${i.submitted_at}</td>
+      <td>
+        <button class="btn-lite" onclick="reviewSubmission(${i.id}, 'approve')">通过</button>
+        <button class="btn-lite" onclick="reviewSubmission(${i.id}, 'reject')">驳回</button>
+      </td>
     </tr>
   `).join('');
 }
 
 loadOrgs();
+loadRecycleOrgs();
+loadOrgDeleteRequests();
+loadCollectionLinks();
+loadSubmissions();
 </script>
 {% endblock %}

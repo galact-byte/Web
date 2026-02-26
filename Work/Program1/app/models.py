@@ -203,6 +203,32 @@ class WorkflowAction(Base):
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
+class WorkflowStepRule(Base):
+    __tablename__ = "workflow_step_rules"
+
+    id = Column(Integer, primary_key=True)
+    config_name = Column(String(100), nullable=False, default="default", index=True)
+    step_name = Column(String(120), nullable=False, index=True)
+    owner = Column(String(100), nullable=False, default="system")
+    time_limit_hours = Column(Integer, nullable=False, default=24)
+    enabled = Column(Boolean, nullable=False, default=True, index=True)
+    updated_by = Column(String(100), nullable=False, default="admin")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class WorkflowReminder(Base):
+    __tablename__ = "workflow_reminders"
+
+    id = Column(Integer, primary_key=True)
+    instance_id = Column(Integer, ForeignKey("workflow_instances.id"), nullable=False, index=True)
+    step_name = Column(String(120), nullable=False)
+    receiver = Column(String(100), nullable=False)
+    reminder_type = Column(String(32), nullable=False, default="due")
+    channel = Column(String(32), nullable=False, default="in_app")
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
 class KnowledgeDocument(Base):
     __tablename__ = "knowledge_documents"
 
@@ -229,3 +255,120 @@ class KnowledgeDownloadLog(Base):
     document_id = Column(Integer, ForeignKey("knowledge_documents.id"), nullable=False, index=True)
     download_by = Column(String(100), nullable=False)
     downloaded_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class KnowledgeDocumentVersion(Base):
+    __tablename__ = "knowledge_document_versions"
+
+    id = Column(Integer, primary_key=True)
+    document_id = Column(Integer, ForeignKey("knowledge_documents.id"), nullable=False, index=True)
+    action = Column(String(32), nullable=False)
+    snapshot = Column(JSON, nullable=False)
+    changed_by = Column(String(100), nullable=False, default="admin")
+    changed_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class KnowledgePin(Base):
+    __tablename__ = "knowledge_pins"
+
+    id = Column(Integer, primary_key=True)
+    document_id = Column(Integer, ForeignKey("knowledge_documents.id"), nullable=False, unique=True, index=True)
+    pinned_by = Column(String(100), nullable=False, default="admin")
+    pinned_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class UserAccount(Base):
+    __tablename__ = "user_accounts"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String(100), nullable=False, unique=True, index=True)
+    password_hash = Column(String(128), nullable=False)
+    role = Column(String(32), nullable=False, default="evaluator", index=True)
+    enabled = Column(Boolean, nullable=False, default=True, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    last_login_at = Column(DateTime, nullable=True)
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("user_accounts.id"), nullable=False, index=True)
+    token = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class ReportTemplate(Base):
+    __tablename__ = "report_templates"
+
+    id = Column(Integer, primary_key=True)
+    template_name = Column(String(200), nullable=False, index=True)
+    report_type = Column(String(32), nullable=False, index=True)
+    category = Column(String(120), nullable=True, index=True)
+    city = Column(String(120), nullable=True, index=True)
+    protection_level = Column(String(32), nullable=True, index=True)
+    description = Column(Text, nullable=True)
+    status = Column(String(32), nullable=False, default="enabled", index=True)
+    is_default = Column(Boolean, nullable=False, default=False, index=True)
+    version_no = Column(Integer, nullable=False, default=1)
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(400), nullable=False)
+    file_size = Column(Integer, nullable=False)
+    config_json = Column(JSON, nullable=True)
+    created_by = Column(String(100), nullable=False, default="admin")
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ReportTemplateVersion(Base):
+    __tablename__ = "report_template_versions"
+
+    id = Column(Integer, primary_key=True)
+    template_id = Column(Integer, ForeignKey("report_templates.id"), nullable=False, index=True)
+    action = Column(String(32), nullable=False)
+    snapshot = Column(JSON, nullable=False)
+    changed_by = Column(String(100), nullable=False, default="admin")
+    changed_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class OrganizationCollectionLink(Base):
+    __tablename__ = "organization_collection_links"
+
+    id = Column(Integer, primary_key=True)
+    token = Column(String(64), nullable=False, unique=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    created_by = Column(String(100), nullable=False, default="system")
+    expires_at = Column(DateTime, nullable=False, index=True)
+    disabled = Column(Boolean, nullable=False, default=False, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class OrganizationSubmission(Base):
+    __tablename__ = "organization_submissions"
+
+    id = Column(Integer, primary_key=True)
+    link_id = Column(Integer, ForeignKey("organization_collection_links.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    payload = Column(JSON, nullable=False)
+    submitter = Column(String(120), nullable=False, default="customer")
+    status = Column(String(32), nullable=False, default="pending", index=True)
+    review_comment = Column(Text, nullable=True)
+    reviewed_by = Column(String(100), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    submitted_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class DeleteRequest(Base):
+    __tablename__ = "delete_requests"
+
+    id = Column(Integer, primary_key=True)
+    entity_type = Column(String(32), nullable=False, index=True)
+    entity_id = Column(Integer, nullable=False, index=True)
+    reason = Column(Text, nullable=True)
+    status = Column(String(32), nullable=False, default="pending", index=True)
+    requested_by = Column(String(100), nullable=False, default="system")
+    requested_at = Column(DateTime, server_default=func.now(), nullable=False)
+    reviewed_by = Column(String(100), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    review_comment = Column(Text, nullable=True)

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 <div class="panel">
   <h2>知识库文档上传</h2>
@@ -19,18 +19,28 @@
 </div>
 
 <div class="panel">
-  <h2>知识库检索</h2>
+  <h2>知识库检索与管理</h2>
   <div class="row">
     <div><label>关键词</label><input id="searchKeyword" /></div>
+    <div><label>匹配模式</label>
+      <select id="searchMatchMode">
+        <option value="fuzzy">模糊</option>
+        <option value="exact">精确</option>
+      </select>
+    </div>
     <div><label>地市</label><input id="searchCity" /></div>
+    <div><label>区县</label><input id="searchDistrict" /></div>
     <div><label>文档类型</label><input id="searchType" /></div>
+    <div><label>等保级别</label><input id="searchLevel" /></div>
+    <div><label>开始日期</label><input id="searchStart" type="date" /></div>
+    <div><label>结束日期</label><input id="searchEnd" type="date" /></div>
     <div><label>&nbsp;</label><button class="btn-lite" onclick="loadKnowledge()">查询</button></div>
   </div>
   <br />
   <table>
     <thead>
       <tr>
-        <th>ID</th><th>标题</th><th>类型</th><th>地市</th><th>版本</th><th>状态</th><th>操作</th>
+        <th>ID</th><th>置顶</th><th>标题</th><th>类型</th><th>地市</th><th>版本</th><th>状态</th><th>操作</th>
       </tr>
     </thead>
     <tbody id="knowledgeTable"></tbody>
@@ -38,6 +48,32 @@
 </div>
 
 <script>
+function authHeaders() {
+  const token = localStorage.getItem('auth_token') || '';
+  return token ? {'X-Auth-Token': token} : {};
+}
+
+function buildSearchParams() {
+  const params = new URLSearchParams();
+  const keyword = document.getElementById('searchKeyword').value.trim();
+  const matchMode = document.getElementById('searchMatchMode').value;
+  const city = document.getElementById('searchCity').value.trim();
+  const district = document.getElementById('searchDistrict').value.trim();
+  const docType = document.getElementById('searchType').value.trim();
+  const level = document.getElementById('searchLevel').value.trim();
+  const start = document.getElementById('searchStart').value;
+  const end = document.getElementById('searchEnd').value;
+  if (keyword) params.set('keyword', keyword);
+  params.set('match_mode', matchMode || 'fuzzy');
+  if (city) params.set('city', city);
+  if (district) params.set('district', district);
+  if (docType) params.set('doc_type', docType);
+  if (level) params.set('protection_level', level);
+  if (start) params.set('start_date', start);
+  if (end) params.set('end_date', end);
+  return params;
+}
+
 async function uploadKnowledge() {
   const fd = new FormData();
   fd.append('title', document.getElementById('title').value.trim());
@@ -54,38 +90,112 @@ async function uploadKnowledge() {
     return;
   }
   fd.append('file', file);
-  const res = await fetch('/api/knowledge/upload', {method: 'POST', body: fd});
+  const res = await fetch('/api/knowledge/upload', {method: 'POST', headers: authHeaders(), body: fd});
   const data = await res.json();
-  document.getElementById('knowledgeResult').textContent = JSON.stringify(data, null, 2);
+  document.getElementById('knowledgeResult').textContent = res.ok ? (data.message || '上传成功') : (data.detail || '上传失败');
   if (res.ok) loadKnowledge();
 }
 
 async function toggleDoc(id, enabled) {
-  await fetch(`/api/knowledge/${id}/toggle?enabled=${enabled}`, {method: 'POST'});
+  await fetch(`/api/knowledge/${id}/toggle?enabled=${enabled}&actor=admin`, {method: 'POST', headers: authHeaders()});
   loadKnowledge();
 }
 
+async function pinDoc(id, enabled) {
+  await fetch(`/api/knowledge/${id}/pin?enabled=${enabled}&actor=admin`, {method: 'POST', headers: authHeaders()});
+  loadKnowledge();
+}
+
+async function editDoc(id, currentTitle, currentType, currentCity, currentDistrict) {
+  const title = prompt('标题', currentTitle);
+  if (title === null) return;
+  const docType = prompt('文档类型', currentType);
+  if (docType === null) return;
+  const city = prompt('地市', currentCity || '');
+  if (city === null) return;
+  const district = prompt('区县', currentDistrict || '');
+  if (district === null) return;
+  await fetch(`/api/knowledge/${id}?actor=admin`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json', ...authHeaders()},
+    body: JSON.stringify({title, doc_type: docType, city, district})
+  });
+  loadKnowledge();
+}
+
+async function uploadNewVersion(id) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.onchange = async () => {
+    if (!input.files || !input.files[0]) return;
+    const fd = new FormData();
+    fd.append('actor', 'admin');
+    fd.append('file', input.files[0]);
+    const res = await fetch(`/api/knowledge/${id}/new-version`, {method: 'POST', headers: authHeaders(), body: fd});
+    const data = await res.json();
+    alert(data.message || data.detail || '完成');
+    loadKnowledge();
+  };
+  input.click();
+}
+
+async function showVersions(id) {
+  const res = await fetch(`/api/knowledge/${id}/versions`);
+  const data = await res.json();
+  const text = (data.items || []).map(i => `版本ID=${i.id} | 动作=${i.action} | 时间=${i.changed_at}`).join('\n');
+  const versionId = prompt(`版本记录:\n${text}\n\n输入要回滚的版本ID（取消则不回滚）`, '');
+  if (!versionId) return;
+  const rb = await fetch(`/api/knowledge/${id}/rollback/${versionId}?actor=admin`, {method: 'POST', headers: authHeaders()});
+  const rbData = await rb.json();
+  alert(rbData.message || rbData.detail || '完成');
+  loadKnowledge();
+}
+
+async function deleteDoc(id) {
+  if (!confirm('确认删除该文档？')) return;
+  const res = await fetch(`/api/knowledge/${id}?actor=admin`, {method: 'DELETE', headers: authHeaders()});
+  const data = await res.json();
+  alert(data.message || data.detail || '完成');
+  loadKnowledge();
+}
+
+async function downloadDoc(id, fileName) {
+  const res = await fetch(`/api/knowledge/${id}/download`, {headers: authHeaders()});
+  if (!res.ok) {
+    const data = await res.json();
+    alert(data.detail || '下载失败');
+    return;
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName || `knowledge_${id}`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
 async function loadKnowledge() {
-  const params = new URLSearchParams();
-  const keyword = document.getElementById('searchKeyword').value.trim();
-  const city = document.getElementById('searchCity').value.trim();
-  const docType = document.getElementById('searchType').value.trim();
-  if (keyword) params.set('keyword', keyword);
-  if (city) params.set('city', city);
-  if (docType) params.set('doc_type', docType);
+  const params = buildSearchParams();
   const res = await fetch('/api/knowledge?' + params.toString());
   const data = await res.json();
   document.getElementById('knowledgeTable').innerHTML = data.items.map(i => `
     <tr>
       <td>${i.id}</td>
+      <td>${i.pinned ? '是' : ''}</td>
       <td>${i.title}</td>
       <td>${i.doc_type}</td>
-      <td>${i.city || ''}</td>
+      <td>${i.city || ''}${i.district ? '/' + i.district : ''}</td>
       <td>V${i.version_no}</td>
       <td>${i.status}</td>
       <td>
-        <a href="/api/knowledge/${i.id}/download" target="_blank">下载</a>
+        <button class="btn-lite" onclick="downloadDoc(${i.id}, '${(i.file_name || '').replace(/'/g, "\\'")}')">下载</button>
         <button class="btn-lite" onclick="toggleDoc(${i.id}, ${i.status !== 'enabled'})">${i.status === 'enabled' ? '下架' : '启用'}</button>
+        <button class="btn-lite" onclick="pinDoc(${i.id}, ${!i.pinned})">${i.pinned ? '取消置顶' : '置顶'}</button>
+        <button class="btn-lite" onclick="editDoc(${i.id}, '${(i.title || '').replace(/'/g, "\\'")}', '${(i.doc_type || '').replace(/'/g, "\\'")}', '${(i.city || '').replace(/'/g, "\\'")}', '${(i.district || '').replace(/'/g, "\\'")}')">编辑</button>
+        <button class="btn-lite" onclick="uploadNewVersion(${i.id})">新版本</button>
+        <button class="btn-lite" onclick="showVersions(${i.id})">版本</button>
+        <button class="btn-lite" onclick="deleteDoc(${i.id})">删除</button>
       </td>
     </tr>
   `).join('');

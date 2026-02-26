@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h2>客户单位信息采集</h2>
+  <p class="hint">请填写后提交，系统将自动同步为待审核记录。</p>
+  <div class="grid grid-3">
+    <div><label>单位名称*</label><input id="name" value="{{ initial.get('name', '') }}" /></div>
+    <div><label>统一社会信用代码*</label><input id="creditCode" value="{{ initial.get('credit_code', '') }}" /></div>
+    <div><label>单位负责人*</label><input id="legalRepresentative" value="{{ initial.get('legal_representative', '') }}" /></div>
+    <div><label>单位地址*</label><input id="address" value="{{ initial.get('address', '') }}" /></div>
+    <div><label>办公电话</label><input id="officePhone" value="{{ initial.get('office_phone', '') }}" /></div>
+    <div><label>移动电话*</label><input id="mobilePhone" value="{{ initial.get('mobile_phone', '') }}" /></div>
+    <div><label>邮箱*</label><input id="email" value="{{ initial.get('email', '') }}" /></div>
+    <div><label>所属行业*</label><input id="industry" value="{{ initial.get('industry', '') }}" /></div>
+    <div><label>单位类型*</label><input id="organizationType" value="{{ initial.get('organization_type', '') }}" /></div>
+    <div><label>备案地区*</label><input id="filingRegion" value="{{ initial.get('filing_region', '') }}" /></div>
+    <div><label>主管部门</label><input id="supervisingDepartment" value="{{ initial.get('supervising_department', '') }}" /></div>
+    <div><label>填报人</label><input id="submitter" placeholder="客户联系人姓名" /></div>
+  </div>
+  <br />
+  <button onclick="submitCollection()">提交采集信息</button>
+  <pre class="result" id="submitResult"></pre>
+</div>
+
+<script>
+async function submitCollection() {
+  const token = "{{ token }}";
+  const payload = {
+    name: document.getElementById('name').value.trim(),
+    credit_code: document.getElementById('creditCode').value.trim().toUpperCase(),
+    legal_representative: document.getElementById('legalRepresentative').value.trim(),
+    address: document.getElementById('address').value.trim(),
+    office_phone: document.getElementById('officePhone').value.trim() || null,
+    mobile_phone: document.getElementById('mobilePhone').value.trim(),
+    email: document.getElementById('email').value.trim(),
+    industry: document.getElementById('industry').value.trim(),
+    organization_type: document.getElementById('organizationType').value.trim(),
+    filing_region: document.getElementById('filingRegion').value.trim(),
+    supervising_department: document.getElementById('supervisingDepartment').value.trim() || null,
+    submitter: document.getElementById('submitter').value.trim() || 'customer'
+  };
+  const res = await fetch(`/api/public/organizations/collect/${token}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  document.getElementById('submitResult').textContent = res.ok ? (data.message || '提交成功，待审核') : (data.detail || '提交失败');
+}
+</script>
+{% endblock %}
