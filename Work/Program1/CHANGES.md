@@ -1,39 +1,47 @@
 ﻿# CHANGES
 
-## v1.2.0 (2026-02-26)
+## [1.2.0]
 
-### 完整版能力补全
+### 后端功能补全
 
-- 新增删除申请审批流：
-  - 单位删除申请：`POST /api/organizations/{org_id}/delete-request`
-  - 系统删除申请：`POST /api/systems/{system_id}/delete-request`
-  - 申请列表：`GET /api/delete-requests`
-  - 管理员审核：`POST /api/delete-requests/{request_id}/review?action=approve|reject`
-- 删除失败原因精细化：返回具体关联系统/关联报告数量，便于定位阻塞项。
-- 回收站能力增强：单位/系统回收站列表与过期清理接口。
-- 附件能力增强：批量上传与在线预览。
-  - `POST /api/attachments/{entity_type}/{entity_id}/batch`
-  - `GET /api/attachment-files/{attachment_id}/preview`
-  - `GET /api/attachment-files/{attachment_id}/download`
-- 知识库检索增强：新增精确匹配模式 `match_mode=exact`（保留模糊检索）。
-- 流程提醒增强：支持站内消息/邮件/双通道提醒（邮件为可配置能力）。
-- 报告版本管理增强：新增版本差异对比接口 `GET /api/reports/{report_id}/compare/{target_id}`。
-- 报告导出格式增强：自动目录段、Word 默认字体/字号/行距、Word/PDF 页码输出。
+- 新增账号与角色能力（admin/reviewer/evaluator）及会话登录机制。
+- 新增模板管理能力：上传、列表、编辑、版本、恢复、默认模板、测试填充。
+- 报告生成支持按 `report_type + city + level` 自动匹配模板，支持手动指定模板。
+- 报告新增签章信息保存与导出注入。
+- 新增报告版本差异对比接口：`GET /api/reports/{report_id}/compare/{target_id}`。
+- 新增单位/系统删除申请审批流：申请、查询、管理员审核通过/驳回。
+- 删除失败提示增强：返回具体阻塞原因（关联系统/关联报告等）。
+- 回收站能力增强：单位/系统回收站列表与过期清理。
+- 附件能力增强：批量上传、在线预览、下载。
+- 流程提醒增强：支持站内消息、邮件、双通道。
+- 知识库检索增强：支持模糊/精确检索（`match_mode=fuzzy|exact`）。
 
-### 精简交付版（APP_LITE_MODE）
+### 报告导出与格式优化
 
-- 新增精简交付版运行模式（不删代码，仅按模式屏蔽模块）。
-- 新增启动脚本：`start_lite.bat`。
-- 新增交付说明：`README_LITE.md`。
-- 新增交付打包脚本：`build_lite_delivery.bat`。
+- 报告导出内容自动生成目录段。
+- Word 导出增加默认字体、字号、行距控制。
+- Word/PDF 导出增加页码展示。
+- PDF 继续支持可选密码加密。
 
-### 版本与测试
+### 前端体验优化
 
-- FastAPI 应用版本由 `1.0.0` 升级至 `1.2.0`。
-- 自动化测试新增到 9 条，全部通过：
+- 流程管控页面由 JSON 调试回显改为可读状态提示与错误提示。
+- 看板按钮区布局优化为横向显示（小屏自动换行）。
+- 登录、模板、单位、系统、报告、流程、知识库、客户采集等页面移除面向用户的 JSON 只读框，统一改为可读反馈文案。
+
+### 权限与显示范围
+
+- 看板在 evaluator 角色下仅展示本人权限范围数据。
+- 知识库下载与批量下载要求登录后访问。
+
+### 测试与版本
+
+- 应用版本升级为 `1.2.0`。
+- 自动化测试更新并通过：
   - `python -m unittest discover -s tests -p "test_*.py" -v`
+  - 结果：`9/9 OK`
 
-## v1.0.0
+## [1.0.0]
 
-- 初版实现单位、系统、报告、流程、看板、知识库等核心模块。
-- 提供基础校验、导入导出、回收站与历史记录能力。
+- 初版实现单位、系统、报告、流程、看板、知识库等模块。
+- 提供基础字段校验、导入导出、历史追溯与回收站机制。
