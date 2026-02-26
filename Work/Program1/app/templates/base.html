@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>定级备案管理系统</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <i class="fas fa-shield-halved logo-icon"></i>
+        <span>定级备案系统</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/" class="{{ 'active' if request.url.path == '/' else '' }}">
+          <i class="fas fa-chart-line"></i> 数据看板
+        </a>
+        <a href="/organizations" class="{{ 'active' if request.url.path == '/organizations' else '' }}">
+          <i class="fas fa-building"></i> 单位信息
+        </a>
+        <a href="/systems" class="{{ 'active' if request.url.path == '/systems' else '' }}">
+          <i class="fas fa-server"></i> 系统信息
+        </a>
+        <a href="/reports" class="{{ 'active' if request.url.path == '/reports' else '' }}">
+          <i class="fas fa-file-contract"></i> 报告与审核
+        </a>
+        <a href="/knowledge" class="{{ 'active' if request.url.path == '/knowledge' else '' }}">
+          <i class="fas fa-book"></i> 知识库
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        {% if show_api_docs %}
+        <a href="/docs" target="_blank"><i class="fas fa-code"></i> API文档</a>
+        {% endif %}
+      </div>
+    </aside>
+    <main class="main-wrapper">
+      <header class="top-header">
+        <div class="breadcrumb">
+          <i class="fas fa-home"></i> / 
+          <span>{{ '数据看板' if request.url.path == '/' else 
+                 '单位管理' if request.url.path == '/organizations' else 
+                 '系统管理' if request.url.path == '/systems' else 
+                 '报告审核' if request.url.path == '/reports' else 
+                 '知识库' if request.url.path == '/knowledge' else '首页' }}</span>
+        </div>
+        <div class="user-info">
+          <span class="badge">当前角色: 管理员</span>
+          <i class="fas fa-user-circle avatar"></i>
+        </div>
+      </header>
+      <div class="content">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+</body>
+</html>

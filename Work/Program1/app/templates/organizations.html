@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h2>单位信息录入</h2>
+  <div class="grid grid-3">
+    <div><label>单位名称*</label><input id="name" /></div>
+    <div><label>统一社会信用代码*</label><input id="creditCode" /></div>
+    <div><label>单位负责人*</label><input id="legalRepresentative" /></div>
+    <div><label>单位地址*</label><input id="address" /></div>
+    <div><label>办公电话</label><input id="officePhone" /></div>
+    <div><label>移动电话*</label><input id="mobilePhone" /></div>
+    <div><label>邮箱*</label><input id="email" /></div>
+    <div><label>所属行业*</label><input id="industry" /></div>
+    <div><label>单位类型*</label><input id="organizationType" placeholder="企业/事业单位/机关单位" /></div>
+    <div><label>备案地区*</label><input id="filingRegion" /></div>
+    <div><label>主管部门</label><input id="supervisingDepartment" /></div>
+    <div><label>录入人</label><input id="createdBy" value="tester" /></div>
+  </div>
+  <br />
+  <button onclick="createOrg()">保存单位</button>
+  <p class="hint">必填字段未填或格式错误会被接口拦截。</p>
+  <pre class="result" id="orgResult"></pre>
+</div>
+
+<div class="panel">
+  <h2>单位列表</h2>
+  <div class="row">
+    <div><label>单位名称</label><input id="searchName" /></div>
+    <div><label>统一社会信用代码</label><input id="searchCredit" /></div>
+    <div><label>所属行业</label><input id="searchIndustry" /></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="loadOrgs()">查询</button></div>
+  </div>
+  <br />
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>单位名称</th><th>信用代码</th><th>行业</th><th>备案地区</th><th>状态</th>
+      </tr>
+    </thead>
+    <tbody id="orgTable"></tbody>
+  </table>
+</div>
+
+<script>
+function formOrgPayload() {
+  return {
+    name: document.getElementById('name').value.trim(),
+    credit_code: document.getElementById('creditCode').value.trim().toUpperCase(),
+    legal_representative: document.getElementById('legalRepresentative').value.trim(),
+    address: document.getElementById('address').value.trim(),
+    office_phone: document.getElementById('officePhone').value.trim() || null,
+    mobile_phone: document.getElementById('mobilePhone').value.trim(),
+    email: document.getElementById('email').value.trim(),
+    industry: document.getElementById('industry').value.trim(),
+    organization_type: document.getElementById('organizationType').value.trim(),
+    filing_region: document.getElementById('filingRegion').value.trim(),
+    supervising_department: document.getElementById('supervisingDepartment').value.trim() || null,
+    created_by: document.getElementById('createdBy').value.trim() || 'tester'
+  };
+}
+
+async function createOrg() {
+  const payload = formOrgPayload();
+  const res = await fetch('/api/organizations', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  document.getElementById('orgResult').textContent = JSON.stringify(data, null, 2);
+  if (res.ok) loadOrgs();
+}
+
+async function loadOrgs() {
+  const params = new URLSearchParams();
+  const name = document.getElementById('searchName').value.trim();
+  const credit = document.getElementById('searchCredit').value.trim();
+  const industry = document.getElementById('searchIndustry').value.trim();
+  if (name) params.set('name', name);
+  if (credit) params.set('credit_code', credit);
+  if (industry) params.set('industry', industry);
+  const res = await fetch('/api/organizations?' + params.toString());
+  const data = await res.json();
+  document.getElementById('orgTable').innerHTML = data.items.map(i => `
+    <tr>
+      <td>${i.id}</td>
+      <td>${i.name}</td>
+      <td>${i.credit_code}</td>
+      <td>${i.industry}</td>
+      <td>${i.filing_region}</td>
+      <td>${i.archived ? '已归档' : '在用'}</td>
+    </tr>
+  `).join('');
+}
+
+loadOrgs();
+</script>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h2><i class="fas fa-filter"></i> 筛选过滤</h2>
+  <div class="row">
+    <div>
+      <label>地区</label>
+      <input id="city" placeholder="如：福州/北京" />
+    </div>
+    <div>
+      <label>行业</label>
+      <input id="industry" placeholder="如：金融/政府" />
+    </div>
+    <div>
+      <label>定级级别</label>
+      <select id="level">
+        <option value="">全部级别</option>
+        <option value="1">第一级</option>
+        <option value="2">第二级</option>
+        <option value="3">第三级</option>
+        <option value="4">第四级</option>
+        <option value="5">第五级</option>
+      </select>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button onclick="loadDashboard()"><i class="fas fa-sync-alt"></i> 刷新数据</button>
+    </div>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="hint">单位总数 <i class="fas fa-building" style="float:right;opacity:0.5"></i></div>
+    <b id="orgCount">0</b>
+  </div>
+  <div class="card">
+    <div class="hint">系统总数 <i class="fas fa-server" style="float:right;opacity:0.5"></i></div>
+    <b id="sysCount">0</b>
+  </div>
+  <div class="card">
+    <div class="hint">待审核报告 <i class="fas fa-clipboard-check" style="float:right;opacity:0.5"></i></div>
+    <b id="pendingReports">0</b>
+  </div>
+  <div class="card">
+    <div class="hint">进行中项目 <i class="fas fa-spinner" style="float:right;opacity:0.5"></i></div>
+    <b id="inProgressProjects">0</b>
+  </div>
+</div>
+
+<div class="panel">
+  <h2><i class="fas fa-chart-pie"></i> 分布统计</h2>
+  <div class="charts">
+    <div style="height:300px"><canvas id="regionChart"></canvas></div>
+    <div style="height:300px"><canvas id="industryChart"></canvas></div>
+    <div style="height:300px"><canvas id="levelChart"></canvas></div>
+  </div>
+</div>
+
+<script>
+let regionChart;
+let industryChart;
+let levelChart;
+
+function upsertChart(inst, el, label, dataset, color) {
+  if (inst) inst.destroy();
+  return new Chart(document.getElementById(el), {
+    type: 'bar',
+    data: {
+      labels: dataset.map(i => i.name),
+      datasets: [{ 
+        label, 
+        data: dataset.map(i => i.value), 
+        backgroundColor: color,
+        borderRadius: 6,
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { 
+        legend: { display: false },
+        title: { display: true, text: label, font: { size: 14, weight: 'bold' } }
+      },
+      scales: {
+        y: { beginAtZero: true, grid: { display: false } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+async function loadDashboard() {
+  const params = new URLSearchParams();
+  const city = document.getElementById('city').value.trim();
+  const industry = document.getElementById('industry').value.trim();
+  const level = document.getElementById('level').value;
+  if (city) params.set('city', city);
+  if (industry) params.set('industry', industry);
+  if (level) params.set('level', level);
+  const res = await fetch('/api/dashboard/summary?' + params.toString());
+  const data = await res.json();
+  document.getElementById('orgCount').textContent = data.totals.organization_count;
+  document.getElementById('sysCount').textContent = data.totals.system_count;
+  document.getElementById('pendingReports').textContent = data.totals.pending_review_reports;
+  document.getElementById('inProgressProjects').textContent = data.totals.in_progress_projects;
+  
+  regionChart = upsertChart(regionChart, 'regionChart', '地区分布', data.region_distribution, '#3b82f6');
+  industryChart = upsertChart(industryChart, 'industryChart', '行业分布', data.industry_distribution, '#10b981');
+  levelChart = upsertChart(levelChart, 'levelChart', '系统级别分布', data.level_distribution, '#f59e0b');
+}
+
+loadDashboard();
+</script>
+{% endblock %}
