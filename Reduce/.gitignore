@@ -1,0 +1,13 @@
+# AI agent working files
+AGENTS.md
+GEMINI.md
+CLAUDE.md
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+*.iml
+.vscode/

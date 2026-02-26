@@ -28,6 +28,10 @@
           </svg>
           <span>项目管理</span>
         </router-link>
+        <router-link to="/workload" class="nav-item">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path></svg>
+          <span>工作量统计</span>
+        </router-link>
         <router-link to="/export" class="nav-item">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -55,13 +59,19 @@
             <div class="user-role">{{ userStore.isManager ? '经理' : '员工' }}</div>
           </div>
         </div>
-        <button class="btn-logout" @click="handleLogout" title="退出登录">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-            <polyline points="16 17 21 12 16 7"></polyline>
-            <line x1="21" y1="12" x2="9" y2="12"></line>
-          </svg>
-        </button>
+        <div class="footer-actions">
+          <button class="btn-theme" @click="toggleTheme" :title="isDark ? '切换浅色主题' : '切换深色主题'">
+            <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          </button>
+          <button class="btn-logout" @click="handleLogout" title="退出登录">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -199,6 +209,7 @@ const statusFilter = ref('')
 const showDeleteModal = ref(false)
 const projectToDelete = ref(null)
 const deleting = ref(false)
+const isDark = ref(document.documentElement.getAttribute('data-theme') !== 'light')
 
 const categoryMap = {
   '等保测评': '等保', '密码评估': '密评', '风险评估': '风评',
@@ -221,6 +232,13 @@ function getStatusClass(status) {
 
 function getStatusText(status) {
   return { draft: '待分发', assigned: '进行中', completed: '已完成' }[status] || status
+}
+
+function toggleTheme() {
+  isDark.value = !isDark.value
+  const theme = isDark.value ? 'dark' : 'light'
+  document.documentElement.setAttribute('data-theme', theme)
+  localStorage.setItem('theme', theme)
 }
 
 function handleLogout() {
@@ -277,7 +295,9 @@ onMounted(fetchProjects)
 .avatar { width: 36px; height: 36px; background: var(--accent-gradient); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.9rem; }
 .user-name { font-weight: 500; font-size: 0.9rem; }
 .user-role { font-size: 0.75rem; color: var(--text-muted); }
-.btn-logout { padding: 0.5rem; background: transparent; border: none; color: var(--text-muted); cursor: pointer; border-radius: var(--radius-sm); transition: all var(--transition-fast); }
+.footer-actions { display: flex; align-items: center; gap: 0.25rem; }
+.btn-theme, .btn-logout { padding: 0.5rem; background: transparent; border: none; color: var(--text-muted); cursor: pointer; border-radius: var(--radius-sm); transition: all var(--transition-fast); }
+.btn-theme:hover { background: rgba(99, 102, 241, 0.15); color: var(--accent-primary); }
 .btn-logout:hover { background: var(--error-bg); color: var(--error); }
 
 .main-content { flex: 1; margin-left: 260px; padding: 2rem; }
