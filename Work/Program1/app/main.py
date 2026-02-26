@@ -1,34 +1,55 @@
 import io
+import hashlib
+import json
+import mimetypes
 import os
+import smtplib
 import uuid
 import zipfile
 from datetime import date, datetime, timedelta
+from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from docx import Document
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from openpyxl import Workbook, load_workbook
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfgen import canvas
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from .db import get_db, init_db
+from .db import SessionLocal, get_db, init_db
 from .models import (
     Attachment,
+    DeleteRequest,
+    AuthSession,
     KnowledgeDocument,
+    KnowledgeDocumentVersion,
     KnowledgeDownloadLog,
+    KnowledgePin,
+    OrganizationCollectionLink,
     Organization,
     OrganizationHistory,
+    OrganizationSubmission,
     Report,
+    ReportTemplate,
+    ReportTemplateVersion,
     ReviewRecord,
     SystemHistory,
     SystemInfo,
+    UserAccount,
     WorkflowAction,
     WorkflowConfig,
     WorkflowInstance,
+    WorkflowReminder,
+    WorkflowStepRule,
 )
 from .schemas import (
     OrganizationCreate,
@@ -54,6 +75,14 @@ MAX_SYS_ATTACHMENT = 200 * 1024 * 1024
 MAX_KNOWLEDGE_FILE = 300 * 1024 * 1024
 DEFAULT_WORKFLOW_STEPS = ["信息收集", "信息审核", "报告生成", "报告审核", "报告终稿", "归档"]
 VALID_REPORT_TYPES = {"filing_form", "grading_report", "expert_review_form"}
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+STRICT_AUTH = str(os.getenv("STRICT_AUTH", "0")).strip().lower() in {"1", "true", "yes", "on", "y"}
+AUTH_SESSION_HOURS = int(os.getenv("AUTH_SESSION_HOURS", "12"))
+SMTP_HOST = (os.getenv("SMTP_HOST") or "").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "25"))
+SMTP_USER = (os.getenv("SMTP_USER") or "").strip()
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+SMTP_FROM = (os.getenv("SMTP_FROM") or "").strip()
 
 
 def env_to_bool(value: str | None, default: bool) -> bool:
@@ -62,12 +91,18 @@ def env_to_bool(value: str | None, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on", "y"}
 
 
+SMTP_TLS = env_to_bool(os.getenv("SMTP_TLS"), False)
+SMTP_SSL = env_to_bool(os.getenv("SMTP_SSL"), False)
+
+
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 ENABLE_API_DOCS = env_to_bool(os.getenv("ENABLE_API_DOCS"), False)
+APP_LITE_MODE = env_to_bool(os.getenv("APP_LITE_MODE"), False)
+WORKFLOW_EMAIL_DEFAULT_TO = (os.getenv("WORKFLOW_EMAIL_DEFAULT_TO") or "").strip()
 
 app = FastAPI(
     title="定级备案管理系统",
-    version="1.0.0",
+    version="1.2.0",
     docs_url="/docs" if ENABLE_API_DOCS else None,
     redoc_url="/redoc" if ENABLE_API_DOCS else None,
     openapi_url="/openapi.json" if ENABLE_API_DOCS else None,
@@ -75,19 +110,73 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 templates.env.globals["show_api_docs"] = ENABLE_API_DOCS
+templates.env.globals["lite_mode"] = APP_LITE_MODE
+
+
+if APP_LITE_MODE:
+
+    @app.middleware("http")
+    async def lite_mode_guard(request: Request, call_next):  # type: ignore[override]
+        path = request.url.path
+        blocked_prefixes = [
+            "/workflow",
+            "/templates",
+            "/knowledge",
+            "/login",
+            "/api/workflow",
+            "/api/templates",
+            "/api/knowledge",
+            "/api/auth",
+        ]
+        if any(path.startswith(prefix) for prefix in blocked_prefixes):
+            if path.startswith("/api/"):
+                return JSONResponse(status_code=404, content={"detail": "精简交付版未开放该功能。"})
+            return HTMLResponse(status_code=404, content="精简交付版未开放该页面。")
+        return await call_next(request)
 
 
 def ensure_dirs() -> None:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     (UPLOAD_DIR / "attachments").mkdir(parents=True, exist_ok=True)
     (UPLOAD_DIR / "knowledge").mkdir(parents=True, exist_ok=True)
+    (UPLOAD_DIR / "templates").mkdir(parents=True, exist_ok=True)
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def ensure_default_accounts() -> None:
+    db = SessionLocal()
+    try:
+        defaults = [
+            ("admin", "admin123", "admin"),
+            ("tester", "tester123", "evaluator"),
+            ("leader", "leader123", "reviewer"),
+        ]
+        for username, password, role in defaults:
+            exists = db.query(UserAccount).filter(UserAccount.username == username).first()
+            if exists:
+                continue
+            db.add(
+                UserAccount(
+                    username=username,
+                    password_hash=hash_password(password),
+                    role=role,
+                    enabled=True,
+                )
+            )
+        db.commit()
+    finally:
+        db.close()
 
 
 @app.on_event("startup")
 def startup() -> None:
     ensure_dirs()
     init_db()
+    ensure_default_accounts()
 
 
 def obj_to_dict(obj: Any, fields: list[str]) -> dict[str, Any]:
@@ -101,6 +190,78 @@ def obj_to_dict(obj: Any, fields: list[str]) -> dict[str, Any]:
         return value
 
     return {f: _normalize(getattr(obj, f)) for f in fields}
+
+
+def template_snapshot(tpl: ReportTemplate) -> dict[str, Any]:
+    return {
+        "template_name": tpl.template_name,
+        "report_type": tpl.report_type,
+        "category": tpl.category,
+        "city": tpl.city,
+        "protection_level": tpl.protection_level,
+        "description": tpl.description,
+        "status": tpl.status,
+        "is_default": tpl.is_default,
+        "version_no": tpl.version_no,
+        "file_name": tpl.file_name,
+        "file_path": tpl.file_path,
+        "file_size": tpl.file_size,
+        "config_json": tpl.config_json,
+        "created_by": tpl.created_by,
+    }
+
+
+def log_template_version(db: Session, tpl: ReportTemplate, action: str, changed_by: str) -> None:
+    db.add(
+        ReportTemplateVersion(
+            template_id=tpl.id,
+            action=action,
+            snapshot=template_snapshot(tpl),
+            changed_by=changed_by,
+        )
+    )
+
+
+def get_auth_token_from_request(request: Request) -> str:
+    auth = (request.headers.get("Authorization") or "").strip()
+    if auth.lower().startswith("bearer "):
+        return auth.split(" ", 1)[1].strip()
+    return (request.headers.get("X-Auth-Token") or "").strip()
+
+
+def get_current_user_optional(request: Request, db: Session) -> UserAccount | None:
+    token = get_auth_token_from_request(request)
+    if not token:
+        return None
+    now = datetime.now()
+    session = (
+        db.query(AuthSession, UserAccount)
+        .join(UserAccount, UserAccount.id == AuthSession.user_id)
+        .filter(AuthSession.token == token, AuthSession.expires_at > now, UserAccount.enabled.is_(True))
+        .first()
+    )
+    if not session:
+        return None
+    _, user = session
+    return user
+
+
+def require_roles(
+    request: Request,
+    db: Session,
+    allowed_roles: set[str],
+    legacy_admin: bool = False,
+) -> tuple[str, str]:
+    user = get_current_user_optional(request, db)
+    if user:
+        if user.role not in allowed_roles:
+            raise HTTPException(status_code=403, detail="当前账号无权限执行此操作。")
+        return user.username, user.role
+    if legacy_admin and "admin" in allowed_roles:
+        return "legacy_admin", "admin"
+    if STRICT_AUTH or allowed_roles:
+        raise HTTPException(status_code=401, detail="请先登录。")
+    return "legacy_user", "evaluator"
 
 
 ORG_FIELDS = [
@@ -133,9 +294,40 @@ ORG_FIELDS = [
     "archived",
     "locked",
     "deleted_at",
+    "deleted_by",
     "created_at",
     "updated_at",
 ]
+
+ORG_CREATE_FIELDS = [
+    "name",
+    "credit_code",
+    "legal_representative",
+    "address",
+    "office_phone",
+    "mobile_phone",
+    "email",
+    "industry",
+    "organization_type",
+    "cybersecurity_dept",
+    "cybersecurity_owner_name",
+    "cybersecurity_owner_title",
+    "cybersecurity_owner_phone",
+    "cybersecurity_owner_email",
+    "data_security_dept",
+    "data_security_owner_name",
+    "data_security_owner_title",
+    "data_security_owner_phone",
+    "data_security_owner_email",
+    "supervising_department",
+    "filing_region",
+    "involves_state_secret",
+    "is_cii",
+    "remark",
+    "created_by",
+]
+
+ORG_UPDATE_FIELDS = [f for f in ORG_CREATE_FIELDS if f != "created_by"]
 
 SYSTEM_FIELDS = [
     "id",
@@ -175,6 +367,7 @@ SYSTEM_FIELDS = [
     "archived",
     "locked",
     "deleted_at",
+    "deleted_by",
     "created_at",
     "updated_at",
 ]
@@ -198,6 +391,108 @@ def validate_org_partial(data: dict[str, Any]) -> None:
         raise HTTPException(status_code=400, detail="办公电话格式错误。")
     if "email" in data and not validate_email(data["email"]):
         raise HTTPException(status_code=400, detail="邮箱格式错误。")
+
+
+def assert_credit_code_available(db: Session, credit_code: str, current_org_id: int | None = None) -> None:
+    exists = db.query(Organization).filter(Organization.credit_code == credit_code).first()
+    if not exists:
+        return
+    if current_org_id is not None and exists.id == current_org_id:
+        return
+    if exists.deleted_at:
+        raise HTTPException(
+            status_code=409,
+            detail=f"统一社会信用代码已存在于回收站(ID={exists.id})，请先恢复该单位。",
+        )
+    raise HTTPException(status_code=409, detail="统一社会信用代码已存在。")
+
+
+def recycle_meta(deleted_at: datetime | None) -> dict[str, Any]:
+    if not deleted_at:
+        return {"expires_at": None, "days_left": 0, "expired": False}
+    expire_at = deleted_at + timedelta(days=30)
+    seconds_left = (expire_at - datetime.now()).total_seconds()
+    days_left = int(max(0, (seconds_left + 86399) // 86400))
+    return {"expires_at": expire_at, "days_left": days_left, "expired": seconds_left <= 0}
+
+
+def send_workflow_email(to_email: str, subject: str, body: str) -> tuple[bool, str]:
+    if not SMTP_HOST:
+        return False, "SMTP_HOST 未配置"
+    sender = SMTP_FROM or SMTP_USER
+    if not sender:
+        return False, "SMTP_FROM/SMTP_USER 未配置"
+    msg = MIMEText(body, _subtype="plain", _charset="utf-8")
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = to_email
+    try:
+        if SMTP_SSL:
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10)
+        else:
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
+        with server:
+            if SMTP_TLS and not SMTP_SSL:
+                server.starttls()
+            if SMTP_USER:
+                server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(sender, [to_email], msg.as_string())
+        return True, "ok"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def save_attachment_row(
+    db: Session,
+    *,
+    entity_type: str,
+    entity_id: int,
+    actor: str,
+    file_name: str,
+    content: bytes,
+) -> Attachment:
+    ext = Path(file_name).suffix.lower().lstrip(".")
+    safe_name = Path(file_name).name
+    save_name = f"{uuid.uuid4().hex}_{safe_name}"
+    target_dir = UPLOAD_DIR / "attachments" / entity_type
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / save_name
+    target_path.write_bytes(content)
+    row = Attachment(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        file_name=safe_name,
+        file_path=str(target_path),
+        file_ext=ext,
+        file_size=len(content),
+        uploaded_by=actor,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def assert_org_deletable(db: Session, org: Organization, is_admin: bool) -> None:
+    if org.archived and not is_admin:
+        raise HTTPException(status_code=400, detail="单位已归档，仅管理员可删除。")
+    related_systems = (
+        db.query(SystemInfo)
+        .filter(SystemInfo.organization_id == org.id, SystemInfo.deleted_at.is_(None))
+        .order_by(SystemInfo.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    if related_systems:
+        details = ", ".join([f"{s.id}:{s.system_name}" for s in related_systems])
+        raise HTTPException(status_code=400, detail=f"存在关联系统，暂不可删除。请先删除系统：{details}")
+
+
+def assert_system_deletable(db: Session, system: SystemInfo, is_admin: bool) -> None:
+    if system.archived and not is_admin:
+        raise HTTPException(status_code=400, detail="系统已归档，仅管理员可删除。")
+    related_reports = db.query(Report).filter(Report.system_id == system.id).count()
+    if related_reports > 0 and not is_admin:
+        raise HTTPException(status_code=400, detail=f"系统已有关联报告({related_reports})，暂不可删除。")
 
 
 def record_org_history(
@@ -277,6 +572,207 @@ def build_report_title(report_type: str, system_name: str, version: int) -> str:
     return f"{title_map.get(report_type, '报告')}-{system_name}-V{version}"
 
 
+def choose_report_template(
+    db: Session,
+    report_type: str,
+    city: str,
+    level: int | None,
+    template_id: int | None = None,
+) -> ReportTemplate | None:
+    if template_id:
+        row = db.query(ReportTemplate).filter(ReportTemplate.id == template_id, ReportTemplate.status == "enabled").first()
+        return row
+    query = db.query(ReportTemplate).filter(ReportTemplate.report_type == report_type, ReportTemplate.status == "enabled")
+    all_rows = query.order_by(ReportTemplate.is_default.desc(), ReportTemplate.updated_at.desc()).all()
+    if not all_rows:
+        return None
+    city_rows: list[ReportTemplate] = []
+    level_rows: list[ReportTemplate] = []
+    for row in all_rows:
+        city_ok = not row.city or (city and row.city in city)
+        level_ok = not row.protection_level or (level is not None and str(level) == str(row.protection_level).replace("级", ""))
+        if city_ok and level_ok:
+            return row
+        if city_ok:
+            city_rows.append(row)
+        if level_ok:
+            level_rows.append(row)
+    if city_rows:
+        return city_rows[0]
+    if level_rows:
+        return level_rows[0]
+    return all_rows[0]
+
+
+def apply_template_config_to_payload(payload: dict[str, Any], template: ReportTemplate | None) -> dict[str, Any]:
+    if not template:
+        return payload
+    result = dict(payload)
+    cfg = dict(template.config_json or {})
+    custom_title = cfg.get("title")
+    if custom_title:
+        result["标题"] = str(custom_title)
+    section_cfg = cfg.get("sections")
+    if isinstance(section_cfg, list) and section_cfg:
+        result["章节"] = section_cfg
+    sign_cfg = cfg.get("signatures")
+    if isinstance(sign_cfg, dict):
+        result["签章"] = sign_cfg
+    result["模板信息"] = {
+        "template_id": template.id,
+        "template_name": template.template_name,
+        "city": template.city,
+        "protection_level": template.protection_level,
+        "version_no": template.version_no,
+    }
+    return result
+
+
+def parse_docx_key_values(content: bytes) -> dict[str, str]:
+    doc = Document(io.BytesIO(content))
+    result: dict[str, str] = {}
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+        delimiter = None
+        if "：" in text:
+            delimiter = "："
+        elif ":" in text:
+            delimiter = ":"
+        if not delimiter:
+            continue
+        key, value = text.split(delimiter, 1)
+        k = key.strip()
+        v = value.strip()
+        if k:
+            result[k] = v
+    return result
+
+
+def to_bool_text(value: str | None) -> bool:
+    if not value:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "y", "是", "有"}
+
+
+def get_or_create_workflow_step_rules(db: Session, config: WorkflowConfig) -> dict[str, WorkflowStepRule]:
+    rows = (
+        db.query(WorkflowStepRule)
+        .filter(WorkflowStepRule.config_name == config.name, WorkflowStepRule.enabled.is_(True))
+        .all()
+    )
+    rule_map = {r.step_name: r for r in rows}
+    changed = False
+    for step in config.steps_json:
+        if step not in rule_map:
+            row = WorkflowStepRule(
+                config_name=config.name,
+                step_name=step,
+                owner="system",
+                time_limit_hours=24,
+                enabled=True,
+                updated_by="system",
+            )
+            db.add(row)
+            db.flush()
+            rule_map[step] = row
+            changed = True
+    if changed:
+        db.flush()
+    return rule_map
+
+
+def recalc_workflow_due_at(db: Session, instance: WorkflowInstance, config: WorkflowConfig) -> None:
+    steps = config.steps_json or []
+    if instance.status != "in_progress":
+        instance.due_at = None
+        return
+    if instance.current_step_index >= len(steps):
+        instance.due_at = None
+        return
+    current_step = steps[instance.current_step_index]
+    rule_map = get_or_create_workflow_step_rules(db, config)
+    hours = 24
+    if current_step in rule_map:
+        hours = max(1, int(rule_map[current_step].time_limit_hours or 24))
+    instance.due_at = datetime.now() + timedelta(hours=hours)
+
+
+def get_workflow_step_owner(db: Session, config: WorkflowConfig, step_index: int) -> str:
+    steps = config.steps_json or []
+    if step_index < 0 or step_index >= len(steps):
+        return ""
+    step_name = steps[step_index]
+    rule_map = get_or_create_workflow_step_rules(db, config)
+    if step_name in rule_map:
+        return rule_map[step_name].owner
+    return "system"
+
+
+def knowledge_snapshot(doc: KnowledgeDocument) -> dict[str, Any]:
+    return {
+        "title": doc.title,
+        "keywords": doc.keywords,
+        "city": doc.city,
+        "district": doc.district,
+        "doc_type": doc.doc_type,
+        "protection_level": doc.protection_level,
+        "version_no": doc.version_no,
+        "status": doc.status,
+        "file_name": doc.file_name,
+        "file_path": doc.file_path,
+        "file_size": doc.file_size,
+        "uploaded_by": doc.uploaded_by,
+    }
+
+
+def log_knowledge_version(db: Session, doc: KnowledgeDocument, action: str, changed_by: str) -> None:
+    db.add(
+        KnowledgeDocumentVersion(
+            document_id=doc.id,
+            action=action,
+            snapshot=knowledge_snapshot(doc),
+            changed_by=changed_by,
+        )
+    )
+
+
+ORG_WORD_MAP = {
+    "单位名称": "name",
+    "统一社会信用代码": "credit_code",
+    "单位负责人": "legal_representative",
+    "单位地址": "address",
+    "办公电话": "office_phone",
+    "移动电话": "mobile_phone",
+    "邮箱": "email",
+    "所属行业": "industry",
+    "单位类型": "organization_type",
+    "备案地区": "filing_region",
+    "主管部门": "supervising_department",
+    "是否涉及国家秘密": "involves_state_secret",
+    "是否关键信息基础设施": "is_cii",
+    "备注": "remark",
+}
+
+SYSTEM_WORD_MAP = {
+    "系统名称": "system_name",
+    "系统编号": "system_code",
+    "单位ID": "organization_id",
+    "拟定等级": "proposed_level",
+    "业务描述": "business_description",
+    "部署方式": "deployment_mode",
+    "系统类型": "system_type",
+    "上线时间": "go_live_date",
+    "定级依据": "level_basis",
+    "定级理由": "level_reason",
+    "系统边界": "boundary",
+    "子系统": "subsystems",
+    "服务对象": "service_object",
+    "服务范围": "service_scope",
+}
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -292,6 +788,28 @@ def organizations_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("organizations.html", {"request": request})
 
 
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.get("/organizations/collect/{token}", response_class=HTMLResponse)
+def organizations_collect_page(token: str, request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    link = db.query(OrganizationCollectionLink).filter(OrganizationCollectionLink.token == token).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="链接不存在。")
+    if link.disabled:
+        raise HTTPException(status_code=403, detail="链接已停用。")
+    if datetime.now() > link.expires_at:
+        raise HTTPException(status_code=403, detail="链接已过期。")
+    initial = {}
+    if link.organization_id:
+        org = db.query(Organization).filter(Organization.id == link.organization_id, Organization.deleted_at.is_(None)).first()
+        if org:
+            initial = obj_to_dict(org, ORG_FIELDS)
+    return templates.TemplateResponse("organization_collect.html", {"request": request, "token": token, "initial": initial})
+
+
 @app.get("/systems", response_class=HTMLResponse)
 def systems_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("systems.html", {"request": request})
@@ -302,22 +820,422 @@ def reports_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("reports.html", {"request": request})
 
 
+@app.get("/workflow", response_class=HTMLResponse)
+def workflow_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("workflow.html", {"request": request})
+
+
 @app.get("/knowledge", response_class=HTMLResponse)
 def knowledge_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("knowledge.html", {"request": request})
+
+
+@app.get("/templates", response_class=HTMLResponse)
+def templates_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("templates.html", {"request": request})
+
+
+@app.post("/api/auth/login")
+def auth_login(payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+    username = str(payload.get("username") or "").strip()
+    password = str(payload.get("password") or "")
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="用户名和密码不能为空。")
+    user = db.query(UserAccount).filter(UserAccount.username == username, UserAccount.enabled.is_(True)).first()
+    if not user or user.password_hash != hash_password(password):
+        raise HTTPException(status_code=401, detail="用户名或密码错误。")
+    token = uuid.uuid4().hex
+    expires_at = datetime.now() + timedelta(hours=max(1, AUTH_SESSION_HOURS))
+    db.add(AuthSession(user_id=user.id, token=token, expires_at=expires_at))
+    user.last_login_at = datetime.now()
+    db.commit()
+    return {
+        "message": "登录成功",
+        "token": token,
+        "expires_at": expires_at,
+        "user": {"username": user.username, "role": user.role},
+    }
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    token = get_auth_token_from_request(request)
+    if not token:
+        return {"message": "已退出"}
+    row = db.query(AuthSession).filter(AuthSession.token == token).first()
+    if row:
+        db.delete(row)
+        db.commit()
+    return {"message": "已退出"}
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    user = get_current_user_optional(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="未登录。")
+    return {
+        "username": user.username,
+        "role": user.role,
+        "enabled": user.enabled,
+        "last_login_at": user.last_login_at,
+    }
+
+
+@app.get("/api/auth/users")
+def list_users(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    require_roles(request, db, {"admin"})
+    rows = db.query(UserAccount).order_by(UserAccount.created_at.desc()).all()
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "id": r.id,
+                "username": r.username,
+                "role": r.role,
+                "enabled": r.enabled,
+                "created_at": r.created_at,
+                "last_login_at": r.last_login_at,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.post("/api/auth/users")
+def create_user(request: Request, payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin"})
+    username = str(payload.get("username") or "").strip()
+    password = str(payload.get("password") or "")
+    role = str(payload.get("role") or "evaluator").strip().lower()
+    if role not in {"admin", "reviewer", "evaluator"}:
+        raise HTTPException(status_code=400, detail="role 仅支持 admin/reviewer/evaluator。")
+    if not username or len(password) < 6:
+        raise HTTPException(status_code=400, detail="用户名不能为空，密码至少6位。")
+    exists = db.query(UserAccount).filter(UserAccount.username == username).first()
+    if exists:
+        raise HTTPException(status_code=409, detail="用户名已存在。")
+    row = UserAccount(username=username, password_hash=hash_password(password), role=role, enabled=True)
+    db.add(row)
+    db.commit()
+    return {"message": "账号创建成功", "data": {"username": row.username, "role": row.role, "created_by": actor}}
+
+
+@app.post("/api/auth/users/{user_id}/toggle")
+def toggle_user(request: Request, user_id: int, enabled: bool = Query(True), db: Session = Depends(get_db)) -> dict[str, Any]:
+    require_roles(request, db, {"admin"})
+    user = db.query(UserAccount).filter(UserAccount.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在。")
+    user.enabled = enabled
+    db.commit()
+    return {"message": "状态更新成功", "enabled": enabled}
+
+
+@app.post("/api/templates/upload")
+async def upload_report_template(
+    request: Request,
+    template_name: str = Form(...),
+    report_type: str = Form(...),
+    category: str = Form(""),
+    city: str = Form(""),
+    protection_level: str = Form(""),
+    description: str = Form(""),
+    is_default: bool = Form(False),
+    config_json: str = Form(""),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin"})
+    report_type = report_type.strip()
+    if report_type not in VALID_REPORT_TYPES:
+        raise HTTPException(status_code=400, detail="report_type 无效。")
+    content = await file.read()
+    if len(content) > MAX_KNOWLEDGE_FILE:
+        raise HTTPException(status_code=400, detail="模板文件过大。")
+    safe_name = Path(file.filename).name
+    save_name = f"{uuid.uuid4().hex}_{safe_name}"
+    target_dir = UPLOAD_DIR / "templates"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    path = target_dir / save_name
+    path.write_bytes(content)
+    cfg = None
+    if config_json.strip():
+        try:
+            import json as _json
+
+            cfg = _json.loads(config_json)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"config_json 解析失败: {exc}") from exc
+    if is_default:
+        exists = db.query(ReportTemplate).filter(ReportTemplate.report_type == report_type, ReportTemplate.is_default.is_(True)).all()
+        for row in exists:
+            row.is_default = False
+    row = ReportTemplate(
+        template_name=template_name.strip(),
+        report_type=report_type,
+        category=category.strip() or None,
+        city=city.strip() or None,
+        protection_level=protection_level.strip() or None,
+        description=description.strip() or None,
+        status="enabled",
+        is_default=is_default,
+        version_no=1,
+        file_name=safe_name,
+        file_path=str(path),
+        file_size=len(content),
+        config_json=cfg,
+        created_by=actor,
+    )
+    db.add(row)
+    db.flush()
+    log_template_version(db, row, "upload", actor)
+    db.commit()
+    return {"message": "模板上传成功", "data": {"id": row.id, "template_name": row.template_name}}
+
+
+@app.get("/api/templates")
+def list_report_templates(
+    report_type: str | None = None,
+    category: str | None = None,
+    city: str | None = None,
+    protection_level: str | None = None,
+    enabled_only: bool = True,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    query = db.query(ReportTemplate)
+    if enabled_only:
+        query = query.filter(ReportTemplate.status == "enabled")
+    if report_type:
+        query = query.filter(ReportTemplate.report_type == report_type)
+    if category:
+        query = query.filter(ReportTemplate.category.like(f"%{category}%"))
+    if city:
+        query = query.filter(ReportTemplate.city.like(f"%{city}%"))
+    if protection_level:
+        query = query.filter(ReportTemplate.protection_level.like(f"%{protection_level}%"))
+    rows = query.order_by(ReportTemplate.is_default.desc(), ReportTemplate.updated_at.desc()).all()
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "id": r.id,
+                "template_name": r.template_name,
+                "report_type": r.report_type,
+                "category": r.category,
+                "city": r.city,
+                "protection_level": r.protection_level,
+                "description": r.description,
+                "status": r.status,
+                "is_default": r.is_default,
+                "version_no": r.version_no,
+                "file_name": r.file_name,
+                "created_by": r.created_by,
+                "created_at": r.created_at,
+                "updated_at": r.updated_at,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.put("/api/templates/{template_id}")
+def update_report_template(
+    request: Request,
+    template_id: int,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin"})
+    row = db.query(ReportTemplate).filter(ReportTemplate.id == template_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="模板不存在。")
+    log_template_version(db, row, "update_before", actor)
+    for key in ["template_name", "category", "city", "protection_level", "description", "status", "config_json"]:
+        if key in payload:
+            setattr(row, key, payload[key] if payload[key] != "" else None)
+    if "is_default" in payload and bool(payload["is_default"]):
+        exists = db.query(ReportTemplate).filter(ReportTemplate.report_type == row.report_type, ReportTemplate.is_default.is_(True)).all()
+        for old in exists:
+            old.is_default = False
+        row.is_default = True
+    db.commit()
+    return {"message": "模板更新成功"}
+
+
+@app.post("/api/templates/{template_id}/new-version")
+async def new_report_template_version(
+    request: Request,
+    template_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin"})
+    row = db.query(ReportTemplate).filter(ReportTemplate.id == template_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="模板不存在。")
+    content = await file.read()
+    if len(content) > MAX_KNOWLEDGE_FILE:
+        raise HTTPException(status_code=400, detail="模板文件过大。")
+    log_template_version(db, row, "new_version_before", actor)
+    safe_name = Path(file.filename).name
+    save_name = f"{uuid.uuid4().hex}_{safe_name}"
+    target_dir = UPLOAD_DIR / "templates"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    path = target_dir / save_name
+    path.write_bytes(content)
+    row.file_name = safe_name
+    row.file_path = str(path)
+    row.file_size = len(content)
+    row.version_no = int(row.version_no or 0) + 1
+    db.commit()
+    return {"message": "模板新版本上传成功", "version_no": row.version_no}
+
+
+@app.get("/api/templates/{template_id}/versions")
+def template_versions(template_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    tpl = db.query(ReportTemplate).filter(ReportTemplate.id == template_id).first()
+    if not tpl:
+        raise HTTPException(status_code=404, detail="模板不存在。")
+    rows = (
+        db.query(ReportTemplateVersion)
+        .filter(ReportTemplateVersion.template_id == template_id)
+        .order_by(ReportTemplateVersion.changed_at.desc())
+        .all()
+    )
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "id": r.id,
+                "action": r.action,
+                "changed_by": r.changed_by,
+                "changed_at": r.changed_at,
+                "snapshot": r.snapshot,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.post("/api/templates/{template_id}/restore/{version_id}")
+def restore_template_version(
+    request: Request,
+    template_id: int,
+    version_id: int,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin"})
+    tpl = db.query(ReportTemplate).filter(ReportTemplate.id == template_id).first()
+    if not tpl:
+        raise HTTPException(status_code=404, detail="模板不存在。")
+    row = (
+        db.query(ReportTemplateVersion)
+        .filter(ReportTemplateVersion.id == version_id, ReportTemplateVersion.template_id == template_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="模板版本不存在。")
+    snap = dict(row.snapshot or {})
+    if not snap:
+        raise HTTPException(status_code=400, detail="版本快照为空。")
+    target_file = Path(str(snap.get("file_path") or ""))
+    if not target_file.exists():
+        raise HTTPException(status_code=400, detail="版本文件不存在，无法回滚。")
+    log_template_version(db, tpl, "restore_before", actor)
+    for key in [
+        "template_name",
+        "category",
+        "city",
+        "protection_level",
+        "description",
+        "status",
+        "is_default",
+        "file_name",
+        "file_path",
+        "file_size",
+        "config_json",
+    ]:
+        if key in snap:
+            setattr(tpl, key, snap[key])
+    tpl.version_no = int(tpl.version_no or 0) + 1
+    db.commit()
+    return {"message": "模板版本恢复成功", "version_no": tpl.version_no}
+
+
+@app.post("/api/templates/{template_id}/set-default")
+def set_default_template(request: Request, template_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    require_roles(request, db, {"admin"})
+    tpl = db.query(ReportTemplate).filter(ReportTemplate.id == template_id).first()
+    if not tpl:
+        raise HTTPException(status_code=404, detail="模板不存在。")
+    old = db.query(ReportTemplate).filter(ReportTemplate.report_type == tpl.report_type, ReportTemplate.is_default.is_(True)).all()
+    for row in old:
+        row.is_default = False
+    tpl.is_default = True
+    db.commit()
+    return {"message": "默认模板已更新", "template_id": tpl.id}
+
+
+@app.get("/api/templates/{template_id}/download")
+def download_template(template_id: int, db: Session = Depends(get_db)) -> FileResponse:
+    tpl = db.query(ReportTemplate).filter(ReportTemplate.id == template_id).first()
+    if not tpl:
+        raise HTTPException(status_code=404, detail="模板不存在。")
+    return FileResponse(path=tpl.file_path, filename=tpl.file_name)
+
+
+@app.post("/api/templates/{template_id}/test-fill")
+def test_fill_template(
+    template_id: int,
+    system_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    tpl = db.query(ReportTemplate).filter(ReportTemplate.id == template_id).first()
+    if not tpl:
+        raise HTTPException(status_code=404, detail="模板不存在。")
+    sample = {
+        "单位名称": "示例单位",
+        "系统名称": "示例系统",
+        "拟定等级": "三级",
+        "备案地区": tpl.city or "示例地区",
+    }
+    if system_id:
+        system = get_system_or_404(db, system_id)
+        org = get_org_or_404(db, system.organization_id)
+        sample.update(
+            {
+                "单位名称": org.name,
+                "系统名称": system.system_name,
+                "拟定等级": f"{system.proposed_level}级",
+                "备案地区": org.filing_region,
+            }
+        )
+    cfg = tpl.config_json or {}
+    preview = {"template_name": tpl.template_name, "sample": sample, "config": cfg}
+    return {"message": "模板测试填充完成", "preview": preview}
+
+
+@app.delete("/api/templates/{template_id}")
+def delete_template(request: Request, template_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin"})
+    tpl = db.query(ReportTemplate).filter(ReportTemplate.id == template_id).first()
+    if not tpl:
+        raise HTTPException(status_code=404, detail="模板不存在。")
+    log_template_version(db, tpl, "delete_before", actor)
+    path = Path(tpl.file_path)
+    if path.exists():
+        path.unlink()
+    db.delete(tpl)
+    db.commit()
+    return {"message": "模板已删除"}
 
 
 @app.post("/api/organizations")
 def create_organization(payload: OrganizationCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
     data = payload.model_dump()
     validate_org_payload(data)
-    exists = (
-        db.query(Organization)
-        .filter(Organization.credit_code == data["credit_code"], Organization.deleted_at.is_(None))
-        .first()
-    )
-    if exists:
-        raise HTTPException(status_code=409, detail="统一社会信用代码已存在。")
+    assert_credit_code_available(db, data["credit_code"])
     org = Organization(**data)
     db.add(org)
     db.commit()
@@ -352,6 +1270,204 @@ def list_organizations(
         query = query.filter(Organization.created_by.like(f"%{created_by}%"))
     items = query.order_by(Organization.created_at.desc()).all()
     return {"total": len(items), "items": [obj_to_dict(i, ORG_FIELDS) for i in items]}
+
+
+@app.post("/api/organizations/collection-links")
+def create_org_collection_link(
+    organization_id: int | None = Query(None),
+    expires_days: int = Query(7, ge=1, le=30),
+    actor: str = Query("system"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if organization_id:
+        get_org_or_404(db, organization_id)
+    token = uuid.uuid4().hex
+    link = OrganizationCollectionLink(
+        token=token,
+        organization_id=organization_id,
+        created_by=actor,
+        expires_at=datetime.now() + timedelta(days=expires_days),
+        disabled=False,
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+    collect_url = f"{PUBLIC_BASE_URL}/organizations/collect/{link.token}"
+    return {
+        "message": "采集链接创建成功",
+        "data": {
+            "id": link.id,
+            "token": link.token,
+            "organization_id": link.organization_id,
+            "expires_at": link.expires_at,
+            "collect_url": collect_url,
+            "qrcode_url": f"https://quickchart.io/qr?size=220&text={quote(collect_url)}",
+        },
+    }
+
+
+@app.get("/api/organizations/collection-links")
+def list_org_collection_links(
+    include_expired: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    query = db.query(OrganizationCollectionLink)
+    if not include_expired:
+        query = query.filter(OrganizationCollectionLink.expires_at > datetime.now(), OrganizationCollectionLink.disabled.is_(False))
+    rows = query.order_by(OrganizationCollectionLink.created_at.desc()).all()
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "id": row.id,
+                "token": row.token,
+                "organization_id": row.organization_id,
+                "created_by": row.created_by,
+                "expires_at": row.expires_at,
+                "disabled": row.disabled,
+                "created_at": row.created_at,
+                "collect_url": f"{PUBLIC_BASE_URL}/organizations/collect/{row.token}",
+            }
+            for row in rows
+        ],
+    }
+
+
+@app.post("/api/organizations/collection-links/{link_id}/toggle")
+def toggle_org_collection_link(link_id: int, enabled: bool = Query(True), db: Session = Depends(get_db)) -> dict[str, Any]:
+    row = db.query(OrganizationCollectionLink).filter(OrganizationCollectionLink.id == link_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="采集链接不存在。")
+    row.disabled = not enabled
+    db.commit()
+    return {"message": "状态更新成功", "enabled": enabled}
+
+
+@app.post("/api/public/organizations/collect/{token}")
+def submit_org_collection(token: str, payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+    link = db.query(OrganizationCollectionLink).filter(OrganizationCollectionLink.token == token).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="链接不存在。")
+    if link.disabled:
+        raise HTTPException(status_code=403, detail="链接已停用。")
+    if datetime.now() > link.expires_at:
+        raise HTTPException(status_code=403, detail="链接已过期。")
+    if "credit_code" in payload and isinstance(payload["credit_code"], str):
+        payload["credit_code"] = payload["credit_code"].strip().upper()
+    if "mobile_phone" in payload and isinstance(payload["mobile_phone"], str):
+        payload["mobile_phone"] = payload["mobile_phone"].strip()
+    if "email" in payload and isinstance(payload["email"], str):
+        payload["email"] = payload["email"].strip()
+    if link.organization_id:
+        validate_org_partial(payload)
+    else:
+        required = ["name", "credit_code", "legal_representative", "address", "mobile_phone", "email", "industry", "organization_type", "filing_region"]
+        missing = [k for k in required if not payload.get(k)]
+        if missing:
+            raise HTTPException(status_code=400, detail=f"缺少必填项: {', '.join(missing)}")
+        validate_org_payload(payload)
+    row = OrganizationSubmission(
+        link_id=link.id,
+        organization_id=link.organization_id,
+        payload=payload,
+        submitter=str(payload.get("submitter") or "customer"),
+        status="pending",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"message": "提交成功，待测评师审核。", "data": {"submission_id": row.id, "status": row.status}}
+
+
+@app.get("/api/organizations/submissions")
+def list_org_submissions(
+    status: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    query = db.query(OrganizationSubmission)
+    if status:
+        query = query.filter(OrganizationSubmission.status == status)
+    rows = query.order_by(OrganizationSubmission.submitted_at.desc()).all()
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "id": r.id,
+                "link_id": r.link_id,
+                "organization_id": r.organization_id,
+                "status": r.status,
+                "payload": r.payload,
+                "submitter": r.submitter,
+                "review_comment": r.review_comment,
+                "reviewed_by": r.reviewed_by,
+                "reviewed_at": r.reviewed_at,
+                "submitted_at": r.submitted_at,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.post("/api/organizations/submissions/{submission_id}/review")
+def review_org_submission(
+    submission_id: int,
+    action: str = Query(...),
+    actor: str = Query("system"),
+    comment: str = Query(""),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    row = db.query(OrganizationSubmission).filter(OrganizationSubmission.id == submission_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="提交记录不存在。")
+    if row.status != "pending":
+        raise HTTPException(status_code=400, detail="仅待审核记录可处理。")
+    action = action.lower()
+    if action not in {"approve", "reject"}:
+        raise HTTPException(status_code=400, detail="action 仅支持 approve/reject。")
+    if action == "reject":
+        row.status = "rejected"
+        row.review_comment = comment
+        row.reviewed_by = actor
+        row.reviewed_at = datetime.now()
+        db.commit()
+        return {"message": "已驳回", "status": row.status}
+
+    payload = dict(row.payload or {})
+    payload.pop("submitter", None)
+    if row.organization_id:
+        org = get_org_or_404(db, row.organization_id)
+        before = obj_to_dict(org, ORG_FIELDS)
+        payload = {k: v for k, v in payload.items() if k in ORG_UPDATE_FIELDS}
+        validate_org_partial(payload)
+        if "credit_code" in payload:
+            assert_credit_code_available(db, payload["credit_code"], current_org_id=org.id)
+        for key, value in payload.items():
+            setattr(org, key, value)
+        db.flush()
+        record_org_history(db, org.id, actor, "customer_approve_update", before, obj_to_dict(org, ORG_FIELDS))
+        target_org_id = org.id
+    else:
+        required = ["name", "credit_code", "legal_representative", "address", "mobile_phone", "email", "industry", "organization_type", "filing_region"]
+        missing = [k for k in required if not payload.get(k)]
+        if missing:
+            raise HTTPException(status_code=400, detail=f"缺少必填项: {', '.join(missing)}")
+        payload = {k: v for k, v in payload.items() if k in ORG_CREATE_FIELDS}
+        payload["created_by"] = actor
+        validate_org_payload(payload)
+        assert_credit_code_available(db, payload["credit_code"])
+        org = Organization(**payload)
+        db.add(org)
+        db.flush()
+        record_org_history(db, org.id, actor, "customer_approve_create", None, obj_to_dict(org, ORG_FIELDS))
+        target_org_id = org.id
+        row.organization_id = org.id
+
+    row.status = "approved"
+    row.review_comment = comment
+    row.reviewed_by = actor
+    row.reviewed_at = datetime.now()
+    db.commit()
+    return {"message": "审核通过并已入库", "status": row.status, "organization_id": target_org_id}
 
 
 @app.get("/api/organizations/{org_id}")
@@ -422,45 +1538,41 @@ def archive_organization(org_id: int, actor: str = Query("system"), db: Session 
 
 @app.post("/api/organizations/{org_id}/unlock")
 def unlock_organization(
+    request: Request,
     org_id: int,
     actor: str = Query("admin"),
     is_admin: bool = Query(True),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    if not is_admin:
-        raise HTTPException(status_code=403, detail="仅管理员可解锁。")
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=is_admin)
     org = get_org_or_404(db, org_id)
     org.locked = False
     db.commit()
     db.refresh(org)
-    record_org_history(db, org.id, actor, "unlock", None, {"locked": False})
+    record_org_history(db, org.id, actor_name or actor, "unlock", None, {"locked": False})
     db.commit()
     return {"message": "解锁成功", "data": obj_to_dict(org, ORG_FIELDS)}
 
 
 @app.delete("/api/organizations/{org_id}")
 def delete_organization(
+    request: Request,
     org_id: int,
     actor: str = Query("system"),
     is_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     org = get_org_or_404(db, org_id)
-    if org.archived and not is_admin:
-        raise HTTPException(status_code=403, detail="已归档单位不可删除，仅管理员可操作。")
-    related_systems = (
-        db.query(SystemInfo)
-        .filter(SystemInfo.organization_id == org_id, SystemInfo.deleted_at.is_(None))
-        .count()
-    )
-    if related_systems > 0:
-        raise HTTPException(status_code=400, detail="存在关联系统，暂不可删除。")
+    actor_name = actor
+    if is_admin:
+        actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    assert_org_deletable(db, org, is_admin=is_admin)
     before = obj_to_dict(org, ORG_FIELDS)
     org.deleted_at = datetime.now()
-    org.deleted_by = actor
+    org.deleted_by = actor_name
     db.commit()
     db.refresh(org)
-    record_org_history(db, org.id, actor, "delete", before, obj_to_dict(org, ORG_FIELDS))
+    record_org_history(db, org.id, actor_name, "delete", before, obj_to_dict(org, ORG_FIELDS))
     db.commit()
     return {"message": "已移入回收站（保留30天）。"}
 
@@ -481,6 +1593,83 @@ def restore_organization(org_id: int, actor: str = Query("system"), db: Session 
     record_org_history(db, org.id, actor, "restore", None, obj_to_dict(org, ORG_FIELDS))
     db.commit()
     return {"message": "恢复成功", "data": obj_to_dict(org, ORG_FIELDS)}
+
+
+@app.post("/api/organizations/{org_id}/delete-request")
+def create_org_delete_request(
+    org_id: int,
+    actor: str = Query("system"),
+    reason: str = Query(""),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    org = get_org_or_404(db, org_id)
+    assert_org_deletable(db, org, is_admin=False)
+    exists = (
+        db.query(DeleteRequest)
+        .filter(
+            DeleteRequest.entity_type == "organization",
+            DeleteRequest.entity_id == org_id,
+            DeleteRequest.status == "pending",
+        )
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=409, detail="已存在待处理删除申请。")
+    row = DeleteRequest(
+        entity_type="organization",
+        entity_id=org_id,
+        reason=reason.strip() or None,
+        status="pending",
+        requested_by=actor,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"message": "删除申请已提交", "data": {"request_id": row.id, "status": row.status}}
+
+
+@app.get("/api/organizations/recycle-bin/list")
+def list_organization_recycle_bin(
+    include_expired: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    rows = (
+        db.query(Organization)
+        .filter(Organization.deleted_at.is_not(None))
+        .order_by(Organization.deleted_at.desc())
+        .all()
+    )
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        meta = recycle_meta(row.deleted_at)
+        if meta["expired"] and not include_expired:
+            continue
+        data = obj_to_dict(row, ORG_FIELDS)
+        data.update(meta)
+        items.append(data)
+    return {"total": len(items), "items": items}
+
+
+@app.post("/api/organizations/recycle-bin/cleanup")
+def cleanup_organization_recycle_bin(
+    request: Request,
+    actor: str = Query("admin"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    threshold = datetime.now() - timedelta(days=30)
+    rows = db.query(Organization).filter(Organization.deleted_at.is_not(None), Organization.deleted_at <= threshold).all()
+    purged = 0
+    skipped: list[str] = []
+    for row in rows:
+        linked = db.query(SystemInfo).filter(SystemInfo.organization_id == row.id).count()
+        if linked > 0:
+            skipped.append(f"{row.id}:{row.name} 仍有关联系统({linked})")
+            continue
+        db.delete(row)
+        purged += 1
+    db.commit()
+    return {"message": "单位回收站清理完成", "purged": purged, "skipped": skipped, "actor": actor_name or actor}
 
 
 @app.get("/api/organizations/export/excel")
@@ -551,14 +1740,7 @@ async def import_organizations_excel(
         }
         try:
             validate_org_payload(data)
-            exists = (
-                db.query(Organization)
-                .filter(Organization.credit_code == data["credit_code"], Organization.deleted_at.is_(None))
-                .first()
-            )
-            if exists:
-                skipped.append(f"第{idx}行：统一社会信用代码重复")
-                continue
+            assert_credit_code_available(db, data["credit_code"])
             org = Organization(**data)
             db.add(org)
             db.flush()
@@ -568,6 +1750,43 @@ async def import_organizations_excel(
             skipped.append(f"第{idx}行：{exc}")
     db.commit()
     return {"message": "导入完成", "imported": imported, "skipped": skipped}
+
+
+@app.post("/api/organizations/import/word")
+async def import_organization_word(
+    actor: str = Query("system"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="仅支持docx格式。")
+    content = await file.read()
+    kv = parse_docx_key_values(content)
+    raw: dict[str, Any] = {}
+    for cn_key, model_key in ORG_WORD_MAP.items():
+        if cn_key in kv:
+            raw[model_key] = kv[cn_key]
+    if "credit_code" in raw and isinstance(raw["credit_code"], str):
+        raw["credit_code"] = raw["credit_code"].strip().upper()
+    if "involves_state_secret" in raw:
+        raw["involves_state_secret"] = to_bool_text(str(raw["involves_state_secret"]))
+    if "is_cii" in raw:
+        raw["is_cii"] = to_bool_text(str(raw["is_cii"]))
+    raw["created_by"] = actor
+    required = ["name", "credit_code", "legal_representative", "address", "mobile_phone", "email", "industry", "organization_type", "filing_region"]
+    missing = [k for k in required if not raw.get(k)]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Word缺少必填字段: {', '.join(missing)}")
+    raw = {k: v for k, v in raw.items() if k in ORG_CREATE_FIELDS}
+    validate_org_payload(raw)
+    assert_credit_code_available(db, raw["credit_code"])
+    org = Organization(**raw)
+    db.add(org)
+    db.flush()
+    record_org_history(db, org.id, actor, "import_word", None, obj_to_dict(org, ORG_FIELDS))
+    db.commit()
+    db.refresh(org)
+    return {"message": "Word导入成功", "data": obj_to_dict(org, ORG_FIELDS)}
 
 
 @app.get("/api/organizations/{org_id}/export/word")
@@ -606,6 +1825,7 @@ def create_system(payload: SystemCreate, db: Session = Depends(get_db)) -> dict[
     record_system_history(db, system.id, payload.created_by, "create", None, obj_to_dict(system, SYSTEM_FIELDS))
     instance = WorkflowInstance(system_id=system.id, current_step_index=0, status="in_progress")
     db.add(instance)
+    recalc_workflow_due_at(db, instance, get_workflow_config(db))
     db.commit()
     db.refresh(system)
     return {"message": "创建成功", "data": obj_to_dict(system, SYSTEM_FIELDS)}
@@ -713,7 +1933,9 @@ def copy_system(system_id: int, actor: str = Query("system"), db: Session = Depe
     db.add(copied)
     db.flush()
     record_system_history(db, copied.id, actor, "copy", None, obj_to_dict(copied, SYSTEM_FIELDS))
-    db.add(WorkflowInstance(system_id=copied.id, current_step_index=0, status="in_progress"))
+    instance = WorkflowInstance(system_id=copied.id, current_step_index=0, status="in_progress")
+    db.add(instance)
+    recalc_workflow_due_at(db, instance, get_workflow_config(db))
     db.commit()
     db.refresh(copied)
     return {"message": "复制成功", "data": obj_to_dict(copied, SYSTEM_FIELDS)}
@@ -732,25 +1954,43 @@ def archive_system(system_id: int, actor: str = Query("system"), db: Session = D
     return {"message": "归档成功", "data": obj_to_dict(system, SYSTEM_FIELDS)}
 
 
+@app.post("/api/systems/{system_id}/unlock")
+def unlock_system(
+    request: Request,
+    system_id: int,
+    actor: str = Query("admin"),
+    is_admin: bool = Query(True),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=is_admin)
+    system = get_system_or_404(db, system_id)
+    system.locked = False
+    db.commit()
+    db.refresh(system)
+    record_system_history(db, system.id, actor_name or actor, "unlock", None, {"locked": False})
+    db.commit()
+    return {"message": "解锁成功", "data": obj_to_dict(system, SYSTEM_FIELDS)}
+
+
 @app.delete("/api/systems/{system_id}")
 def delete_system(
+    request: Request,
     system_id: int,
     actor: str = Query("system"),
     is_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     system = get_system_or_404(db, system_id)
-    if system.archived and not is_admin:
-        raise HTTPException(status_code=403, detail="已归档系统不可删除，仅管理员可操作。")
-    approved_reports = db.query(Report).filter(Report.system_id == system_id, Report.status == "approved").count()
-    if approved_reports > 0 and not is_admin:
-        raise HTTPException(status_code=400, detail="存在已审核通过报告，不可删除。")
+    actor_name = actor
+    if is_admin:
+        actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    assert_system_deletable(db, system, is_admin=is_admin)
     before = obj_to_dict(system, SYSTEM_FIELDS)
     system.deleted_at = datetime.now()
-    system.deleted_by = actor
+    system.deleted_by = actor_name
     db.commit()
     db.refresh(system)
-    record_system_history(db, system.id, actor, "delete", before, obj_to_dict(system, SYSTEM_FIELDS))
+    record_system_history(db, system.id, actor_name, "delete", before, obj_to_dict(system, SYSTEM_FIELDS))
     db.commit()
     return {"message": "已移入回收站（保留30天）。"}
 
@@ -771,6 +2011,175 @@ def restore_system(system_id: int, actor: str = Query("system"), db: Session = D
     record_system_history(db, system.id, actor, "restore", None, obj_to_dict(system, SYSTEM_FIELDS))
     db.commit()
     return {"message": "恢复成功", "data": obj_to_dict(system, SYSTEM_FIELDS)}
+
+
+@app.post("/api/systems/{system_id}/delete-request")
+def create_system_delete_request(
+    system_id: int,
+    actor: str = Query("system"),
+    reason: str = Query(""),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    system = get_system_or_404(db, system_id)
+    assert_system_deletable(db, system, is_admin=False)
+    exists = (
+        db.query(DeleteRequest)
+        .filter(
+            DeleteRequest.entity_type == "system",
+            DeleteRequest.entity_id == system_id,
+            DeleteRequest.status == "pending",
+        )
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=409, detail="已存在待处理删除申请。")
+    row = DeleteRequest(
+        entity_type="system",
+        entity_id=system_id,
+        reason=reason.strip() or None,
+        status="pending",
+        requested_by=actor,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"message": "删除申请已提交", "data": {"request_id": row.id, "status": row.status}}
+
+
+@app.get("/api/systems/recycle-bin/list")
+def list_system_recycle_bin(
+    include_expired: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    rows = (
+        db.query(SystemInfo)
+        .filter(SystemInfo.deleted_at.is_not(None))
+        .order_by(SystemInfo.deleted_at.desc())
+        .all()
+    )
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        meta = recycle_meta(row.deleted_at)
+        if meta["expired"] and not include_expired:
+            continue
+        data = obj_to_dict(row, SYSTEM_FIELDS)
+        data["organization_name"] = row.organization.name if row.organization else ""
+        data.update(meta)
+        items.append(data)
+    return {"total": len(items), "items": items}
+
+
+@app.post("/api/systems/recycle-bin/cleanup")
+def cleanup_system_recycle_bin(
+    request: Request,
+    actor: str = Query("admin"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    threshold = datetime.now() - timedelta(days=30)
+    rows = db.query(SystemInfo).filter(SystemInfo.deleted_at.is_not(None), SystemInfo.deleted_at <= threshold).all()
+    purged = 0
+    skipped: list[str] = []
+    for row in rows:
+        report_count = db.query(Report).filter(Report.system_id == row.id).count()
+        if report_count > 0:
+            skipped.append(f"{row.id}:{row.system_name} 仍有关联报告({report_count})")
+            continue
+        db.delete(row)
+        purged += 1
+    db.commit()
+    return {"message": "系统回收站清理完成", "purged": purged, "skipped": skipped, "actor": actor_name or actor}
+
+
+@app.get("/api/delete-requests")
+def list_delete_requests(
+    request: Request,
+    entity_type: str | None = None,
+    status: str | None = None,
+    requested_by: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    current_user = get_current_user_optional(request, db)
+    q = db.query(DeleteRequest)
+    if entity_type:
+        q = q.filter(DeleteRequest.entity_type == entity_type.strip().lower())
+    if status:
+        q = q.filter(DeleteRequest.status == status.strip().lower())
+    if requested_by:
+        q = q.filter(DeleteRequest.requested_by.like(f"%{requested_by}%"))
+    if current_user and current_user.role != "admin":
+        q = q.filter(DeleteRequest.requested_by == current_user.username)
+    rows = q.order_by(DeleteRequest.requested_at.desc()).all()
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "id": r.id,
+                "entity_type": r.entity_type,
+                "entity_id": r.entity_id,
+                "reason": r.reason,
+                "status": r.status,
+                "requested_by": r.requested_by,
+                "requested_at": r.requested_at,
+                "reviewed_by": r.reviewed_by,
+                "reviewed_at": r.reviewed_at,
+                "review_comment": r.review_comment,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.post("/api/delete-requests/{request_id}/review")
+def review_delete_request(
+    request: Request,
+    request_id: int,
+    action: str = Query(...),
+    actor: str = Query("admin"),
+    comment: str = Query(""),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    row = db.query(DeleteRequest).filter(DeleteRequest.id == request_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="删除申请不存在。")
+    if row.status != "pending":
+        raise HTTPException(status_code=400, detail="仅待处理申请可审核。")
+    action = action.strip().lower()
+    if action not in {"approve", "reject"}:
+        raise HTTPException(status_code=400, detail="action 仅支持 approve/reject。")
+
+    if action == "approve":
+        if row.entity_type == "organization":
+            org = get_org_or_404(db, row.entity_id)
+            assert_org_deletable(db, org, is_admin=True)
+            before = obj_to_dict(org, ORG_FIELDS)
+            org.deleted_at = datetime.now()
+            org.deleted_by = actor_name or actor
+            record_org_history(db, org.id, actor_name or actor, "delete_by_request", before, obj_to_dict(org, ORG_FIELDS))
+        elif row.entity_type == "system":
+            system = get_system_or_404(db, row.entity_id)
+            assert_system_deletable(db, system, is_admin=True)
+            before = obj_to_dict(system, SYSTEM_FIELDS)
+            system.deleted_at = datetime.now()
+            system.deleted_by = actor_name or actor
+            record_system_history(
+                db,
+                system.id,
+                actor_name or actor,
+                "delete_by_request",
+                before,
+                obj_to_dict(system, SYSTEM_FIELDS),
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"不支持的实体类型: {row.entity_type}")
+
+    row.status = "approved" if action == "approve" else "rejected"
+    row.reviewed_by = actor_name or actor
+    row.reviewed_at = datetime.now()
+    row.review_comment = comment.strip() or None
+    db.commit()
+    return {"message": "删除申请处理完成", "status": row.status}
 
 
 @app.get("/api/systems/export/excel")
@@ -831,13 +2240,84 @@ async def import_systems_excel(
             )
             db.add(sys)
             db.flush()
-            db.add(WorkflowInstance(system_id=sys.id, current_step_index=0, status="in_progress"))
+            instance = WorkflowInstance(system_id=sys.id, current_step_index=0, status="in_progress")
+            db.add(instance)
+            recalc_workflow_due_at(db, instance, get_workflow_config(db))
             record_system_history(db, sys.id, actor, "import", None, obj_to_dict(sys, SYSTEM_FIELDS))
             imported += 1
         except Exception as exc:
             skipped.append(f"第{idx}行：{exc}")
     db.commit()
     return {"message": "导入完成", "imported": imported, "skipped": skipped}
+
+
+@app.post("/api/systems/import/word")
+async def import_system_word(
+    actor: str = Query("system"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="仅支持docx格式。")
+    content = await file.read()
+    kv = parse_docx_key_values(content)
+    raw: dict[str, Any] = {}
+    for cn_key, model_key in SYSTEM_WORD_MAP.items():
+        if cn_key in kv:
+            raw[model_key] = kv[cn_key]
+    if "organization_id" not in raw:
+        raise HTTPException(status_code=400, detail="Word缺少单位ID。")
+    try:
+        org_id = int(str(raw["organization_id"]).strip())
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"单位ID格式错误: {exc}") from exc
+    org = get_org_or_404(db, org_id)
+    if org.archived and org.locked:
+        raise HTTPException(status_code=403, detail="单位已归档锁定，不可新增系统。")
+    level_text = str(raw.get("proposed_level", "")).strip()
+    if not level_text:
+        raise HTTPException(status_code=400, detail="Word缺少拟定等级。")
+    level_text = level_text.replace("级", "")
+    try:
+        proposed_level = int(level_text)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"拟定等级格式错误: {exc}") from exc
+    go_live_date = None
+    if raw.get("go_live_date"):
+        date_text = str(raw["go_live_date"]).strip().replace("/", "-")
+        try:
+            go_live_date = date.fromisoformat(date_text)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"上线时间格式错误(应为YYYY-MM-DD): {exc}") from exc
+    name = str(raw.get("system_name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Word缺少系统名称。")
+    system = SystemInfo(
+        organization_id=org_id,
+        system_name=name,
+        system_code=generate_system_code(db),
+        proposed_level=proposed_level,
+        business_description=str(raw.get("business_description") or "").strip() or None,
+        deployment_mode=str(raw.get("deployment_mode") or "").strip() or None,
+        system_type=str(raw.get("system_type") or "").strip() or None,
+        go_live_date=go_live_date,
+        level_basis=str(raw.get("level_basis") or "").strip() or None,
+        level_reason=str(raw.get("level_reason") or "").strip() or None,
+        boundary=str(raw.get("boundary") or "").strip() or None,
+        subsystems=str(raw.get("subsystems") or "").strip() or None,
+        service_object=str(raw.get("service_object") or "").strip() or None,
+        service_scope=str(raw.get("service_scope") or "").strip() or None,
+        created_by=actor,
+    )
+    db.add(system)
+    db.flush()
+    instance = WorkflowInstance(system_id=system.id, current_step_index=0, status="in_progress")
+    db.add(instance)
+    recalc_workflow_due_at(db, instance, get_workflow_config(db))
+    record_system_history(db, system.id, actor, "import_word", None, obj_to_dict(system, SYSTEM_FIELDS))
+    db.commit()
+    db.refresh(system)
+    return {"message": "Word导入成功", "data": obj_to_dict(system, SYSTEM_FIELDS)}
 
 
 @app.get("/api/systems/{system_id}/export/word")
@@ -887,25 +2367,62 @@ async def upload_attachment(
     content = await file.read()
     if len(content) > limit:
         raise HTTPException(status_code=400, detail=f"文件大小超过限制({limit // 1024 // 1024}MB)。")
-    safe_name = Path(file.filename).name
-    save_name = f"{uuid.uuid4().hex}_{safe_name}"
-    target_dir = UPLOAD_DIR / "attachments" / entity_type
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target_path = target_dir / save_name
-    target_path.write_bytes(content)
-    row = Attachment(
+    row = save_attachment_row(
+        db,
         entity_type=entity_type,
         entity_id=entity_id,
-        file_name=safe_name,
-        file_path=str(target_path),
-        file_ext=ext,
-        file_size=len(content),
-        uploaded_by=actor,
+        actor=actor,
+        file_name=file.filename,
+        content=content,
     )
-    db.add(row)
     db.commit()
     db.refresh(row)
     return {"message": "上传成功", "data": {"id": row.id, "file_name": row.file_name, "file_size": row.file_size}}
+
+
+@app.post("/api/attachments/{entity_type}/{entity_id}/batch")
+async def upload_attachment_batch(
+    entity_type: str,
+    entity_id: int,
+    actor: str = Query("system"),
+    files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    entity_type = entity_type.lower()
+    if entity_type not in {"organization", "system"}:
+        raise HTTPException(status_code=400, detail="entity_type 仅支持 organization/system。")
+    if entity_type == "organization":
+        get_org_or_404(db, entity_id)
+        allowed = {"jpg", "jpeg", "png", "pdf"}
+        limit = MAX_ORG_ATTACHMENT
+    else:
+        get_system_or_404(db, entity_id)
+        allowed = {"jpg", "jpeg", "png", "pdf", "vsd", "vsdx"}
+        limit = MAX_SYS_ATTACHMENT
+    if not files:
+        raise HTTPException(status_code=400, detail="files 不能为空。")
+    uploaded = 0
+    skipped: list[str] = []
+    for f in files:
+        ext = Path(f.filename).suffix.lower().lstrip(".")
+        if ext not in allowed:
+            skipped.append(f"{f.filename}: 不支持的附件格式 {ext}")
+            continue
+        content = await f.read()
+        if len(content) > limit:
+            skipped.append(f"{f.filename}: 文件大小超过限制({limit // 1024 // 1024}MB)")
+            continue
+        save_attachment_row(
+            db,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            actor=actor,
+            file_name=f.filename,
+            content=content,
+        )
+        uploaded += 1
+    db.commit()
+    return {"message": "批量上传完成", "uploaded": uploaded, "skipped": skipped}
 
 
 @app.get("/api/attachments/{entity_type}/{entity_id}")
@@ -932,12 +2449,26 @@ def list_attachments(entity_type: str, entity_id: int, db: Session = Depends(get
     }
 
 
-@app.get("/api/attachments/{attachment_id}/download")
+@app.get("/api/attachment-files/{attachment_id}/download")
 def download_attachment(attachment_id: int, db: Session = Depends(get_db)) -> FileResponse:
     row = db.query(Attachment).filter(Attachment.id == attachment_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="附件不存在。")
     return FileResponse(path=row.file_path, filename=row.file_name)
+
+
+@app.get("/api/attachment-files/{attachment_id}/preview")
+def preview_attachment(attachment_id: int, db: Session = Depends(get_db)) -> FileResponse:
+    row = db.query(Attachment).filter(Attachment.id == attachment_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="附件不存在。")
+    guessed_type = mimetypes.guess_type(row.file_name)[0] or "application/octet-stream"
+    return FileResponse(
+        path=row.file_path,
+        media_type=guessed_type,
+        filename=row.file_name,
+        content_disposition_type="inline",
+    )
 
 
 @app.delete("/api/attachments/{attachment_id}")
@@ -957,6 +2488,7 @@ def delete_attachment(attachment_id: int, db: Session = Depends(get_db)) -> dict
 def generate_report(
     system_id: int = Query(...),
     report_type: str = Query("grading_report"),
+    template_id: int | None = Query(None),
     actor: str = Query("system"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
@@ -973,6 +2505,13 @@ def generate_report(
     )
     version = max_version + 1
     content = generate_report_payload(report_type, org, system)
+    template = choose_report_template(db, report_type, org.filing_region or "", system.proposed_level, template_id=template_id)
+    content = apply_template_config_to_payload(content, template)
+    if "签章" not in content:
+        content["签章"] = {"公司签章": "", "测评师签章": "", "签章日期": ""}
+    if template and report_type == "expert_review_form":
+        content["模板信息"] = content.get("模板信息", {})
+        content["模板信息"]["匹配说明"] = f"按地市[{org.filing_region}]匹配模板"
     report = Report(
         organization_id=org.id,
         system_id=system.id,
@@ -995,6 +2534,8 @@ def generate_report(
             "version_no": report.version_no,
             "status": report.status,
             "content": report.content,
+            "template_id": template.id if template else None,
+            "template_name": template.template_name if template else None,
         },
     }
 
@@ -1076,6 +2617,140 @@ def edit_report(
     )
     db.commit()
     return {"message": "保存成功", "data": {"id": report.id, "status": report.status}}
+
+
+def _editable_report_or_403(db: Session, report_id: int, is_admin: bool) -> Report:
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="报告不存在。")
+    if report.status in {"submitted", "approved"} and not is_admin:
+        raise HTTPException(status_code=403, detail="当前状态不可编辑。")
+    return report
+
+
+@app.post("/api/reports/{report_id}/sections")
+def add_report_section(
+    report_id: int,
+    payload: dict[str, Any],
+    actor: str = Query("system"),
+    index: int | None = Query(None),
+    is_admin: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    report = _editable_report_or_403(db, report_id, is_admin)
+    content = dict(report.content or {})
+    sections = list(content.get("章节") or [])
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name 不能为空。")
+    section_content = payload.get("content")
+    if section_content is None:
+        section_content = {}
+    new_section = {"名称": name, "内容": section_content}
+    if index is None or index < 0 or index >= len(sections):
+        sections.append(new_section)
+    else:
+        sections.insert(index, new_section)
+    content["章节"] = sections
+    report.content = content
+    db.add(
+        ReviewRecord(
+            report_id=report.id,
+            reviewer=actor,
+            action="section_add",
+            comment=f"新增章节: {name}",
+        )
+    )
+    db.commit()
+    return {"message": "章节新增成功", "section_count": len(sections)}
+
+
+@app.delete("/api/reports/{report_id}/sections/{section_index}")
+def delete_report_section(
+    report_id: int,
+    section_index: int,
+    actor: str = Query("system"),
+    is_admin: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    report = _editable_report_or_403(db, report_id, is_admin)
+    content = dict(report.content or {})
+    sections = list(content.get("章节") or [])
+    if section_index < 0 or section_index >= len(sections):
+        raise HTTPException(status_code=400, detail="section_index 超出范围。")
+    removed = sections.pop(section_index)
+    content["章节"] = sections
+    report.content = content
+    db.add(
+        ReviewRecord(
+            report_id=report.id,
+            reviewer=actor,
+            action="section_delete",
+            comment=f"删除章节: {removed.get('名称', '')}",
+        )
+    )
+    db.commit()
+    return {"message": "章节删除成功", "section_count": len(sections)}
+
+
+@app.post("/api/reports/{report_id}/sections/reorder")
+def reorder_report_section(
+    report_id: int,
+    from_index: int = Query(..., ge=0),
+    to_index: int = Query(..., ge=0),
+    actor: str = Query("system"),
+    is_admin: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    report = _editable_report_or_403(db, report_id, is_admin)
+    content = dict(report.content or {})
+    sections = list(content.get("章节") or [])
+    if from_index >= len(sections) or to_index >= len(sections):
+        raise HTTPException(status_code=400, detail="索引超出范围。")
+    section = sections.pop(from_index)
+    sections.insert(to_index, section)
+    content["章节"] = sections
+    report.content = content
+    db.add(
+        ReviewRecord(
+            report_id=report.id,
+            reviewer=actor,
+            action="section_reorder",
+            comment=f"章节顺序调整 {from_index}->{to_index}",
+        )
+    )
+    db.commit()
+    return {"message": "章节顺序调整成功"}
+
+
+@app.post("/api/reports/{report_id}/signature")
+def set_report_signature(
+    report_id: int,
+    payload: dict[str, Any],
+    actor: str = Query("system"),
+    is_admin: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    report = _editable_report_or_403(db, report_id, is_admin)
+    content = dict(report.content or {})
+    sign = content.get("签章")
+    if not isinstance(sign, dict):
+        sign = {}
+    for key in ["公司签章", "测评师签章", "签章日期", "签章位置", "备注"]:
+        if key in payload:
+            sign[key] = payload[key]
+    content["签章"] = sign
+    report.content = content
+    db.add(
+        ReviewRecord(
+            report_id=report.id,
+            reviewer=actor,
+            action="signature",
+            comment="更新签章信息",
+        )
+    )
+    db.commit()
+    return {"message": "签章信息已更新", "signature": sign}
 
 
 @app.post("/api/reports/{report_id}/submit")
@@ -1169,6 +2844,67 @@ def list_report_versions(report_id: int, db: Session = Depends(get_db)) -> dict[
     }
 
 
+def _normalize_for_diff(value: Any) -> str:
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return "" if value is None else str(value)
+
+
+def _section_name_map(content: dict[str, Any]) -> dict[str, Any]:
+    items = list(content.get("章节") or [])
+    result: dict[str, Any] = {}
+    for idx, row in enumerate(items):
+        if not isinstance(row, dict):
+            result[f"#{idx}"] = row
+            continue
+        name = str(row.get("名称") or f"#{idx}")
+        result[name] = row.get("内容")
+    return result
+
+
+@app.get("/api/reports/{report_id}/compare/{target_id}")
+def compare_report_versions(report_id: int, target_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    left = db.query(Report).filter(Report.id == report_id).first()
+    right = db.query(Report).filter(Report.id == target_id).first()
+    if not left or not right:
+        raise HTTPException(status_code=404, detail="报告不存在。")
+    if left.system_id != right.system_id or left.report_type != right.report_type:
+        raise HTTPException(status_code=400, detail="仅可对比同系统同类型报告。")
+    left_content = dict(left.content or {})
+    right_content = dict(right.content or {})
+    fields = sorted(set(left_content.keys()) | set(right_content.keys()))
+    field_changes = []
+    for key in fields:
+        lv = left_content.get(key)
+        rv = right_content.get(key)
+        if _normalize_for_diff(lv) != _normalize_for_diff(rv):
+            field_changes.append({"field": key, "from": lv, "to": rv})
+
+    left_sections = _section_name_map(left_content)
+    right_sections = _section_name_map(right_content)
+    left_names = set(left_sections.keys())
+    right_names = set(right_sections.keys())
+    section_added = sorted(right_names - left_names)
+    section_removed = sorted(left_names - right_names)
+    section_changed = sorted(
+        [name for name in (left_names & right_names) if _normalize_for_diff(left_sections[name]) != _normalize_for_diff(right_sections[name])]
+    )
+    return {
+        "left": {"id": left.id, "version_no": left.version_no, "title": left.title},
+        "right": {"id": right.id, "version_no": right.version_no, "title": right.title},
+        "summary": {
+            "field_change_count": len(field_changes),
+            "section_added_count": len(section_added),
+            "section_removed_count": len(section_removed),
+            "section_changed_count": len(section_changed),
+        },
+        "field_changes": field_changes,
+        "section_added": section_added,
+        "section_removed": section_removed,
+        "section_changed": section_changed,
+    }
+
+
 @app.post("/api/reports/{report_id}/restore/{target_id}")
 def restore_report_version(
     report_id: int, target_id: int, actor: str = Query("system"), db: Session = Depends(get_db)
@@ -1201,23 +2937,55 @@ def restore_report_version(
     return {"message": "恢复成功", "new_report_id": new_report.id, "version_no": new_report.version_no}
 
 
+def prepare_export_content(content: dict[str, Any]) -> dict[str, Any]:
+    output = dict(content or {})
+    sections = list(output.get("章节") or [])
+    sign = output.get("签章")
+    if isinstance(sign, dict):
+        has_sign_section = any(str(s.get("名称") or "") == "签章信息" for s in sections if isinstance(s, dict))
+        if not has_sign_section:
+            sections.append({"名称": "签章信息", "内容": sign})
+    tpl = output.get("模板信息")
+    if isinstance(tpl, dict):
+        has_tpl_section = any(str(s.get("名称") or "") == "模板信息" for s in sections if isinstance(s, dict))
+        if not has_tpl_section:
+            sections.append({"名称": "模板信息", "内容": tpl})
+    toc_names = []
+    for item in sections:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("名称") or "").strip()
+        if not name or name == "目录":
+            continue
+        toc_names.append(name)
+    toc_section = {"名称": "目录", "内容": {f"{idx + 1}": name for idx, name in enumerate(toc_names)}}
+    sections = [s for s in sections if not (isinstance(s, dict) and str(s.get("名称") or "") == "目录")]
+    sections.insert(0, toc_section)
+    output["章节"] = sections
+    return output
+
+
 @app.get("/api/reports/{report_id}/export/word")
 def export_report_word(report_id: int, db: Session = Depends(get_db)) -> FileResponse:
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="报告不存在。")
     path = EXPORT_DIR / f"report_{report.id}_{datetime.now():%Y%m%d%H%M%S}.docx"
-    export_report_docx(report.title, report.content, path)
+    export_report_docx(report.title, prepare_export_content(report.content), path)
     return FileResponse(path=str(path), filename=path.name)
 
 
 @app.get("/api/reports/{report_id}/export/pdf")
-def export_report_pdf_file(report_id: int, db: Session = Depends(get_db)) -> FileResponse:
+def export_report_pdf_file(
+    report_id: int,
+    password: str | None = Query(None, min_length=4, max_length=64),
+    db: Session = Depends(get_db),
+) -> FileResponse:
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="报告不存在。")
     path = EXPORT_DIR / f"report_{report.id}_{datetime.now():%Y%m%d%H%M%S}.pdf"
-    export_report_pdf(report.title, report.content, path)
+    export_report_pdf(report.title, prepare_export_content(report.content), path, password=password)
     return FileResponse(path=str(path), filename=path.name)
 
 
@@ -1228,30 +2996,262 @@ def get_workflow(db: Session = Depends(get_db)) -> dict[str, Any]:
 
 
 @app.put("/api/workflow/config")
-def update_workflow(payload: WorkflowConfigUpdate, db: Session = Depends(get_db)) -> dict[str, Any]:
+def update_workflow(request: Request, payload: WorkflowConfigUpdate, db: Session = Depends(get_db)) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin"}, legacy_admin=(not STRICT_AUTH))
     if not payload.steps:
         raise HTTPException(status_code=400, detail="流程步骤不能为空。")
     config = get_workflow_config(db)
     config.steps_json = payload.steps
-    config.updated_by = payload.updated_by
+    config.updated_by = actor or payload.updated_by
+    get_or_create_workflow_step_rules(db, config)
+    in_progress_rows = db.query(WorkflowInstance).filter(WorkflowInstance.status == "in_progress").all()
+    for row in in_progress_rows:
+        if row.current_step_index >= len(config.steps_json):
+            row.current_step_index = max(0, len(config.steps_json) - 1)
+        recalc_workflow_due_at(db, row, config)
     db.commit()
     db.refresh(config)
     return {"message": "流程配置更新成功", "steps": config.steps_json}
+
+
+@app.get("/api/workflow/rules")
+def list_workflow_rules(db: Session = Depends(get_db)) -> dict[str, Any]:
+    config = get_workflow_config(db)
+    rule_map = get_or_create_workflow_step_rules(db, config)
+    rows = []
+    for step in config.steps_json:
+        r = rule_map[step]
+        rows.append(
+            {
+                "step_name": r.step_name,
+                "owner": r.owner,
+                "time_limit_hours": r.time_limit_hours,
+                "enabled": r.enabled,
+                "updated_by": r.updated_by,
+                "updated_at": r.updated_at,
+            }
+        )
+    db.commit()
+    return {"config_name": config.name, "rules": rows}
+
+
+@app.put("/api/workflow/rules")
+def update_workflow_rules(request: Request, payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin"}, legacy_admin=(not STRICT_AUTH))
+    config = get_workflow_config(db)
+    rules = payload.get("rules") or []
+    updated_by = str(payload.get("updated_by") or actor or "admin")
+    if not isinstance(rules, list) or not rules:
+        raise HTTPException(status_code=400, detail="rules 不能为空。")
+    step_set = set(config.steps_json or [])
+    for item in rules:
+        step_name = str(item.get("step_name") or "").strip()
+        if not step_name:
+            raise HTTPException(status_code=400, detail="step_name 不能为空。")
+        if step_name not in step_set:
+            raise HTTPException(status_code=400, detail=f"非法流程节点: {step_name}")
+        owner = str(item.get("owner") or "system").strip()
+        limit = int(item.get("time_limit_hours") or 24)
+        enabled = bool(item.get("enabled", True))
+        row = (
+            db.query(WorkflowStepRule)
+            .filter(WorkflowStepRule.config_name == config.name, WorkflowStepRule.step_name == step_name)
+            .first()
+        )
+        if not row:
+            row = WorkflowStepRule(
+                config_name=config.name,
+                step_name=step_name,
+                owner=owner,
+                time_limit_hours=max(1, limit),
+                enabled=enabled,
+                updated_by=updated_by,
+            )
+            db.add(row)
+        else:
+            row.owner = owner
+            row.time_limit_hours = max(1, limit)
+            row.enabled = enabled
+            row.updated_by = updated_by
+    in_progress_rows = db.query(WorkflowInstance).filter(WorkflowInstance.status == "in_progress").all()
+    for row in in_progress_rows:
+        recalc_workflow_due_at(db, row, config)
+    db.commit()
+    return {"message": "流程规则更新成功"}
+
+
+@app.post("/api/workflow/instances/{system_id}/extend")
+def workflow_extend_due(
+    request: Request,
+    system_id: int,
+    hours: int = Query(24, ge=1, le=720),
+    actor: str = Query("admin"),
+    reason: str = Query(""),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    get_system_or_404(db, system_id)
+    instance = db.query(WorkflowInstance).filter(WorkflowInstance.system_id == system_id).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="流程实例不存在。")
+    if instance.status != "in_progress":
+        raise HTTPException(status_code=400, detail="仅进行中流程可延时。")
+    base = instance.due_at or datetime.now()
+    instance.due_at = base + timedelta(hours=hours)
+    current_step = get_workflow_config(db).steps_json[instance.current_step_index]
+    db.add(
+        WorkflowAction(
+            instance_id=instance.id,
+            step_name=current_step,
+            actor=actor_name or actor,
+            action="extend_due",
+            comment=f"延长{hours}小时 {reason}".strip(),
+        )
+    )
+    db.commit()
+    db.refresh(instance)
+    return {"message": "已延长时限", "due_at": instance.due_at}
+
+
+@app.get("/api/workflow/reminders")
+def workflow_reminders(
+    mode: str = Query("all"),
+    within_hours: int = Query(4, ge=1, le=72),
+    send: bool = Query(False),
+    channel: str = Query("in_app"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    mode = mode.lower()
+    if mode not in {"all", "due", "overdue"}:
+        raise HTTPException(status_code=400, detail="mode 仅支持 all/due/overdue。")
+    channel = (channel or "in_app").strip().lower()
+    if channel not in {"in_app", "email", "both"}:
+        raise HTTPException(status_code=400, detail="channel 仅支持 in_app/email/both。")
+    config = get_workflow_config(db)
+    query = (
+        db.query(WorkflowInstance, SystemInfo.system_name)
+        .join(SystemInfo, SystemInfo.id == WorkflowInstance.system_id)
+        .filter(WorkflowInstance.status == "in_progress", WorkflowInstance.due_at.is_not(None))
+    )
+    rows = query.order_by(WorkflowInstance.due_at.asc()).all()
+    items: list[dict[str, Any]] = []
+    for instance, system_name in rows:
+        remaining_seconds = int((instance.due_at - datetime.now()).total_seconds())
+        is_overdue = remaining_seconds < 0
+        if mode == "overdue" and not is_overdue:
+            continue
+        if mode == "due" and (is_overdue or remaining_seconds > within_hours * 3600):
+            continue
+        step_name = ""
+        if 0 <= instance.current_step_index < len(config.steps_json):
+            step_name = config.steps_json[instance.current_step_index]
+        owner = get_workflow_step_owner(db, config, instance.current_step_index)
+        item = {
+            "instance_id": instance.id,
+            "system_id": instance.system_id,
+            "system_name": system_name,
+            "step_name": step_name,
+            "owner": owner,
+            "due_at": instance.due_at,
+            "remaining_seconds": remaining_seconds,
+            "status": "overdue" if is_overdue else "due_soon",
+        }
+        items.append(item)
+        if send:
+            msg = f"系统[{system_name}]节点[{step_name}]将于{instance.due_at}到期，请及时处理。"
+            if is_overdue:
+                msg = f"系统[{system_name}]节点[{step_name}]已超时，请立即处理。"
+            if channel in {"in_app", "both"}:
+                db.add(
+                    WorkflowReminder(
+                        instance_id=instance.id,
+                        step_name=step_name or "未知节点",
+                        receiver=owner or "system",
+                        reminder_type=item["status"],
+                        channel="in_app",
+                        content=msg,
+                    )
+                )
+            if channel in {"email", "both"}:
+                to_email = ""
+                if owner and "@" in owner:
+                    to_email = owner
+                else:
+                    user = db.query(UserAccount).filter(UserAccount.username == (owner or "")).first()
+                    if user and "@" in user.username:
+                        to_email = user.username
+                if not to_email:
+                    to_email = WORKFLOW_EMAIL_DEFAULT_TO
+                ok = False
+                err = "无可用邮箱地址"
+                if to_email:
+                    ok, err = send_workflow_email(
+                        to_email=to_email,
+                        subject=f"[流程提醒]{system_name}-{step_name or '未知节点'}",
+                        body=msg,
+                    )
+                log_msg = msg if ok else f"{msg} (邮件发送失败: {err})"
+                db.add(
+                    WorkflowReminder(
+                        instance_id=instance.id,
+                        step_name=step_name or "未知节点",
+                        receiver=to_email or (owner or "system"),
+                        reminder_type=item["status"],
+                        channel="email",
+                        content=log_msg,
+                    )
+                )
+    if send and items:
+        db.commit()
+    return {"total": len(items), "items": items}
+
+
+@app.get("/api/workflow/reminder-logs")
+def workflow_reminder_logs(db: Session = Depends(get_db)) -> dict[str, Any]:
+    rows = db.query(WorkflowReminder).order_by(WorkflowReminder.created_at.desc()).limit(200).all()
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "instance_id": r.instance_id,
+                "step_name": r.step_name,
+                "receiver": r.receiver,
+                "reminder_type": r.reminder_type,
+                "channel": r.channel,
+                "content": r.content,
+                "created_at": r.created_at,
+            }
+            for r in rows
+        ],
+    }
 
 
 @app.get("/api/workflow/instances/{system_id}")
 def workflow_instance(system_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
     get_system_or_404(db, system_id)
     config = get_workflow_config(db)
+    get_or_create_workflow_step_rules(db, config)
     instance = db.query(WorkflowInstance).filter(WorkflowInstance.system_id == system_id).first()
     if not instance:
         instance = WorkflowInstance(system_id=system_id, current_step_index=0, status="in_progress")
         db.add(instance)
+        recalc_workflow_due_at(db, instance, config)
+        db.commit()
+        db.refresh(instance)
+    elif instance.status == "in_progress" and not instance.due_at:
+        recalc_workflow_due_at(db, instance, config)
         db.commit()
         db.refresh(instance)
     step_name = ""
     if 0 <= instance.current_step_index < len(config.steps_json):
         step_name = config.steps_json[instance.current_step_index]
+    owner = get_workflow_step_owner(db, config, instance.current_step_index)
+    remaining_seconds = None
+    overdue = False
+    if instance.due_at:
+        delta = int((instance.due_at - datetime.now()).total_seconds())
+        remaining_seconds = delta
+        overdue = delta < 0
     logs = (
         db.query(WorkflowAction)
         .filter(WorkflowAction.instance_id == instance.id)
@@ -1263,6 +3263,10 @@ def workflow_instance(system_id: int, db: Session = Depends(get_db)) -> dict[str
         "status": instance.status,
         "current_step_index": instance.current_step_index,
         "current_step_name": step_name,
+        "current_owner": owner,
+        "due_at": instance.due_at,
+        "remaining_seconds": remaining_seconds,
+        "overdue": overdue,
         "steps": config.steps_json,
         "logs": [
             {
@@ -1320,6 +3324,7 @@ def workflow_advance(
             comment=comment,
         )
     )
+    recalc_workflow_due_at(db, instance, config)
     db.commit()
     db.refresh(instance)
     return {
@@ -1334,6 +3339,7 @@ def workflow_advance(
 
 @app.get("/api/dashboard/summary")
 def dashboard_summary(
+    request: Request,
     start_date: date | None = None,
     end_date: date | None = None,
     industry: str | None = None,
@@ -1343,6 +3349,9 @@ def dashboard_summary(
     project_status: str | None = None,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    current_user = get_current_user_optional(request, db)
+    role = current_user.role if current_user else ""
+    username = current_user.username if current_user else ""
     org_q = db.query(Organization).filter(Organization.deleted_at.is_(None))
     if start_date:
         org_q = org_q.filter(Organization.created_at >= datetime.combine(start_date, datetime.min.time()))
@@ -1354,6 +3363,8 @@ def dashboard_summary(
         org_q = org_q.filter(Organization.filing_region.like(f"%{city}%"))
     if evaluator:
         org_q = org_q.filter(Organization.created_by.like(f"%{evaluator}%"))
+    if role == "evaluator":
+        org_q = org_q.filter(Organization.created_by == username)
 
     sys_q = db.query(SystemInfo).join(Organization, Organization.id == SystemInfo.organization_id).filter(
         SystemInfo.deleted_at.is_(None), Organization.deleted_at.is_(None)
@@ -1366,6 +3377,8 @@ def dashboard_summary(
         sys_q = sys_q.filter(SystemInfo.proposed_level == level)
     if evaluator:
         sys_q = sys_q.filter(SystemInfo.created_by.like(f"%{evaluator}%"))
+    if role == "evaluator":
+        sys_q = sys_q.filter(SystemInfo.created_by == username)
 
     if project_status:
         sys_q = sys_q.join(WorkflowInstance, WorkflowInstance.system_id == SystemInfo.id).filter(
@@ -1396,8 +3409,179 @@ def dashboard_summary(
     }
 
 
+@app.get("/api/dashboard/drilldown")
+def dashboard_drilldown(
+    request: Request,
+    dimension: str = Query(...),
+    value: str = Query(""),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    current_user = get_current_user_optional(request, db)
+    role = current_user.role if current_user else ""
+    username = current_user.username if current_user else ""
+    dimension = dimension.lower()
+    if dimension not in {"region", "industry", "level"}:
+        raise HTTPException(status_code=400, detail="dimension 仅支持 region/industry/level。")
+    org_query = db.query(Organization).filter(Organization.deleted_at.is_(None))
+    sys_query = db.query(SystemInfo).join(Organization, Organization.id == SystemInfo.organization_id).filter(
+        SystemInfo.deleted_at.is_(None), Organization.deleted_at.is_(None)
+    )
+    if dimension == "region":
+        org_query = org_query.filter(Organization.filing_region.like(f"%{value}%"))
+        sys_query = sys_query.filter(Organization.filing_region.like(f"%{value}%"))
+    elif dimension == "industry":
+        org_query = org_query.filter(Organization.industry.like(f"%{value}%"))
+        sys_query = sys_query.filter(Organization.industry.like(f"%{value}%"))
+    else:
+        try:
+            level = int(value)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"level 取值非法: {exc}") from exc
+        sys_query = sys_query.filter(SystemInfo.proposed_level == level)
+    if role == "evaluator":
+        org_query = org_query.filter(Organization.created_by == username)
+        sys_query = sys_query.filter(SystemInfo.created_by == username)
+
+    org_items = org_query.order_by(Organization.created_at.desc()).limit(500).all()
+    sys_items = sys_query.order_by(SystemInfo.created_at.desc()).limit(500).all()
+    return {
+        "dimension": dimension,
+        "value": value,
+        "organizations": [
+            {
+                "id": o.id,
+                "name": o.name,
+                "industry": o.industry,
+                "filing_region": o.filing_region,
+                "created_by": o.created_by,
+            }
+            for o in org_items
+        ],
+        "systems": [
+            {
+                "id": s.id,
+                "system_name": s.system_name,
+                "system_code": s.system_code,
+                "proposed_level": s.proposed_level,
+                "organization_id": s.organization_id,
+            }
+            for s in sys_items
+        ],
+    }
+
+
+@app.get("/api/dashboard/export/excel")
+def export_dashboard_excel(
+    request: Request,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    industry: str | None = None,
+    city: str | None = None,
+    level: int | None = None,
+    evaluator: str | None = None,
+    project_status: str | None = None,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    data = dashboard_summary(
+        request=request,
+        start_date=start_date,
+        end_date=end_date,
+        industry=industry,
+        city=city,
+        level=level,
+        evaluator=evaluator,
+        project_status=project_status,
+        db=db,
+    )
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "看板汇总"
+    ws.append(["指标", "数值"])
+    for k, v in data["totals"].items():
+        ws.append([k, v])
+    ws2 = wb.create_sheet("地区分布")
+    ws2.append(["地区", "数量"])
+    for row in data["region_distribution"]:
+        ws2.append([row["name"], row["value"]])
+    ws3 = wb.create_sheet("行业分布")
+    ws3.append(["行业", "数量"])
+    for row in data["industry_distribution"]:
+        ws3.append([row["name"], row["value"]])
+    ws4 = wb.create_sheet("级别分布")
+    ws4.append(["级别", "数量"])
+    for row in data["level_distribution"]:
+        ws4.append([row["name"], row["value"]])
+    path = EXPORT_DIR / f"dashboard_{datetime.now():%Y%m%d%H%M%S}.xlsx"
+    wb.save(path)
+    return FileResponse(path=str(path), filename=path.name)
+
+
+@app.get("/api/dashboard/export/pdf")
+def export_dashboard_pdf(
+    request: Request,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    industry: str | None = None,
+    city: str | None = None,
+    level: int | None = None,
+    evaluator: str | None = None,
+    project_status: str | None = None,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    data = dashboard_summary(
+        request=request,
+        start_date=start_date,
+        end_date=end_date,
+        industry=industry,
+        city=city,
+        level=level,
+        evaluator=evaluator,
+        project_status=project_status,
+        db=db,
+    )
+    path = EXPORT_DIR / f"dashboard_{datetime.now():%Y%m%d%H%M%S}.pdf"
+    pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+    c = canvas.Canvas(str(path), pagesize=A4)
+    c.setFont("STSong-Light", 15)
+    c.drawString(36, 800, "数据看板导出")
+    c.setFont("STSong-Light", 11)
+    y = 770
+    for k, v in data["totals"].items():
+        c.drawString(36, y, f"{k}: {v}")
+        y -= 18
+    y -= 8
+    c.drawString(36, y, "地区分布")
+    y -= 18
+    for row in data["region_distribution"][:15]:
+        c.drawString(50, y, f"{row['name']}: {row['value']}")
+        y -= 16
+    if y < 120:
+        c.showPage()
+        c.setFont("STSong-Light", 11)
+        y = 800
+    y -= 8
+    c.drawString(36, y, "行业分布")
+    y -= 18
+    for row in data["industry_distribution"][:15]:
+        c.drawString(50, y, f"{row['name']}: {row['value']}")
+        y -= 16
+    if y < 120:
+        c.showPage()
+        c.setFont("STSong-Light", 11)
+        y = 800
+    y -= 8
+    c.drawString(36, y, "级别分布")
+    y -= 18
+    for row in data["level_distribution"][:15]:
+        c.drawString(50, y, f"{row['name']}: {row['value']}")
+        y -= 16
+    c.save()
+    return FileResponse(path=str(path), filename=path.name)
+
+
 @app.post("/api/knowledge/upload")
 async def upload_knowledge(
+    request: Request,
     title: str = Form(...),
     doc_type: str = Form(...),
     actor: str = Form("admin"),
@@ -1406,9 +3590,11 @@ async def upload_knowledge(
     keywords: str = Form(""),
     protection_level: str = Form(""),
     version_no: int = Form(1),
+    source_doc_id: int | None = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
     content = await file.read()
     if len(content) > MAX_KNOWLEDGE_FILE:
         raise HTTPException(status_code=400, detail="文件过大。")
@@ -1416,6 +3602,18 @@ async def upload_knowledge(
     save_name = f"{uuid.uuid4().hex}_{safe_name}"
     path = UPLOAD_DIR / "knowledge" / save_name
     path.write_bytes(content)
+    final_version = version_no
+    if source_doc_id:
+        source = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == source_doc_id).first()
+        if not source:
+            raise HTTPException(status_code=404, detail="source_doc_id 对应文档不存在。")
+        title = title or source.title
+        doc_type = doc_type or source.doc_type
+        city = city or source.city or ""
+        district = district or source.district or ""
+        keywords = keywords or source.keywords or ""
+        protection_level = protection_level or source.protection_level or ""
+        final_version = max(source.version_no + 1, version_no)
     row = KnowledgeDocument(
         title=title,
         keywords=keywords,
@@ -1423,14 +3621,16 @@ async def upload_knowledge(
         district=district,
         doc_type=doc_type,
         protection_level=protection_level,
-        version_no=version_no,
+        version_no=final_version,
         status="enabled",
         file_name=safe_name,
         file_path=str(path),
         file_size=len(content),
-        uploaded_by=actor,
+        uploaded_by=actor_name or actor,
     )
     db.add(row)
+    db.flush()
+    log_knowledge_version(db, row, "upload", actor_name or actor)
     db.commit()
     db.refresh(row)
     return {"message": "上传成功", "data": {"id": row.id, "title": row.title}}
@@ -1439,29 +3639,48 @@ async def upload_knowledge(
 @app.get("/api/knowledge")
 def list_knowledge(
     keyword: str | None = None,
+    match_mode: str = Query("fuzzy"),
     city: str | None = None,
+    district: str | None = None,
     doc_type: str | None = None,
     protection_level: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     enabled_only: bool = True,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     q = db.query(KnowledgeDocument)
+    match_mode = match_mode.strip().lower()
+    if match_mode not in {"fuzzy", "exact"}:
+        raise HTTPException(status_code=400, detail="match_mode 仅支持 fuzzy/exact。")
     if enabled_only:
         q = q.filter(KnowledgeDocument.status == "enabled")
     if keyword:
-        q = q.filter(
-            or_(
-                KnowledgeDocument.title.like(f"%{keyword}%"),
-                KnowledgeDocument.keywords.like(f"%{keyword}%"),
+        if match_mode == "exact":
+            q = q.filter(or_(KnowledgeDocument.title == keyword, KnowledgeDocument.keywords == keyword))
+        else:
+            q = q.filter(
+                or_(
+                    KnowledgeDocument.title.like(f"%{keyword}%"),
+                    KnowledgeDocument.keywords.like(f"%{keyword}%"),
+                )
             )
-        )
     if city:
         q = q.filter(KnowledgeDocument.city.like(f"%{city}%"))
+    if district:
+        q = q.filter(KnowledgeDocument.district.like(f"%{district}%"))
     if doc_type:
         q = q.filter(KnowledgeDocument.doc_type.like(f"%{doc_type}%"))
     if protection_level:
         q = q.filter(KnowledgeDocument.protection_level.like(f"%{protection_level}%"))
+    if start_date:
+        q = q.filter(KnowledgeDocument.uploaded_at >= datetime.combine(start_date, datetime.min.time()))
+    if end_date:
+        q = q.filter(KnowledgeDocument.uploaded_at <= datetime.combine(end_date, datetime.max.time()))
     rows = q.order_by(KnowledgeDocument.uploaded_at.desc()).all()
+    pin_rows = db.query(KnowledgePin).filter(KnowledgePin.document_id.in_([r.id for r in rows])).all() if rows else []
+    pin_map = {p.document_id: p for p in pin_rows}
+    rows = sorted(rows, key=lambda r: (0 if r.id in pin_map else 1, -(pin_map[r.id].pinned_at.timestamp() if r.id in pin_map else 0), -(r.uploaded_at.timestamp() if hasattr(r.uploaded_at, "timestamp") else 0)))
     return {
         "total": len(rows),
         "items": [
@@ -1477,6 +3696,167 @@ def list_knowledge(
                 "file_name": r.file_name,
                 "uploaded_by": r.uploaded_by,
                 "uploaded_at": r.uploaded_at,
+                "pinned": r.id in pin_map,
+                "pinned_at": pin_map[r.id].pinned_at if r.id in pin_map else None,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.put("/api/knowledge/{doc_id}")
+def update_knowledge(
+    request: Request,
+    doc_id: int,
+    payload: dict[str, Any],
+    actor: str = Query("admin"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在。")
+    log_knowledge_version(db, doc, "update_before", actor_name or actor)
+    fields = {
+        "title",
+        "keywords",
+        "city",
+        "district",
+        "doc_type",
+        "protection_level",
+        "status",
+        "version_no",
+    }
+    for k, v in payload.items():
+        if k in fields:
+            setattr(doc, k, v)
+    db.commit()
+    return {"message": "更新成功"}
+
+
+@app.post("/api/knowledge/{doc_id}/new-version")
+async def new_knowledge_version(
+    request: Request,
+    doc_id: int,
+    actor: str = Form("admin"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在。")
+    content = await file.read()
+    if len(content) > MAX_KNOWLEDGE_FILE:
+        raise HTTPException(status_code=400, detail="文件过大。")
+    log_knowledge_version(db, doc, "new_version_before", actor_name or actor)
+    safe_name = Path(file.filename).name
+    save_name = f"{uuid.uuid4().hex}_{safe_name}"
+    path = UPLOAD_DIR / "knowledge" / save_name
+    path.write_bytes(content)
+    doc.file_name = safe_name
+    doc.file_path = str(path)
+    doc.file_size = len(content)
+    doc.version_no = int(doc.version_no or 0) + 1
+    doc.uploaded_by = actor_name or actor
+    db.commit()
+    return {"message": "新版本上传成功", "version_no": doc.version_no}
+
+
+@app.get("/api/knowledge/{doc_id}/versions")
+def knowledge_versions(doc_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    _ = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
+    if not _:
+        raise HTTPException(status_code=404, detail="文档不存在。")
+    rows = (
+        db.query(KnowledgeDocumentVersion)
+        .filter(KnowledgeDocumentVersion.document_id == doc_id)
+        .order_by(KnowledgeDocumentVersion.changed_at.desc())
+        .all()
+    )
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "id": r.id,
+                "action": r.action,
+                "changed_by": r.changed_by,
+                "changed_at": r.changed_at,
+                "snapshot": r.snapshot,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.post("/api/knowledge/{doc_id}/rollback/{version_id}")
+def rollback_knowledge(
+    request: Request,
+    doc_id: int,
+    version_id: int,
+    actor: str = Query("admin"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在。")
+    version = (
+        db.query(KnowledgeDocumentVersion)
+        .filter(KnowledgeDocumentVersion.id == version_id, KnowledgeDocumentVersion.document_id == doc_id)
+        .first()
+    )
+    if not version:
+        raise HTTPException(status_code=404, detail="版本记录不存在。")
+    snap = dict(version.snapshot or {})
+    if not snap:
+        raise HTTPException(status_code=400, detail="版本快照为空。")
+    target_file = Path(str(snap.get("file_path") or ""))
+    if not target_file.exists():
+        raise HTTPException(status_code=400, detail="版本文件不存在，无法回滚。")
+    log_knowledge_version(db, doc, "rollback_before", actor_name or actor)
+    for key in ["title", "keywords", "city", "district", "doc_type", "protection_level", "status", "file_name", "file_path", "file_size"]:
+        if key in snap:
+            setattr(doc, key, snap[key])
+    doc.version_no = int(doc.version_no or 0) + 1
+    doc.uploaded_by = actor_name or actor
+    db.commit()
+    return {"message": "回滚成功", "version_no": doc.version_no}
+
+
+@app.post("/api/knowledge/{doc_id}/pin")
+def pin_knowledge(
+    request: Request,
+    doc_id: int,
+    enabled: bool = Query(True),
+    actor: str = Query("admin"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在。")
+    row = db.query(KnowledgePin).filter(KnowledgePin.document_id == doc_id).first()
+    if enabled and not row:
+        row = KnowledgePin(document_id=doc_id, pinned_by=actor_name or actor)
+        db.add(row)
+    if not enabled and row:
+        db.delete(row)
+    db.commit()
+    return {"message": "置顶状态已更新", "pinned": enabled}
+
+
+@app.get("/api/knowledge/download-logs")
+def knowledge_download_logs(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    require_roles(request, db, {"admin"})
+    rows = db.query(KnowledgeDownloadLog).order_by(KnowledgeDownloadLog.downloaded_at.desc()).limit(500).all()
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "document_id": r.document_id,
+                "download_by": r.download_by,
+                "downloaded_at": r.downloaded_at,
             }
             for r in rows
         ],
@@ -1484,33 +3864,44 @@ def list_knowledge(
 
 
 @app.post("/api/knowledge/{doc_id}/toggle")
-def toggle_knowledge(doc_id: int, enabled: bool = Query(True), db: Session = Depends(get_db)) -> dict[str, Any]:
+def toggle_knowledge(
+    request: Request,
+    doc_id: int,
+    enabled: bool = Query(True),
+    actor: str = Query("admin"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
     doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在。")
+    log_knowledge_version(db, doc, "toggle_before", actor_name or actor)
     doc.status = "enabled" if enabled else "disabled"
     db.commit()
     return {"message": "状态更新成功", "status": doc.status}
 
 
 @app.get("/api/knowledge/{doc_id}/download")
-def download_knowledge(doc_id: int, actor: str = Query("system"), db: Session = Depends(get_db)) -> FileResponse:
+def download_knowledge(request: Request, doc_id: int, actor: str = Query("system"), db: Session = Depends(get_db)) -> FileResponse:
+    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"})
     doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在。")
     if doc.status != "enabled":
         raise HTTPException(status_code=403, detail="文档已下架。")
-    db.add(KnowledgeDownloadLog(document_id=doc.id, download_by=actor))
+    db.add(KnowledgeDownloadLog(document_id=doc.id, download_by=actor_name or actor))
     db.commit()
     return FileResponse(path=doc.file_path, filename=doc.file_name)
 
 
 @app.post("/api/knowledge/batch-download")
 def batch_download_knowledge(
+    request: Request,
     doc_ids: list[int],
     actor: str = Query("system"),
     db: Session = Depends(get_db),
 ) -> FileResponse:
+    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"})
     if not doc_ids:
         raise HTTPException(status_code=400, detail="doc_ids 不能为空。")
     rows = db.query(KnowledgeDocument).filter(KnowledgeDocument.id.in_(doc_ids)).all()
@@ -1522,19 +3913,24 @@ def batch_download_knowledge(
             src = Path(doc.file_path)
             if src.exists():
                 zf.write(src, arcname=doc.file_name)
-                db.add(KnowledgeDownloadLog(document_id=doc.id, download_by=actor))
+                db.add(KnowledgeDownloadLog(document_id=doc.id, download_by=actor_name or actor))
     db.commit()
     return FileResponse(path=str(zip_path), filename=zip_path.name)
 
 
 @app.delete("/api/knowledge/{doc_id}")
-def delete_knowledge(doc_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+def delete_knowledge(request: Request, doc_id: int, actor: str = Query("admin"), db: Session = Depends(get_db)) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
     doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在。")
+    log_knowledge_version(db, doc, "delete_before", actor_name or actor)
     path = Path(doc.file_path)
     if path.exists():
         path.unlink()
+    pin = db.query(KnowledgePin).filter(KnowledgePin.document_id == doc_id).first()
+    if pin:
+        db.delete(pin)
     db.delete(doc)
     db.commit()
     return {"message": "文档已删除。"}

@@ -22,7 +22,9 @@
   </div>
   <br />
   <button onclick="createSystem()">保存系统</button>
-  <pre class="result" id="sysResult"></pre>
+  <input id="sysWordFile" type="file" accept=".docx" />
+  <button class="btn-lite" onclick="importSystemWord()">Word导入</button>
+  <div class="result" id="sysResult">可在此查看操作结果。</div>
 </div>
 
 <div class="panel">
@@ -37,14 +39,59 @@
   <table>
     <thead>
       <tr>
-        <th>ID</th><th>系统名称</th><th>系统编号</th><th>单位</th><th>等级</th><th>部署方式</th><th>状态</th>
+        <th>ID</th><th>系统名称</th><th>系统编号</th><th>单位</th><th>等级</th><th>部署方式</th><th>状态</th><th>操作</th>
       </tr>
     </thead>
     <tbody id="sysTable"></tbody>
   </table>
 </div>
 
+<div class="panel">
+  <h2>系统回收站（30天）</h2>
+  <button class="btn-lite" onclick="loadRecycleSystems()">刷新回收站</button>
+  <button class="btn-lite" onclick="cleanupRecycleSystems()">清理已过期</button>
+  <br /><br />
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>系统名称</th><th>删除人</th><th>删除时间</th><th>剩余天数</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="sysRecycleTable"></tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>系统删除申请</h2>
+  <button class="btn-lite" onclick="loadSystemDeleteRequests()">刷新申请列表</button>
+  <br /><br />
+  <table>
+    <thead>
+      <tr>
+        <th>申请ID</th><th>系统ID</th><th>申请人</th><th>状态</th><th>原因</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="sysDeleteReqTable"></tbody>
+  </table>
+</div>
+
 <script>
+function authHeaders() {
+  const token = localStorage.getItem('auth_token') || '';
+  return token ? {'X-Auth-Token': token} : {};
+}
+
+function apiErrorText(data) {
+  if (!data) return '请求失败';
+  if (typeof data.detail === 'string') return data.detail;
+  if (data.detail && typeof data.detail === 'object') return '请求参数不合法';
+  return data.message || '请求失败';
+}
+
+function setSysResult(text) {
+  document.getElementById('sysResult').textContent = text;
+}
+
 function formSystemPayload() {
   return {
     organization_id: Number(document.getElementById('organizationId').value),
@@ -63,12 +110,34 @@ async function createSystem() {
   const payload = formSystemPayload();
   const res = await fetch('/api/systems', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', ...authHeaders()},
     body: JSON.stringify(payload)
   });
   const data = await res.json();
-  document.getElementById('sysResult').textContent = JSON.stringify(data, null, 2);
-  if (res.ok) loadSystems();
+  if (!res.ok) {
+    setSysResult(`保存失败：${apiErrorText(data)}`);
+    return;
+  }
+  setSysResult(`保存成功：系统ID=${data?.data?.id || '-'}`);
+  loadSystems();
+}
+
+async function importSystemWord() {
+  const file = document.getElementById('sysWordFile').files[0];
+  if (!file) {
+    alert('请选择Word文件');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch('/api/systems/import/word?actor=tester', {method: 'POST', body: fd});
+  const data = await res.json();
+  if (!res.ok) {
+    setSysResult(`导入失败：${apiErrorText(data)}`);
+    return;
+  }
+  setSysResult(data.message || 'Word导入成功');
+  loadSystems();
 }
 
 async function loadSystems() {
@@ -79,7 +148,7 @@ async function loadSystems() {
   if (systemName) params.set('system_name', systemName);
   if (systemCode) params.set('system_code', systemCode);
   if (organizationName) params.set('organization_name', organizationName);
-  const res = await fetch('/api/systems?' + params.toString());
+  const res = await fetch('/api/systems?' + params.toString(), {headers: authHeaders()});
   const data = await res.json();
   document.getElementById('sysTable').innerHTML = data.items.map(i => `
     <tr>
@@ -90,10 +159,111 @@ async function loadSystems() {
       <td>${i.proposed_level}级</td>
       <td>${i.deployment_mode || ''}</td>
       <td>${i.archived ? '已归档' : '在用'}</td>
+      <td>
+        <button class="btn-lite" onclick="archiveSystem(${i.id})">归档</button>
+        <button class="btn-lite" onclick="deleteSystemRow(${i.id})">删除</button>
+      </td>
     </tr>
   `).join('');
 }
 
+async function archiveSystem(id) {
+  const res = await fetch(`/api/systems/${id}/archive?actor=tester`, {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    alert(apiErrorText(data));
+    return;
+  }
+  loadSystems();
+}
+
+async function deleteSystemRow(id) {
+  const reason = prompt('请输入删除原因（可空）', '') || '';
+  const res = await fetch(`/api/systems/${id}/delete-request?actor=tester&reason=${encodeURIComponent(reason)}`, {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setSysResult(`提交删除申请失败：${apiErrorText(data)}`);
+    return;
+  }
+  setSysResult('删除申请已提交，等待管理员审核。');
+  loadSystemDeleteRequests();
+}
+
+async function loadRecycleSystems() {
+  const res = await fetch('/api/systems/recycle-bin/list', {headers: authHeaders()});
+  const data = await res.json();
+  document.getElementById('sysRecycleTable').innerHTML = data.items.map(i => `
+    <tr>
+      <td>${i.id}</td>
+      <td>${i.system_name}</td>
+      <td>${i.deleted_by || ''}</td>
+      <td>${i.deleted_at || ''}</td>
+      <td>${i.days_left}</td>
+      <td><button class="btn-lite" onclick="restoreSystem(${i.id})">恢复</button></td>
+    </tr>
+  `).join('');
+}
+
+async function restoreSystem(id) {
+  const res = await fetch(`/api/systems/${id}/restore?actor=tester`, {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setSysResult(`恢复失败：${apiErrorText(data)}`);
+    return;
+  }
+  setSysResult('系统已从回收站恢复。');
+  loadSystems();
+  loadRecycleSystems();
+}
+
+async function cleanupRecycleSystems() {
+  if (!confirm('仅清理超过30天且无关联报告的系统，继续吗？')) return;
+  const res = await fetch('/api/systems/recycle-bin/cleanup?actor=admin', {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setSysResult(`清理失败：${apiErrorText(data)}`);
+    return;
+  }
+  setSysResult(`清理完成：已清理 ${data.purged || 0} 条，跳过 ${data.skipped?.length || 0} 条。`);
+  loadRecycleSystems();
+}
+
+async function loadSystemDeleteRequests() {
+  const res = await fetch('/api/delete-requests?entity_type=system', {headers: authHeaders()});
+  const data = await res.json();
+  document.getElementById('sysDeleteReqTable').innerHTML = (data.items || []).map(i => `
+    <tr>
+      <td>${i.id}</td>
+      <td>${i.entity_id}</td>
+      <td>${i.requested_by || ''}</td>
+      <td>${i.status}</td>
+      <td>${i.reason || ''}</td>
+      <td>
+        ${i.status === 'pending' ? `
+          <button class="btn-lite" onclick="reviewSystemDeleteReq(${i.id}, 'approve')">通过</button>
+          <button class="btn-lite" onclick="reviewSystemDeleteReq(${i.id}, 'reject')">驳回</button>
+        ` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function reviewSystemDeleteReq(id, action) {
+  const comment = action === 'reject' ? (prompt('请输入驳回原因', '') || '') : '';
+  const res = await fetch(`/api/delete-requests/${id}/review?action=${action}&actor=admin&comment=${encodeURIComponent(comment)}`, {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setSysResult(`审核失败：${apiErrorText(data)}`);
+    return;
+  }
+  setSysResult('删除申请审核完成。');
+  loadSystemDeleteRequests();
+  loadSystems();
+  loadRecycleSystems();
+}
+
 loadSystems();
+loadRecycleSystems();
+loadSystemDeleteRequests();
 </script>
 {% endblock %}

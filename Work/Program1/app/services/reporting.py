@@ -3,11 +3,15 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Pt
 
 try:
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.cidfonts import UnicodeCIDFont
     from reportlab.pdfgen import canvas
+    from reportlab.lib.pdfencrypt import StandardEncryption
 
     HAS_REPORTLAB = True
 except Exception:
@@ -94,6 +98,29 @@ def _iter_report_lines(content: dict[str, Any]) -> list[str]:
 
 def export_report_docx(title: str, content: dict[str, Any], output_path: Path) -> None:
     doc = Document()
+    normal_style = doc.styles["Normal"]
+    normal_style.font.name = "宋体"
+    normal_style._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+    normal_style.font.size = Pt(12)
+
+    # Footer page number field: "第 {PAGE} 页"
+    footer = doc.sections[0].footer
+    p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+    p.alignment = 2
+    p.add_run("第 ")
+    run = p.add_run()
+    fld_begin = OxmlElement("w:fldChar")
+    fld_begin.set(qn("w:fldCharType"), "begin")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = " PAGE "
+    fld_end = OxmlElement("w:fldChar")
+    fld_end.set(qn("w:fldCharType"), "end")
+    run._r.append(fld_begin)
+    run._r.append(instr)
+    run._r.append(fld_end)
+    p.add_run(" 页")
+
     doc.add_heading(title, level=1)
     for section in content.get("章节", []):
         section_title = section.get("名称", "")
@@ -101,16 +128,27 @@ def export_report_docx(title: str, content: dict[str, Any], output_path: Path) -
         section_content = section.get("内容", {})
         if isinstance(section_content, dict):
             for key, value in section_content.items():
-                doc.add_paragraph(f"{key}: {value}")
+                para = doc.add_paragraph(f"{key}: {value}")
+                para.paragraph_format.line_spacing = 1.5
         else:
-            doc.add_paragraph(str(section_content))
+            para = doc.add_paragraph(str(section_content))
+            para.paragraph_format.line_spacing = 1.5
     doc.save(output_path)
 
 
-def export_report_pdf(title: str, content: dict[str, Any], output_path: Path) -> None:
+def export_report_pdf(title: str, content: dict[str, Any], output_path: Path, password: str | None = None) -> None:
     if HAS_REPORTLAB:
         pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
-        c = canvas.Canvas(str(output_path))
+        encrypt = None
+        if password:
+            encrypt = StandardEncryption(userPassword=password, ownerPassword=password, canPrint=1, canModify=0, canCopy=0)
+        c = canvas.Canvas(str(output_path), encrypt=encrypt)
+        page_no = 1
+
+        def draw_page_footer() -> None:
+            c.setFont("STSong-Light", 9)
+            c.drawString(520, 20, f"第{page_no}页")
+
         c.setFont("STSong-Light", 14)
         y = 800
         c.drawString(60, y, title)
@@ -118,11 +156,14 @@ def export_report_pdf(title: str, content: dict[str, Any], output_path: Path) ->
         c.setFont("STSong-Light", 11)
         for line in _iter_report_lines(content):
             if y < 50:
+                draw_page_footer()
                 c.showPage()
+                page_no += 1
                 c.setFont("STSong-Light", 11)
                 y = 800
             c.drawString(60, y, line[:1000])
             y -= 18
+        draw_page_footer()
         c.save()
         return
 

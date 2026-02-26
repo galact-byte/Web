@@ -215,6 +215,32 @@ body {
   gap: 20px;
 }
 
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+
+.row > div {
+  min-width: 0;
+}
+
+.dashboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.dashboard-actions > div {
+  flex: 0 0 auto;
+}
+
+.dashboard-actions button {
+  white-space: nowrap;
+}
+
 .grid-2 { grid-template-columns: repeat(2, 1fr); }
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 
@@ -329,5 +355,15 @@ tr:hover td {
   }
   .grid-2, .grid-3 {
     grid-template-columns: 1fr;
+  }
+  .dashboard-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .dashboard-actions > div {
+    width: 100%;
+  }
+  .dashboard-actions button {
+    width: 100%;
   }
 }

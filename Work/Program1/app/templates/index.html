@@ -1,6 +1,6 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
-<div class="panel">
+<div class="panel" id="dashboardCapture">
   <h2><i class="fas fa-filter"></i> 筛选过滤</h2>
   <div class="row">
     <div>
@@ -23,9 +23,39 @@
       </select>
     </div>
     <div>
+      <label>测评师</label>
+      <input id="evaluator" placeholder="录入人/测评师" />
+    </div>
+    <div>
+      <label>项目状态</label>
+      <select id="projectStatus">
+        <option value="">全部</option>
+        <option value="in_progress">进行中</option>
+        <option value="completed">已完成</option>
+        <option value="abnormal">异常</option>
+      </select>
+    </div>
+    <div>
+      <label>开始日期</label>
+      <input id="startDate" type="date" />
+    </div>
+    <div>
+      <label>结束日期</label>
+      <input id="endDate" type="date" />
+    </div>
+    <div>
       <label>&nbsp;</label>
       <button onclick="loadDashboard()"><i class="fas fa-sync-alt"></i> 刷新数据</button>
     </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row dashboard-actions">
+    <div><button class="btn-lite" onclick="exportDashboardExcel()">导出Excel</button></div>
+    <div><button class="btn-lite" onclick="exportDashboardPdf()">导出PDF</button></div>
+    <div><button class="btn-lite" onclick="captureDashboard()">截图PNG</button></div>
+    <div><button class="btn-lite" onclick="toggleFullscreen()">全屏展示</button></div>
   </div>
 </div>
 
@@ -49,7 +79,7 @@
 </div>
 
 <div class="panel">
-  <h2><i class="fas fa-chart-pie"></i> 分布统计</h2>
+  <h2><i class="fas fa-chart-pie"></i> 分布统计（点击柱子可下钻）</h2>
   <div class="charts">
     <div style="height:300px"><canvas id="regionChart"></canvas></div>
     <div style="height:300px"><canvas id="industryChart"></canvas></div>
@@ -57,20 +87,59 @@
   </div>
 </div>
 
+<div class="panel">
+  <h2><i class="fas fa-map"></i> 地图热力图（点击省份下钻）</h2>
+  <div style="height:420px" id="heatMap"></div>
+</div>
+
+<div class="panel">
+  <h2><i class="fas fa-list"></i> 下钻明细</h2>
+  <p class="hint" id="drillHint">点击上方图表柱子查看明细</p>
+  <table>
+    <thead>
+      <tr><th>类型</th><th>ID</th><th>名称</th><th>附加信息</th></tr>
+    </thead>
+    <tbody id="drillTable"></tbody>
+  </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/map/js/china.js"></script>
 <script>
 let regionChart;
 let industryChart;
 let levelChart;
+let heatMapChart;
 
-function upsertChart(inst, el, label, dataset, color) {
+function getFilters() {
+  const params = new URLSearchParams();
+  const city = document.getElementById('city').value.trim();
+  const industry = document.getElementById('industry').value.trim();
+  const level = document.getElementById('level').value;
+  const evaluator = document.getElementById('evaluator').value.trim();
+  const projectStatus = document.getElementById('projectStatus').value;
+  const startDate = document.getElementById('startDate').value;
+  const endDate = document.getElementById('endDate').value;
+  if (city) params.set('city', city);
+  if (industry) params.set('industry', industry);
+  if (level) params.set('level', level);
+  if (evaluator) params.set('evaluator', evaluator);
+  if (projectStatus) params.set('project_status', projectStatus);
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+  return params;
+}
+
+function upsertChart(inst, el, label, dataset, color, dimension) {
   if (inst) inst.destroy();
   return new Chart(document.getElementById(el), {
     type: 'bar',
     data: {
       labels: dataset.map(i => i.name),
       datasets: [{ 
-        label, 
-        data: dataset.map(i => i.value), 
+        label,
+        data: dataset.map(i => i.value),
         backgroundColor: color,
         borderRadius: 6,
         borderWidth: 0
@@ -79,9 +148,19 @@ function upsertChart(inst, el, label, dataset, color) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      onClick: async (evt, elements) => {
+        if (!elements || !elements.length) return;
+        const idx = elements[0].index;
+        const clicked = dataset[idx];
+        if (!clicked) return;
+        let value = clicked.name;
+        if (dimension === 'level') value = String(clicked.name).replace('级', '');
+        await loadDrilldown(dimension, value);
+      },
       plugins: { 
         legend: { display: false },
-        title: { display: true, text: label, font: { size: 14, weight: 'bold' } }
+        title: { display: true, text: label, font: { size: 14, weight: 'bold' } },
+        tooltip: { enabled: true }
       },
       scales: {
         y: { beginAtZero: true, grid: { display: false } },
@@ -92,23 +171,96 @@ function upsertChart(inst, el, label, dataset, color) {
 }
 
 async function loadDashboard() {
-  const params = new URLSearchParams();
-  const city = document.getElementById('city').value.trim();
-  const industry = document.getElementById('industry').value.trim();
-  const level = document.getElementById('level').value;
-  if (city) params.set('city', city);
-  if (industry) params.set('industry', industry);
-  if (level) params.set('level', level);
+  const params = getFilters();
   const res = await fetch('/api/dashboard/summary?' + params.toString());
   const data = await res.json();
   document.getElementById('orgCount').textContent = data.totals.organization_count;
   document.getElementById('sysCount').textContent = data.totals.system_count;
   document.getElementById('pendingReports').textContent = data.totals.pending_review_reports;
   document.getElementById('inProgressProjects').textContent = data.totals.in_progress_projects;
-  
-  regionChart = upsertChart(regionChart, 'regionChart', '地区分布', data.region_distribution, '#3b82f6');
-  industryChart = upsertChart(industryChart, 'industryChart', '行业分布', data.industry_distribution, '#10b981');
-  levelChart = upsertChart(levelChart, 'levelChart', '系统级别分布', data.level_distribution, '#f59e0b');
+
+  regionChart = upsertChart(regionChart, 'regionChart', '地区分布', data.region_distribution, '#3b82f6', 'region');
+  industryChart = upsertChart(industryChart, 'industryChart', '行业分布', data.industry_distribution, '#10b981', 'industry');
+  levelChart = upsertChart(levelChart, 'levelChart', '系统级别分布', data.level_distribution, '#f59e0b', 'level');
+  renderHeatMap(data.region_distribution || []);
+}
+
+function renderHeatMap(dataset) {
+  const el = document.getElementById('heatMap');
+  if (!el || !window.echarts) return;
+  if (!heatMapChart) {
+    heatMapChart = echarts.init(el);
+    heatMapChart.on('click', async (params) => {
+      if (!params || !params.name) return;
+      await loadDrilldown('region', params.name);
+    });
+  }
+  const maxValue = Math.max(1, ...dataset.map(i => Number(i.value || 0)));
+  const mapData = dataset.map(i => ({name: i.name, value: Number(i.value || 0)}));
+  heatMapChart.setOption({
+    tooltip: {trigger: 'item'},
+    visualMap: {
+      min: 0,
+      max: maxValue,
+      left: 'left',
+      top: 'bottom',
+      text: ['高', '低'],
+      calculable: true,
+      inRange: {color: ['#dbeafe', '#93c5fd', '#1d4ed8']}
+    },
+    series: [
+      {
+        name: '单位数量',
+        type: 'map',
+        map: 'china',
+        roam: true,
+        data: mapData
+      }
+    ]
+  });
+}
+
+async function loadDrilldown(dimension, value) {
+  const params = new URLSearchParams({dimension, value});
+  const res = await fetch('/api/dashboard/drilldown?' + params.toString());
+  const data = await res.json();
+  document.getElementById('drillHint').textContent = `当前下钻: ${dimension} = ${value}`;
+  const rows = [];
+  for (const i of data.organizations) {
+    rows.push(`<tr><td>单位</td><td>${i.id}</td><td>${i.name}</td><td>${i.industry || ''} / ${i.filing_region || ''}</td></tr>`);
+  }
+  for (const i of data.systems) {
+    rows.push(`<tr><td>系统</td><td>${i.id}</td><td>${i.system_name}</td><td>${i.system_code} / ${i.proposed_level}级</td></tr>`);
+  }
+  document.getElementById('drillTable').innerHTML = rows.join('');
+}
+
+function exportDashboardExcel() {
+  const params = getFilters();
+  window.open('/api/dashboard/export/excel?' + params.toString(), '_blank');
+}
+
+function exportDashboardPdf() {
+  const params = getFilters();
+  window.open('/api/dashboard/export/pdf?' + params.toString(), '_blank');
+}
+
+async function captureDashboard() {
+  const el = document.getElementById('dashboardCapture');
+  const canvas = await html2canvas(el, {backgroundColor: '#ffffff', scale: 2});
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = 'dashboard_capture.png';
+  a.click();
+}
+
+function toggleFullscreen() {
+  const root = document.documentElement;
+  if (!document.fullscreenElement) {
+    root.requestFullscreen();
+    return;
+  }
+  document.exitFullscreen();
 }
 
 loadDashboard();

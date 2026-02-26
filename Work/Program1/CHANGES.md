@@ -1,64 +1,39 @@
-# CHANGES
+﻿# CHANGES
 
-## 本次完成内容
+## v1.2.0 (2026-02-26)
 
-### 1. 项目初始化
+### 完整版能力补全
 
-- 新建 FastAPI 项目骨架与模块目录
-- 增加依赖清单 `requirements.txt`
-- 增加数据库初始化与会话管理 `app/db.py`
+- 新增删除申请审批流：
+  - 单位删除申请：`POST /api/organizations/{org_id}/delete-request`
+  - 系统删除申请：`POST /api/systems/{system_id}/delete-request`
+  - 申请列表：`GET /api/delete-requests`
+  - 管理员审核：`POST /api/delete-requests/{request_id}/review?action=approve|reject`
+- 删除失败原因精细化：返回具体关联系统/关联报告数量，便于定位阻塞项。
+- 回收站能力增强：单位/系统回收站列表与过期清理接口。
+- 附件能力增强：批量上传与在线预览。
+  - `POST /api/attachments/{entity_type}/{entity_id}/batch`
+  - `GET /api/attachment-files/{attachment_id}/preview`
+  - `GET /api/attachment-files/{attachment_id}/download`
+- 知识库检索增强：新增精确匹配模式 `match_mode=exact`（保留模糊检索）。
+- 流程提醒增强：支持站内消息/邮件/双通道提醒（邮件为可配置能力）。
+- 报告版本管理增强：新增版本差异对比接口 `GET /api/reports/{report_id}/compare/{target_id}`。
+- 报告导出格式增强：自动目录段、Word 默认字体/字号/行距、Word/PDF 页码输出。
 
-### 2. 核心数据模型
+### 精简交付版（APP_LITE_MODE）
 
-- 新增单位、系统、附件、报告、审核记录、流程配置/实例/动作、知识库文档与下载日志等模型
-- 增加单位/系统历史表，支持变更追溯
-- 支持归档、锁定、回收站（软删除 + 30 天恢复窗口）
+- 新增精简交付版运行模式（不删代码，仅按模式屏蔽模块）。
+- 新增启动脚本：`start_lite.bat`。
+- 新增交付说明：`README_LITE.md`。
+- 新增交付打包脚本：`build_lite_delivery.bat`。
 
-### 3. 功能接口实现
+### 版本与测试
 
-- 单位管理：新增、查询、编辑、归档、解锁、删除、恢复、历史查询、Excel 导入导出、Word 导出
-- 系统管理：新增、查询、编辑、复制、归档、删除、恢复、历史查询、Excel 导入导出、Word 导出
-- 附件管理：上传、列表、下载、删除（按实体类型限制格式/大小）
-- 报告模块：自动生成（定级报告/备案表/专家评审意见表）、编辑、提交审核、审核通过/驳回、版本恢复、Word/PDF 导出
-- 流程管控：流程配置、流程实例查询、节点推进、异常标记、操作留痕
-- 数据看板：多维筛选统计与地区/行业/级别分布
-- 知识库：上传、检索、启用/下架、下载、批量下载、下载日志
+- FastAPI 应用版本由 `1.0.0` 升级至 `1.2.0`。
+- 自动化测试新增到 9 条，全部通过：
+  - `python -m unittest discover -s tests -p "test_*.py" -v`
 
-### 4. 前端页面
+## v1.0.0
 
-- 新增统一布局 `app/templates/base.html`
-- 新增看板页、单位页、系统页、报告页、知识库页
-- 新增样式 `app/static/style.css`，支持桌面与移动端自适应
-
-### 5. 校验与服务
-
-- 新增统一社会信用代码、手机号、办公电话、邮箱格式校验
-- 新增报告生成与导出服务 `app/services/reporting.py`
-- 修复历史 JSON 写入时 `datetime` 序列化问题
-
-### 6. 数据库兼容策略
-
-- 默认 `DATABASE_URL=sqlite:///./app.db`
-- 数据访问层采用 SQLAlchemy 通用写法，支持后续切换 MySQL/国产数据库驱动
-- 增加内存 SQLite 兼容（用于受限环境测试）
-
-### 7. 测试与运行
-
-- 新增接口链路测试 `tests/test_api.py`（单位 -> 系统 -> 报告 -> 审核 + 校验/看板）
-- 新增一键启动脚本 `start.bat`
-- 新增使用文档 `README.md`
-- 增加 API 文档环境开关（`ENABLE_API_DOCS`），生产可关闭 `/docs` 与 `/openapi.json`
-
-### 8. UI 视觉系统全面升级
-
-- **风格重塑**：从传统的渐变风格切换为现代、纯净的“极简白 + 科技蓝”中后台管理系统设计，显著提升视觉专业度。
-- **布局优化**：
-    - 侧边栏导航引入 FontAwesome 图标增强直观性。
-    - 顶部新增面包屑导航与角色状态栏。
-    - 页面容器采用卡片式封装（Panel），配合柔和阴影（Shadow）提升层级感。
-- **交互增强**：
-    - 全面优化表单控件（Input/Select/Button）的间距、圆角与焦点反馈效果。
-    - 数据表格增加表头区分、隔行换色与悬停高亮提示。
-- **看板重构**：
-    - 引入带业务图标的数据概览卡片。
-    - 优化图表（Chart.js）配色体系，隐藏冗余图例并增加圆角柱状图效果。
+- 初版实现单位、系统、报告、流程、看板、知识库等核心模块。
+- 提供基础校验、导入导出、回收站与历史记录能力。
