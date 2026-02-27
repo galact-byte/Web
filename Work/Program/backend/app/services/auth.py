@@ -1,6 +1,7 @@
 """
 认证服务
 """
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -12,10 +13,23 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 
-# 配置
-SECRET_KEY = "your-secret-key-change-in-production-environment"  # 生产环境请更换
+# ---- 安全配置 ----
+# SECRET_KEY 必须通过环境变量设置，生产环境禁止使用默认值
+_DEV_DEFAULT_KEY = "dev-only-secret-key-do-not-use-in-production"
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+
+if not SECRET_KEY:
+    if os.getenv("ENV", "dev").lower() == "dev":
+        SECRET_KEY = _DEV_DEFAULT_KEY
+        print("[警告] SECRET_KEY 未设置，使用开发环境默认密钥（生产环境请务必设置 SECRET_KEY）")
+    else:
+        raise RuntimeError(
+            "[安全错误] 生产环境必须通过环境变量设置 SECRET_KEY！"
+            "请在 .env 文件或系统环境变量中设置一个强随机密钥。"
+        )
+
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7天
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(60 * 24)))  # 默认1天
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()

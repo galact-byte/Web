@@ -17,8 +17,14 @@ from app.models.user import User, UserRole
 # 密码哈希上下文
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# JWT 配置
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+# JWT 配置 —— 从环境变量读取，安全策略与 auth.py 一致
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not SECRET_KEY:
+    if os.getenv("ENV", "dev").lower() == "dev":
+        SECRET_KEY = "dev-only-secret-key-do-not-use-in-production"
+    else:
+        raise RuntimeError("[安全错误] 生产环境必须通过环境变量设置 SECRET_KEY！")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 默认24小时
 
