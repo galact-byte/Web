@@ -1,10 +1,6 @@
 # Programs - 个人项目集合
 
-<<<<<<< HEAD
-本仓库包含我的个人学习和项目开发代码，主要涵盖前端学习、AI 客户端、文档生成工具和工作项目等内容。
-=======
-本仓库包含我的个人学习和项目开发代码，主要涵盖前端学习、AI 客户端、文档生成工具和 Android 应用等内容。
->>>>>>> 4fbca823287bf3dfab4bd5851add1d0aeea7e301
+本仓库包含我的个人学习和项目开发代码，主要涵盖前端学习、AI 客户端、文档生成工具、安全工具、Android 应用和工作项目等内容。
 
 ---
 
@@ -37,17 +33,19 @@
 - **启动命令**: `npm run dev`
 - **构建命令**: `npm run build`
 
-### 4. Program/ - 项目完结单管理平台
-- **技术栈**: FastAPI + Vue 3 + Vite + SQLAlchemy
-- **用途**: 在线项目完结单管理系统
+### 4. DDDD/dddd/ - 网络安全扫描工具
+- **技术栈**: Go
+- **用途**: 综合性网络安全扫描与漏洞检测工具（基于 [dddd](https://github.com/SleepingBag945/dddd) 二次开发）
 - **特性**:
-  - 经理/员工角色区分
-  - 项目录入与分发
-  - 贡献率填写
-  - Excel/Word 批量导出
-- **启动命令**: 见 `Program/README.md`
+  - 自动识别输入类型（IP / 网段 / URL）
+  - 主动/被动指纹识别，支持复杂逻辑运算
+  - Nuclei v3 漏洞扫描支持
+  - 子域名枚举/爆破，精准泛解析过滤
+  - Hunter / Fofa / Quake 空间测绘引擎集成
+  - HTML 漏洞报表输出 & 审计日志
+- **构建命令**: 运行 `build_windows.bat` 或见 `DDDD/dddd/README.md`
 
-### 5. Reduce/ - 短视频时间控制 App (Reduce)
+### 5. Reduce/ - 短视频时间控制 App
 - **技术栈**: Kotlin 1.9 + Jetpack Compose + Material 3
 - **用途**: 控制刷短视频时间，识别"刷短视频"行为（竖屏 + 连续滑动），超时后温和拦截
 - **特性**:
@@ -61,21 +59,24 @@
 ### 6. test/ - 测试代码
 - **用途**: 各类测试和实验代码
 
-### 5. Work/ - 工作项目
+### 7. Work/ - 工作项目
 
-#### 5.1 Work/Program/ - 项目完结单管理平台
+#### 7.1 Work/Program/ - 项目完结单管理平台
 - **技术栈**: FastAPI + Vue 3 + Vite + SQLAlchemy
 - **用途**: 在线项目完结单管理系统
 - **特性**:
   - 支持经理/员工角色区分
   - 项目管理、分发与贡献率填写
+  - 季度工作量统计
   - Excel/Word 批量导出
+  - 深浅主题切换
   - JWT Token 认证
 - **启动**:
+  - 一键启动: 双击 `start.bat`（Windows）或 `bash start.sh`（Linux/macOS）
   - 后端: `cd backend && uvicorn app.main:app --reload --port 8000`
   - 前端: `cd frontend && npm run dev`
 
-#### 5.2 Work/Program1/ - 定级备案管理系统
+#### 7.2 Work/Program1/ - 定级备案管理系统
 - **技术栈**: FastAPI + SQLAlchemy + Jinja2 + Chart.js
 - **用途**: 网络安全定级备案管理
 - **特性**:
@@ -93,9 +94,10 @@
 
 ### 环境要求
 - Node.js 18+
-- Python 3.9+ (Work 项目需要)
-- Rust (ai-client 构建需要)
-- JDK 17 + Android SDK 34 (Reduce 构建需要)
+- Python 3.9+（Work 项目需要）
+- Go 1.20+（DDDD 构建需要）
+- Rust（ai-client 构建需要）
+- JDK 17 + Android SDK 34（Reduce 构建需要）
 
 ### 安装依赖
 ```bash
@@ -108,7 +110,7 @@ cd docgen-electron
 npm install
 
 # 项目完结单管理平台
-cd Program/backend
+cd Work/Program/backend
 pip install fastapi uvicorn sqlalchemy python-jose[cryptography] passlib[bcrypt] python-multipart openpyxl python-docx
 cd ../frontend
 npm install
@@ -128,12 +130,10 @@ npm run tauri dev
 cd docgen-electron
 npm run dev
 
-# 项目完结单管理平台
-cd Program/backend
-uvicorn app.main:app --reload --port 8000
-# 另开终端
-cd Program/frontend
-npm run dev
+# 项目完结单管理平台（一键启动）
+cd Work/Program
+start.bat          # Windows
+# bash start.sh   # Linux/macOS
 ```
 
 ---
@@ -144,12 +144,11 @@ npm run dev
 |------|----------|-------|----------|
 | ai-client | Tauri + Vue 3 | Vanilla CSS | Vite |
 | docgen-electron | Electron + Vue 3 | Element Plus | electron-vite |
-| Program | FastAPI + Vue 3 | Vanilla CSS | Vite |
+| DDDD/dddd | Go | - | go build |
 | Reduce | Kotlin + Jetpack Compose | Material 3 | Gradle |
 | front | Vanilla JS/CSS | - | - |
-| Work/Program | FastAPI + Vue 3 | - | Vite |
+| Work/Program | FastAPI + Vue 3 | Vanilla CSS | Vite |
 | Work/Program1 | FastAPI + Jinja2 | Chart.js | - |
-
 
 ---
 
