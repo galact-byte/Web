@@ -1,19 +1,44 @@
 """
 项目完结单管理平台 - 一键启动脚本
 此脚本由 start.bat 调用，负责环境检查、依赖安装和服务启动。
+关闭此窗口将自动停止所有服务。
 """
 
 import os
 import sys
 import subprocess
-import shutil
+import signal
 import time
 import webbrowser
+import atexit
 
 # 项目根目录（start.bat 所在目录）
 ROOT = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(ROOT, "backend")
 FRONTEND_DIR = os.path.join(ROOT, "frontend")
+
+# 全局子进程列表，用于统一管理
+_child_processes: list[subprocess.Popen] = []
+
+
+def cleanup():
+    """终止所有子进程"""
+    for proc in _child_processes:
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+    # 给进程一点时间优雅退出
+    time.sleep(1)
+    for proc in _child_processes:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
+# 注册退出时自动清理
+atexit.register(cleanup)
 
 
 def print_banner():
@@ -101,46 +126,29 @@ def install_frontend_deps():
 
 
 def start_backend():
-    """启动后端服务"""
+    """启动后端服务（当前进程的子进程，关窗口自动停止）"""
     print("[3/4] 启动后端服务 (端口 8000)...")
 
-    if os.name == "nt":
-        # Windows: 在新窗口中启动
-        subprocess.Popen(
-            f'chcp 65001 >nul & title 后端 - FastAPI & "{sys.executable}" -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000',
-            cwd=BACKEND_DIR,
-            shell=True,
-            creationflags=subprocess.CREATE_NEW_CONSOLE
-        )
-    else:
-        subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "app.main:app",
-             "--reload", "--host", "0.0.0.0", "--port", "8000"],
-            cwd=BACKEND_DIR
-        )
-
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "app.main:app",
+         "--reload", "--host", "0.0.0.0", "--port", "8000"],
+        cwd=BACKEND_DIR
+    )
+    _child_processes.append(proc)
     time.sleep(2)
 
 
 def start_frontend():
-    """启动前端服务"""
+    """启动前端服务（当前进程的子进程，关窗口自动停止）"""
     print("[4/4] 启动前端服务 (端口 5173)...")
 
     npx_cmd = "npx.cmd" if os.name == "nt" else "npx"
 
-    if os.name == "nt":
-        subprocess.Popen(
-            f'chcp 65001 >nul & title 前端 - Vite & {npx_cmd} vite --host',
-            cwd=FRONTEND_DIR,
-            shell=True,
-            creationflags=subprocess.CREATE_NEW_CONSOLE
-        )
-    else:
-        subprocess.Popen(
-            [npx_cmd, "vite", "--host"],
-            cwd=FRONTEND_DIR
-        )
-
+    proc = subprocess.Popen(
+        [npx_cmd, "vite", "--host"],
+        cwd=FRONTEND_DIR
+    )
+    _child_processes.append(proc)
     time.sleep(3)
 
 
@@ -161,12 +169,26 @@ def main():
     print("=" * 50)
     print()
 
-    input("按任意键打开浏览器...")
     webbrowser.open("http://localhost:5173")
 
     print()
-    print("提示: 关闭此窗口不会停止服务。")
-    input("按任意键退出...")
+    print("提示: 关闭此窗口将自动停止所有服务。")
+    print("      按 Ctrl+C 或直接关闭窗口即可停止。")
+    print()
+
+    try:
+        # 持续等待子进程，任一退出则全部停止
+        while True:
+            for proc in _child_processes:
+                if proc.poll() is not None:
+                    print(f"\n[警告] 子进程 (PID {proc.pid}) 已退出，正在停止所有服务...")
+                    cleanup()
+                    return
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n[INFO] 正在停止所有服务...")
+        cleanup()
+        print("[INFO] 已停止。")
 
 
 if __name__ == "__main__":
