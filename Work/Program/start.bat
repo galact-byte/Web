@@ -34,7 +34,7 @@ echo.
 echo [1/4] 检查后端依赖...
 if exist "%ROOT%backend\.deps_installed" goto :backend_ok
 echo       首次运行，正在安装后端依赖...
-pip install -r "%ROOT%backend\requirements.txt"
+pip install -r "%ROOT%backend\requirements.txt" -q
 if %ERRORLEVEL% neq 0 (
     echo [错误] 后端依赖安装失败
     pause
@@ -92,11 +92,14 @@ echo ==================================================
 echo.
 echo 按任意键打开浏览器...
 pause >nul
-
 start http://localhost:5173
+call :exit_msg
+goto :eof
 
+:exit_msg
 chcp 65001 >nul
 echo.
 echo 提示: 关闭此窗口不会停止服务。
 echo 按任意键退出...
 pause >nul
+goto :eof
