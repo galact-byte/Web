@@ -53,7 +53,7 @@ echo [2/4] 检查前端依赖...
 if not exist "%ROOT%frontend\node_modules\" (
     echo       首次运行，正在安装前端依赖...
     cd /d "%ROOT%frontend"
-    npm install
+    call npm install
     if %ERRORLEVEL% neq 0 (
         echo [错误] 前端依赖安装失败
         pause
