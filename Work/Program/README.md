@@ -32,7 +32,7 @@ pip install fastapi uvicorn sqlalchemy python-jose[cryptography] passlib[bcrypt]
 uvicorn app.main:app --reload --port 8000
 ```
 
-后端启动后访问 http://localhost:8000/docs 查看 API 文档。
+后端启动后访问 http://localhost:8000/docs 查看 API 文档（仅开发模式可用）。
 
 ### 启动前端
 
@@ -71,26 +71,30 @@ npm run dev
 
 ```
 Program/
+├── start.bat                 # 一键启动入口（Windows）
+├── launcher.py               # 启动脚本（环境检查、依赖安装、服务启动）
+│
 ├── backend/                  # 后端（Python FastAPI）
+│   ├── .env.example          # 环境变量配置模板
 │   └── app/
-│       ├── main.py          # 入口
-│       ├── database.py      # 数据库配置
-│       ├── models/          # 数据模型
-│       ├── schemas/         # 请求/响应模式
-│       ├── routers/         # API 路由
-│       └── services/        # 业务逻辑
+│       ├── main.py           # 入口（含安全配置）
+│       ├── database.py       # 数据库配置
+│       ├── models/           # 数据模型
+│       ├── schemas/          # 请求/响应模式
+│       ├── routers/          # API 路由
+│       └── services/         # 业务逻辑（含 JWT 认证）
 │
 ├── frontend/                 # 前端（Vue 3 + Vite）
 │   └── src/
-│       ├── api/             # API 调用
-│       ├── stores/          # 状态管理
-│       ├── router/          # 路由配置
-│       └── views/           # 页面组件
-│           ├── Dashboard     # 仪表盘
-│           ├── Projects      # 项目管理
-│           ├── Workload      # 工作量统计
-│           ├── Export        # 导出完结单
-│           └── Users         # 用户管理
+│       ├── api/              # API 调用
+│       ├── stores/           # 状态管理
+│       ├── router/           # 路由配置
+│       └── views/            # 页面组件
+│           ├── Dashboard      # 仪表盘
+│           ├── Projects       # 项目管理
+│           ├── Workload       # 工作量统计
+│           ├── Export         # 导出完结单
+│           └── Users          # 用户管理
 │
 └── Request/                  # 原始需求文档
 ```
@@ -99,18 +103,45 @@ Program/
 
 ## ⚙️ 配置说明
 
-### 数据库切换
+复制 `backend/.env.example` 为 `backend/.env`，按需修改配置项：
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+### 环境模式
+
+| 变量 | 值 | 说明 |
+|------|------|------|
+| `ENV` | `dev`（默认） | 开发模式：启用 Swagger 文档（`/docs`），使用默认密钥 |
+| `ENV` | `prod` | 生产模式：禁用 Swagger 文档，强制要求设置 `SECRET_KEY` |
+
+### 数据库
 
 默认使用 SQLite，生产环境可切换到 PostgreSQL：
 
 ```bash
-# 设置环境变量
-export DATABASE_URL="postgresql://user:password@localhost:5432/dbname"
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
 ```
 
-### JWT 密钥配置
+### JWT 密钥（生产环境必须修改）
 
-生产环境请修改 `backend/app/services/auth.py` 中的 `SECRET_KEY`。
+```bash
+# 生成强随机密钥
+python -c "import secrets; print(secrets.token_urlsafe(64))"
+
+# 填入 .env
+SECRET_KEY=生成的密钥
+```
+
+> ⚠️ **生产环境未设置 `SECRET_KEY` 时，服务器将拒绝启动。**
+
+### CORS 跨域
+
+```bash
+# 多个来源用逗号分隔
+CORS_ORIGINS=https://你的前端域名
+```
 
 ---
 
