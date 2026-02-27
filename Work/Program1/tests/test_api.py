@@ -4,6 +4,7 @@ import io
 import json
 import os
 import unittest
+from pathlib import Path
 
 from docx import Document
 from fastapi.testclient import TestClient
@@ -13,6 +14,7 @@ class ApiFlowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+        os.environ['API_AUTH_REQUIRED'] = '0'
 
         import app.db as db_module
         import app.main as main_module
@@ -82,11 +84,17 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(report_resp.status_code, 200)
         report_id = report_resp.json()['data']['id']
 
-        submit_resp = self.client.post(f'/api/reports/{report_id}/submit?actor=tester&reviewer=leader')
+        submit_resp = self.client.post(
+            f'/api/reports/{report_id}/submit?actor=tester&reviewer=leader',
+            headers=self.admin_headers,
+        )
         self.assertEqual(submit_resp.status_code, 200)
         self.assertEqual(submit_resp.json()['status'], 'submitted')
 
-        review_resp = self.client.post(f'/api/reports/{report_id}/review?actor=leader&action=approve&comment=通过')
+        review_resp = self.client.post(
+            f'/api/reports/{report_id}/review?actor=leader&action=approve&comment=通过',
+            headers=self.admin_headers,
+        )
         self.assertEqual(review_resp.status_code, 200)
         self.assertEqual(review_resp.json()['status'], 'approved')
 
@@ -189,7 +197,10 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(import_resp.status_code, 200)
         imported_org_id = import_resp.json()['data']['id']
 
-        link_resp = self.client.post(f'/api/organizations/collection-links?organization_id={imported_org_id}&expires_days=7&actor=tester')
+        link_resp = self.client.post(
+            f'/api/organizations/collection-links?organization_id={imported_org_id}&expires_days=7&actor=tester',
+            headers=self.admin_headers,
+        )
         self.assertEqual(link_resp.status_code, 200)
         token = link_resp.json()['data']['token']
 
@@ -203,7 +214,10 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(submit_resp.status_code, 200)
         submission_id = submit_resp.json()['data']['submission_id']
 
-        review_resp = self.client.post(f'/api/organizations/submissions/{submission_id}/review?action=approve&actor=tester')
+        review_resp = self.client.post(
+            f'/api/organizations/submissions/{submission_id}/review?action=approve&actor=tester',
+            headers=self.admin_headers,
+        )
         self.assertEqual(review_resp.status_code, 200)
         self.assertEqual(review_resp.json()['status'], 'approved')
 
@@ -286,7 +300,10 @@ class ApiFlowTests(unittest.TestCase):
         )
         self.assertEqual(add_section_resp.status_code, 200)
 
-        reorder_resp = self.client.post(f'/api/reports/{report_id}/sections/reorder?from_index=0&to_index=1&actor=tester')
+        reorder_resp = self.client.post(
+            f'/api/reports/{report_id}/sections/reorder?from_index=0&to_index=1&actor=tester',
+            headers=self.admin_headers,
+        )
         self.assertEqual(reorder_resp.status_code, 200)
 
         drill_resp = self.client.get('/api/dashboard/drilldown?dimension=region&value=成都')
@@ -393,6 +410,34 @@ class ApiFlowTests(unittest.TestCase):
             headers=self.admin_headers,
         )
         self.assertIn(create_user_resp.status_code, [200, 409])
+
+        local_tpl_docs = [
+            ('01-自动测试备案表.docx', '网络安全等级保护备案表'),
+            ('02-自动测试定级报告.docx', '网络安全等级保护定级报告'),
+            ('03-自动测试专家评审意见表.docx', '专家评审意见表'),
+        ]
+
+        def _safe_remove(path: Path) -> None:
+            try:
+                path.unlink(missing_ok=True)
+            except PermissionError:
+                pass
+
+        for filename, title in local_tpl_docs:
+            p = Path(filename)
+            d = Document()
+            d.add_paragraph(title)
+            t = d.add_table(rows=2, cols=2)
+            t.cell(0, 0).text = '单位名称'
+            t.cell(0, 1).text = '山西晋深交易有限公司'
+            t.cell(1, 0).text = '系统名称'
+            t.cell(1, 1).text = '山西省省属企业采购与供应链信息管理系统'
+            d.save(p)
+            self.addCleanup(_safe_remove, p)
+
+        import_local_resp = self.client.post('/api/templates/import-local-official?actor=admin', headers=self.admin_headers)
+        self.assertEqual(import_local_resp.status_code, 200)
+        self.assertGreaterEqual(len(import_local_resp.json().get('imported', [])), 3)
 
         tpl_config = {
             'title': '福州市专家评审意见表模板',
@@ -613,6 +658,66 @@ class ApiFlowTests(unittest.TestCase):
         list_exact = self.client.get('/api/knowledge?keyword=精确关键字&match_mode=exact')
         self.assertEqual(list_exact.status_code, 200)
         self.assertTrue(any(i['title'] == '精确检索文档' for i in list_exact.json()['items']))
+
+    def test_10_permission_boundaries(self):
+        unauth_collection = self.client.get('/api/organizations/collection-links')
+        self.assertEqual(unauth_collection.status_code, 401)
+
+        create_user_resp = self.client.post(
+            '/api/auth/users',
+            json={'username': 'ev_user', 'password': 'evpass123', 'role': 'evaluator'},
+            headers=self.admin_headers,
+        )
+        self.assertIn(create_user_resp.status_code, [200, 409])
+
+        evaluator_login = self.client.post('/api/auth/login', json={'username': 'ev_user', 'password': 'evpass123'})
+        self.assertEqual(evaluator_login.status_code, 200)
+        evaluator_headers = {'X-Auth-Token': evaluator_login.json()['token']}
+
+        org_payload = {
+            'name': '权限边界单位',
+            'credit_code': '91350100M000100Y54',
+            'legal_representative': '周十',
+            'address': '福州市',
+            'mobile_phone': '13100131000',
+            'email': 'perm@example.com',
+            'industry': '政府',
+            'organization_type': '机关单位',
+            'filing_region': '福州',
+            'created_by': 'tester',
+        }
+        org_resp = self.client.post('/api/organizations', json=org_payload)
+        self.assertEqual(org_resp.status_code, 200)
+        org_id = org_resp.json()['data']['id']
+
+        system_payload = {
+            'organization_id': org_id,
+            'system_name': '权限边界系统',
+            'proposed_level': 3,
+            'created_by': 'tester',
+        }
+        sys_resp = self.client.post('/api/systems', json=system_payload)
+        self.assertEqual(sys_resp.status_code, 200)
+        system_id = sys_resp.json()['data']['id']
+
+        report_resp = self.client.post(f'/api/reports/generate?system_id={system_id}&report_type=grading_report&actor=tester')
+        self.assertEqual(report_resp.status_code, 200)
+        report_id = report_resp.json()['data']['id']
+
+        submit_resp = self.client.post(
+            f'/api/reports/{report_id}/submit?actor=tester&reviewer=leader',
+            headers=self.admin_headers,
+        )
+        self.assertEqual(submit_resp.status_code, 200)
+
+        eval_review_resp = self.client.post(
+            f'/api/reports/{report_id}/review?actor=ev_user&action=approve&comment=越权审核测试',
+            headers=evaluator_headers,
+        )
+        self.assertEqual(eval_review_resp.status_code, 403)
+
+        evaluator_collection = self.client.get('/api/organizations/collection-links', headers=evaluator_headers)
+        self.assertEqual(evaluator_collection.status_code, 200)
 
 
 if __name__ == '__main__':

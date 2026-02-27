@@ -101,6 +101,19 @@ function msg(data, fallback='操作失败') {
   return data.message || fallback;
 }
 
+function authToken() {
+  return localStorage.getItem('auth_token') || '';
+}
+
+function authHeaders() {
+  const token = authToken();
+  return token ? {'X-Auth-Token': token} : {};
+}
+
+function esc(v) {
+  return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}
+
 async function generateReport() {
   const systemId = document.getElementById('systemId').value;
   const reportType = document.getElementById('reportType').value;
@@ -108,7 +121,7 @@ async function generateReport() {
   const actor = document.getElementById('reportActor').value.trim() || 'tester';
   const suffix = templateId ? `&template_id=${encodeURIComponent(templateId)}` : '';
   const url = `/api/reports/generate?system_id=${systemId}&report_type=${reportType}&actor=${encodeURIComponent(actor)}${suffix}`;
-  const res = await fetch(url, {method: 'POST'});
+  const res = await fetch(url, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     document.getElementById('reportResult').textContent = `生成失败：${msg(data)}`;
@@ -131,7 +144,7 @@ async function setSignature() {
   };
   const res = await fetch(`/api/reports/${reportId}/signature?actor=tester`, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', ...authHeaders()},
     body: JSON.stringify(payload)
   });
   const data = await res.json();
@@ -145,7 +158,7 @@ function getReportId() {
 async function submitReport() {
   const reportId = getReportId();
   const reviewer = document.getElementById('reviewer').value.trim() || 'leader';
-  const res = await fetch(`/api/reports/${reportId}/submit?actor=tester&reviewer=${encodeURIComponent(reviewer)}`, {method: 'POST'});
+  const res = await fetch(`/api/reports/${reportId}/submit?actor=tester&reviewer=${encodeURIComponent(reviewer)}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   document.getElementById('reviewResult').textContent = res.ok ? (data.message || '已提交审核') : `提交失败：${msg(data)}`;
   loadReports();
@@ -155,7 +168,7 @@ async function reviewReport() {
   const reportId = getReportId();
   const reviewer = document.getElementById('reviewer').value.trim() || 'leader';
   const action = document.getElementById('reviewAction').value;
-  const res = await fetch(`/api/reports/${reportId}/review?actor=${encodeURIComponent(reviewer)}&action=${action}&comment=页面操作`, {method: 'POST'});
+  const res = await fetch(`/api/reports/${reportId}/review?actor=${encodeURIComponent(reviewer)}&action=${action}&comment=页面操作`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   document.getElementById('reviewResult').textContent = res.ok ? (data.message || '审核完成') : `审核失败：${msg(data)}`;
   loadReports();
@@ -164,7 +177,7 @@ async function reviewReport() {
 async function showReportSections() {
   const reportId = getReportId();
   if (!reportId) return;
-  const res = await fetch(`/api/reports/${reportId}`);
+  const res = await fetch(`/api/reports/${reportId}`, {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     document.getElementById('sectionResult').textContent = `读取失败：${msg(data)}`;
@@ -195,7 +208,7 @@ async function addSection() {
   const payload = {name, content: parseSectionContent()};
   const res = await fetch(`/api/reports/${reportId}/sections?actor=tester`, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', ...authHeaders()},
     body: JSON.stringify(payload)
   });
   const data = await res.json();
@@ -206,7 +219,7 @@ async function addSection() {
 async function deleteSection() {
   const reportId = getReportId();
   const idx = document.getElementById('deleteSectionIndex').value;
-  const res = await fetch(`/api/reports/${reportId}/sections/${idx}?actor=tester`, {method: 'DELETE'});
+  const res = await fetch(`/api/reports/${reportId}/sections/${idx}?actor=tester`, {method: 'DELETE', headers: authHeaders()});
   const data = await res.json();
   document.getElementById('sectionResult').textContent = res.ok ? (data.message || '章节删除成功') : `删除失败：${msg(data)}`;
   showReportSections();
@@ -216,7 +229,7 @@ async function reorderSection() {
   const reportId = getReportId();
   const fromIndex = document.getElementById('fromIndex').value;
   const toIndex = document.getElementById('toIndex').value;
-  const res = await fetch(`/api/reports/${reportId}/sections/reorder?from_index=${fromIndex}&to_index=${toIndex}&actor=tester`, {method: 'POST'});
+  const res = await fetch(`/api/reports/${reportId}/sections/reorder?from_index=${fromIndex}&to_index=${toIndex}&actor=tester`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   document.getElementById('sectionResult').textContent = res.ok ? (data.message || '章节顺序已调整') : `调整失败：${msg(data)}`;
   showReportSections();
@@ -224,19 +237,28 @@ async function reorderSection() {
 
 async function loadReports() {
   const pdfPassword = document.getElementById('pdfPassword').value.trim();
-  const pdfSuffix = pdfPassword ? `?password=${encodeURIComponent(pdfPassword)}` : '';
-  const res = await fetch('/api/reports');
+  const token = authToken();
+  const wordSuffix = token ? `?token=${encodeURIComponent(token)}` : '';
+  const pdfParams = new URLSearchParams();
+  if (pdfPassword) pdfParams.set('password', pdfPassword);
+  if (token) pdfParams.set('token', token);
+  const pdfLinkSuffix = pdfParams.toString() ? `?${pdfParams.toString()}` : '';
+  const res = await fetch('/api/reports', {headers: authHeaders()});
   const data = await res.json();
+  if (!res.ok) {
+    document.getElementById('reportTable').innerHTML = `<tr><td colspan="7">${esc(data.detail || '请先登录后查看报告列表。')}</td></tr>`;
+    return;
+  }
   document.getElementById('reportTable').innerHTML = data.items.map(i => `
     <tr>
-      <td>${i.id}</td>
-      <td>${i.title}</td>
-      <td>${i.report_type}</td>
-      <td>V${i.version_no}</td>
-      <td>${i.status}</td>
+      <td>${esc(i.id)}</td>
+      <td>${esc(i.title)}</td>
+      <td>${esc(i.report_type)}</td>
+      <td>V${esc(i.version_no)}</td>
+      <td>${esc(i.status)}</td>
       <td>
-        <a href="/api/reports/${i.id}/export/word" target="_blank">Word</a> |
-        <a href="/api/reports/${i.id}/export/pdf${pdfSuffix}" target="_blank">PDF</a>
+        <a href="/api/reports/${i.id}/export/word${wordSuffix}" target="_blank">Word</a> |
+        <a href="/api/reports/${i.id}/export/pdf${pdfLinkSuffix}" target="_blank">PDF</a>
       </td>
       <td>
         <button class="btn-lite" onclick="useReportId(${i.id})">设为当前</button>
@@ -262,7 +284,7 @@ async function compareReports() {
     alert('请先填写两个报告ID');
     return;
   }
-  const res = await fetch(`/api/reports/${left}/compare/${right}`);
+  const res = await fetch(`/api/reports/${left}/compare/${right}`, {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     document.getElementById('compareResult').textContent = `对比失败：${msg(data)}`;

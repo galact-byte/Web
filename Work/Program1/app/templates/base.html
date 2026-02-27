@@ -29,10 +29,10 @@
           <i class="fas fa-file-contract"></i> 报告与审核
         </a>
         {% if not lite_mode %}
-        <a href="/workflow" class="{{ 'active' if request.url.path.startswith('/workflow') else '' }}">
+        <a href="/workflow" class="{{ 'active' if request.url.path.startswith('/workflow') else '' }}" data-role-only="admin,reviewer">
           <i class="fas fa-diagram-project"></i> 流程管控
         </a>
-        <a href="/templates" class="{{ 'active' if request.url.path.startswith('/templates') else '' }}">
+        <a href="/templates" class="{{ 'active' if request.url.path.startswith('/templates') else '' }}" data-role-only="admin">
           <i class="fas fa-layer-group"></i> 模板管理
         </a>
         <a href="/knowledge" class="{{ 'active' if request.url.path.startswith('/knowledge') else '' }}">
@@ -42,7 +42,7 @@
       </nav>
       <div class="sidebar-footer">
         {% if show_api_docs %}
-        <a href="/docs" target="_blank"><i class="fas fa-code"></i> API文档</a>
+        <a href="#" onclick="openApiDocs(); return false;"><i class="fas fa-code"></i> API文档</a>
         {% endif %}
       </div>
     </aside>
@@ -74,19 +74,49 @@
   </div>
 </body>
 <script>
+function applyRoleUI(role) {
+  const currentRole = role || 'guest';
+  window.__currentUserRole = currentRole;
+  const roleEls = document.querySelectorAll('[data-role-only]');
+  roleEls.forEach((el) => {
+    const allow = (el.getAttribute('data-role-only') || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    const visible = allow.length === 0 || allow.includes(currentRole);
+    el.style.display = visible ? '' : 'none';
+  });
+  const event = new CustomEvent('app-role-changed', {detail: {role: currentRole}});
+  window.dispatchEvent(event);
+}
+
 async function refreshCurrentRole() {
   if ({{ 'true' if lite_mode else 'false' }}) return;
   const token = localStorage.getItem('auth_token') || '';
-  if (!token) return;
+  if (!token) {
+    applyRoleUI('guest');
+    return;
+  }
   try {
     const res = await fetch('/api/auth/me', {headers: {'X-Auth-Token': token}});
-    if (!res.ok) return;
+    if (!res.ok) {
+      applyRoleUI('guest');
+      return;
+    }
     const data = await res.json();
     const badge = document.getElementById('currentRoleBadge');
     if (badge) badge.textContent = `当前角色: ${data.role} (${data.username})`;
+    applyRoleUI(data.role || 'guest');
   } catch (e) {
+    applyRoleUI('guest');
   }
 }
 refreshCurrentRole();
+
+function openApiDocs() {
+  const token = localStorage.getItem('auth_token') || '';
+  const url = token ? `/docs?token=${encodeURIComponent(token)}` : '/docs';
+  window.open(url, '_blank');
+}
 </script>
 </html>

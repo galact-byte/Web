@@ -177,7 +177,7 @@ async function downloadDoc(id, fileName) {
 
 async function loadKnowledge() {
   const params = buildSearchParams();
-  const res = await fetch('/api/knowledge?' + params.toString());
+  const res = await fetch('/api/knowledge?' + params.toString(), {headers: authHeaders()});
   const data = await res.json();
   document.getElementById('knowledgeTable').innerHTML = data.items.map(i => `
     <tr>

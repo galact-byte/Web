@@ -130,7 +130,7 @@ async function importSystemWord() {
   }
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch('/api/systems/import/word?actor=tester', {method: 'POST', body: fd});
+  const res = await fetch('/api/systems/import/word?actor=tester', {method: 'POST', headers: authHeaders(), body: fd});
   const data = await res.json();
   if (!res.ok) {
     setSysResult(`导入失败：${apiErrorText(data)}`);

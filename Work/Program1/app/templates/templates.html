@@ -21,6 +21,7 @@
     <div><label>模板文件*</label><input id="tplFile" type="file" /></div>
   </div>
   <br />
+  <button class="btn-lite" onclick="importLocalOfficialTemplates()">导入本地官方模板</button>
   <button onclick="uploadTemplate()">上传模板</button>
   <div class="result" id="tplResult">可在此查看操作结果。</div>
 </div>
@@ -46,6 +47,10 @@ function authHeaders() {
   return token ? {'X-Auth-Token': token} : {};
 }
 
+function authToken() {
+  return localStorage.getItem('auth_token') || '';
+}
+
 function messageFrom(data, fallback='操作失败') {
   if (!data) return fallback;
   if (typeof data.detail === 'string') return data.detail;
@@ -55,6 +60,19 @@ function messageFrom(data, fallback='操作失败') {
 
 function setTplResult(text) {
   document.getElementById('tplResult').textContent = text;
+}
+
+async function importLocalOfficialTemplates() {
+  const res = await fetch('/api/templates/import-local-official?actor=admin', {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setTplResult(`导入失败：${messageFrom(data)}`);
+    return;
+  }
+  const count = (data.imported || []).length;
+  const missing = (data.missing || []).length ? `；缺失文件模式：${data.missing.join(', ')}` : '';
+  setTplResult(`本地官方模板导入完成：成功 ${count} 个${missing}`);
+  loadTemplates();
 }
 
 async function uploadTemplate() {
@@ -91,7 +109,7 @@ async function loadTemplates() {
   if (type) params.set('report_type', type);
   if (category) params.set('category', category);
   if (city) params.set('city', city);
-  const res = await fetch('/api/templates?' + params.toString());
+  const res = await fetch('/api/templates?' + params.toString(), {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     setTplResult(`查询失败：${messageFrom(data)}`);
@@ -108,7 +126,7 @@ async function loadTemplates() {
       <td>V${i.version_no}</td>
       <td>${i.status}</td>
       <td>
-        <a href="/api/templates/${i.id}/download" target="_blank">下载</a>
+        <a href="/api/templates/${i.id}/download${authToken() ? `?token=${encodeURIComponent(authToken())}` : ''}" target="_blank">下载</a>
         <button class="btn-lite" onclick="setDefault(${i.id})">设默认</button>
         <button class="btn-lite" onclick="editTemplate(${i.id})">编辑</button>
         <button class="btn-lite" onclick="newVersion(${i.id})">新版本</button>
@@ -163,7 +181,7 @@ async function newVersion(id) {
 async function testFill(id) {
   const systemId = prompt('可选：输入系统ID用于测试填充', '');
   const suffix = systemId ? `?system_id=${encodeURIComponent(systemId)}` : '';
-  const res = await fetch(`/api/templates/${id}/test-fill${suffix}`);
+  const res = await fetch(`/api/templates/${id}/test-fill${suffix}`, {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     setTplResult(`测试填充失败：${messageFrom(data)}`);
@@ -176,7 +194,7 @@ async function testFill(id) {
 }
 
 async function showVersions(id) {
-  const res = await fetch(`/api/templates/${id}/versions`);
+  const res = await fetch(`/api/templates/${id}/versions`, {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     setTplResult(`读取版本失败：${messageFrom(data)}`);
