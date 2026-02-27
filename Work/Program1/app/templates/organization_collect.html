@@ -2,15 +2,15 @@
 {% block content %}
 <div class="panel">
   <h2>客户单位信息采集</h2>
-  <p class="hint">请填写后提交，系统将自动同步为待审核记录。</p>
+  <p class="hint">请填写后提交。必填项不能为空；单位名称需真实填写，统一社会信用代码/手机号/邮箱按格式校验。其他文本字段如暂缺可填写“/”占位。</p>
   <div class="grid grid-3">
     <div><label>单位名称*</label><input id="name" value="{{ initial.get('name', '') }}" /></div>
-    <div><label>统一社会信用代码*</label><input id="creditCode" value="{{ initial.get('credit_code', '') }}" /></div>
+    <div><label>统一社会信用代码*</label><input id="creditCode" value="{{ initial.get('credit_code', '') }}" placeholder="例如：91350100M000100Y43" /></div>
     <div><label>单位负责人*</label><input id="legalRepresentative" value="{{ initial.get('legal_representative', '') }}" /></div>
     <div><label>单位地址*</label><input id="address" value="{{ initial.get('address', '') }}" /></div>
-    <div><label>办公电话</label><input id="officePhone" value="{{ initial.get('office_phone', '') }}" /></div>
-    <div><label>移动电话*</label><input id="mobilePhone" value="{{ initial.get('mobile_phone', '') }}" /></div>
-    <div><label>邮箱*</label><input id="email" value="{{ initial.get('email', '') }}" /></div>
+    <div><label>办公电话（可空）</label><input id="officePhone" value="{{ initial.get('office_phone', '') }}" placeholder="例如：0591-1234567" /></div>
+    <div><label>移动电话*</label><input id="mobilePhone" value="{{ initial.get('mobile_phone', '') }}" placeholder="例如：13800138000" /></div>
+    <div><label>邮箱*</label><input id="email" value="{{ initial.get('email', '') }}" placeholder="例如：user@example.com" /></div>
     <div><label>所属行业*</label><input id="industry" value="{{ initial.get('industry', '') }}" /></div>
     <div><label>单位类型*</label><input id="organizationType" value="{{ initial.get('organization_type', '') }}" /></div>
     <div><label>备案地区*</label><input id="filingRegion" value="{{ initial.get('filing_region', '') }}" /></div>
@@ -39,6 +39,42 @@ async function submitCollection() {
     supervising_department: document.getElementById('supervisingDepartment').value.trim() || null,
     submitter: document.getElementById('submitter').value.trim() || 'customer'
   };
+  const required = [
+    ['单位名称', payload.name],
+    ['统一社会信用代码', payload.credit_code],
+    ['单位负责人', payload.legal_representative],
+    ['单位地址', payload.address],
+    ['移动电话', payload.mobile_phone],
+    ['邮箱', payload.email],
+    ['所属行业', payload.industry],
+    ['单位类型', payload.organization_type],
+    ['备案地区', payload.filing_region]
+  ];
+  for (const [label, value] of required) {
+    if (!String(value || '').trim()) {
+      document.getElementById('submitResult').textContent = `${label}为必填项，不能为空。`;
+      return;
+    }
+  }
+  if (payload.name === '/' || payload.name === '／') {
+    document.getElementById('submitResult').textContent = '单位名称需填写真实内容，不能仅填写“/”。';
+    return;
+  }
+  const creditPattern = /^[0-9A-Z]{18}$/;
+  const mobilePattern = /^1[3-9]\d{9}$/;
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!creditPattern.test(payload.credit_code)) {
+    document.getElementById('submitResult').textContent = '统一社会信用代码格式错误，应为18位大写字母或数字。';
+    return;
+  }
+  if (!mobilePattern.test(payload.mobile_phone)) {
+    document.getElementById('submitResult').textContent = '手机号格式错误，应为11位中国大陆手机号。';
+    return;
+  }
+  if (!emailPattern.test(payload.email)) {
+    document.getElementById('submitResult').textContent = '邮箱格式错误。';
+    return;
+  }
   const res = await fetch(`/api/public/organizations/collect/${token}`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
