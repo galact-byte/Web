@@ -32,36 +32,37 @@ echo.
 
 :: ---- 安装后端依赖 ----
 echo [1/4] 检查后端依赖...
-if not exist "%ROOT%backend\.deps_installed" (
-    echo       首次运行，正在安装后端依赖...
-    pip install -r "%ROOT%backend\requirements.txt"
-    if %ERRORLEVEL% neq 0 (
-        echo [错误] 后端依赖安装失败
-        pause
-        exit /b 1
-    )
-    echo ok> "%ROOT%backend\.deps_installed"
-) else (
-    echo       后端依赖已安装，检查更新...
-    pip install -r "%ROOT%backend\requirements.txt" -q
+if exist "%ROOT%backend\.deps_installed" goto :backend_ok
+echo       首次运行，正在安装后端依赖...
+pip install -r "%ROOT%backend\requirements.txt"
+if %ERRORLEVEL% neq 0 (
+    echo [错误] 后端依赖安装失败
+    pause
+    exit /b 1
 )
+echo ok> "%ROOT%backend\.deps_installed"
+goto :backend_done
+:backend_ok
+echo       后端依赖已安装
+:backend_done
 echo       后端依赖 OK
 echo.
 
 :: ---- 安装前端依赖（首次运行时） ----
 echo [2/4] 检查前端依赖...
-if not exist "%ROOT%frontend\node_modules\" (
-    echo       首次运行，正在安装前端依赖...
-    cd /d "%ROOT%frontend"
-    call npm install
-    if %ERRORLEVEL% neq 0 (
-        echo [错误] 前端依赖安装失败
-        pause
-        exit /b 1
-    )
-) else (
-    echo       前端依赖已安装
+if exist "%ROOT%frontend\node_modules\" goto :frontend_ok
+echo       首次运行，正在安装前端依赖...
+cd /d "%ROOT%frontend"
+call npm install
+if %ERRORLEVEL% neq 0 (
+    echo [错误] 前端依赖安装失败
+    pause
+    exit /b 1
 )
+goto :frontend_done
+:frontend_ok
+echo       前端依赖已安装
+:frontend_done
 echo       前端依赖 OK
 echo.
 
@@ -94,6 +95,7 @@ pause >nul
 
 start http://localhost:5173
 
+chcp 65001 >nul
 echo.
 echo 提示: 关闭此窗口不会停止服务。
 echo 按任意键退出...
