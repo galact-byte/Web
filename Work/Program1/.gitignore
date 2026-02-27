@@ -43,4 +43,4 @@ Thumbs.db
 .DS_Store
 
 # 需求文档
-需求.docx
+*.docx

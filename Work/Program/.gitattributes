@@ -1,0 +1,2 @@
+# 确保 .bat 文件使用 LF 或 CRLF 均可，但不添加 BOM
+*.bat text eol=crlf working-tree-encoding=UTF-8
