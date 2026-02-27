@@ -1,4 +1,4 @@
-﻿@chcp 65001 >nul 2>&1
+@chcp 65001 >nul 2>&1
 @echo off
 title 项目完结单管理平台 - 一键启动
 
