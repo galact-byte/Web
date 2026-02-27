@@ -87,14 +87,14 @@ function formatInstanceText(data) {
   return [
     `状态：${data.status || '-'}`,
     `当前节点：${data.current_step_name || '-'}`,
-    `负责人：${data.owner || '-'}`,
+    `负责人：${data.current_owner || '-'}`,
     `到期时间：${data.due_at || '-'}`,
     `剩余秒：${data.remaining_seconds ?? '-'}`
   ].join(' | ');
 }
 
 async function loadRules() {
-  const res = await fetch('/api/workflow/rules');
+  const res = await fetch('/api/workflow/rules', {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     document.getElementById('rulesResult').textContent = `加载失败：${getErrorText(data)}`;
@@ -144,7 +144,7 @@ function getSystemId() {
 async function loadInstance() {
   const systemId = getSystemId();
   if (!systemId) return;
-  const res = await fetch(`/api/workflow/instances/${systemId}`);
+  const res = await fetch(`/api/workflow/instances/${systemId}`, {headers: authHeaders()});
   const data = await res.json();
   document.getElementById('instanceResult').textContent = res.ok ? formatInstanceText(data) : `读取失败：${getErrorText(data)}`;
 }
@@ -154,7 +154,7 @@ async function advanceWorkflow() {
   if (!systemId) return;
   const actor = document.getElementById('actor').value.trim() || 'tester';
   const action = document.getElementById('action').value;
-  const res = await fetch(`/api/workflow/instances/${systemId}/advance?actor=${encodeURIComponent(actor)}&action=${action}`, {method: 'POST'});
+  const res = await fetch(`/api/workflow/instances/${systemId}/advance?actor=${encodeURIComponent(actor)}&action=${action}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   document.getElementById('instanceResult').textContent = res.ok ? (data.message || '流程已更新') : `推进失败：${getErrorText(data)}`;
   loadInstance();
@@ -175,7 +175,7 @@ async function loadReminders(send) {
   const mode = document.getElementById('mode').value;
   const withinHours = document.getElementById('withinHours').value || '4';
   const channel = document.getElementById('reminderChannel').value;
-  const res = await fetch(`/api/workflow/reminders?mode=${mode}&within_hours=${withinHours}&send=${send}&channel=${channel}`, {method: 'GET'});
+  const res = await fetch(`/api/workflow/reminders?mode=${mode}&within_hours=${withinHours}&send=${send}&channel=${channel}`, {method: 'GET', headers: authHeaders()});
   const data = await res.json();
   document.getElementById('reminderTable').innerHTML = (data.items || []).map(i => `
     <tr>

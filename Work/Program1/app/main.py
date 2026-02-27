@@ -1,9 +1,13 @@
 import io
+import hmac
 import hashlib
 import json
 import mimetypes
 import os
+import re
+import secrets
 import smtplib
+import threading
 import uuid
 import zipfile
 from datetime import date, datetime, timedelta
@@ -14,6 +18,7 @@ from urllib.parse import quote
 
 from docx import Document
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -59,7 +64,13 @@ from .schemas import (
     SystemUpdate,
     WorkflowConfigUpdate,
 )
-from .services.reporting import export_report_docx, export_report_pdf, generate_report_payload
+from .services.reporting import (
+    export_report_docx,
+    export_report_docx_with_template,
+    export_report_pdf,
+    generate_report_payload,
+    sanitize_template_docx_content,
+)
 from .validators import (
     is_placeholder_value,
     validate_credit_code,
@@ -76,7 +87,30 @@ MAX_SYS_ATTACHMENT = 200 * 1024 * 1024
 MAX_KNOWLEDGE_FILE = 300 * 1024 * 1024
 DEFAULT_WORKFLOW_STEPS = ["信息收集", "信息审核", "报告生成", "报告审核", "报告终稿", "归档"]
 VALID_REPORT_TYPES = {"filing_form", "grading_report", "expert_review_form"}
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+LOCAL_OFFICIAL_TEMPLATE_RULES = [
+    {
+        "pattern": "01-*.docx",
+        "report_type": "filing_form",
+        "template_name": "官方备案表模板",
+        "category": "官方模板",
+        "default_title": "网络安全等级保护备案表",
+    },
+    {
+        "pattern": "02-*.docx",
+        "report_type": "grading_report",
+        "template_name": "官方定级报告模板",
+        "category": "官方模板",
+        "default_title": "网络安全等级保护定级报告",
+    },
+    {
+        "pattern": "03-*.docx",
+        "report_type": "expert_review_form",
+        "template_name": "官方专家评审意见表模板",
+        "category": "官方模板",
+        "default_title": "专家评审意见表",
+    },
+]
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8011").rstrip("/")
 STRICT_AUTH = str(os.getenv("STRICT_AUTH", "0")).strip().lower() in {"1", "true", "yes", "on", "y"}
 AUTH_SESSION_HOURS = int(os.getenv("AUTH_SESSION_HOURS", "12"))
 SMTP_HOST = (os.getenv("SMTP_HOST") or "").strip()
@@ -99,14 +133,23 @@ SMTP_SSL = env_to_bool(os.getenv("SMTP_SSL"), False)
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 ENABLE_API_DOCS = env_to_bool(os.getenv("ENABLE_API_DOCS"), False)
 APP_LITE_MODE = env_to_bool(os.getenv("APP_LITE_MODE"), False)
+API_AUTH_REQUIRED = env_to_bool(os.getenv("API_AUTH_REQUIRED"), not APP_LITE_MODE)
+FORCE_HTTPS = env_to_bool(os.getenv("FORCE_HTTPS"), False)
+LOGIN_MAX_FAILS = max(1, int(os.getenv("LOGIN_MAX_FAILS", "5")))
+LOGIN_FAIL_WINDOW_MINUTES = max(1, int(os.getenv("LOGIN_FAIL_WINDOW_MINUTES", "10")))
+LOGIN_LOCK_MINUTES = max(1, int(os.getenv("LOGIN_LOCK_MINUTES", "15")))
+PASSWORD_PBKDF2_ITERATIONS = max(200000, int(os.getenv("PASSWORD_PBKDF2_ITERATIONS", "390000")))
 WORKFLOW_EMAIL_DEFAULT_TO = (os.getenv("WORKFLOW_EMAIL_DEFAULT_TO") or "").strip()
+SCRIPT_TAG_RE = re.compile(r"<\s*/?\s*[a-zA-Z!]|on\w+\s*=|javascript\s*:", re.IGNORECASE)
+LOGIN_ATTEMPTS: dict[str, dict[str, Any]] = {}
+LOGIN_ATTEMPTS_LOCK = threading.Lock()
 
 app = FastAPI(
     title="定级备案管理系统",
     version="1.2.0",
-    docs_url="/docs" if ENABLE_API_DOCS else None,
-    redoc_url="/redoc" if ENABLE_API_DOCS else None,
-    openapi_url="/openapi.json" if ENABLE_API_DOCS else None,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
@@ -145,7 +188,97 @@ def ensure_dirs() -> None:
 
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        PASSWORD_PBKDF2_ITERATIONS,
+    ).hex()
+    return f"pbkdf2_sha256${PASSWORD_PBKDF2_ITERATIONS}${salt}${digest}"
+
+
+def verify_password(password: str, stored_hash: str) -> tuple[bool, bool]:
+    stored = (stored_hash or "").strip()
+    if stored.startswith("pbkdf2_sha256$"):
+        parts = stored.split("$")
+        if len(parts) != 4:
+            return False, False
+        _, iter_str, salt, digest_hex = parts
+        try:
+            iterations = int(iter_str)
+        except ValueError:
+            return False, False
+        calc = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt.encode("utf-8"),
+            iterations,
+        ).hex()
+        return hmac.compare_digest(calc, digest_hex), False
+    legacy = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(legacy, stored), True
+
+
+def assert_safe_text(value: Any, field_name: str) -> None:
+    if not isinstance(value, str):
+        return
+    text = value.strip()
+    if not text:
+        return
+    if SCRIPT_TAG_RE.search(text):
+        raise HTTPException(status_code=400, detail=f"{field_name} 包含潜在危险脚本内容，请移除后重试。")
+
+
+def assert_safe_payload(payload: Any, field_name: str) -> None:
+    if isinstance(payload, dict):
+        for key, val in payload.items():
+            child_name = f"{field_name}.{key}"
+            assert_safe_payload(val, child_name)
+        return
+    if isinstance(payload, list):
+        for idx, val in enumerate(payload):
+            child_name = f"{field_name}[{idx}]"
+            assert_safe_payload(val, child_name)
+        return
+    assert_safe_text(payload, field_name)
+
+
+def _login_attempt_key(username: str, request: Request) -> str:
+    client_host = request.client.host if request.client and request.client.host else "unknown"
+    return f"{client_host}:{(username or '').strip().lower()}"
+
+
+def check_login_locked(key: str) -> None:
+    with LOGIN_ATTEMPTS_LOCK:
+        item = LOGIN_ATTEMPTS.get(key)
+        if not item:
+            return
+        lock_until = item.get("lock_until")
+        if isinstance(lock_until, datetime) and datetime.now() < lock_until:
+            wait_seconds = int((lock_until - datetime.now()).total_seconds())
+            wait_seconds = max(1, wait_seconds)
+            raise HTTPException(status_code=429, detail=f"登录失败次数过多，请在 {wait_seconds} 秒后重试。")
+        window_start = item.get("window_start")
+        if isinstance(window_start, datetime) and datetime.now() - window_start > timedelta(minutes=LOGIN_FAIL_WINDOW_MINUTES):
+            LOGIN_ATTEMPTS.pop(key, None)
+
+
+def record_login_failure(key: str) -> None:
+    now = datetime.now()
+    with LOGIN_ATTEMPTS_LOCK:
+        item = LOGIN_ATTEMPTS.get(key)
+        if not item or now - item.get("window_start", now) > timedelta(minutes=LOGIN_FAIL_WINDOW_MINUTES):
+            item = {"window_start": now, "fails": 0, "lock_until": None}
+            LOGIN_ATTEMPTS[key] = item
+        item["fails"] = int(item.get("fails", 0)) + 1
+        if item["fails"] >= LOGIN_MAX_FAILS:
+            item["lock_until"] = now + timedelta(minutes=LOGIN_LOCK_MINUTES)
+
+
+def clear_login_failure(key: str) -> None:
+    with LOGIN_ATTEMPTS_LOCK:
+        LOGIN_ATTEMPTS.pop(key, None)
 
 
 def ensure_default_accounts() -> None:
@@ -227,11 +360,13 @@ def get_auth_token_from_request(request: Request) -> str:
     auth = (request.headers.get("Authorization") or "").strip()
     if auth.lower().startswith("bearer "):
         return auth.split(" ", 1)[1].strip()
-    return (request.headers.get("X-Auth-Token") or "").strip()
+    header_token = (request.headers.get("X-Auth-Token") or "").strip()
+    if header_token:
+        return header_token
+    return (request.query_params.get("token") or "").strip()
 
 
-def get_current_user_optional(request: Request, db: Session) -> UserAccount | None:
-    token = get_auth_token_from_request(request)
+def get_user_by_token(db: Session, token: str) -> UserAccount | None:
     if not token:
         return None
     now = datetime.now()
@@ -245,6 +380,108 @@ def get_current_user_optional(request: Request, db: Session) -> UserAccount | No
         return None
     _, user = session
     return user
+
+
+def _is_api_auth_exempt(path: str) -> bool:
+    if not path.startswith("/api/"):
+        return True
+    if path == "/api/auth/login":
+        return True
+    if path.startswith("/api/public/organizations/collect/"):
+        return True
+    return False
+
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):  # type: ignore[override]
+    req_scheme = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").strip().lower()
+    if FORCE_HTTPS and req_scheme and req_scheme != "https":
+        target = request.url.replace(scheme="https")
+        return JSONResponse(status_code=307, content={"detail": "请使用 HTTPS 访问。", "redirect": str(target)})
+
+    if API_AUTH_REQUIRED and not APP_LITE_MODE and request.method.upper() != "OPTIONS":
+        path = request.url.path
+        if not _is_api_auth_exempt(path):
+            token = get_auth_token_from_request(request)
+            if not token:
+                return JSONResponse(status_code=401, content={"detail": "未登录或令牌缺失。"})
+            db = SessionLocal()
+            try:
+                user = get_user_by_token(db, token)
+                if not user:
+                    return JSONResponse(status_code=401, content={"detail": "登录令牌无效或已过期。"})
+                request.state.current_user = user.username
+            finally:
+                db.close()
+
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data: https:; "
+        "style-src 'self' 'unsafe-inline' https:; "
+        "script-src 'self' 'unsafe-inline' https:; "
+        "font-src 'self' https: data:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'none'"
+    )
+    if req_scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
+def get_current_user_optional(request: Request, db: Session) -> UserAccount | None:
+    token = get_auth_token_from_request(request)
+    return get_user_by_token(db, token)
+
+
+def require_docs_admin(request: Request, db: Session, token: str | None = None) -> str:
+    auth_token = (token or "").strip() or get_auth_token_from_request(request)
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="访问API文档需要管理员登录令牌。")
+    user = get_user_by_token(db, auth_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="登录令牌无效或已过期。")
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可访问API文档。")
+    return auth_token
+
+
+if ENABLE_API_DOCS:
+
+    @app.get("/openapi.json", include_in_schema=False)
+    def secured_openapi(
+        request: Request,
+        token: str | None = Query(None),
+        db: Session = Depends(get_db),
+    ) -> JSONResponse:
+        require_docs_admin(request, db, token=token)
+        return JSONResponse(app.openapi())
+
+    @app.get("/docs", include_in_schema=False)
+    def secured_docs(
+        request: Request,
+        token: str | None = Query(None),
+        db: Session = Depends(get_db),
+    ) -> HTMLResponse:
+        auth_token = require_docs_admin(request, db, token=token)
+        openapi_url = f"/openapi.json?token={quote(auth_token)}"
+        return get_swagger_ui_html(openapi_url=openapi_url, title=f"{app.title} - Swagger UI")
+
+    @app.get("/redoc", include_in_schema=False)
+    def secured_redoc(
+        request: Request,
+        token: str | None = Query(None),
+        db: Session = Depends(get_db),
+    ) -> HTMLResponse:
+        auth_token = require_docs_admin(request, db, token=token)
+        openapi_url = f"/openapi.json?token={quote(auth_token)}"
+        return get_redoc_html(openapi_url=openapi_url, title=f"{app.title} - ReDoc")
 
 
 def require_roles(
@@ -373,6 +610,34 @@ SYSTEM_FIELDS = [
     "updated_at",
 ]
 
+SYSTEM_TEXT_FIELDS = [
+    "system_name",
+    "business_description",
+    "system_type",
+    "deployment_mode",
+    "boundary",
+    "subsystems",
+    "service_object",
+    "service_scope",
+    "network_topology",
+    "data_name",
+    "data_level",
+    "data_category",
+    "data_security_dept",
+    "data_security_owner",
+    "data_source",
+    "data_flow",
+    "data_interaction",
+    "storage_location",
+    "level_basis",
+    "impact_scope",
+    "level_reason",
+    "expert_review_info",
+    "ops_unit",
+    "ops_personnel",
+    "created_by",
+]
+
 
 def validate_org_payload(data: dict[str, Any]) -> None:
     required_fields = [
@@ -389,6 +654,8 @@ def validate_org_payload(data: dict[str, Any]) -> None:
     for key, label in required_fields:
         if not str(data.get(key) or "").strip():
             raise HTTPException(status_code=400, detail=f"{label}为必填项，不能为空。")
+    for key in ORG_CREATE_FIELDS:
+        assert_safe_text(data.get(key), key)
     name = str(data.get("name") or "").strip()
     if not name or is_placeholder_value(name):
         raise HTTPException(status_code=400, detail="单位名称不能为空，且不能仅填写“/”。")
@@ -417,6 +684,9 @@ def validate_org_partial(data: dict[str, Any]) -> None:
     for key, label in required_labels.items():
         if key in data and not str(data.get(key) or "").strip():
             raise HTTPException(status_code=400, detail=f"{label}为必填项，不能为空。")
+    for key in ORG_UPDATE_FIELDS:
+        if key in data:
+            assert_safe_text(data.get(key), key)
     if "name" in data:
         name = str(data.get("name") or "").strip()
         if not name or is_placeholder_value(name):
@@ -429,6 +699,16 @@ def validate_org_partial(data: dict[str, Any]) -> None:
         raise HTTPException(status_code=400, detail="办公电话格式错误。")
     if "email" in data and not validate_email(data["email"]):
         raise HTTPException(status_code=400, detail="邮箱格式错误。")
+
+
+def validate_system_payload(data: dict[str, Any], partial: bool = False) -> None:
+    if not partial:
+        name = str(data.get("system_name") or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="系统名称为必填项，不能为空。")
+    for key in SYSTEM_TEXT_FIELDS:
+        if key in data:
+            assert_safe_text(data.get(key), key)
 
 
 def normalize_org_payload(data: dict[str, Any]) -> None:
@@ -676,6 +956,63 @@ def apply_template_config_to_payload(payload: dict[str, Any], template: ReportTe
     return result
 
 
+def local_official_template_config(report_type: str, default_title: str) -> dict[str, Any]:
+    if report_type == "filing_form":
+        return {
+            "title": default_title,
+            "sections": [
+                {
+                    "名称": "单位信息",
+                    "内容": {
+                        "单位名称": "{{单位名称}}",
+                        "统一社会信用代码": "{{统一社会信用代码}}",
+                        "单位地址": "{{单位地址}}",
+                        "单位负责人": "{{单位负责人}}",
+                        "联系电话": "{{联系电话}}",
+                        "邮箱": "{{邮箱}}",
+                    },
+                },
+                {
+                    "名称": "定级对象信息",
+                    "内容": {
+                        "系统名称": "{{系统名称}}",
+                        "拟定等级": "{{拟定等级}}",
+                        "部署方式": "{{部署方式}}",
+                        "备案地区": "{{备案地区}}",
+                    },
+                },
+            ],
+            "source": "local_official_docx",
+        }
+    if report_type == "expert_review_form":
+        return {
+            "title": default_title,
+            "sections": [
+                {
+                    "名称": "基础信息",
+                    "内容": {
+                        "单位名称": "{{单位名称}}",
+                        "系统名称": "{{系统名称}}",
+                        "系统自定安全级别": "{{拟定等级}}",
+                        "项目负责人": "{{联系人}}",
+                        "联系电话": "{{联系电话}}",
+                    },
+                },
+                {
+                    "名称": "专家意见",
+                    "内容": {"专家结论": "", "评审专家组组长（签字）": "", "评审专家组成员（签字）": ""},
+                },
+            ],
+            "source": "local_official_docx",
+        }
+    return {"title": default_title, "source": "local_official_docx"}
+
+
+def find_latest_docx_by_pattern(pattern: str) -> Path | None:
+    candidates = sorted(BASE_DIR.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0] if candidates else None
+
+
 def parse_docx_key_values(content: bytes) -> dict[str, str]:
     doc = Document(io.BytesIO(content))
     result: dict[str, str] = {}
@@ -884,14 +1221,22 @@ def templates_page(request: Request) -> HTMLResponse:
 
 
 @app.post("/api/auth/login")
-def auth_login(payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+def auth_login(payload: dict[str, Any], request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
     username = str(payload.get("username") or "").strip()
     password = str(payload.get("password") or "")
+    assert_safe_text(username, "用户名")
     if not username or not password:
         raise HTTPException(status_code=400, detail="用户名和密码不能为空。")
+    attempt_key = _login_attempt_key(username, request)
+    check_login_locked(attempt_key)
     user = db.query(UserAccount).filter(UserAccount.username == username, UserAccount.enabled.is_(True)).first()
-    if not user or user.password_hash != hash_password(password):
+    ok, need_upgrade = verify_password(password, user.password_hash if user else "")
+    if not user or not ok:
+        record_login_failure(attempt_key)
         raise HTTPException(status_code=401, detail="用户名或密码错误。")
+    clear_login_failure(attempt_key)
+    if need_upgrade:
+        user.password_hash = hash_password(password)
     token = uuid.uuid4().hex
     expires_at = datetime.now() + timedelta(hours=max(1, AUTH_SESSION_HOURS))
     db.add(AuthSession(user_id=user.id, token=token, expires_at=expires_at))
@@ -956,6 +1301,7 @@ def create_user(request: Request, payload: dict[str, Any], db: Session = Depends
     username = str(payload.get("username") or "").strip()
     password = str(payload.get("password") or "")
     role = str(payload.get("role") or "evaluator").strip().lower()
+    assert_safe_text(username, "用户名")
     if role not in {"admin", "reviewer", "evaluator"}:
         raise HTTPException(status_code=400, detail="role 仅支持 admin/reviewer/evaluator。")
     if not username or len(password) < 6:
@@ -996,6 +1342,11 @@ async def upload_report_template(
 ) -> dict[str, Any]:
     actor, _ = require_roles(request, db, {"admin"})
     report_type = report_type.strip()
+    assert_safe_text(template_name, "template_name")
+    assert_safe_text(category, "category")
+    assert_safe_text(city, "city")
+    assert_safe_text(protection_level, "protection_level")
+    assert_safe_text(description, "description")
     if report_type not in VALID_REPORT_TYPES:
         raise HTTPException(status_code=400, detail="report_type 无效。")
     content = await file.read()
@@ -1013,6 +1364,7 @@ async def upload_report_template(
             import json as _json
 
             cfg = _json.loads(config_json)
+            assert_safe_payload(cfg, "config_json")
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"config_json 解析失败: {exc}") from exc
     if is_default:
@@ -1040,6 +1392,97 @@ async def upload_report_template(
     log_template_version(db, row, "upload", actor)
     db.commit()
     return {"message": "模板上传成功", "data": {"id": row.id, "template_name": row.template_name}}
+
+
+@app.post("/api/templates/import-local-official")
+def import_local_official_templates(
+    request: Request,
+    actor: str = Query("admin"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    assert_safe_text(actor, "actor")
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    imported: list[dict[str, Any]] = []
+    missing: list[str] = []
+    target_dir = UPLOAD_DIR / "templates"
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    for rule in LOCAL_OFFICIAL_TEMPLATE_RULES:
+        src = find_latest_docx_by_pattern(rule["pattern"])
+        if not src or not src.exists():
+            missing.append(rule["pattern"])
+            continue
+
+        content = src.read_bytes()
+        cleaned_content = sanitize_template_docx_content(content)
+        safe_name = src.name
+        save_name = f"{uuid.uuid4().hex}_{safe_name}"
+        path = target_dir / save_name
+        path.write_bytes(cleaned_content)
+        config = local_official_template_config(rule["report_type"], rule["default_title"])
+        config["source_file"] = safe_name
+
+        defaults = (
+            db.query(ReportTemplate)
+            .filter(ReportTemplate.report_type == rule["report_type"], ReportTemplate.is_default.is_(True))
+            .all()
+        )
+        for old in defaults:
+            old.is_default = False
+
+        row = (
+            db.query(ReportTemplate)
+            .filter(
+                ReportTemplate.report_type == rule["report_type"],
+                ReportTemplate.template_name == rule["template_name"],
+                ReportTemplate.category == rule["category"],
+            )
+            .first()
+        )
+
+        if row:
+            log_template_version(db, row, "import_local_official_before", actor_name or actor)
+            row.status = "enabled"
+            row.is_default = True
+            row.version_no = int(row.version_no or 0) + 1
+            row.file_name = safe_name
+            row.file_path = str(path)
+            row.file_size = len(cleaned_content)
+            row.config_json = config
+            row.description = f"来源本地模板文件：{safe_name}（已去除测试数据）"
+            row.created_by = actor_name or actor
+        else:
+            row = ReportTemplate(
+                template_name=rule["template_name"],
+                report_type=rule["report_type"],
+                category=rule["category"],
+                city=None,
+                protection_level=None,
+                description=f"来源本地模板文件：{safe_name}（已去除测试数据）",
+                status="enabled",
+                is_default=True,
+                version_no=1,
+                file_name=safe_name,
+                file_path=str(path),
+                file_size=len(cleaned_content),
+                config_json=config,
+                created_by=actor_name or actor,
+            )
+            db.add(row)
+            db.flush()
+            log_template_version(db, row, "import_local_official", actor_name or actor)
+
+        imported.append(
+            {
+                "report_type": rule["report_type"],
+                "template_name": rule["template_name"],
+                "source_file": safe_name,
+                "is_default": True,
+            }
+        )
+
+    db.commit()
+    return {"message": "本地官方模板导入完成", "imported": imported, "missing": missing}
 
 
 @app.get("/api/templates")
@@ -1095,6 +1538,7 @@ def update_report_template(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     actor, _ = require_roles(request, db, {"admin"})
+    assert_safe_payload(payload, "payload")
     row = db.query(ReportTemplate).filter(ReportTemplate.id == template_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="模板不存在。")
@@ -1323,18 +1767,21 @@ def list_organizations(
 
 @app.post("/api/organizations/collection-links")
 def create_org_collection_link(
+    request: Request,
     organization_id: int | None = Query(None),
     expires_days: int = Query(7, ge=1, le=30),
     actor: str = Query("system"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    assert_safe_text(actor, "actor")
+    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"}, legacy_admin=(actor == "admin"))
     if organization_id:
         get_org_or_404(db, organization_id)
     token = uuid.uuid4().hex
     link = OrganizationCollectionLink(
         token=token,
         organization_id=organization_id,
-        created_by=actor,
+        created_by=actor_name or actor,
         expires_at=datetime.now() + timedelta(days=expires_days),
         disabled=False,
     )
@@ -1357,9 +1804,11 @@ def create_org_collection_link(
 
 @app.get("/api/organizations/collection-links")
 def list_org_collection_links(
+    request: Request,
     include_expired: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    require_roles(request, db, {"admin", "reviewer", "evaluator"})
     query = db.query(OrganizationCollectionLink)
     if not include_expired:
         query = query.filter(OrganizationCollectionLink.expires_at > datetime.now(), OrganizationCollectionLink.disabled.is_(False))
@@ -1383,7 +1832,13 @@ def list_org_collection_links(
 
 
 @app.post("/api/organizations/collection-links/{link_id}/toggle")
-def toggle_org_collection_link(link_id: int, enabled: bool = Query(True), db: Session = Depends(get_db)) -> dict[str, Any]:
+def toggle_org_collection_link(
+    request: Request,
+    link_id: int,
+    enabled: bool = Query(True),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    require_roles(request, db, {"admin", "reviewer", "evaluator"})
     row = db.query(OrganizationCollectionLink).filter(OrganizationCollectionLink.id == link_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="采集链接不存在。")
@@ -1401,6 +1856,7 @@ def submit_org_collection(token: str, payload: dict[str, Any], db: Session = Dep
         raise HTTPException(status_code=403, detail="链接已停用。")
     if datetime.now() > link.expires_at:
         raise HTTPException(status_code=403, detail="链接已过期。")
+    assert_safe_payload(payload, "payload")
     normalize_org_payload(payload)
     if link.organization_id:
         validate_org_partial(payload)
@@ -1426,9 +1882,11 @@ def submit_org_collection(token: str, payload: dict[str, Any], db: Session = Dep
 
 @app.get("/api/organizations/submissions")
 def list_org_submissions(
+    request: Request,
     status: str | None = None,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    require_roles(request, db, {"admin", "reviewer", "evaluator"})
     query = db.query(OrganizationSubmission)
     if status:
         query = query.filter(OrganizationSubmission.status == status)
@@ -1455,12 +1913,16 @@ def list_org_submissions(
 
 @app.post("/api/organizations/submissions/{submission_id}/review")
 def review_org_submission(
+    request: Request,
     submission_id: int,
     action: str = Query(...),
     actor: str = Query("system"),
     comment: str = Query(""),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"}, legacy_admin=(actor == "admin"))
+    assert_safe_text(actor, "actor")
+    assert_safe_text(comment, "comment")
     row = db.query(OrganizationSubmission).filter(OrganizationSubmission.id == submission_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="提交记录不存在。")
@@ -1472,13 +1934,14 @@ def review_org_submission(
     if action == "reject":
         row.status = "rejected"
         row.review_comment = comment
-        row.reviewed_by = actor
+        row.reviewed_by = actor_name or actor
         row.reviewed_at = datetime.now()
         db.commit()
         return {"message": "已驳回", "status": row.status}
 
     payload = dict(row.payload or {})
     payload.pop("submitter", None)
+    assert_safe_payload(payload, "payload")
     if row.organization_id:
         org = get_org_or_404(db, row.organization_id)
         before = obj_to_dict(org, ORG_FIELDS)
@@ -1490,7 +1953,7 @@ def review_org_submission(
         for key, value in payload.items():
             setattr(org, key, value)
         db.flush()
-        record_org_history(db, org.id, actor, "customer_approve_update", before, obj_to_dict(org, ORG_FIELDS))
+        record_org_history(db, org.id, actor_name or actor, "customer_approve_update", before, obj_to_dict(org, ORG_FIELDS))
         target_org_id = org.id
     else:
         required = ["name", "credit_code", "legal_representative", "address", "mobile_phone", "email", "industry", "organization_type", "filing_region"]
@@ -1498,20 +1961,20 @@ def review_org_submission(
         if missing:
             raise HTTPException(status_code=400, detail=f"缺少必填项: {', '.join(missing)}")
         payload = {k: v for k, v in payload.items() if k in ORG_CREATE_FIELDS}
-        payload["created_by"] = actor
+        payload["created_by"] = actor_name or actor
         normalize_org_payload(payload)
         validate_org_payload(payload)
         assert_credit_code_available(db, payload["credit_code"])
         org = Organization(**payload)
         db.add(org)
         db.flush()
-        record_org_history(db, org.id, actor, "customer_approve_create", None, obj_to_dict(org, ORG_FIELDS))
+        record_org_history(db, org.id, actor_name or actor, "customer_approve_create", None, obj_to_dict(org, ORG_FIELDS))
         target_org_id = org.id
         row.organization_id = org.id
 
     row.status = "approved"
     row.review_comment = comment
-    row.reviewed_by = actor
+    row.reviewed_by = actor_name or actor
     row.reviewed_at = datetime.now()
     db.commit()
     return {"message": "审核通过并已入库", "status": row.status, "organization_id": target_org_id}
@@ -1531,6 +1994,7 @@ def update_organization(
     is_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    assert_safe_text(actor, "actor")
     org = get_org_or_404(db, org_id)
     if org.archived and org.locked and not is_admin:
         raise HTTPException(status_code=403, detail="已归档单位默认不可编辑，请管理员解锁。")
@@ -1868,6 +2332,7 @@ def create_system(payload: SystemCreate, db: Session = Depends(get_db)) -> dict[
     if org.archived and org.locked:
         raise HTTPException(status_code=403, detail="单位已归档锁定，不可新增系统。")
     data = payload.model_dump()
+    validate_system_payload(data, partial=False)
     data["system_code"] = generate_system_code(db)
     system = SystemInfo(**data)
     db.add(system)
@@ -1934,10 +2399,12 @@ def update_system(
     is_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    assert_safe_text(actor, "actor")
     system = get_system_or_404(db, system_id)
     if system.archived and system.locked and not is_admin:
         raise HTTPException(status_code=403, detail="已归档系统默认不可编辑。")
     data = payload.model_dump(exclude_unset=True)
+    validate_system_payload(data, partial=True)
     before = obj_to_dict(system, SYSTEM_FIELDS)
     for key, value in data.items():
         setattr(system, key, value)
@@ -1969,6 +2436,7 @@ def system_history(system_id: int, db: Session = Depends(get_db)) -> dict[str, A
 
 @app.post("/api/systems/{system_id}/copy")
 def copy_system(system_id: int, actor: str = Query("system"), db: Session = Depends(get_db)) -> dict[str, Any]:
+    assert_safe_text(actor, "actor")
     source = get_system_or_404(db, system_id)
     data = obj_to_dict(source, SYSTEM_FIELDS)
     for key in ["id", "system_code", "created_at", "updated_at", "deleted_at"]:
@@ -2647,6 +3115,10 @@ def edit_report(
     is_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    assert_safe_text(actor, "actor")
+    assert_safe_payload(payload.content, "content")
+    if payload.title:
+        assert_safe_text(payload.title, "title")
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="报告不存在。")
@@ -2687,15 +3159,18 @@ def add_report_section(
     is_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    assert_safe_text(actor, "actor")
     report = _editable_report_or_403(db, report_id, is_admin)
     content = dict(report.content or {})
     sections = list(content.get("章节") or [])
     name = str(payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="name 不能为空。")
+    assert_safe_text(name, "name")
     section_content = payload.get("content")
     if section_content is None:
         section_content = {}
+    assert_safe_payload(section_content, "section_content")
     new_section = {"名称": name, "内容": section_content}
     if index is None or index < 0 or index >= len(sections):
         sections.append(new_section)
@@ -2723,6 +3198,7 @@ def delete_report_section(
     is_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    assert_safe_text(actor, "actor")
     report = _editable_report_or_403(db, report_id, is_admin)
     content = dict(report.content or {})
     sections = list(content.get("章节") or [])
@@ -2745,6 +3221,7 @@ def delete_report_section(
 
 @app.post("/api/reports/{report_id}/sections/reorder")
 def reorder_report_section(
+    request: Request,
     report_id: int,
     from_index: int = Query(..., ge=0),
     to_index: int = Query(..., ge=0),
@@ -2752,6 +3229,7 @@ def reorder_report_section(
     is_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"}, legacy_admin=(actor == "admin"))
     report = _editable_report_or_403(db, report_id, is_admin)
     content = dict(report.content or {})
     sections = list(content.get("章节") or [])
@@ -2764,7 +3242,7 @@ def reorder_report_section(
     db.add(
         ReviewRecord(
             report_id=report.id,
-            reviewer=actor,
+            reviewer=actor_name or actor,
             action="section_reorder",
             comment=f"章节顺序调整 {from_index}->{to_index}",
         )
@@ -2775,12 +3253,15 @@ def reorder_report_section(
 
 @app.post("/api/reports/{report_id}/signature")
 def set_report_signature(
+    request: Request,
     report_id: int,
     payload: dict[str, Any],
     actor: str = Query("system"),
     is_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"}, legacy_admin=(actor == "admin"))
+    assert_safe_payload(payload, "payload")
     report = _editable_report_or_403(db, report_id, is_admin)
     content = dict(report.content or {})
     sign = content.get("签章")
@@ -2794,7 +3275,7 @@ def set_report_signature(
     db.add(
         ReviewRecord(
             report_id=report.id,
-            reviewer=actor,
+            reviewer=actor_name or actor,
             action="signature",
             comment="更新签章信息",
         )
@@ -2805,11 +3286,14 @@ def set_report_signature(
 
 @app.post("/api/reports/{report_id}/submit")
 def submit_report(
+    request: Request,
     report_id: int,
     actor: str = Query("system"),
     reviewer: str = Query("reviewer"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"}, legacy_admin=(actor == "admin"))
+    assert_safe_text(reviewer, "reviewer")
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="报告不存在。")
@@ -2819,7 +3303,7 @@ def submit_report(
     db.add(
         ReviewRecord(
             report_id=report.id,
-            reviewer=actor,
+            reviewer=actor_name or actor,
             action="submit",
             comment=f"提交审核给 {reviewer}",
         )
@@ -2830,6 +3314,7 @@ def submit_report(
 
 @app.post("/api/reports/{report_id}/review")
 def review_report(
+    request: Request,
     report_id: int,
     actor: str = Query("reviewer"),
     action: str = Query(...),
@@ -2837,6 +3322,9 @@ def review_report(
     position: str = Query(""),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin", "reviewer"}, legacy_admin=(actor == "admin"))
+    assert_safe_text(comment, "comment")
+    assert_safe_text(position, "position")
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="报告不存在。")
@@ -2849,7 +3337,7 @@ def review_report(
     db.add(
         ReviewRecord(
             report_id=report.id,
-            reviewer=actor,
+            reviewer=actor_name or actor,
             action=action,
             comment=comment,
             position=position,
@@ -3015,13 +3503,80 @@ def prepare_export_content(content: dict[str, Any]) -> dict[str, Any]:
     return output
 
 
+def build_report_template_field_map(report: Report, content: dict[str, Any], db: Session) -> dict[str, str]:
+    field_map: dict[str, str] = {}
+    org = db.query(Organization).filter(Organization.id == report.organization_id).first()
+    system = db.query(SystemInfo).filter(SystemInfo.id == report.system_id).first()
+    if org:
+        field_map.update(
+            {
+                "单位名称": org.name or "",
+                "统一社会信用代码": org.credit_code or "",
+                "单位地址": org.address or "",
+                "单位负责人": org.legal_representative or "",
+                "邮箱": org.email or "",
+                "备案地区": org.filing_region or "",
+                "联系人": org.cybersecurity_owner_name or org.legal_representative or "",
+                "联系电话": org.mobile_phone or org.office_phone or "",
+            }
+        )
+    if system:
+        level = f"第{system.proposed_level}级" if system.proposed_level else ""
+        field_map.update(
+            {
+                "系统名称": system.system_name or "",
+                "信息系统名称": system.system_name or "",
+                "系统自定安全级别": level,
+                "拟定等级": level,
+                "部署方式": system.deployment_mode or "",
+                "系统编号": system.system_code or "",
+            }
+        )
+    field_map["报告标题"] = report.title or ""
+    field_map["生成日期"] = (report.generated_at or datetime.now()).strftime("%Y-%m-%d")
+    for section in content.get("章节", []):
+        if not isinstance(section, dict):
+            continue
+        body = section.get("内容")
+        if not isinstance(body, dict):
+            continue
+        for k, v in body.items():
+            if v is None:
+                continue
+            key = str(k).strip()
+            if not key:
+                continue
+            value = str(v).strip()
+            if not value:
+                continue
+            field_map.setdefault(key, value)
+    return field_map
+
+
 @app.get("/api/reports/{report_id}/export/word")
 def export_report_word(report_id: int, db: Session = Depends(get_db)) -> FileResponse:
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="报告不存在。")
     path = EXPORT_DIR / f"report_{report.id}_{datetime.now():%Y%m%d%H%M%S}.docx"
-    export_report_docx(report.title, prepare_export_content(report.content), path)
+    export_content = prepare_export_content(report.content)
+    tpl_info = export_content.get("模板信息")
+    template_id = None
+    if isinstance(tpl_info, dict):
+        try:
+            template_id = int(tpl_info.get("template_id")) if tpl_info.get("template_id") is not None else None
+        except Exception:
+            template_id = None
+    if template_id:
+        tpl = db.query(ReportTemplate).filter(ReportTemplate.id == template_id, ReportTemplate.status == "enabled").first()
+        if tpl and tpl.file_path and Path(tpl.file_path).exists():
+            field_map = build_report_template_field_map(report, export_content, db)
+            try:
+                export_report_docx_with_template(Path(tpl.file_path), field_map, path)
+                return FileResponse(path=str(path), filename=path.name)
+            except Exception:
+                pass
+    export_report_docx(report.title, export_content, path)
     return FileResponse(path=str(path), filename=path.name)
 
 
@@ -3050,6 +3605,8 @@ def update_workflow(request: Request, payload: WorkflowConfigUpdate, db: Session
     actor, _ = require_roles(request, db, {"admin"}, legacy_admin=(not STRICT_AUTH))
     if not payload.steps:
         raise HTTPException(status_code=400, detail="流程步骤不能为空。")
+    for step in payload.steps:
+        assert_safe_text(step, "workflow.step")
     config = get_workflow_config(db)
     config.steps_json = payload.steps
     config.updated_by = actor or payload.updated_by
@@ -3091,6 +3648,7 @@ def update_workflow_rules(request: Request, payload: dict[str, Any], db: Session
     config = get_workflow_config(db)
     rules = payload.get("rules") or []
     updated_by = str(payload.get("updated_by") or actor or "admin")
+    assert_safe_text(updated_by, "updated_by")
     if not isinstance(rules, list) or not rules:
         raise HTTPException(status_code=400, detail="rules 不能为空。")
     step_set = set(config.steps_json or [])
@@ -3098,9 +3656,11 @@ def update_workflow_rules(request: Request, payload: dict[str, Any], db: Session
         step_name = str(item.get("step_name") or "").strip()
         if not step_name:
             raise HTTPException(status_code=400, detail="step_name 不能为空。")
+        assert_safe_text(step_name, "step_name")
         if step_name not in step_set:
             raise HTTPException(status_code=400, detail=f"非法流程节点: {step_name}")
         owner = str(item.get("owner") or "system").strip()
+        assert_safe_text(owner, "owner")
         limit = int(item.get("time_limit_hours") or 24)
         enabled = bool(item.get("enabled", True))
         row = (
@@ -3140,6 +3700,8 @@ def workflow_extend_due(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    assert_safe_text(actor, "actor")
+    assert_safe_text(reason, "reason")
     get_system_or_404(db, system_id)
     instance = db.query(WorkflowInstance).filter(WorkflowInstance.system_id == system_id).first()
     if not instance:
@@ -3333,12 +3895,16 @@ def workflow_instance(system_id: int, db: Session = Depends(get_db)) -> dict[str
 
 @app.post("/api/workflow/instances/{system_id}/advance")
 def workflow_advance(
+    request: Request,
     system_id: int,
     actor: str = Query("system"),
     action: str = Query("complete"),
     comment: str = Query(""),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"}, legacy_admin=(actor == "admin"))
+    assert_safe_text(actor, "actor")
+    assert_safe_text(comment, "comment")
     get_system_or_404(db, system_id)
     config = get_workflow_config(db)
     instance = db.query(WorkflowInstance).filter(WorkflowInstance.system_id == system_id).first()
@@ -3369,7 +3935,7 @@ def workflow_advance(
         WorkflowAction(
             instance_id=instance.id,
             step_name=current_name,
-            actor=actor,
+            actor=actor_name or actor,
             action=action,
             comment=comment,
         )
@@ -3645,6 +4211,13 @@ async def upload_knowledge(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    assert_safe_text(title, "title")
+    assert_safe_text(doc_type, "doc_type")
+    assert_safe_text(actor, "actor")
+    assert_safe_text(city, "city")
+    assert_safe_text(district, "district")
+    assert_safe_text(keywords, "keywords")
+    assert_safe_text(protection_level, "protection_level")
     content = await file.read()
     if len(content) > MAX_KNOWLEDGE_FILE:
         raise HTTPException(status_code=400, detail="文件过大。")
@@ -3763,6 +4336,8 @@ def update_knowledge(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    assert_safe_text(actor, "actor")
+    assert_safe_payload(payload, "payload")
     doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在。")

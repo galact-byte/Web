@@ -202,7 +202,7 @@ async function importOrgWord() {
   }
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch('/api/organizations/import/word?actor=tester', {method: 'POST', body: fd});
+  const res = await fetch('/api/organizations/import/word?actor=tester', {method: 'POST', headers: authHeaders(), body: fd});
   const data = await res.json();
   if (!res.ok) {
     setOrgResult(`导入失败：${apiErrorText(data)}`);
@@ -338,7 +338,7 @@ async function createCollectionLink() {
   const days = document.getElementById('collectionDays').value.trim() || '7';
   const params = new URLSearchParams({expires_days: days, actor: 'tester'});
   if (orgId) params.set('organization_id', orgId);
-  const res = await fetch('/api/organizations/collection-links?' + params.toString(), {method: 'POST'});
+  const res = await fetch('/api/organizations/collection-links?' + params.toString(), {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     setCollectionResult(`生成失败：${apiErrorText(data)}`);
@@ -350,7 +350,7 @@ async function createCollectionLink() {
 }
 
 async function loadCollectionLinks() {
-  const res = await fetch('/api/organizations/collection-links');
+  const res = await fetch('/api/organizations/collection-links', {headers: authHeaders()});
   const data = await res.json();
   document.getElementById('collectionTable').innerHTML = data.items.map(i => `
     <tr>
@@ -365,7 +365,7 @@ async function loadCollectionLinks() {
 async function reviewSubmission(id, action) {
   const comment = action === 'reject' ? prompt('请输入驳回意见', '') || '' : '';
   const params = new URLSearchParams({action, actor: 'tester', comment});
-  const res = await fetch(`/api/organizations/submissions/${id}/review?` + params.toString(), {method: 'POST'});
+  const res = await fetch(`/api/organizations/submissions/${id}/review?` + params.toString(), {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   alert(data.message || data.detail || '操作完成');
   loadSubmissions();
@@ -373,7 +373,7 @@ async function reviewSubmission(id, action) {
 }
 
 async function loadSubmissions() {
-  const res = await fetch('/api/organizations/submissions?status=pending');
+  const res = await fetch('/api/organizations/submissions?status=pending', {headers: authHeaders()});
   const data = await res.json();
   document.getElementById('submissionTable').innerHTML = data.items.map(i => `
     <tr>

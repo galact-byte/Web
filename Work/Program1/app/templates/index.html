@@ -112,6 +112,19 @@ let industryChart;
 let levelChart;
 let heatMapChart;
 
+function authToken() {
+  return localStorage.getItem('auth_token') || '';
+}
+
+function authHeaders() {
+  const token = authToken();
+  return token ? {'X-Auth-Token': token} : {};
+}
+
+function esc(v) {
+  return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}
+
 function getFilters() {
   const params = new URLSearchParams();
   const city = document.getElementById('city').value.trim();
@@ -172,8 +185,12 @@ function upsertChart(inst, el, label, dataset, color, dimension) {
 
 async function loadDashboard() {
   const params = getFilters();
-  const res = await fetch('/api/dashboard/summary?' + params.toString());
+  const res = await fetch('/api/dashboard/summary?' + params.toString(), {headers: authHeaders()});
   const data = await res.json();
+  if (!res.ok) {
+    document.getElementById('drillHint').textContent = `读取看板失败：${data.detail || '请先登录'}`;
+    return;
+  }
   document.getElementById('orgCount').textContent = data.totals.organization_count;
   document.getElementById('sysCount').textContent = data.totals.system_count;
   document.getElementById('pendingReports').textContent = data.totals.pending_review_reports;
@@ -222,26 +239,34 @@ function renderHeatMap(dataset) {
 
 async function loadDrilldown(dimension, value) {
   const params = new URLSearchParams({dimension, value});
-  const res = await fetch('/api/dashboard/drilldown?' + params.toString());
+  const res = await fetch('/api/dashboard/drilldown?' + params.toString(), {headers: authHeaders()});
   const data = await res.json();
+  if (!res.ok) {
+    document.getElementById('drillHint').textContent = `下钻失败：${data.detail || '请先登录'}`;
+    return;
+  }
   document.getElementById('drillHint').textContent = `当前下钻: ${dimension} = ${value}`;
   const rows = [];
   for (const i of data.organizations) {
-    rows.push(`<tr><td>单位</td><td>${i.id}</td><td>${i.name}</td><td>${i.industry || ''} / ${i.filing_region || ''}</td></tr>`);
+    rows.push(`<tr><td>单位</td><td>${esc(i.id)}</td><td>${esc(i.name)}</td><td>${esc(i.industry || '')} / ${esc(i.filing_region || '')}</td></tr>`);
   }
   for (const i of data.systems) {
-    rows.push(`<tr><td>系统</td><td>${i.id}</td><td>${i.system_name}</td><td>${i.system_code} / ${i.proposed_level}级</td></tr>`);
+    rows.push(`<tr><td>系统</td><td>${esc(i.id)}</td><td>${esc(i.system_name)}</td><td>${esc(i.system_code)} / ${esc(i.proposed_level)}级</td></tr>`);
   }
   document.getElementById('drillTable').innerHTML = rows.join('');
 }
 
 function exportDashboardExcel() {
   const params = getFilters();
+  const token = authToken();
+  if (token) params.set('token', token);
   window.open('/api/dashboard/export/excel?' + params.toString(), '_blank');
 }
 
 function exportDashboardPdf() {
   const params = getFilters();
+  const token = authToken();
+  if (token) params.set('token', token);
   window.open('/api/dashboard/export/pdf?' + params.toString(), '_blank');
 }
 

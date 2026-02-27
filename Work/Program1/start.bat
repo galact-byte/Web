@@ -74,15 +74,18 @@ goto LAUNCH
 
 :LAUNCH
 if "%DATABASE_URL%"=="" set "DATABASE_URL=sqlite:///./app.db"
+if "%API_AUTH_REQUIRED%"=="" set "API_AUTH_REQUIRED=1"
+if "%APP_PORT%"=="" set "APP_PORT=8011"
+if "%PUBLIC_BASE_URL%"=="" set "PUBLIC_BASE_URL=http://127.0.0.1:%APP_PORT%"
 
 echo.
 echo [INFO] Starting service...
 echo ==================================================
-echo   Access URL: http://127.0.0.1:8000
+echo   Access URL: http://127.0.0.1:%APP_PORT%
 echo ==================================================
 echo.
 
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn app.main:app --host 0.0.0.0 --port %APP_PORT% --reload
 if errorlevel 1 (
     echo.
     echo [ERROR] Program exited abnormally. Please check error messages.

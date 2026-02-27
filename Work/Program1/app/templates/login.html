@@ -6,13 +6,19 @@
     <div><label>用户名</label><input id="username" value="admin" /></div>
     <div><label>密码</label><input id="password" type="password" value="admin123" /></div>
   </div>
+  <p class="hint">内置测试账号：admin/admin123，tester/tester123，leader/leader123。</p>
+  <div class="row">
+    <button class="btn-lite" onclick="fillBuiltIn('admin')">填充 admin</button>
+    <button class="btn-lite" onclick="fillBuiltIn('tester')">填充 tester</button>
+    <button class="btn-lite" onclick="fillBuiltIn('leader')">填充 leader</button>
+  </div>
   <br />
   <button onclick="login()">登录</button>
   <button class="btn-lite" onclick="logout()">退出</button>
   <div class="result" id="loginResult">请输入账号密码后登录。</div>
 </div>
 
-<div class="panel">
+<div class="panel" data-role-only="admin" id="adminUserPanel">
   <h2>用户管理（管理员）</h2>
   <div class="row">
     <div><label>用户名</label><input id="newUsername" /></div>
@@ -36,6 +42,8 @@
 </div>
 
 <script>
+let currentRole = 'guest';
+
 function resultText(data, fallback='操作失败') {
   if (!data) return fallback;
   if (typeof data.detail === 'string') return data.detail;
@@ -45,6 +53,16 @@ function resultText(data, fallback='操作失败') {
 function authHeaders() {
   const token = localStorage.getItem('auth_token') || '';
   return token ? {'X-Auth-Token': token} : {};
+}
+
+function fillBuiltIn(username) {
+  const presets = {
+    admin: 'admin123',
+    tester: 'tester123',
+    leader: 'leader123'
+  };
+  document.getElementById('username').value = username;
+  document.getElementById('password').value = presets[username] || '';
 }
 
 async function login() {
@@ -58,8 +76,14 @@ async function login() {
   const data = await res.json();
   if (res.ok) {
     localStorage.setItem('auth_token', data.token);
-    document.getElementById('loginResult').textContent = `登录成功：${data.user?.username || username}（${data.user?.role || ''}）`;
-    loadUsers();
+    currentRole = data.user?.role || 'guest';
+    if (typeof applyRoleUI === 'function') applyRoleUI(currentRole);
+    document.getElementById('loginResult').textContent = `登录成功：${data.user?.username || username}（${currentRole}）`;
+    if (currentRole === 'admin') {
+      loadUsers();
+    } else {
+      document.getElementById('userTable').innerHTML = '';
+    }
     return;
   }
   document.getElementById('loginResult').textContent = `登录失败：${resultText(data, '用户名或密码错误')}`;
@@ -68,14 +92,18 @@ async function login() {
 async function logout() {
   await fetch('/api/auth/logout', {method: 'POST', headers: authHeaders()});
   localStorage.removeItem('auth_token');
+  currentRole = 'guest';
+  if (typeof applyRoleUI === 'function') applyRoleUI('guest');
+  document.getElementById('userTable').innerHTML = '';
   document.getElementById('loginResult').textContent = '已退出';
 }
 
 async function loadUsers() {
+  if (currentRole !== 'admin') return;
   const res = await fetch('/api/auth/users', {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
-    document.getElementById('loginResult').textContent = `读取用户失败：${resultText(data, '请先登录管理员账号')}`;
+    document.getElementById('loginResult').textContent = `读取用户失败：${resultText(data, '仅管理员可查看用户列表')}`;
     return;
   }
   document.getElementById('loginResult').textContent = `用户列表已刷新，共 ${data.total || 0} 人。`;
@@ -91,6 +119,10 @@ async function loadUsers() {
 }
 
 async function createUser() {
+  if (currentRole !== 'admin') {
+    document.getElementById('loginResult').textContent = '仅管理员可新增用户。';
+    return;
+  }
   const payload = {
     username: document.getElementById('newUsername').value.trim(),
     password: document.getElementById('newPassword').value,
@@ -107,12 +139,23 @@ async function createUser() {
 }
 
 async function toggleUser(id, enabled) {
+  if (currentRole !== 'admin') {
+    document.getElementById('loginResult').textContent = '仅管理员可修改用户状态。';
+    return;
+  }
   const res = await fetch(`/api/auth/users/${id}/toggle?enabled=${enabled}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   document.getElementById('loginResult').textContent = res.ok ? '用户状态已更新。' : `更新失败：${resultText(data)}`;
   if (res.ok) loadUsers();
 }
 
-loadUsers();
+window.addEventListener('app-role-changed', (e) => {
+  currentRole = e?.detail?.role || 'guest';
+  if (currentRole === 'admin') {
+    loadUsers();
+  } else {
+    document.getElementById('userTable').innerHTML = '';
+  }
+});
 </script>
 {% endblock %}

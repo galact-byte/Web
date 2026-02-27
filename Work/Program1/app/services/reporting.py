@@ -1,4 +1,6 @@
+import io
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -133,6 +135,107 @@ def export_report_docx(title: str, content: dict[str, Any], output_path: Path) -
         else:
             para = doc.add_paragraph(str(section_content))
             para.paragraph_format.line_spacing = 1.5
+    doc.save(output_path)
+
+
+OFFICIAL_TEMPLATE_TEXT_REPLACEMENTS = {
+    "山西晋深交易有限公司": "【单位名称】",
+    "山西省省属企业采购与供应链信息管理系统": "【系统名称】",
+    "张宇阳": "【联系人】",
+    "李沛林": "【负责人】",
+    "郭丽娟": "【负责人】",
+    "孔庆花、马丽娜、郭煜": "【专家组成员】",
+    "党委副书记、副董事长": "【职务】",
+    "信息技术部": "【责任部门】",
+}
+
+
+def _normalize_text_for_replace(text: str) -> str:
+    result = text
+    for old, new in OFFICIAL_TEMPLATE_TEXT_REPLACEMENTS.items():
+        result = result.replace(old, new)
+    result = re.sub(r"\b[0-9A-Z]{18}\b", "【统一社会信用代码】", result)
+    result = re.sub(r"\b1[3-9]\d{9}\b", "【联系电话】", result)
+    result = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "【邮箱】", result)
+    result = re.sub(r"\b\d{17}[0-9Xx]\b", "【证件号】", result)
+    result = re.sub(r"\b\d{4}年\d{1,2}月\d{1,2}日\b", "____年__月__日", result)
+    result = re.sub(r"https?://[^\s，。；;]+", "【访问地址】", result)
+    return result
+
+
+def _replace_paragraph_text(paragraph: Any, value: str) -> None:
+    if not paragraph.runs:
+        paragraph.text = value
+        return
+    paragraph.runs[0].text = value
+    for run in paragraph.runs[1:]:
+        run.text = ""
+
+
+def sanitize_template_docx_content(content: bytes) -> bytes:
+    doc = Document(io.BytesIO(content))
+    for p in doc.paragraphs:
+        raw = p.text or ""
+        cleaned = _normalize_text_for_replace(raw)
+        if cleaned != raw:
+            _replace_paragraph_text(p, cleaned)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    raw = p.text or ""
+                    cleaned = _normalize_text_for_replace(raw)
+                    if cleaned != raw:
+                        _replace_paragraph_text(p, cleaned)
+    bio = io.BytesIO()
+    doc.save(bio)
+    return bio.getvalue()
+
+
+def _replace_tokens(text: str, field_map: dict[str, str]) -> str:
+    result = text
+    for k, v in field_map.items():
+        if not k:
+            continue
+        result = result.replace(f"{{{{{k}}}}}", v)
+        result = result.replace(f"【{k}】", v)
+    return result
+
+
+def _fill_row_by_label(row: Any, field_map: dict[str, str]) -> None:
+    cells = list(row.cells)
+    labels = [c.text.strip().replace("\n", " ") for c in cells]
+    for idx, label in enumerate(labels):
+        if not label:
+            continue
+        for key, value in field_map.items():
+            if not value:
+                continue
+            if key in label and idx + 1 < len(cells):
+                cells[idx + 1].text = value
+
+
+def export_report_docx_with_template(
+    template_path: Path,
+    field_map: dict[str, Any],
+    output_path: Path,
+) -> None:
+    doc = Document(str(template_path))
+    normalized_map = {str(k).strip(): str(v) for k, v in (field_map or {}).items() if str(k).strip() and v is not None}
+    for p in doc.paragraphs:
+        raw = p.text or ""
+        replaced = _replace_tokens(raw, normalized_map)
+        if replaced != raw:
+            _replace_paragraph_text(p, replaced)
+    for table in doc.tables:
+        for row in table.rows:
+            _fill_row_by_label(row, normalized_map)
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    raw = p.text or ""
+                    replaced = _replace_tokens(raw, normalized_map)
+                    if replaced != raw:
+                        _replace_paragraph_text(p, replaced)
     doc.save(output_path)
 
 
