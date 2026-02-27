@@ -121,6 +121,51 @@ class ApiFlowTests(unittest.TestCase):
         ok_resp = self.client.post('/api/organizations', json=good_payload)
         self.assertEqual(ok_resp.status_code, 200)
 
+        bad_name_payload = {
+            'name': '/',
+            'credit_code': '91350100M000100Y53',
+            'legal_representative': '赵六',
+            'address': '天津市',
+            'mobile_phone': '13900139001',
+            'email': 'd@example.com',
+            'industry': '政府',
+            'organization_type': '机关单位',
+            'filing_region': '天津',
+            'created_by': 'tester',
+        }
+        bad_name_resp = self.client.post('/api/organizations', json=bad_name_payload)
+        self.assertEqual(bad_name_resp.status_code, 400)
+
+        bad_format_payload = {
+            'name': '测试单位D',
+            'credit_code': '/',
+            'legal_representative': '/',
+            'address': '/',
+            'mobile_phone': '/',
+            'email': '/',
+            'industry': '/',
+            'organization_type': '/',
+            'filing_region': '/',
+            'created_by': 'tester',
+        }
+        bad_format_resp = self.client.post('/api/organizations', json=bad_format_payload)
+        self.assertEqual(bad_format_resp.status_code, 400)
+
+        placeholder_payload = {
+            'name': '测试单位E',
+            'credit_code': '91350100M000100Y53',
+            'legal_representative': '/',
+            'address': '/',
+            'mobile_phone': '13900139001',
+            'email': 'placeholder@example.com',
+            'industry': '/',
+            'organization_type': '/',
+            'filing_region': '/',
+            'created_by': 'tester',
+        }
+        placeholder_resp = self.client.post('/api/organizations', json=placeholder_payload)
+        self.assertEqual(placeholder_resp.status_code, 200)
+
         dash_resp = self.client.get('/api/dashboard/summary?city=北京')
         self.assertEqual(dash_resp.status_code, 200)
         self.assertIn('totals', dash_resp.json())

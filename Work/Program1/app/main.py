@@ -61,6 +61,7 @@ from .schemas import (
 )
 from .services.reporting import export_report_docx, export_report_pdf, generate_report_payload
 from .validators import (
+    is_placeholder_value,
     validate_credit_code,
     validate_email,
     validate_mobile_phone,
@@ -374,6 +375,23 @@ SYSTEM_FIELDS = [
 
 
 def validate_org_payload(data: dict[str, Any]) -> None:
+    required_fields = [
+        ("name", "单位名称"),
+        ("credit_code", "统一社会信用代码"),
+        ("legal_representative", "单位负责人"),
+        ("address", "单位地址"),
+        ("mobile_phone", "移动电话"),
+        ("email", "邮箱"),
+        ("industry", "所属行业"),
+        ("organization_type", "单位类型"),
+        ("filing_region", "备案地区"),
+    ]
+    for key, label in required_fields:
+        if not str(data.get(key) or "").strip():
+            raise HTTPException(status_code=400, detail=f"{label}为必填项，不能为空。")
+    name = str(data.get("name") or "").strip()
+    if not name or is_placeholder_value(name):
+        raise HTTPException(status_code=400, detail="单位名称不能为空，且不能仅填写“/”。")
     if not validate_credit_code(data["credit_code"]):
         raise HTTPException(status_code=400, detail="统一社会信用代码格式错误，应为18位大写字母或数字。")
     if not validate_mobile_phone(data["mobile_phone"]):
@@ -385,12 +403,42 @@ def validate_org_payload(data: dict[str, Any]) -> None:
 
 
 def validate_org_partial(data: dict[str, Any]) -> None:
+    required_labels = {
+        "name": "单位名称",
+        "credit_code": "统一社会信用代码",
+        "legal_representative": "单位负责人",
+        "address": "单位地址",
+        "mobile_phone": "移动电话",
+        "email": "邮箱",
+        "industry": "所属行业",
+        "organization_type": "单位类型",
+        "filing_region": "备案地区",
+    }
+    for key, label in required_labels.items():
+        if key in data and not str(data.get(key) or "").strip():
+            raise HTTPException(status_code=400, detail=f"{label}为必填项，不能为空。")
+    if "name" in data:
+        name = str(data.get("name") or "").strip()
+        if not name or is_placeholder_value(name):
+            raise HTTPException(status_code=400, detail="单位名称不能为空，且不能仅填写“/”。")
+    if "credit_code" in data and not validate_credit_code(str(data.get("credit_code") or "")):
+        raise HTTPException(status_code=400, detail="统一社会信用代码格式错误，应为18位大写字母或数字。")
     if "mobile_phone" in data and not validate_mobile_phone(data["mobile_phone"]):
         raise HTTPException(status_code=400, detail="手机号格式错误，应为11位中国大陆手机号。")
     if "office_phone" in data and not validate_office_phone(data.get("office_phone") or ""):
         raise HTTPException(status_code=400, detail="办公电话格式错误。")
     if "email" in data and not validate_email(data["email"]):
         raise HTTPException(status_code=400, detail="邮箱格式错误。")
+
+
+def normalize_org_payload(data: dict[str, Any]) -> None:
+    if "name" in data and isinstance(data["name"], str):
+        data["name"] = data["name"].strip()
+    if "credit_code" in data and isinstance(data["credit_code"], str):
+        data["credit_code"] = data["credit_code"].strip().upper()
+    for key in ("mobile_phone", "office_phone", "email"):
+        if key in data and isinstance(data[key], str):
+            data[key] = data[key].strip()
 
 
 def assert_credit_code_available(db: Session, credit_code: str, current_org_id: int | None = None) -> None:
@@ -1234,6 +1282,7 @@ def delete_template(request: Request, template_id: int, db: Session = Depends(ge
 @app.post("/api/organizations")
 def create_organization(payload: OrganizationCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
     data = payload.model_dump()
+    normalize_org_payload(data)
     validate_org_payload(data)
     assert_credit_code_available(db, data["credit_code"])
     org = Organization(**data)
@@ -1352,12 +1401,7 @@ def submit_org_collection(token: str, payload: dict[str, Any], db: Session = Dep
         raise HTTPException(status_code=403, detail="链接已停用。")
     if datetime.now() > link.expires_at:
         raise HTTPException(status_code=403, detail="链接已过期。")
-    if "credit_code" in payload and isinstance(payload["credit_code"], str):
-        payload["credit_code"] = payload["credit_code"].strip().upper()
-    if "mobile_phone" in payload and isinstance(payload["mobile_phone"], str):
-        payload["mobile_phone"] = payload["mobile_phone"].strip()
-    if "email" in payload and isinstance(payload["email"], str):
-        payload["email"] = payload["email"].strip()
+    normalize_org_payload(payload)
     if link.organization_id:
         validate_org_partial(payload)
     else:
@@ -1365,6 +1409,7 @@ def submit_org_collection(token: str, payload: dict[str, Any], db: Session = Dep
         missing = [k for k in required if not payload.get(k)]
         if missing:
             raise HTTPException(status_code=400, detail=f"缺少必填项: {', '.join(missing)}")
+        normalize_org_payload(payload)
         validate_org_payload(payload)
     row = OrganizationSubmission(
         link_id=link.id,
@@ -1438,6 +1483,7 @@ def review_org_submission(
         org = get_org_or_404(db, row.organization_id)
         before = obj_to_dict(org, ORG_FIELDS)
         payload = {k: v for k, v in payload.items() if k in ORG_UPDATE_FIELDS}
+        normalize_org_payload(payload)
         validate_org_partial(payload)
         if "credit_code" in payload:
             assert_credit_code_available(db, payload["credit_code"], current_org_id=org.id)
@@ -1453,6 +1499,7 @@ def review_org_submission(
             raise HTTPException(status_code=400, detail=f"缺少必填项: {', '.join(missing)}")
         payload = {k: v for k, v in payload.items() if k in ORG_CREATE_FIELDS}
         payload["created_by"] = actor
+        normalize_org_payload(payload)
         validate_org_payload(payload)
         assert_credit_code_available(db, payload["credit_code"])
         org = Organization(**payload)
@@ -1488,7 +1535,10 @@ def update_organization(
     if org.archived and org.locked and not is_admin:
         raise HTTPException(status_code=403, detail="已归档单位默认不可编辑，请管理员解锁。")
     data = payload.model_dump(exclude_unset=True)
+    normalize_org_payload(data)
     validate_org_partial(data)
+    if "credit_code" in data:
+        assert_credit_code_available(db, data["credit_code"], current_org_id=org.id)
     before = obj_to_dict(org, ORG_FIELDS)
     for key, value in data.items():
         setattr(org, key, value)
@@ -1739,6 +1789,7 @@ async def import_organizations_excel(
             "created_by": actor,
         }
         try:
+            normalize_org_payload(data)
             validate_org_payload(data)
             assert_credit_code_available(db, data["credit_code"])
             org = Organization(**data)
@@ -1766,8 +1817,6 @@ async def import_organization_word(
     for cn_key, model_key in ORG_WORD_MAP.items():
         if cn_key in kv:
             raw[model_key] = kv[cn_key]
-    if "credit_code" in raw and isinstance(raw["credit_code"], str):
-        raw["credit_code"] = raw["credit_code"].strip().upper()
     if "involves_state_secret" in raw:
         raw["involves_state_secret"] = to_bool_text(str(raw["involves_state_secret"]))
     if "is_cii" in raw:
@@ -1778,6 +1827,7 @@ async def import_organization_word(
     if missing:
         raise HTTPException(status_code=400, detail=f"Word缺少必填字段: {', '.join(missing)}")
     raw = {k: v for k, v in raw.items() if k in ORG_CREATE_FIELDS}
+    normalize_org_payload(raw)
     validate_org_payload(raw)
     assert_credit_code_available(db, raw["credit_code"])
     org = Organization(**raw)
