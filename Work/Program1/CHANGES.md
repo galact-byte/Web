@@ -1,3 +1,57 @@
+# 修改记录 — 定级备案管理系统（稳定性修复：Excel 导入事务、系统编号并发、模板必填校验）
+
+> **修订记录**
+>
+> - v1.2.27: 修复 Excel 导入行失败后事务污染导致 500；修复 `generate_system_code` 并发冲突风险；修复模板更新将必填字段置空触发 500 的问题，并补充回归测试。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/main.py — 导入事务与参数校验增强
+
+- **修改位置**：`generate_system_code`、`import_organizations_excel`、`update_report_template`。
+- **修改内容**：
+  - 系统编号由 `count()+1` 改为高熵编号 + 存在性检查，避免并发生成重复编号；
+  - Excel 导入按行使用 `begin_nested()` savepoint，单行 `flush` 异常不会污染整批事务；
+  - 模板更新对 `template_name/status` 空值做 400 校验，并校验 `status` 仅允许 `enabled/disabled`。
+
+### tests/test_api.py — 回归测试补充
+
+- **修改位置**：新增 `test_17`、`test_18`、`test_19`。
+- **修改内容**：
+  - `test_17_import_excel_flush_error_does_not_break_whole_transaction`：验证单行唯一约束异常不会导致接口 500；
+  - `test_18_update_template_empty_required_fields_returns_400`：验证模板必填字段传空返回 400；
+  - `test_19_generate_system_code_not_reused_without_insert`：验证系统编号连续生成不会复用。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.27。
+- **修改内容**：记录本次稳定性修复与测试覆盖。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/main.py |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 新增用例：`.\.venv_clean\Scripts\python.exe -m unittest tests.test_api.ApiFlowTests.test_17_import_excel_flush_error_does_not_break_whole_transaction -v`
+- 新增用例：`.\.venv_clean\Scripts\python.exe -m unittest tests.test_api.ApiFlowTests.test_18_update_template_empty_required_fields_returns_400 -v`
+- 新增用例：`.\.venv_clean\Scripts\python.exe -m unittest tests.test_api.ApiFlowTests.test_19_generate_system_code_not_reused_without_insert -v`
+- 全量回归：`.\.venv_clean\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v`
+
 # 修改记录 — 定级备案管理系统（回归修复：无鉴权管理员维护与系统日期筛选）
 
 > **修订记录**
