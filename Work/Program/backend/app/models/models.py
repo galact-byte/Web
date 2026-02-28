@@ -1,7 +1,7 @@
 """
 数据库模型
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -30,6 +30,7 @@ class User(Base):
     display_name = Column(String(100), nullable=False)
     role = Column(Enum(UserRole), default=UserRole.employee)
     department = Column(String(100), nullable=True)
+    must_change_password = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

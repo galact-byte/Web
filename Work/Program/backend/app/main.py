@@ -5,14 +5,37 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import engine, Base
+from app.database import engine, Base, SessionLocal
 from app.routers import auth_router, users_router, projects_router, exports_router
+from app.models import User, UserRole
+from app.services.auth import hash_password
 
 # 环境判断：ENV=dev 为开发模式，其他值（如 prod）为生产模式
 IS_DEV = os.getenv("ENV", "dev").lower() == "dev"
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
+
+# 种子数据：首次启动时创建默认管理员账户
+def _seed_admin():
+    db = SessionLocal()
+    try:
+        if db.query(User).count() == 0:
+            admin = User(
+                username="admin",
+                password_hash=hash_password("admin123"),
+                display_name="系统管理员",
+                role=UserRole.manager,
+                department="管理部",
+                must_change_password=True,
+            )
+            db.add(admin)
+            db.commit()
+            print("[初始化] 已创建默认管理员账户: admin / admin123")
+    finally:
+        db.close()
+
+_seed_admin()
 
 # 创建应用 —— 生产环境禁用 Swagger 文档，防止 API 信息泄露
 app = FastAPI(

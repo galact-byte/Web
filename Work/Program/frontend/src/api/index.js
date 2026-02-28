@@ -42,7 +42,7 @@ api.interceptors.response.use(
 // ============ 认证 API ============
 export const authApi = {
   login: (data) => api.post('/api/auth/login', data),
-  register: (data) => api.post('/api/auth/register', data),
+  changePassword: (data) => api.post('/api/auth/change-password', data),
   me: () => api.get('/api/auth/me')
 }
 
@@ -53,7 +53,8 @@ export const usersApi = {
   getManagers: () => api.get('/api/users/managers'),
   create: (data) => api.post('/api/users/', data),
   update: (id, data) => api.put(`/api/users/${id}`, data),
-  delete: (id) => api.delete(`/api/users/${id}`)
+  delete: (id) => api.delete(`/api/users/${id}`),
+  resetPassword: (id) => api.post(`/api/users/${id}/reset-password`)
 }
 
 // ============ 项目 API ============

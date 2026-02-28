@@ -54,7 +54,7 @@ npm run dev
 
 | 功能模块 | 说明 |
 |----------|------|
-| 用户认证 | 登录/注册，JWT Token 认证 |
+| 用户认证 | 管理员分发账户，首次登录强制改密，JWT Token 认证 |
 | 角色区分 | 经理可管理所有项目，员工只能看自己被分配的项目 |
 | 项目录入 | 项目编号、名称、客户、业务类别、地点等 |
 | 多系统支持 | 一个项目可包含多个系统 |
@@ -118,11 +118,47 @@ cp backend/.env.example backend/.env
 
 ### 数据库
 
-默认使用 SQLite，生产环境可切换到 PostgreSQL：
+默认使用 SQLite（零配置，开箱即用），部署到服务器时可通过 `DATABASE_URL` 环境变量切换，**无需改代码**。
+
+#### SQLite（默认，本地开发）
+
+无需配置，数据存储在 `backend/project_completion.db` 文件中。
+
+#### PostgreSQL（推荐生产环境）
 
 ```bash
-DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+DATABASE_URL=postgresql://user:password@localhost:5432/project_completion
 ```
+
+> 驱动 `psycopg2-binary` 已包含在 `requirements.txt` 中，无需额外安装。
+
+#### MySQL
+
+```bash
+DATABASE_URL=mysql+pymysql://user:password@localhost:3306/project_completion
+```
+
+> 需额外安装驱动：`pip install pymysql`
+
+#### 国产数据库
+
+项目基于 SQLAlchemy ORM，支持通过安装对应驱动连接国产数据库：
+
+| 数据库 | DATABASE_URL 格式 | 驱动安装 |
+|--------|------------------|----------|
+| 达梦 (DM) | `dm+dmPython://user:pwd@host:5236/dbname` | `pip install dmPython` |
+| 人大金仓 (KingbaseES) | `postgresql://user:pwd@host:54321/dbname` | `pip install psycopg2-binary`（兼容 PG 协议） |
+| GaussDB | `postgresql://user:pwd@host:5432/dbname` | `pip install psycopg2-binary`（兼容 PG 协议） |
+
+> **提示**：人大金仓和 GaussDB 兼容 PostgreSQL 协议，直接使用 PostgreSQL 连接方式即可。达梦需安装官方 Python 驱动 `dmPython`。
+
+#### 注意事项
+
+- 项目基于 SQLAlchemy ORM，全部通过 Python 对象操作，**没有手写 SQL**，因此切换数据库无需修改业务代码
+- 切换 PostgreSQL / 人大金仓 / GaussDB：只需修改 `DATABASE_URL`，驱动已内置
+- 切换 MySQL / 达梦：修改 `DATABASE_URL` + 安装对应驱动包
+- 切换数据库后首次启动会自动建表
+- 如数据库中无用户，会自动创建默认管理员 `admin / admin123`
 
 ### JWT 密钥（生产环境必须修改）
 
@@ -147,13 +183,14 @@ CORS_ORIGINS=https://你的前端域名
 
 ## 📝 使用流程
 
-1. **注册账户** - 选择经理或员工角色
-2. **创建项目**（经理）- 填写项目信息和系统
-3. **分发项目**（经理）- 将项目分配给员工
-4. **填写贡献率**（员工）- 补充部门和贡献率信息
-5. **导出完结单** - 选择项目导出 Excel 或 Word
-6. **查看工作量** - 访问“工作量统计”了解各人员季度贡献
-7. **切换主题** - 点击侧边栏底部☁️/🌙图标切换深浅主题
+1. **首次启动** - 系统自动创建管理员 `admin / admin123`，首次登录需改密
+2. **管理员创建用户** - 在用户管理页添加员工/经理账户
+3. **创建项目**（经理）- 填写项目信息和系统
+4. **分发项目**（经理）- 将项目分配给员工
+5. **填写贡献率**（员工）- 补充部门和贡献率信息
+6. **导出完结单** - 选择项目导出 Excel 或 Word
+7. **查看工作量** - 访问"工作量统计"了解各人员季度贡献
+8. **切换主题** - 点击侧边栏底部图标切换深浅主题
 
 ---
 

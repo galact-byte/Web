@@ -2,7 +2,7 @@
 用户数据模型
 """
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 import enum
 
@@ -25,6 +25,7 @@ class User(Base):
     display_name = Column(String(100), nullable=False)
     role = Column(SQLEnum(UserRole), default=UserRole.EMPLOYEE, nullable=False)
     department = Column(String(100), default="")
+    must_change_password = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # 关系

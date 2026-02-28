@@ -31,6 +31,7 @@ async def get_users(
             display_name=u.display_name,
             role=u.role.value,
             department=u.department,
+            must_change_password=u.must_change_password,
             created_at=u.created_at
         )
         for u in users
@@ -51,6 +52,7 @@ async def get_employees(
             display_name=u.display_name,
             role=u.role.value,
             department=u.department,
+            must_change_password=u.must_change_password,
             created_at=u.created_at
         )
         for u in users
@@ -71,6 +73,7 @@ async def get_managers(
             display_name=u.display_name,
             role=u.role.value,
             department=u.department,
+            must_change_password=u.must_change_password,
             created_at=u.created_at
         )
         for u in users
@@ -108,6 +111,7 @@ async def create_user(
         display_name=user.display_name,
         role=user.role.value,
         department=user.department,
+        must_change_password=user.must_change_password,
         created_at=user.created_at
     )
 
@@ -140,8 +144,27 @@ async def update_user(
         display_name=user.display_name,
         role=user.role.value,
         department=user.department,
+        must_change_password=user.must_change_password,
         created_at=user.created_at
     )
+
+
+@router.post("/{user_id}/reset-password")
+async def reset_password(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_manager)
+):
+    """重置用户密码（仅经理）—— 密码重置为 123456，用户需首次登录后修改"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    user.password_hash = hash_password("123456")
+    user.must_change_password = True
+    db.commit()
+    
+    return {"message": f"用户 {user.display_name} 的密码已重置为默认密码"}
 
 
 @router.delete("/{user_id}")

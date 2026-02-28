@@ -36,6 +36,7 @@
               <td>
                 <div class="action-btns">
                   <button class="btn btn-ghost btn-sm" @click="openEditModal(user)" title="编辑"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
+                  <button class="btn btn-ghost btn-sm" @click="confirmResetPassword(user)" title="重置密码"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></button>
                   <button v-if="user.id !== userStore.user?.id" class="btn btn-ghost btn-sm" @click="confirmDelete(user)" title="删除"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
                 </div>
               </td>
@@ -73,6 +74,18 @@
           </div>
         </div>
       </div>
+
+      <!-- 重置密码确认 -->
+      <div v-if="showResetModal" class="modal-overlay" @click.self="showResetModal = false">
+        <div class="modal">
+          <div class="modal-header"><h2>重置密码</h2><button class="btn btn-ghost" @click="showResetModal = false">✕</button></div>
+          <div class="modal-body"><p>确定要重置用户 <strong>{{ userToReset?.display_name }}</strong> 的密码为默认密码 <code>123456</code> 吗？</p><p class="text-muted" style="margin-top: 0.5rem; font-size: 0.85rem;">该用户下次登录时将被要求修改密码。</p></div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showResetModal = false">取消</button>
+            <button class="btn btn-primary" @click="resetPassword" :disabled="resetting">{{ resetting ? '重置中...' : '确认重置' }}</button>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 </template>
@@ -96,6 +109,9 @@ const userToDelete = ref(null)
 const submitting = ref(false)
 const deleting = ref(false)
 const isDark = ref(document.documentElement.getAttribute('data-theme') !== 'light')
+const showResetModal = ref(false)
+const userToReset = ref(null)
+const resetting = ref(false)
 
 const form = reactive({ username: '', password: '', display_name: '', role: 'employee', department: '' })
 
@@ -124,6 +140,21 @@ function openEditModal(user) {
 function confirmDelete(user) {
   userToDelete.value = user
   showDeleteModal.value = true
+}
+
+function confirmResetPassword(user) {
+  userToReset.value = user
+  showResetModal.value = true
+}
+
+async function resetPassword() {
+  resetting.value = true
+  try {
+    const res = await usersApi.resetPassword(userToReset.value.id)
+    showResetModal.value = false
+    alert(res.data.message || '密码重置成功')
+  } catch (err) { console.error(err); alert(err.response?.data?.detail || '重置失败') }
+  finally { resetting.value = false }
 }
 
 async function submitUser() {
