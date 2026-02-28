@@ -816,6 +816,240 @@ class ApiFlowTests(unittest.TestCase):
         )
         self.assertEqual(invalid_resp.status_code, 400)
 
+    def test_14_is_admin_param_cannot_bypass_lock_and_report_freeze(self):
+        create_eval_resp = self.client.post(
+            '/api/auth/users',
+            json={'username': 'non_admin_editor', 'password': 'editor123', 'role': 'evaluator', 'require_password_change': False},
+            headers=self.admin_headers,
+        )
+        self.assertIn(create_eval_resp.status_code, [200, 409])
+        eval_login = self.client.post('/api/auth/login', json={'username': 'non_admin_editor', 'password': 'editor123'})
+        self.assertEqual(eval_login.status_code, 200)
+        eval_headers = {'X-Auth-Token': eval_login.json()['token']}
+
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '权限绕过修复单位',
+                'credit_code': '91350100M000100Y55',
+                'legal_representative': '赵一',
+                'address': '修复城A',
+                'mobile_phone': '13100131001',
+                'email': 'permfix@example.com',
+                'industry': '政府',
+                'organization_type': '机关单位',
+                'filing_region': '修复城A',
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(org_resp.status_code, 200)
+        org_id = org_resp.json()['data']['id']
+
+        sys_resp = self.client.post(
+            '/api/systems',
+            json={
+                'organization_id': org_id,
+                'system_name': '权限绕过修复系统',
+                'proposed_level': 3,
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(sys_resp.status_code, 200)
+        system_id = sys_resp.json()['data']['id']
+
+        report_resp = self.client.post(f'/api/reports/generate?system_id={system_id}&report_type=grading_report&actor=tester')
+        self.assertEqual(report_resp.status_code, 200)
+        report_id = report_resp.json()['data']['id']
+
+        submit_resp = self.client.post(
+            f'/api/reports/{report_id}/submit?actor=tester&reviewer=leader',
+            headers=self.admin_headers,
+        )
+        self.assertEqual(submit_resp.status_code, 200)
+
+        bypass_edit_resp = self.client.put(
+            f'/api/reports/{report_id}?actor=non_admin_editor&is_admin=true',
+            json={'content': {'标题': '尝试绕过'}},
+            headers=eval_headers,
+        )
+        self.assertEqual(bypass_edit_resp.status_code, 403)
+
+        admin_edit_resp = self.client.put(
+            f'/api/reports/{report_id}?actor=admin&is_admin=true',
+            json={'content': {'标题': '管理员可编辑'}},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(admin_edit_resp.status_code, 200)
+
+        archive_org_resp = self.client.post(f'/api/organizations/{org_id}/archive?actor=tester')
+        self.assertEqual(archive_org_resp.status_code, 200)
+        bypass_org_update_resp = self.client.put(
+            f'/api/organizations/{org_id}?actor=non_admin_editor&is_admin=true',
+            json={'address': '被绕过地址'},
+            headers=eval_headers,
+        )
+        self.assertEqual(bypass_org_update_resp.status_code, 403)
+        admin_org_update_resp = self.client.put(
+            f'/api/organizations/{org_id}?actor=admin&is_admin=true',
+            json={'address': '管理员地址'},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(admin_org_update_resp.status_code, 200)
+
+        archive_sys_resp = self.client.post(f'/api/systems/{system_id}/archive?actor=tester')
+        self.assertEqual(archive_sys_resp.status_code, 200)
+        bypass_sys_update_resp = self.client.put(
+            f'/api/systems/{system_id}?actor=non_admin_editor&is_admin=true',
+            json={'system_name': '绕过系统名'},
+            headers=eval_headers,
+        )
+        self.assertEqual(bypass_sys_update_resp.status_code, 403)
+        admin_sys_update_resp = self.client.put(
+            f'/api/systems/{system_id}?actor=admin&is_admin=true',
+            json={'system_name': '管理员系统名'},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(admin_sys_update_resp.status_code, 200)
+
+    def test_15_batch_download_and_dashboard_filter_consistency(self):
+        upload_resp = self.client.post(
+            '/api/knowledge/upload',
+            data={'title': '批量下载下架校验', 'doc_type': '政策文件', 'actor': 'admin'},
+            files={'file': ('disabled.docx', b'content', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(upload_resp.status_code, 200)
+        disabled_doc_id = upload_resp.json()['data']['id']
+
+        disable_resp = self.client.post(
+            f'/api/knowledge/{disabled_doc_id}/toggle?enabled=false&actor=admin',
+            headers=self.admin_headers,
+        )
+        self.assertEqual(disable_resp.status_code, 200)
+
+        batch_resp = self.client.post(
+            '/api/knowledge/batch-download?actor=admin',
+            json=[disabled_doc_id],
+            headers=self.admin_headers,
+        )
+        self.assertEqual(batch_resp.status_code, 403)
+
+        city_a = '筛选一致城A'
+        city_b = '筛选一致城B'
+        org_a_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '看板筛选A单位',
+                'credit_code': '91350100M000100Y56',
+                'legal_representative': '甲',
+                'address': city_a,
+                'mobile_phone': '13100131002',
+                'email': 'citya@example.com',
+                'industry': '教育',
+                'organization_type': '事业单位',
+                'filing_region': city_a,
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(org_a_resp.status_code, 200)
+        org_a_id = org_a_resp.json()['data']['id']
+
+        org_b_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '看板筛选B单位',
+                'credit_code': '91350100M000100Y57',
+                'legal_representative': '乙',
+                'address': city_b,
+                'mobile_phone': '13100131003',
+                'email': 'cityb@example.com',
+                'industry': '教育',
+                'organization_type': '事业单位',
+                'filing_region': city_b,
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(org_b_resp.status_code, 200)
+        org_b_id = org_b_resp.json()['data']['id']
+
+        sys_a_resp = self.client.post(
+            '/api/systems',
+            json={'organization_id': org_a_id, 'system_name': '看板系统A', 'proposed_level': 2, 'created_by': 'tester'},
+        )
+        self.assertEqual(sys_a_resp.status_code, 200)
+        sys_a_id = sys_a_resp.json()['data']['id']
+
+        sys_b_resp = self.client.post(
+            '/api/systems',
+            json={'organization_id': org_b_id, 'system_name': '看板系统B', 'proposed_level': 2, 'created_by': 'tester'},
+        )
+        self.assertEqual(sys_b_resp.status_code, 200)
+        sys_b_id = sys_b_resp.json()['data']['id']
+
+        report_a = self.client.post(f'/api/reports/generate?system_id={sys_a_id}&report_type=grading_report&actor=tester')
+        self.assertEqual(report_a.status_code, 200)
+        report_b = self.client.post(f'/api/reports/generate?system_id={sys_b_id}&report_type=grading_report&actor=tester')
+        self.assertEqual(report_b.status_code, 200)
+        report_b_id = report_b.json()['data']['id']
+
+        submit_b = self.client.post(
+            f'/api/reports/{report_b_id}/submit?actor=tester&reviewer=leader',
+            headers=self.admin_headers,
+        )
+        self.assertEqual(submit_b.status_code, 200)
+
+        archive_b = self.client.post(f'/api/systems/{sys_b_id}/archive?actor=tester')
+        self.assertEqual(archive_b.status_code, 200)
+
+        summary_resp = self.client.get(f'/api/dashboard/summary?city={city_a}')
+        self.assertEqual(summary_resp.status_code, 200)
+        totals = summary_resp.json()['totals']
+        self.assertEqual(totals['archived_system_count'], 0)
+        self.assertEqual(totals['pending_review_reports'], 0)
+        self.assertEqual(totals['in_progress_projects'], 1)
+
+    def test_16_lite_mode_can_edit_frozen_report_with_is_admin_flag(self):
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '无鉴权演示单位',
+                'credit_code': '91350100M000100Y58',
+                'legal_representative': '丙',
+                'address': '演示城',
+                'mobile_phone': '13100131004',
+                'email': 'lite@example.com',
+                'industry': '政务',
+                'organization_type': '机关单位',
+                'filing_region': '演示城',
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(org_resp.status_code, 200)
+        org_id = org_resp.json()['data']['id']
+
+        sys_resp = self.client.post(
+            '/api/systems',
+            json={'organization_id': org_id, 'system_name': '无鉴权演示系统', 'proposed_level': 2, 'created_by': 'tester'},
+        )
+        self.assertEqual(sys_resp.status_code, 200)
+        system_id = sys_resp.json()['data']['id']
+
+        report_resp = self.client.post(f'/api/reports/generate?system_id={system_id}&report_type=grading_report&actor=tester')
+        self.assertEqual(report_resp.status_code, 200)
+        report_id = report_resp.json()['data']['id']
+
+        submit_resp = self.client.post(
+            f'/api/reports/{report_id}/submit?actor=tester&reviewer=leader',
+            headers=self.admin_headers,
+        )
+        self.assertEqual(submit_resp.status_code, 200)
+
+        lite_edit_resp = self.client.put(
+            f'/api/reports/{report_id}?actor=demo_admin&is_admin=true',
+            json={'content': {'标题': '无鉴权维护'}},
+        )
+        self.assertEqual(lite_edit_resp.status_code, 200)
+
 
 if __name__ == '__main__':
     unittest.main()

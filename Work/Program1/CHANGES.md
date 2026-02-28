@@ -1,3 +1,107 @@
+# 修改记录 — 定级备案管理系统（回归修复：无鉴权管理员维护与系统日期筛选）
+
+> **修订记录**
+>
+> - v1.2.26: 修复无鉴权模式下冻结报告无法通过 `is_admin=true` 维护的回归；修复系统侧看板日期筛选使用错误字段导致统计偏小的问题。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/main.py — 管理员判定与系统日期筛选修复
+
+- **修改位置**：`is_current_user_admin`、`update_organization`、`update_system`、`edit_report`、章节编辑接口、`dashboard_summary`。
+- **修改内容**：
+  - 管理员判定改为：
+    - 有登录用户时仅信任令牌角色；
+    - 无登录且处于无鉴权/精简模式时，允许回退 `is_admin` 参数（兼容演示流程）；
+  - 看板系统侧日期筛选改为 `SystemInfo.created_at`，与系统指标语义一致。
+
+### tests/test_api.py — 回归测试补充
+
+- **修改位置**：新增 `test_16_lite_mode_can_edit_frozen_report_with_is_admin_flag`。
+- **修改内容**：验证 `API_AUTH_REQUIRED=0` 场景下，未登录但带 `is_admin=true` 仍可维护冻结报告，防止精简演示流程回归。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.26。
+- **修改内容**：记录本次回归修复与字段筛选修复。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/main.py |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 新增回归：`.\.venv_clean\Scripts\python.exe -m unittest tests.test_api.ApiFlowTests.test_16_lite_mode_can_edit_frozen_report_with_is_admin_flag -v`
+- 全量回归：`.\.venv_clean\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v`
+
+# 修改记录 — 定级备案管理系统（安全修复：权限绕过与看板统计一致性）
+
+> **修订记录**
+>
+> - v1.2.25: 修复 `is_admin` 参数信任导致的报告/归档对象编辑绕过；修复知识库批量下载可下载下架文档；修复看板 totals 指标未应用筛选条件导致统计不一致。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/main.py — 权限与统计修复
+
+- **修改位置**：`update_organization`、`update_system`、报告编辑/章节/签章接口、`/api/knowledge/batch-download`、`dashboard_summary`。
+- **修改内容**：
+  - 新增 `is_current_user_admin`，管理员判断绑定当前登录用户角色，不再信任 `is_admin` 查询参数；
+  - 归档且锁定对象更新时，仅管理员账号可绕过锁定限制；
+  - 报告在 `submitted/approved` 状态时，仅管理员可编辑（普通角色即使传 `is_admin=true` 也不可绕过）；
+  - 批量下载接口新增下架状态校验，包含 `disabled` 文档直接拒绝；
+  - 看板 `archived_system_count`、`pending_review_reports`、`in_progress_projects` 改为基于同一筛选后的系统集合统计。
+
+### tests/test_api.py — 回归测试补充
+
+- **修改位置**：新增 `test_14`、`test_15`。
+- **修改内容**：
+  - `test_14_is_admin_param_cannot_bypass_lock_and_report_freeze`：验证普通账号无法通过 `?is_admin=true` 绕过报告冻结和归档锁定编辑；
+  - `test_15_batch_download_and_dashboard_filter_consistency`：验证批量下载下架文档被拒绝，且看板 totals 指标与城市筛选一致。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.25。
+- **修改内容**：记录本次安全与统计一致性修复。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/main.py |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 新增用例：`.\.venv_clean\Scripts\python.exe -m unittest tests.test_api.ApiFlowTests.test_14_is_admin_param_cannot_bypass_lock_and_report_freeze -v`
+- 新增用例：`.\.venv_clean\Scripts\python.exe -m unittest tests.test_api.ApiFlowTests.test_15_batch_download_and_dashboard_filter_consistency -v`
+- 全量回归：`.\.venv_clean\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v`
+
 # 修改记录 — 定级备案管理系统（收口：忽略测试残留并推送）
 
 > **修订记录**
