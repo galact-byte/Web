@@ -44,6 +44,7 @@ start_lite.bat
 .vscode/
 .idea/
 AGENTS.md
+CLAUDE.md
 GEMINI.md
 Thumbs.db
 .DS_Store
