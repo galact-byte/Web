@@ -16,7 +16,8 @@
 双击运行项目根目录下的 `start.bat` 即可：
 
 - 自动创建虚拟环境 `.venv`
-- 自动安装依赖
+- 优先使用 `requirements.lock.txt`，缺失时回退到 `requirements.txt`
+- 推荐 Python 3.12.x（默认兼容运行，可按需开启严格检查）
 - 启动服务: `http://127.0.0.1:8011`（可通过环境变量 `APP_PORT` 覆盖）
 
 ## 3. 手动启动
@@ -25,9 +26,20 @@
 cd E:\vscode\Programs\Program1
 python -m venv .venv
 .\.venv\Scripts\activate
-python -m pip install -i https://pypi.org/simple -r requirements.txt
+if (Test-Path .\requirements.lock.txt) {
+  python -m pip install -i https://pypi.org/simple --timeout 20 --retries 1 -r requirements.lock.txt
+} else {
+  python -m pip install -i https://pypi.org/simple --timeout 20 --retries 1 -r requirements.txt
+}
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8011 --reload
 ```
+
+依赖一致性说明：
+
+- 默认策略为“兼容优先”：有 `requirements.lock.txt` 用锁定依赖；没有则回退到 `requirements.txt`。
+- 如需严格模式，可设置：
+  - `STRICT_DEP_LOCK=1`（必须有 `requirements.lock.txt`）
+  - `STRICT_PY312=1`（必须使用 Python 3.12.x）
 
 页面入口：
 

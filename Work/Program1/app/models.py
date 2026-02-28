@@ -285,8 +285,10 @@ class UserAccount(Base):
     password_hash = Column(String(128), nullable=False)
     role = Column(String(32), nullable=False, default="evaluator", index=True)
     enabled = Column(Boolean, nullable=False, default=True, index=True)
+    must_change_password = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     last_login_at = Column(DateTime, nullable=True)
+    password_updated_at = Column(DateTime, nullable=True)
 
 
 class AuthSession(Base):

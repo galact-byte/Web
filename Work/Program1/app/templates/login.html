@@ -3,26 +3,32 @@
 <div class="panel" style="max-width:520px;">
   <h2>账号登录</h2>
   <div class="grid grid-2">
-    <div><label>用户名</label><input id="username" value="admin" /></div>
-    <div><label>密码</label><input id="password" type="password" value="admin123" /></div>
+    <div><label>用户名</label><input id="username" /></div>
+    <div><label>密码</label><input id="password" type="password" /></div>
   </div>
-  <p class="hint">内置测试账号：admin/admin123，tester/tester123，leader/leader123。</p>
-  <div class="row">
-    <button class="btn-lite" onclick="fillBuiltIn('admin')">填充 admin</button>
-    <button class="btn-lite" onclick="fillBuiltIn('tester')">填充 tester</button>
-    <button class="btn-lite" onclick="fillBuiltIn('leader')">填充 leader</button>
-  </div>
+  <p class="hint">账号由管理员统一分发。普通账号首次登录后建议立即修改密码。</p>
   <br />
   <button onclick="login()">登录</button>
   <button class="btn-lite" onclick="logout()">退出</button>
   <div class="result" id="loginResult">请输入账号密码后登录。</div>
 </div>
 
+<div class="panel" id="selfPwdPanel">
+  <h2>修改密码</h2>
+  <div class="row">
+    <div><label>当前密码</label><input id="currentPassword" type="password" /></div>
+    <div><label>新密码</label><input id="newPasswordSelf" type="password" /></div>
+    <div><label>确认新密码</label><input id="newPasswordSelf2" type="password" /></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="changePassword()">修改密码</button></div>
+  </div>
+  <div class="result" id="pwdResult">登录后可在此修改密码。</div>
+</div>
+
 <div class="panel" data-role-only="admin" id="adminUserPanel">
   <h2>用户管理（管理员）</h2>
   <div class="row">
     <div><label>用户名</label><input id="newUsername" /></div>
-    <div><label>密码</label><input id="newPassword" type="password" /></div>
+    <div><label>初始密码</label><input id="newPassword" type="password" /></div>
     <div>
       <label>角色</label>
       <select id="newRole">
@@ -31,18 +37,20 @@
         <option value="admin">admin</option>
       </select>
     </div>
+    <div><label>首次改密</label><input id="newRequireChange" type="checkbox" checked /></div>
     <div><label>&nbsp;</label><button class="btn-lite" onclick="createUser()">新增用户</button></div>
   </div>
   <br />
   <button class="btn-lite" onclick="loadUsers()">刷新用户列表</button>
   <table>
-    <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>启用</th><th>操作</th></tr></thead>
+    <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>启用</th><th>首次改密</th><th>最近登录</th><th>操作</th></tr></thead>
     <tbody id="userTable"></tbody>
   </table>
 </div>
 
 <script>
 let currentRole = 'guest';
+let currentUsername = '';
 
 function resultText(data, fallback='操作失败') {
   if (!data) return fallback;
@@ -55,14 +63,47 @@ function authHeaders() {
   return token ? {'X-Auth-Token': token} : {};
 }
 
-function fillBuiltIn(username) {
-  const presets = {
-    admin: 'admin123',
-    tester: 'tester123',
-    leader: 'leader123'
-  };
-  document.getElementById('username').value = username;
-  document.getElementById('password').value = presets[username] || '';
+function setLoginResult(text) {
+  document.getElementById('loginResult').textContent = text;
+}
+
+function setPwdResult(text) {
+  document.getElementById('pwdResult').textContent = text;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => (
+    {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch
+  ));
+}
+
+function encodeUserArg(value) {
+  return encodeURIComponent(String(value ?? '')).replace(/'/g, '%27');
+}
+
+async function syncCurrentUser() {
+  const token = localStorage.getItem('auth_token') || '';
+  if (!token) {
+    currentRole = 'guest';
+    currentUsername = '';
+    if (typeof applyRoleUI === 'function') applyRoleUI('guest');
+    return;
+  }
+  const res = await fetch('/api/auth/me', {headers: authHeaders()});
+  if (!res.ok) {
+    currentRole = 'guest';
+    currentUsername = '';
+    if (typeof applyRoleUI === 'function') applyRoleUI('guest');
+    return;
+  }
+  const data = await res.json();
+  currentRole = data.role || 'guest';
+  currentUsername = data.username || '';
+  if (typeof applyRoleUI === 'function') applyRoleUI(currentRole);
+  if (currentRole === 'admin') loadUsers();
+  if (data.must_change_password) {
+    setPwdResult('当前账号被标记为首次登录/重置后登录，请先修改密码。');
+  }
 }
 
 async function login() {
@@ -77,8 +118,14 @@ async function login() {
   if (res.ok) {
     localStorage.setItem('auth_token', data.token);
     currentRole = data.user?.role || 'guest';
+    currentUsername = data.user?.username || username;
     if (typeof applyRoleUI === 'function') applyRoleUI(currentRole);
-    document.getElementById('loginResult').textContent = `登录成功：${data.user?.username || username}（${currentRole}）`;
+    let msg = `登录成功：${data.user?.username || username}（${currentRole}）`;
+    if (data.must_change_password) {
+      msg += '；请先修改初始密码。';
+      setPwdResult('当前账号被标记为首次登录/重置后登录，请先修改密码。');
+    }
+    setLoginResult(msg);
     if (currentRole === 'admin') {
       loadUsers();
     } else {
@@ -86,16 +133,18 @@ async function login() {
     }
     return;
   }
-  document.getElementById('loginResult').textContent = `登录失败：${resultText(data, '用户名或密码错误')}`;
+  setLoginResult(`登录失败：${resultText(data, '用户名或密码错误')}`);
 }
 
 async function logout() {
   await fetch('/api/auth/logout', {method: 'POST', headers: authHeaders()});
   localStorage.removeItem('auth_token');
   currentRole = 'guest';
+  currentUsername = '';
   if (typeof applyRoleUI === 'function') applyRoleUI('guest');
   document.getElementById('userTable').innerHTML = '';
-  document.getElementById('loginResult').textContent = '已退出';
+  setLoginResult('已退出');
+  setPwdResult('登录后可在此修改密码。');
 }
 
 async function loadUsers() {
@@ -103,50 +152,115 @@ async function loadUsers() {
   const res = await fetch('/api/auth/users', {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
-    document.getElementById('loginResult').textContent = `读取用户失败：${resultText(data, '仅管理员可查看用户列表')}`;
+    setLoginResult(`读取用户失败：${resultText(data, '仅管理员可查看用户列表')}`);
     return;
   }
-  document.getElementById('loginResult').textContent = `用户列表已刷新，共 ${data.total || 0} 人。`;
-  document.getElementById('userTable').innerHTML = data.items.map(u => `
+  setLoginResult(`用户列表已刷新，共 ${data.total || 0} 人。`);
+  document.getElementById('userTable').innerHTML = data.items.map(u => {
+    const encodedUsername = encodeUserArg(u.username || '');
+    return `
     <tr>
       <td>${u.id}</td>
-      <td>${u.username}</td>
-      <td>${u.role}</td>
+      <td>${escapeHtml(u.username)}</td>
+      <td>${escapeHtml(u.role)}</td>
       <td>${u.enabled ? '是' : '否'}</td>
-      <td><button class="btn-lite" onclick="toggleUser(${u.id}, ${!u.enabled})">${u.enabled ? '停用' : '启用'}</button></td>
+      <td>${u.must_change_password ? '是' : '否'}</td>
+      <td>${escapeHtml(u.last_login_at || '')}</td>
+      <td>
+        <button class="btn-lite" onclick="toggleUser(${u.id}, ${!u.enabled})">${u.enabled ? '停用' : '启用'}</button>
+        <button class="btn-lite" onclick="resetPassword(${u.id}, '${encodedUsername}')">重置密码</button>
+      </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 async function createUser() {
   if (currentRole !== 'admin') {
-    document.getElementById('loginResult').textContent = '仅管理员可新增用户。';
+    setLoginResult('仅管理员可新增用户。');
     return;
   }
   const payload = {
     username: document.getElementById('newUsername').value.trim(),
     password: document.getElementById('newPassword').value,
-    role: document.getElementById('newRole').value
+    role: document.getElementById('newRole').value,
+    require_password_change: document.getElementById('newRequireChange').checked
   };
+  if (!payload.username || !payload.password) {
+    setLoginResult('用户名和初始密码不能为空。');
+    return;
+  }
   const res = await fetch('/api/auth/users', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', ...authHeaders()},
     body: JSON.stringify(payload)
   });
   const data = await res.json();
-  document.getElementById('loginResult').textContent = res.ok ? (data.message || '新增用户成功') : `新增失败：${resultText(data)}`;
+  setLoginResult(res.ok ? (data.message || '新增用户成功') : `新增失败：${resultText(data)}`);
   if (res.ok) loadUsers();
 }
 
 async function toggleUser(id, enabled) {
   if (currentRole !== 'admin') {
-    document.getElementById('loginResult').textContent = '仅管理员可修改用户状态。';
+    setLoginResult('仅管理员可修改用户状态。');
     return;
   }
   const res = await fetch(`/api/auth/users/${id}/toggle?enabled=${enabled}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
-  document.getElementById('loginResult').textContent = res.ok ? '用户状态已更新。' : `更新失败：${resultText(data)}`;
+  setLoginResult(res.ok ? '用户状态已更新。' : `更新失败：${resultText(data)}`);
   if (res.ok) loadUsers();
+}
+
+async function resetPassword(id, usernameEncoded) {
+  if (currentRole !== 'admin') {
+    setLoginResult('仅管理员可重置密码。');
+    return;
+  }
+  const username = decodeURIComponent(usernameEncoded || '');
+  const newPassword = prompt(`请输入 ${username} 的新密码（至少8位）`, '');
+  if (newPassword === null) return;
+  const pwd = (newPassword || '').trim();
+  if (pwd.length < 8) {
+    setLoginResult('重置密码至少8位。');
+    return;
+  }
+  const res = await fetch(`/api/auth/users/${id}/reset-password`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', ...authHeaders()},
+    body: JSON.stringify({new_password: pwd})
+  });
+  const data = await res.json();
+  setLoginResult(res.ok ? (data.message || '密码已重置。') : `重置失败：${resultText(data)}`);
+  if (res.ok) loadUsers();
+}
+
+async function changePassword() {
+  const currentPassword = document.getElementById('currentPassword').value;
+  const newPassword = document.getElementById('newPasswordSelf').value;
+  const newPassword2 = document.getElementById('newPasswordSelf2').value;
+  if (!currentPassword || !newPassword || !newPassword2) {
+    setPwdResult('请完整填写当前密码、新密码和确认密码。');
+    return;
+  }
+  if (newPassword !== newPassword2) {
+    setPwdResult('两次新密码输入不一致。');
+    return;
+  }
+  const res = await fetch('/api/auth/change-password', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', ...authHeaders()},
+    body: JSON.stringify({current_password: currentPassword, new_password: newPassword})
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    setPwdResult(`修改失败：${resultText(data)}`);
+    return;
+  }
+  setPwdResult(data.message || '密码修改成功。');
+  document.getElementById('currentPassword').value = '';
+  document.getElementById('newPasswordSelf').value = '';
+  document.getElementById('newPasswordSelf2').value = '';
+  await syncCurrentUser();
 }
 
 window.addEventListener('app-role-changed', (e) => {
@@ -157,5 +271,7 @@ window.addEventListener('app-role-changed', (e) => {
     document.getElementById('userTable').innerHTML = '';
   }
 });
+
+syncCurrentUser();
 </script>
 {% endblock %}
