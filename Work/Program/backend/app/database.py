@@ -2,8 +2,7 @@
 数据库配置
 """
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
 # 数据库 URL - 开发环境使用 SQLite，生产环境使用 PostgreSQL

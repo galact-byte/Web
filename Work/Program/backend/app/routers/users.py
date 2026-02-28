@@ -22,7 +22,10 @@ async def get_users(
     """获取用户列表"""
     query = db.query(User)
     if role:
-        query = query.filter(User.role == UserRole(role))
+        try:
+            query = query.filter(User.role == UserRole(role))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"无效的角色: {role}")
     users = query.all()
     return [
         UserResponse(
@@ -98,7 +101,7 @@ async def create_user(
         username=request.username,
         password_hash=hash_password(request.password),
         display_name=request.display_name,
-        role=UserRole(request.role),
+        role=UserRole(request.role) if request.role in [r.value for r in UserRole] else UserRole.employee,
         department=request.department
     )
     db.add(user)
@@ -131,6 +134,8 @@ async def update_user(
     if request.display_name:
         user.display_name = request.display_name
     if request.role:
+        if request.role not in [r.value for r in UserRole]:
+            raise HTTPException(status_code=400, detail=f"无效的角色: {request.role}")
         user.role = UserRole(request.role)
     if request.department is not None:
         user.department = request.department
@@ -176,12 +181,24 @@ async def delete_user(
     """删除用户（仅经理）"""
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="不能删除自己")
-    
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-    
+
+    # 清理该用户在项目表中的外键引用，避免级联错误
+    from app.models import Project
+    db.query(Project).filter(Project.business_manager_id == user_id).update(
+        {"business_manager_id": None}, synchronize_session="fetch"
+    )
+    db.query(Project).filter(Project.implementation_manager_id == user_id).update(
+        {"implementation_manager_id": None}, synchronize_session="fetch"
+    )
+    db.query(Project).filter(Project.creator_id == user_id).update(
+        {"creator_id": None}, synchronize_session="fetch"
+    )
+
     db.delete(user)
     db.commit()
-    
+
     return {"message": "删除成功"}

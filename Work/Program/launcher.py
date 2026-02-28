@@ -7,7 +7,6 @@
 import os
 import sys
 import subprocess
-import signal
 import time
 import webbrowser
 import atexit

@@ -55,6 +55,12 @@ const routes = [
     name: 'Users',
     component: () => import('../views/Users.vue'),
     meta: { requiresAuth: true, requiresManager: true }
+  },
+  {
+    path: '/backup',
+    name: 'Backup',
+    component: () => import('../views/Backup.vue'),
+    meta: { requiresAuth: true, requiresManager: true }
   }
 ]
 

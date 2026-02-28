@@ -41,6 +41,7 @@ class LoginRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     new_password: str
+    old_password: Optional[str] = None  # 首次改密可不填，主动改密必填
 
 
 class TokenResponse(BaseModel):

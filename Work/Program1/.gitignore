@@ -43,6 +43,7 @@ start_lite.bat
 .omc/
 .vscode/
 .idea/
+AGENTS.md
 GEMINI.md
 Thumbs.db
 .DS_Store
