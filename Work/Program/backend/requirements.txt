@@ -2,8 +2,6 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 sqlalchemy==2.0.25
 aiosqlite==0.19.0
-asyncpg==0.29.0
-psycopg2-binary==2.9.9
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
@@ -13,3 +11,7 @@ python-docx==1.1.0
 openpyxl==3.1.2
 python-multipart==0.0.6
 python-dotenv==1.0.0
+
+# === PostgreSQL 驱动（默认安装，支持切换 DATABASE_URL 到 PostgreSQL） ===
+asyncpg==0.29.0
+psycopg2-binary==2.9.9

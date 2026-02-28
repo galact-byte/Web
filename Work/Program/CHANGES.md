@@ -1,5 +1,52 @@
 # 修改记录 — 项目完结单管理平台
 
+# 修改记录 — 项目完结单管理平台
+
+> **修订记录**
+>
+> - v1.2.1: 恢复 PostgreSQL 默认驱动依赖（`asyncpg`、`psycopg2-binary`），修复仅改 `DATABASE_URL` 切换 PostgreSQL 时的缺驱动启动失败问题
+> - v1.2: 安全改造（管理员分发账户、首次改密、重置密码）+ bcrypt 兼容性修复
+> - v1.1: 修改启动行为，关闭 CMD 窗口时自动停止所有子进程
+
+## 新增文件 (如有)
+
+_无新增文件_
+
+---
+
+## 修改文件
+
+### backend/requirements.txt — 恢复 PostgreSQL 驱动默认安装
+
+- **修改位置**：依赖列表末尾 PostgreSQL 驱动段落
+- **修改内容**：
+  - 取消注释 `asyncpg==0.29.0`
+  - 取消注释 `psycopg2-binary==2.9.9`
+  - 保持“设置 `DATABASE_URL=postgresql://...` 即可切换数据库”的既有部署行为
+
+### CHANGES.md — 变更记录补充
+
+- **修改位置**：文件顶部新增 v1.2.1 记录
+- **修改内容**：记录本次 PostgreSQL 驱动回归修复
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | backend/requirements.txt |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 配置检查：确认 `backend/requirements.txt` 已包含 `asyncpg` 与 `psycopg2-binary`
+- 启动验证（部署侧）：在 PostgreSQL 环境执行依赖安装后启动后端，验证不再出现缺失驱动异常
+
+# 修改记录 — 项目完结单管理平台
+
 > **修订记录**
 >
 > - v1.2: 安全改造（管理员分发账户、首次改密、重置密码）+ bcrypt 兼容性修复
