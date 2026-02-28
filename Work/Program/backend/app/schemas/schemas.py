@@ -27,6 +27,7 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     id: int
     created_at: Optional[datetime] = None
+    must_change_password: bool = False
 
     class Config:
         from_attributes = True
@@ -38,11 +39,8 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class RegisterRequest(BaseModel):
-    username: str
-    password: str
-    display_name: str
-    role: str = "employee"
+class ChangePasswordRequest(BaseModel):
+    new_password: str
 
 
 class TokenResponse(BaseModel):

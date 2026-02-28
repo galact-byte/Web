@@ -35,23 +35,11 @@
       <!-- 右侧登录表单 -->
       <div class="login-form-container">
         <div class="form-header">
-          <h2>{{ isRegister ? '创建账户' : '欢迎回来' }}</h2>
-          <p>{{ isRegister ? '填写以下信息创建您的账户' : '请登录您的账户继续' }}</p>
+          <h2>欢迎回来</h2>
+          <p>请登录您的账户继续</p>
         </div>
 
         <form @submit.prevent="handleSubmit" class="login-form">
-          <div class="input-group" v-if="isRegister">
-            <label for="displayName">显示名称</label>
-            <input
-              id="displayName"
-              v-model="form.display_name"
-              type="text"
-              class="input"
-              placeholder="输入您的姓名"
-              required
-            />
-          </div>
-
           <div class="input-group">
             <label for="username">用户名</label>
             <input
@@ -76,33 +64,63 @@
             />
           </div>
 
-          <div class="input-group" v-if="isRegister">
-            <label for="role">角色</label>
-            <select id="role" v-model="form.role" class="select">
-              <option value="employee">员工</option>
-              <option value="manager">经理</option>
-            </select>
-          </div>
-
           <div v-if="error" class="error-message">
             {{ error }}
           </div>
 
           <button type="submit" class="btn btn-primary btn-lg w-full" :disabled="loading">
             <span v-if="loading" class="loading-spinner" style="width: 20px; height: 20px;"></span>
-            <span v-else>{{ isRegister ? '注 册' : '登 录' }}</span>
+            <span v-else>登 录</span>
           </button>
         </form>
 
         <div class="form-footer">
-          <p v-if="isRegister">
-            已有账户？
-            <a href="#" @click.prevent="isRegister = false">立即登录</a>
-          </p>
-          <p v-else>
-            还没有账户？
-            <a href="#" @click.prevent="isRegister = true">立即注册</a>
-          </p>
+          <p class="text-muted">账户由管理员统一分配，如需开通请联系管理员</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 首次登录修改密码弹窗 -->
+    <div v-if="showChangePassword" class="modal-overlay">
+      <div class="modal change-password-modal">
+        <div class="modal-header">
+          <h2>🔐 修改密码</h2>
+        </div>
+        <div class="modal-body">
+          <p class="change-password-hint">首次登录或密码已被重置，请设置新密码后继续使用。</p>
+          <form @submit.prevent="handleChangePassword" class="login-form">
+            <div class="input-group">
+              <label for="newPassword">新密码</label>
+              <input
+                id="newPassword"
+                v-model="newPassword"
+                type="password"
+                class="input"
+                placeholder="请输入新密码（至少6位）"
+                minlength="6"
+                required
+              />
+            </div>
+            <div class="input-group">
+              <label for="confirmPassword">确认密码</label>
+              <input
+                id="confirmPassword"
+                v-model="confirmPassword"
+                type="password"
+                class="input"
+                placeholder="再次输入新密码"
+                minlength="6"
+                required
+              />
+            </div>
+            <div v-if="changePasswordError" class="error-message">
+              {{ changePasswordError }}
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg w-full" :disabled="changingPassword">
+              <span v-if="changingPassword" class="loading-spinner" style="width: 20px; height: 20px;"></span>
+              <span v-else>确认修改</span>
+            </button>
+          </form>
         </div>
       </div>
     </div>
@@ -117,15 +135,17 @@ import { useUserStore } from '../stores/user'
 const router = useRouter()
 const userStore = useUserStore()
 
-const isRegister = ref(false)
 const loading = ref(false)
 const error = ref('')
+const showChangePassword = ref(false)
+const newPassword = ref('')
+const confirmPassword = ref('')
+const changePasswordError = ref('')
+const changingPassword = ref(false)
 
 const form = reactive({
   username: '',
-  password: '',
-  display_name: '',
-  role: 'employee'
+  password: ''
 })
 
 async function handleSubmit() {
@@ -133,19 +153,44 @@ async function handleSubmit() {
   error.value = ''
 
   try {
-    if (isRegister.value) {
-      await userStore.register(form)
+    const user = await userStore.login({
+      username: form.username,
+      password: form.password
+    })
+    // 检查是否需要修改密码
+    if (user.must_change_password) {
+      showChangePassword.value = true
     } else {
-      await userStore.login({
-        username: form.username,
-        password: form.password
-      })
+      router.push('/')
     }
-    router.push('/')
   } catch (err) {
-    error.value = err.response?.data?.detail || '操作失败，请重试'
+    error.value = err.response?.data?.detail || '登录失败，请重试'
   } finally {
     loading.value = false
+  }
+}
+
+async function handleChangePassword() {
+  changePasswordError.value = ''
+
+  if (newPassword.value.length < 6) {
+    changePasswordError.value = '密码长度不能少于6位'
+    return
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    changePasswordError.value = '两次输入的密码不一致'
+    return
+  }
+
+  changingPassword.value = true
+  try {
+    await userStore.changePassword(newPassword.value)
+    showChangePassword.value = false
+    router.push('/')
+  } catch (err) {
+    changePasswordError.value = err.response?.data?.detail || '密码修改失败，请重试'
+  } finally {
+    changingPassword.value = false
   }
 }
 </script>
@@ -293,8 +338,17 @@ async function handleSubmit() {
   color: var(--text-secondary);
 }
 
-.form-footer a {
-  font-weight: 500;
+/* 修改密码弹窗 */
+.change-password-modal {
+  max-width: 420px;
+  width: 90%;
+}
+
+.change-password-hint {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 /* 响应式 */

@@ -81,12 +81,17 @@ def install_backend_deps():
     """安装后端依赖"""
     print("[1/4] 检查后端依赖...")
     flag_file = os.path.join(BACKEND_DIR, ".deps_installed")
+    req_file = os.path.join(BACKEND_DIR, "requirements.txt")
 
-    if os.path.exists(flag_file):
-        print("      后端依赖已安装")
-    else:
-        print("      首次运行，正在安装后端依赖...")
-        req_file = os.path.join(BACKEND_DIR, "requirements.txt")
+    # 如依赖文件比标记文件更新，则需要重新安装
+    need_install = not os.path.exists(flag_file)
+    if not need_install and os.path.exists(req_file):
+        if os.path.getmtime(req_file) > os.path.getmtime(flag_file):
+            need_install = True
+            print("      检测到依赖变更，正在更新...")
+
+    if need_install:
+        print("      正在安装后端依赖...")
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "-r", req_file, "-q"],
             cwd=BACKEND_DIR
@@ -97,6 +102,8 @@ def install_backend_deps():
             sys.exit(1)
         with open(flag_file, "w") as f:
             f.write("ok")
+    else:
+        print("      后端依赖已安装")
 
     print("      后端依赖 OK")
     print()

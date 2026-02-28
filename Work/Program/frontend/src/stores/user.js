@@ -16,6 +16,7 @@ export const useUserStore = defineStore('user', () => {
   const isLoggedIn = computed(() => !!token.value && !!user.value)
   const isManager = computed(() => user.value?.role === 'manager')
   const isEmployee = computed(() => user.value?.role === 'employee')
+  const mustChangePassword = computed(() => !!user.value?.must_change_password)
 
   // 方法
   async function login(credentials) {
@@ -40,22 +41,18 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  async function register(userData) {
+  async function changePassword(newPassword) {
     loading.value = true
     error.value = ''
     try {
-      const response = await authApi.register(userData)
-      const data = response.data
-      
-      token.value = data.access_token
-      user.value = data.user
-      
-      localStorage.setItem('token', data.access_token)
-      localStorage.setItem('user', JSON.stringify(data.user))
-      
-      return data.user
+      await authApi.changePassword({ new_password: newPassword })
+      // 更新本地状态
+      if (user.value) {
+        user.value.must_change_password = false
+        localStorage.setItem('user', JSON.stringify(user.value))
+      }
     } catch (err) {
-      error.value = err.response?.data?.detail || '注册失败'
+      error.value = err.response?.data?.detail || '密码修改失败'
       throw err
     } finally {
       loading.value = false
@@ -90,8 +87,9 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn,
     isManager,
     isEmployee,
+    mustChangePassword,
     login,
-    register,
+    changePassword,
     logout,
     fetchCurrentUser
   }
