@@ -1,5 +1,6 @@
 # Python 虚拟环境
 .venv/
+.venv_clean/
 
 # Python 缓存
 __pycache__/
@@ -8,6 +9,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+tests/runtime/
 
 # 数据库文件
 *.db

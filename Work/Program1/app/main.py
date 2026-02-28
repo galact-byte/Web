@@ -27,10 +27,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfgen import canvas
-from sqlalchemy import func, or_
+from sqlalchemy import func, inspect, or_, text
 from sqlalchemy.orm import Session
 
-from .db import SessionLocal, get_db, init_db
+from .db import SessionLocal, engine, get_db, init_db
 from .models import (
     Attachment,
     DeleteRequest,
@@ -124,6 +124,22 @@ def env_to_bool(value: str | None, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on", "y"}
+
+
+def parse_optional_bool(value: Any, field_name: str) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"1", "true", "yes", "on", "y"}:
+            return True
+        if text in {"0", "false", "no", "off", "n"}:
+            return False
+    raise HTTPException(status_code=400, detail=f"{field_name} 仅支持布尔值 true/false。")
 
 
 SMTP_TLS = env_to_bool(os.getenv("SMTP_TLS"), False)
@@ -299,6 +315,8 @@ def ensure_default_accounts() -> None:
                     password_hash=hash_password(password),
                     role=role,
                     enabled=True,
+                    must_change_password=False,
+                    password_updated_at=datetime.now(),
                 )
             )
         db.commit()
@@ -306,10 +324,24 @@ def ensure_default_accounts() -> None:
         db.close()
 
 
+def ensure_user_account_schema() -> None:
+    insp = inspect(engine)
+    tables = set(insp.get_table_names())
+    if "user_accounts" not in tables:
+        return
+    cols = {c["name"] for c in insp.get_columns("user_accounts")}
+    with engine.begin() as conn:
+        if "must_change_password" not in cols:
+            conn.execute(text("ALTER TABLE user_accounts ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0"))
+        if "password_updated_at" not in cols:
+            conn.execute(text("ALTER TABLE user_accounts ADD COLUMN password_updated_at DATETIME NULL"))
+
+
 @app.on_event("startup")
 def startup() -> None:
     ensure_dirs()
     init_db()
+    ensure_user_account_schema()
     ensure_default_accounts()
 
 
@@ -392,6 +424,10 @@ def _is_api_auth_exempt(path: str) -> bool:
     return False
 
 
+def _is_password_change_exempt(path: str) -> bool:
+    return path in {"/api/auth/change-password", "/api/auth/logout", "/api/auth/me"}
+
+
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):  # type: ignore[override]
     req_scheme = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").strip().lower()
@@ -410,6 +446,8 @@ async def security_middleware(request: Request, call_next):  # type: ignore[over
                 user = get_user_by_token(db, token)
                 if not user:
                     return JSONResponse(status_code=401, content={"detail": "登录令牌无效或已过期。"})
+                if bool(getattr(user, "must_change_password", False)) and not _is_password_change_exempt(path):
+                    return JSONResponse(status_code=403, content={"detail": "当前账号需先修改密码后再继续操作。"})
                 request.state.current_user = user.username
             finally:
                 db.close()
@@ -492,6 +530,8 @@ def require_roles(
 ) -> tuple[str, str]:
     user = get_current_user_optional(request, db)
     if user:
+        if bool(getattr(user, "must_change_password", False)) and not _is_password_change_exempt(request.url.path):
+            raise HTTPException(status_code=403, detail="当前账号需先修改密码后再继续操作。")
         if user.role not in allowed_roles:
             raise HTTPException(status_code=403, detail="当前账号无权限执行此操作。")
         return user.username, user.role
@@ -1246,7 +1286,12 @@ def auth_login(payload: dict[str, Any], request: Request, db: Session = Depends(
         "message": "登录成功",
         "token": token,
         "expires_at": expires_at,
-        "user": {"username": user.username, "role": user.role},
+        "user": {
+            "username": user.username,
+            "role": user.role,
+            "must_change_password": bool(getattr(user, "must_change_password", False)),
+        },
+        "must_change_password": bool(getattr(user, "must_change_password", False)),
     }
 
 
@@ -1272,6 +1317,8 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
         "role": user.role,
         "enabled": user.enabled,
         "last_login_at": user.last_login_at,
+        "must_change_password": bool(getattr(user, "must_change_password", False)),
+        "password_updated_at": user.password_updated_at,
     }
 
 
@@ -1287,8 +1334,10 @@ def list_users(request: Request, db: Session = Depends(get_db)) -> dict[str, Any
                 "username": r.username,
                 "role": r.role,
                 "enabled": r.enabled,
+                "must_change_password": bool(getattr(r, "must_change_password", False)),
                 "created_at": r.created_at,
                 "last_login_at": r.last_login_at,
+                "password_updated_at": r.password_updated_at,
             }
             for r in rows
         ],
@@ -1301,18 +1350,86 @@ def create_user(request: Request, payload: dict[str, Any], db: Session = Depends
     username = str(payload.get("username") or "").strip()
     password = str(payload.get("password") or "")
     role = str(payload.get("role") or "evaluator").strip().lower()
+    require_password_change = parse_optional_bool(payload.get("require_password_change"), "require_password_change")
     assert_safe_text(username, "用户名")
     if role not in {"admin", "reviewer", "evaluator"}:
         raise HTTPException(status_code=400, detail="role 仅支持 admin/reviewer/evaluator。")
     if not username or len(password) < 6:
         raise HTTPException(status_code=400, detail="用户名不能为空，密码至少6位。")
+    if require_password_change is None:
+        require_password_change = role != "admin"
     exists = db.query(UserAccount).filter(UserAccount.username == username).first()
     if exists:
         raise HTTPException(status_code=409, detail="用户名已存在。")
-    row = UserAccount(username=username, password_hash=hash_password(password), role=role, enabled=True)
+    row = UserAccount(
+        username=username,
+        password_hash=hash_password(password),
+        role=role,
+        enabled=True,
+        must_change_password=require_password_change,
+        password_updated_at=None if require_password_change else datetime.now(),
+    )
     db.add(row)
     db.commit()
-    return {"message": "账号创建成功", "data": {"username": row.username, "role": row.role, "created_by": actor}}
+    return {
+        "message": "账号创建成功",
+        "data": {
+            "id": row.id,
+            "username": row.username,
+            "role": row.role,
+            "must_change_password": bool(getattr(row, "must_change_password", False)),
+            "created_by": actor,
+        },
+    }
+
+
+@app.post("/api/auth/change-password")
+def change_password(request: Request, payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+    user = get_current_user_optional(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="请先登录。")
+    current_password = str(payload.get("current_password") or "")
+    new_password = str(payload.get("new_password") or "")
+    if not current_password or not new_password:
+        raise HTTPException(status_code=400, detail="当前密码和新密码不能为空。")
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="新密码至少8位。")
+    ok, _ = verify_password(current_password, user.password_hash)
+    if not ok:
+        raise HTTPException(status_code=400, detail="当前密码不正确。")
+    if current_password == new_password:
+        raise HTTPException(status_code=400, detail="新密码不能与当前密码相同。")
+    user.password_hash = hash_password(new_password)
+    user.must_change_password = False
+    user.password_updated_at = datetime.now()
+    db.query(AuthSession).filter(AuthSession.user_id == user.id).delete(synchronize_session=False)
+    db.commit()
+    return {"message": "密码修改成功，请使用新密码登录。"}
+
+
+@app.post("/api/auth/users/{user_id}/reset-password")
+def reset_user_password(request: Request, user_id: int, payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin"})
+    user = db.query(UserAccount).filter(UserAccount.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在。")
+    new_password = str(payload.get("new_password") or "").strip()
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="重置密码至少8位。")
+    user.password_hash = hash_password(new_password)
+    user.must_change_password = True
+    user.password_updated_at = None
+    db.query(AuthSession).filter(AuthSession.user_id == user.id).delete(synchronize_session=False)
+    db.commit()
+    return {
+        "message": "密码重置成功，用户下次登录需修改密码。",
+        "data": {
+            "user_id": user.id,
+            "username": user.username,
+            "reset_by": actor,
+            "must_change_password": True,
+        },
+    }
 
 
 @app.post("/api/auth/users/{user_id}/toggle")

@@ -665,7 +665,7 @@ class ApiFlowTests(unittest.TestCase):
 
         create_user_resp = self.client.post(
             '/api/auth/users',
-            json={'username': 'ev_user', 'password': 'evpass123', 'role': 'evaluator'},
+            json={'username': 'ev_user', 'password': 'evpass123', 'role': 'evaluator', 'require_password_change': False},
             headers=self.admin_headers,
         )
         self.assertIn(create_user_resp.status_code, [200, 409])
@@ -718,6 +718,103 @@ class ApiFlowTests(unittest.TestCase):
 
         evaluator_collection = self.client.get('/api/organizations/collection-links', headers=evaluator_headers)
         self.assertEqual(evaluator_collection.status_code, 200)
+
+    def test_11_change_password_revokes_old_sessions(self):
+        create_user_resp = self.client.post(
+            '/api/auth/users',
+            json={'username': 'pw_rotate_user', 'password': 'oldpass123', 'role': 'evaluator'},
+            headers=self.admin_headers,
+        )
+        self.assertIn(create_user_resp.status_code, [200, 409])
+
+        login_old = self.client.post('/api/auth/login', json={'username': 'pw_rotate_user', 'password': 'oldpass123'})
+        self.assertEqual(login_old.status_code, 200)
+        old_token = login_old.json()['token']
+        old_headers = {'X-Auth-Token': old_token}
+
+        me_before = self.client.get('/api/auth/me', headers=old_headers)
+        self.assertEqual(me_before.status_code, 200)
+
+        change_resp = self.client.post(
+            '/api/auth/change-password',
+            json={'current_password': 'oldpass123', 'new_password': 'newpass123'},
+            headers=old_headers,
+        )
+        self.assertEqual(change_resp.status_code, 200)
+
+        me_after = self.client.get('/api/auth/me', headers=old_headers)
+        self.assertEqual(me_after.status_code, 401)
+
+        login_old_again = self.client.post('/api/auth/login', json={'username': 'pw_rotate_user', 'password': 'oldpass123'})
+        self.assertEqual(login_old_again.status_code, 401)
+
+        login_new = self.client.post('/api/auth/login', json={'username': 'pw_rotate_user', 'password': 'newpass123'})
+        self.assertEqual(login_new.status_code, 200)
+
+    def test_12_must_change_password_is_enforced_server_side(self):
+        create_user_resp = self.client.post(
+            '/api/auth/users',
+            json={'username': 'must_change_user', 'password': 'temp12345', 'role': 'evaluator'},
+            headers=self.admin_headers,
+        )
+        self.assertIn(create_user_resp.status_code, [200, 409])
+
+        login_resp = self.client.post('/api/auth/login', json={'username': 'must_change_user', 'password': 'temp12345'})
+        self.assertEqual(login_resp.status_code, 200)
+        self.assertTrue(login_resp.json().get('must_change_password'))
+        old_token = login_resp.json()['token']
+        old_headers = {'X-Auth-Token': old_token}
+
+        me_resp = self.client.get('/api/auth/me', headers=old_headers)
+        self.assertEqual(me_resp.status_code, 200)
+        self.assertTrue(me_resp.json().get('must_change_password'))
+
+        blocked_resp = self.client.get('/api/organizations/collection-links', headers=old_headers)
+        self.assertEqual(blocked_resp.status_code, 403)
+
+        change_resp = self.client.post(
+            '/api/auth/change-password',
+            json={'current_password': 'temp12345', 'new_password': 'temp12345_new'},
+            headers=old_headers,
+        )
+        self.assertEqual(change_resp.status_code, 200)
+
+        old_token_resp = self.client.get('/api/auth/me', headers=old_headers)
+        self.assertEqual(old_token_resp.status_code, 401)
+
+        login_new = self.client.post('/api/auth/login', json={'username': 'must_change_user', 'password': 'temp12345_new'})
+        self.assertEqual(login_new.status_code, 200)
+        self.assertFalse(login_new.json().get('must_change_password'))
+        new_headers = {'X-Auth-Token': login_new.json()['token']}
+
+        allowed_resp = self.client.get('/api/organizations/collection-links', headers=new_headers)
+        self.assertEqual(allowed_resp.status_code, 200)
+
+    def test_13_require_password_change_explicit_bool_parse(self):
+        create_false_resp = self.client.post(
+            '/api/auth/users',
+            json={
+                'username': 'bool_parse_user',
+                'password': 'boolpass123',
+                'role': 'evaluator',
+                'require_password_change': 'false',
+            },
+            headers=self.admin_headers,
+        )
+        self.assertEqual(create_false_resp.status_code, 200)
+        self.assertFalse(create_false_resp.json()['data']['must_change_password'])
+
+        invalid_resp = self.client.post(
+            '/api/auth/users',
+            json={
+                'username': 'bool_parse_user_bad',
+                'password': 'boolpass123',
+                'role': 'evaluator',
+                'require_password_change': 'not-bool',
+            },
+            headers=self.admin_headers,
+        )
+        self.assertEqual(invalid_resp.status_code, 400)
 
 
 if __name__ == '__main__':
