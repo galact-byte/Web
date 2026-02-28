@@ -2,6 +2,7 @@
  * API 配置和基础请求
  */
 import axios from 'axios'
+import router from '../router'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -33,7 +34,7 @@ api.interceptors.response.use(
       // Token 过期或无效
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      window.location.href = '/login'
+      router.push('/login')
     }
     return Promise.reject(error)
   }
@@ -65,10 +66,6 @@ export const projectsApi = {
   update: (id, data) => api.put(`/api/projects/${id}`, data),
   delete: (id) => api.delete(`/api/projects/${id}`),
 
-  // 系统
-  addSystem: (projectId, data) => api.post(`/api/projects/${projectId}/systems`, data),
-  deleteSystem: (projectId, systemId) => api.delete(`/api/projects/${projectId}/systems/${systemId}`),
-
   // 分配
   assign: (projectId, data) => api.post(`/api/projects/${projectId}/assign`, data),
   getAssignments: (projectId) => api.get(`/api/projects/${projectId}/assignments`),
@@ -80,6 +77,19 @@ export const projectsApi = {
 export const exportsApi = {
   excel: (data) => api.post('/api/exports/excel', data, { responseType: 'blob' }),
   word: (projectId) => api.post(`/api/exports/word/${projectId}`, {}, { responseType: 'blob' })
+}
+
+// ============ 备份恢复 API ============
+export const backupApi = {
+  exportJson: () => api.post('/api/backup/export', {}, { responseType: 'blob' }),
+  downloadDb: () => api.get('/api/backup/download-db', { responseType: 'blob' }),
+  importJson: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/api/backup/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  }
 }
 
 export default api

@@ -44,5 +44,9 @@ delivery_*.zip
 .vscode/
 .idea/
 GEMINI.md
+CLAUDE.md
 Thumbs.db
 .DS_Store
+
+# OMC 状态
+.omc/

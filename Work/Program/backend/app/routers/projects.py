@@ -6,7 +6,7 @@ from datetime import date
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import extract
+
 
 from app.database import get_db
 from app.models import User, Project, System, ProjectAssignment, ProjectStatus
@@ -56,18 +56,23 @@ async def get_workload_stats(
     按 approval_date（审批完成时间）归属季度。
     解析每个项目分配的 contribution 文本，汇总每个人员的总贡献率。
     """
-    # 计算季度的起止月份
-    start_month = (quarter - 1) * 3 + 1
-    end_month = quarter * 3
+    # 计算季度的起止日期（字符串比较，兼容 SQLite/PostgreSQL/达梦等）
+    start_date = f"{year}-{(quarter - 1) * 3 + 1:02d}-01"
+    if quarter == 4:
+        end_date = f"{year + 1}-01-01"
+    else:
+        end_date = f"{year}-{quarter * 3 + 1:02d}-01"
 
     # 查询该季度内有 approval_date 的项目的所有分配
+    # approval_date 为 String 类型，使用字符串范围比较（要求格式为 YYYY-MM-DD）
     assignments = db.query(ProjectAssignment).join(Project).options(
         joinedload(ProjectAssignment.project),
         joinedload(ProjectAssignment.assignee)
     ).filter(
-        extract('year', Project.approval_date) == year,
-        extract('month', Project.approval_date) >= start_month,
-        extract('month', Project.approval_date) <= end_month
+        Project.approval_date.isnot(None),
+        Project.approval_date != "",
+        Project.approval_date >= start_date,
+        Project.approval_date < end_date
     ).all()
 
     # 按人员汇总
@@ -142,18 +147,27 @@ async def get_projects(
         joinedload(Project.systems),
         joinedload(Project.assignments)
     )
-    
-    # 员工只能看到分配给自己的项目
+
+    # 员工只能看到分配给自己的项目（用子查询避免 join+joinedload 产生重复）
     if current_user.role.value == "employee":
-        query = query.join(ProjectAssignment).filter(
+        assigned_project_ids = db.query(ProjectAssignment.project_id).filter(
             ProjectAssignment.assignee_id == current_user.id
-        )
+        ).subquery()
+        query = query.filter(Project.id.in_(assigned_project_ids))
     
     if status:
         query = query.filter(Project.status == ProjectStatus(status))
     
     projects = query.order_by(Project.created_at.desc()).all()
-    
+
+    # joinedload 一对多可能产生重复行，去重
+    seen_ids = set()
+    unique_projects = []
+    for p in projects:
+        if p.id not in seen_ids:
+            seen_ids.add(p.id)
+            unique_projects.append(p)
+
     return [
         ProjectListResponse(
             id=p.id,
@@ -171,7 +185,7 @@ async def get_projects(
             systems_count=len(p.systems),
             created_at=p.created_at
         )
-        for p in projects
+        for p in unique_projects
     ]
 
 
@@ -191,7 +205,16 @@ async def get_project(
     
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
-    
+
+    # 员工只能查看分配给自己的项目
+    if current_user.role.value == "employee":
+        is_assigned = db.query(ProjectAssignment).filter(
+            ProjectAssignment.project_id == project_id,
+            ProjectAssignment.assignee_id == current_user.id
+        ).first()
+        if not is_assigned:
+            raise HTTPException(status_code=403, detail="无权查看此项目")
+
     return project_to_response(project, db)
 
 
@@ -252,7 +275,16 @@ async def update_project(
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
-    
+
+    # 检查项目编号是否与其他项目重复
+    if request.project_code != project.project_code:
+        dup = db.query(Project).filter(
+            Project.project_code == request.project_code,
+            Project.id != project_id
+        ).first()
+        if dup:
+            raise HTTPException(status_code=400, detail="项目编号已存在")
+
     # 更新基本信息
     project.project_code = request.project_code
     project.project_name = request.project_name
@@ -367,6 +399,13 @@ async def update_contribution(
     current_user: User = Depends(get_current_user)
 ):
     """更新贡献率（员工）"""
+    # 检查项目状态，已完成的项目不允许修改贡献率
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    if project.status == ProjectStatus.completed:
+        raise HTTPException(status_code=400, detail="项目已完成，无法修改贡献率")
+
     assignment = db.query(ProjectAssignment).filter(
         ProjectAssignment.project_id == project_id,
         ProjectAssignment.assignee_id == current_user.id

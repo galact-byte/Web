@@ -4,30 +4,44 @@
 
 > **修订记录**
 >
+> - v1.4: 全面代码审查修复（3 CRITICAL + 6 HIGH + 7 MEDIUM + 4 LOW）
+> - v1.3: Bug 修复（删除用户级联、员工项目列表重复、工作量统计日期兼容）+ 新增备份与恢复功能
 > - v1.2.1: 恢复 PostgreSQL 默认驱动依赖（`asyncpg`、`psycopg2-binary`），修复仅改 `DATABASE_URL` 切换 PostgreSQL 时的缺驱动启动失败问题
 > - v1.2: 安全改造（管理员分发账户、首次改密、重置密码）+ bcrypt 兼容性修复
 > - v1.1: 修改启动行为，关闭 CMD 窗口时自动停止所有子进程
 
-## 新增文件 (如有)
+## v1.4 修复清单
 
-_无新增文件_
+### CRITICAL 修复
 
----
+- **备份导出不再包含密码哈希**（`routers/backup.py`）— 防止敏感信息泄露；恢复时无密码的用户自动设置默认密码并强制改密
+- **修改密码需验证旧密码**（`routers/auth.py` + `schemas/schemas.py`）— 首次改密豁免，主动改密必须验证当前密码
+- **移除前端不存在的 API 方法**（`api/index.js`）— 删除 `addSystem`/`deleteSystem` 死代码
 
-## 修改文件
+### HIGH 修复
 
-### backend/requirements.txt — 恢复 PostgreSQL 驱动默认安装
+- **登录接口增加频率限制**（`routers/auth.py`）— 每 IP 60 秒内最多 5 次尝试，超限返回 429
+- **员工项目详情权限校验**（`routers/projects.py`）— 员工只能查看分配给自己的项目详情
+- **贡献率更新增加项目状态检查**（`routers/projects.py`）— 已完成项目禁止修改贡献率
+- **备份导入后重置自增序列**（`routers/backup.py`）— 兼容 SQLite 和 PostgreSQL，防止后续插入主键冲突
+- **_seed_admin 增加异常处理**（`main.py`）— try/except 包裹，print 改为 logging
+- **Excel 列宽改用 get_column_letter**（`routers/exports.py`）— 支持超过 26 列
 
-- **修改位置**：依赖列表末尾 PostgreSQL 驱动段落
-- **修改内容**：
-  - 取消注释 `asyncpg==0.29.0`
-  - 取消注释 `psycopg2-binary==2.9.9`
-  - 保持“设置 `DATABASE_URL=postgresql://...` 即可切换数据库”的既有部署行为
+### MEDIUM 修复
 
-### CHANGES.md — 变更记录补充
+- **更新项目编号唯一性校验**（`routers/projects.py`）— 防止修改时与其他项目编号冲突导致 500
+- **UserRole 枚举值校验**（`routers/users.py`）— 无效角色返回 400 而非 500
+- **备份导入文件大小限制 50MB**（`routers/backup.py`）— 防止 OOM
+- **项目列表 joinedload 去重**（`routers/projects.py`）— 防止一对多关系产生重复行
+- **datetime.utcnow() 替换为 timezone-aware**（`services/auth.py` + `routers/backup.py`）— 兼容 Python 3.12+
+- **备份下载 db 路径解析为绝对路径**（`routers/backup.py`）— 防止相对路径在不同 CWD 下找不到文件
 
-- **修改位置**：文件顶部新增 v1.2.1 记录
-- **修改内容**：记录本次 PostgreSQL 驱动回归修复
+### LOW 修复
+
+- **401 拦截改用 Vue Router 跳转**（`api/index.js`）— 避免全页刷新丢失状态
+- **移除 launcher.py 未使用的 signal 导入**
+- **declarative_base 从 sqlalchemy.orm 导入**（`database.py`）— 修复弃用警告
+- **Export.vue 移除未使用的 computed 导入**
 
 ---
 
@@ -35,15 +49,120 @@ _无新增文件_
 
 | 操作 | 文件路径 |
 | :--- | :--- |
-| **修改** | backend/requirements.txt |
-| **修改** | CHANGES.md |
+| **修改** | `backend/app/routers/auth.py` |
+| **修改** | `backend/app/routers/projects.py` |
+| **修改** | `backend/app/routers/users.py` |
+| **修改** | `backend/app/routers/backup.py` |
+| **修改** | `backend/app/routers/exports.py` |
+| **修改** | `backend/app/main.py` |
+| **修改** | `backend/app/database.py` |
+| **修改** | `backend/app/services/auth.py` |
+| **修改** | `backend/app/schemas/schemas.py` |
+| **修改** | `frontend/src/api/index.js` |
+| **修改** | `frontend/src/views/Export.vue` |
+| **修改** | `launcher.py` |
 
 ---
 
 ## 测试方式
 
-- 配置检查：确认 `backend/requirements.txt` 已包含 `asyncpg` 与 `psycopg2-binary`
-- 启动验证（部署侧）：在 PostgreSQL 环境执行依赖安装后启动后端，验证不再出现缺失驱动异常
+- 启动项目，连续输错密码 6 次，验证第 6 次返回 429
+- 以员工身份访问未分配的项目详情 ID，验证返回 403
+- 已完成项目尝试修改贡献率，验证返回 400
+- 导出 JSON 备份，确认文件中不含 password_hash 字段
+- 主动修改密码时不填旧密码，验证返回 400
+- 更新项目编号为已存在的编号，验证返回 400
+- 导入备份后新建用户/项目，验证 ID 不冲突
+
+### backend/app/routers/backup.py — 数据库备份与恢复 API
+
+- **功能**：提供 JSON 备份导出、SQLite 数据库文件下载、JSON 备份恢复三个接口
+- **实现原理**：
+  - `POST /api/backup/export` — 遍历所有表数据序列化为 JSON 下载
+  - `GET /api/backup/download-db` — 直接复制 SQLite .db 文件供下载（仅 SQLite 模式）
+  - `POST /api/backup/import` — 上传 JSON 文件，按依赖顺序清空再恢复所有表数据
+- **权限**：所有接口仅经理可操作
+
+### frontend/src/views/Backup.vue — 备份恢复管理页面
+
+- **功能**：前端备份恢复操作界面，包含 JSON 备份下载、数据库文件下载、拖拽上传恢复
+- **实现原理**：调用 `backupApi` 进行文件下载和上传，恢复前弹窗二次确认
+
+---
+
+## 修改文件
+
+### backend/app/routers/users.py — 修复删除用户外键级联问题
+
+- **修改位置**：`delete_user` 函数（约第 170 行）
+- **修改内容**：删除用户前先将 `projects` 表中该用户作为 `business_manager_id`、`implementation_manager_id`、`creator_id` 的引用置为 NULL，防止外键约束错误
+
+### backend/app/routers/projects.py — 修复员工项目列表重复 + 工作量统计日期查询
+
+- **修改位置**：`get_projects` 函数（约第 134 行）、`get_workload_stats` 函数（约第 47 行）
+- **修改内容**：
+  - 员工项目列表改用子查询过滤，避免 `joinedload + join` 产生重复记录
+  - 工作量统计将 `extract()` 日期函数改为字符串范围比较，兼容 SQLite 和 PostgreSQL
+
+### backend/app/main.py — 注册备份路由
+
+- **修改位置**：路由导入和注册（第 9、66 行）
+- **修改内容**：新增 `backup_router` 导入和 `app.include_router(backup_router)`
+
+### backend/app/routers/__init__.py — 导出备份路由
+
+- **修改位置**：模块导入（第 5 行）
+- **修改内容**：新增 `from app.routers.backup import router as backup_router`
+
+### frontend/src/api/index.js — 新增备份恢复 API
+
+- **修改位置**：文件末尾
+- **修改内容**：新增 `backupApi` 对象，包含 `exportJson`、`downloadDb`、`importJson` 三个方法
+
+### frontend/src/router/index.js — 新增备份页面路由
+
+- **修改位置**：路由配置数组
+- **修改内容**：新增 `/backup` 路由，需要 `requiresAuth` 和 `requiresManager` 权限
+
+### frontend/src/views/*.vue — 所有页面侧边栏新增”备份恢复”导航
+
+- **修改位置**：各页面 sidebar-nav 区域
+- **修改内容**：在”用户管理”链接后新增”备份恢复”导航项（仅经理可见）
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **新增** | `backend/app/routers/backup.py` |
+| **新增** | `frontend/src/views/Backup.vue` |
+| **修改** | `backend/app/routers/users.py` |
+| **修改** | `backend/app/routers/projects.py` |
+| **修改** | `backend/app/main.py` |
+| **修改** | `backend/app/routers/__init__.py` |
+| **修改** | `frontend/src/api/index.js` |
+| **修改** | `frontend/src/router/index.js` |
+| **修改** | `frontend/src/views/Dashboard.vue` |
+| **修改** | `frontend/src/views/Projects.vue` |
+| **修改** | `frontend/src/views/ProjectForm.vue` |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
+| **修改** | `frontend/src/views/Workload.vue` |
+| **修改** | `frontend/src/views/Export.vue` |
+| **修改** | `frontend/src/views/Users.vue` |
+
+---
+
+## 测试方式
+
+- 启动项目（`start.bat`），以经理身份登录
+- 验证侧边栏出现”备份恢复”导航项
+- 点击”JSON 备份”下载 `.json` 文件，验证文件内容包含 users/projects/systems/project_assignments 数据
+- 点击”数据库文件备份”下载 `.db` 文件
+- 上传之前下载的 `.json` 文件进行恢复，确认弹出二次确认弹窗，确认后提示恢复成功并显示统计
+- 以员工身份登录，验证侧边栏不显示”备份恢复”
+- 验证删除一个已分配为业务负责人的用户不再报错
+- 以员工身份登录，验证项目列表无重复记录
 
 # 修改记录 — 项目完结单管理平台
 
