@@ -8,6 +8,7 @@ from pathlib import Path
 
 from docx import Document
 from fastapi.testclient import TestClient
+from openpyxl import Workbook
 
 
 class ApiFlowTests(unittest.TestCase):
@@ -42,6 +43,8 @@ class ApiFlowTests(unittest.TestCase):
             db.close()
 
         cls.client = TestClient(main_module.app)
+        cls.main_module = main_module
+        cls.db_module = db_module
         login_resp = cls.client.post('/api/auth/login', json={'username': 'admin', 'password': 'admin123'})
         assert login_resp.status_code == 200, login_resp.text
         cls.admin_token = login_resp.json()['token']
@@ -1049,6 +1052,72 @@ class ApiFlowTests(unittest.TestCase):
             json={'content': {'标题': '无鉴权维护'}},
         )
         self.assertEqual(lite_edit_resp.status_code, 200)
+
+    def test_17_import_excel_flush_error_does_not_break_whole_transaction(self):
+        wb = Workbook()
+        ws = wb.active
+        ws.append(['name', 'credit_code', 'legal_representative', 'address', 'office_phone', 'mobile_phone', 'email', 'industry', 'organization_type', 'filing_region'])
+        ws.append(['导入A', '91350100M000100Y59', '张一', 'A市', '', '13100131005', 'a59@example.com', '教育', '事业单位', 'A市'])
+        ws.append(['导入B', '91350100M000100Y59', '张二', 'B市', '', '13100131006', 'b59@example.com', '教育', '事业单位', 'B市'])
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+
+        original_checker = self.__class__.main_module.assert_credit_code_available
+        self.__class__.main_module.assert_credit_code_available = lambda *args, **kwargs: None
+        try:
+            resp = self.client.post(
+                '/api/organizations/import/excel?actor=tester',
+                files={'file': ('orgs.xlsx', bio.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+            )
+        finally:
+            self.__class__.main_module.assert_credit_code_available = original_checker
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['imported'], 1)
+        self.assertGreaterEqual(len(data['skipped']), 1)
+
+    def test_18_update_template_empty_required_fields_returns_400(self):
+        upload_resp = self.client.post(
+            '/api/templates/upload',
+            data={
+                'template_name': '必填校验模板',
+                'report_type': 'expert_review_form',
+                'category': '测试',
+                'city': '测试城',
+                'protection_level': '2',
+                'is_default': 'false',
+                'config_json': '{}',
+            },
+            files={'file': ('req_template.docx', b'template', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(upload_resp.status_code, 200)
+        tpl_id = upload_resp.json()['data']['id']
+
+        bad_status = self.client.put(
+            f'/api/templates/{tpl_id}',
+            json={'status': ''},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(bad_status.status_code, 400)
+
+        bad_name = self.client.put(
+            f'/api/templates/{tpl_id}',
+            json={'template_name': ''},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(bad_name.status_code, 400)
+
+    def test_19_generate_system_code_not_reused_without_insert(self):
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            code1 = self.__class__.main_module.generate_system_code(db)
+            code2 = self.__class__.main_module.generate_system_code(db)
+        finally:
+            db.close()
+        self.assertNotEqual(code1, code2)
 
 
 if __name__ == '__main__':

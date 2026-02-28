@@ -941,8 +941,12 @@ def get_org_or_404(db: Session, org_id: int) -> Organization:
 
 
 def generate_system_code(db: Session) -> str:
-    total = db.query(func.count(SystemInfo.id)).scalar() or 0
-    return f"SYS-{datetime.now():%Y%m%d}-{total + 1:04d}"
+    for _ in range(8):
+        candidate = f"SYS-{datetime.now():%Y%m%d%H%M%S%f}-{secrets.token_hex(2).upper()}"
+        exists = db.query(SystemInfo.id).filter(SystemInfo.system_code == candidate).first()
+        if not exists:
+            return candidate
+    raise HTTPException(status_code=500, detail="系统编号生成失败，请重试。")
 
 
 def build_report_title(report_type: str, system_name: str, version: int) -> str:
@@ -1676,7 +1680,18 @@ def update_report_template(
     log_template_version(db, row, "update_before", actor)
     for key in ["template_name", "category", "city", "protection_level", "description", "status", "config_json"]:
         if key in payload:
-            setattr(row, key, payload[key] if payload[key] != "" else None)
+            value = payload[key]
+            if isinstance(value, str):
+                value = value.strip()
+            if value == "":
+                if key in {"template_name", "status"}:
+                    raise HTTPException(status_code=400, detail=f"{key} 不能为空。")
+                value = None
+            if key == "template_name" and value is not None:
+                assert_safe_text(str(value), "template_name")
+            if key == "status" and value is not None and str(value) not in {"enabled", "disabled"}:
+                raise HTTPException(status_code=400, detail="status 仅支持 enabled/disabled。")
+            setattr(row, key, value)
     if "is_default" in payload and bool(payload["is_default"]):
         exists = db.query(ReportTemplate).filter(ReportTemplate.report_type == row.report_type, ReportTemplate.is_default.is_(True)).all()
         for old in exists:
@@ -2386,13 +2401,14 @@ async def import_organizations_excel(
             "created_by": actor,
         }
         try:
-            normalize_org_payload(data)
-            validate_org_payload(data)
-            assert_credit_code_available(db, data["credit_code"])
-            org = Organization(**data)
-            db.add(org)
-            db.flush()
-            record_org_history(db, org.id, actor, "import", None, obj_to_dict(org, ORG_FIELDS))
+            with db.begin_nested():
+                normalize_org_payload(data)
+                validate_org_payload(data)
+                assert_credit_code_available(db, data["credit_code"])
+                org = Organization(**data)
+                db.add(org)
+                db.flush()
+                record_org_history(db, org.id, actor, "import", None, obj_to_dict(org, ORG_FIELDS))
             imported += 1
         except Exception as exc:
             skipped.append(f"第{idx}行：{exc}")
