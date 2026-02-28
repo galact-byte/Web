@@ -478,6 +478,20 @@ def get_current_user_optional(request: Request, db: Session) -> UserAccount | No
     return get_user_by_token(db, token)
 
 
+def is_current_user_admin(
+    request: Request,
+    db: Session,
+    allow_legacy_flag: bool = False,
+    legacy_is_admin: bool = False,
+) -> bool:
+    user = get_current_user_optional(request, db)
+    if user:
+        return bool(user.role == "admin")
+    if allow_legacy_flag and (APP_LITE_MODE or not API_AUTH_REQUIRED):
+        return bool(legacy_is_admin)
+    return False
+
+
 def require_docs_admin(request: Request, db: Session, token: str | None = None) -> str:
     auth_token = (token or "").strip() or get_auth_token_from_request(request)
     if not auth_token:
@@ -2105,6 +2119,7 @@ def get_organization(org_id: int, db: Session = Depends(get_db)) -> dict[str, An
 
 @app.put("/api/organizations/{org_id}")
 def update_organization(
+    request: Request,
     org_id: int,
     payload: OrganizationUpdate,
     actor: str = Query("system"),
@@ -2113,7 +2128,8 @@ def update_organization(
 ) -> dict[str, Any]:
     assert_safe_text(actor, "actor")
     org = get_org_or_404(db, org_id)
-    if org.archived and org.locked and not is_admin:
+    effective_is_admin = is_current_user_admin(request, db, allow_legacy_flag=True, legacy_is_admin=is_admin)
+    if org.archived and org.locked and not effective_is_admin:
         raise HTTPException(status_code=403, detail="已归档单位默认不可编辑，请管理员解锁。")
     data = payload.model_dump(exclude_unset=True)
     normalize_org_payload(data)
@@ -2510,6 +2526,7 @@ def get_system(system_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
 
 @app.put("/api/systems/{system_id}")
 def update_system(
+    request: Request,
     system_id: int,
     payload: SystemUpdate,
     actor: str = Query("system"),
@@ -2518,7 +2535,8 @@ def update_system(
 ) -> dict[str, Any]:
     assert_safe_text(actor, "actor")
     system = get_system_or_404(db, system_id)
-    if system.archived and system.locked and not is_admin:
+    effective_is_admin = is_current_user_admin(request, db, allow_legacy_flag=True, legacy_is_admin=is_admin)
+    if system.archived and system.locked and not effective_is_admin:
         raise HTTPException(status_code=403, detail="已归档系统默认不可编辑。")
     data = payload.model_dump(exclude_unset=True)
     validate_system_payload(data, partial=True)
@@ -3226,6 +3244,7 @@ def get_report(report_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
 
 @app.put("/api/reports/{report_id}")
 def edit_report(
+    request: Request,
     report_id: int,
     payload: ReportEdit,
     actor: str = Query("system"),
@@ -3239,7 +3258,8 @@ def edit_report(
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="报告不存在。")
-    if report.status in {"submitted", "approved"} and not is_admin:
+    effective_is_admin = is_current_user_admin(request, db, allow_legacy_flag=True, legacy_is_admin=is_admin)
+    if report.status in {"submitted", "approved"} and not effective_is_admin:
         raise HTTPException(status_code=403, detail="当前状态不可编辑。")
     report.content = payload.content
     if payload.title:
@@ -3269,6 +3289,7 @@ def _editable_report_or_403(db: Session, report_id: int, is_admin: bool) -> Repo
 
 @app.post("/api/reports/{report_id}/sections")
 def add_report_section(
+    request: Request,
     report_id: int,
     payload: dict[str, Any],
     actor: str = Query("system"),
@@ -3277,7 +3298,9 @@ def add_report_section(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     assert_safe_text(actor, "actor")
-    report = _editable_report_or_403(db, report_id, is_admin)
+    report = _editable_report_or_403(
+        db, report_id, is_current_user_admin(request, db, allow_legacy_flag=True, legacy_is_admin=is_admin)
+    )
     content = dict(report.content or {})
     sections = list(content.get("章节") or [])
     name = str(payload.get("name") or "").strip()
@@ -3309,6 +3332,7 @@ def add_report_section(
 
 @app.delete("/api/reports/{report_id}/sections/{section_index}")
 def delete_report_section(
+    request: Request,
     report_id: int,
     section_index: int,
     actor: str = Query("system"),
@@ -3316,7 +3340,9 @@ def delete_report_section(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     assert_safe_text(actor, "actor")
-    report = _editable_report_or_403(db, report_id, is_admin)
+    report = _editable_report_or_403(
+        db, report_id, is_current_user_admin(request, db, allow_legacy_flag=True, legacy_is_admin=is_admin)
+    )
     content = dict(report.content or {})
     sections = list(content.get("章节") or [])
     if section_index < 0 or section_index >= len(sections):
@@ -3346,8 +3372,8 @@ def reorder_report_section(
     is_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"}, legacy_admin=(actor == "admin"))
-    report = _editable_report_or_403(db, report_id, is_admin)
+    actor_name, role = require_roles(request, db, {"admin", "reviewer", "evaluator"}, legacy_admin=(actor == "admin"))
+    report = _editable_report_or_403(db, report_id, role == "admin")
     content = dict(report.content or {})
     sections = list(content.get("章节") or [])
     if from_index >= len(sections) or to_index >= len(sections):
@@ -3377,9 +3403,9 @@ def set_report_signature(
     is_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"}, legacy_admin=(actor == "admin"))
+    actor_name, role = require_roles(request, db, {"admin", "reviewer", "evaluator"}, legacy_admin=(actor == "admin"))
     assert_safe_payload(payload, "payload")
-    report = _editable_report_or_403(db, report_id, is_admin)
+    report = _editable_report_or_403(db, report_id, role == "admin")
     content = dict(report.content or {})
     sign = content.get("签章")
     if not isinstance(sign, dict):
@@ -4106,6 +4132,10 @@ def dashboard_summary(
         sys_q = sys_q.filter(Organization.industry == industry)
     if city:
         sys_q = sys_q.filter(Organization.filing_region.like(f"%{city}%"))
+    if start_date:
+        sys_q = sys_q.filter(SystemInfo.created_at >= datetime.combine(start_date, datetime.min.time()))
+    if end_date:
+        sys_q = sys_q.filter(SystemInfo.created_at <= datetime.combine(end_date, datetime.max.time()))
     if level:
         sys_q = sys_q.filter(SystemInfo.proposed_level == level)
     if evaluator:
@@ -4125,14 +4155,24 @@ def dashboard_summary(
         org_q.with_entities(Organization.industry, func.count(Organization.id)).group_by(Organization.industry).all()
     )
     level_stats = sys_q.with_entities(SystemInfo.proposed_level, func.count(SystemInfo.id)).group_by(SystemInfo.proposed_level).all()
-    pending_reports = db.query(Report).filter(Report.status == "submitted").count()
-    in_progress_projects = db.query(WorkflowInstance).filter(WorkflowInstance.status == "in_progress").count()
+    system_ids_query = sys_q.with_entities(SystemInfo.id).distinct()
+    pending_reports = (
+        db.query(Report)
+        .filter(Report.status == "submitted", Report.system_id.in_(system_ids_query))
+        .count()
+    )
+    in_progress_projects = (
+        db.query(WorkflowInstance)
+        .filter(WorkflowInstance.status == "in_progress", WorkflowInstance.system_id.in_(system_ids_query))
+        .count()
+    )
+    archived_system_count = sys_q.filter(SystemInfo.archived.is_(True)).count()
     return {
         "totals": {
             "organization_count": org_q.count(),
             "system_count": sys_q.count(),
             "archived_organization_count": org_q.filter(Organization.archived.is_(True)).count(),
-            "archived_system_count": db.query(SystemInfo).filter(SystemInfo.archived.is_(True), SystemInfo.deleted_at.is_(None)).count(),
+            "archived_system_count": archived_system_count,
             "pending_review_reports": pending_reports,
             "in_progress_projects": in_progress_projects,
         },
@@ -4649,6 +4689,9 @@ def batch_download_knowledge(
     rows = db.query(KnowledgeDocument).filter(KnowledgeDocument.id.in_(doc_ids)).all()
     if not rows:
         raise HTTPException(status_code=404, detail="未找到文档。")
+    disabled = [row.id for row in rows if row.status != "enabled"]
+    if disabled:
+        raise HTTPException(status_code=403, detail=f"包含已下架文档，禁止下载: {disabled}")
     zip_path = EXPORT_DIR / f"knowledge_batch_{datetime.now():%Y%m%d%H%M%S}.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for doc in rows:
