@@ -6,7 +6,9 @@ import mimetypes
 import os
 import re
 import secrets
+import shutil
 import smtplib
+import sqlite3
 import threading
 import uuid
 import zipfile
@@ -82,9 +84,11 @@ from .validators import (
 BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 EXPORT_DIR = BASE_DIR / "exports"
+BACKUP_DIR = EXPORT_DIR / "backups"
 MAX_ORG_ATTACHMENT = 100 * 1024 * 1024
 MAX_SYS_ATTACHMENT = 200 * 1024 * 1024
 MAX_KNOWLEDGE_FILE = 300 * 1024 * 1024
+MAX_BACKUP_FILE = 1024 * 1024 * 1024
 DEFAULT_WORKFLOW_STEPS = ["信息收集", "信息审核", "报告生成", "报告审核", "报告终稿", "归档"]
 VALID_REPORT_TYPES = {"filing_form", "grading_report", "expert_review_form"}
 LOCAL_OFFICIAL_TEMPLATE_RULES = [
@@ -182,11 +186,13 @@ if APP_LITE_MODE:
             "/workflow",
             "/templates",
             "/knowledge",
+            "/backup",
             "/login",
             "/register",
             "/api/workflow",
             "/api/templates",
             "/api/knowledge",
+            "/api/backup",
             "/api/auth",
         ]
         if any(path.startswith(prefix) for prefix in blocked_prefixes):
@@ -202,6 +208,80 @@ def ensure_dirs() -> None:
     (UPLOAD_DIR / "knowledge").mkdir(parents=True, exist_ok=True)
     (UPLOAD_DIR / "templates").mkdir(parents=True, exist_ok=True)
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def resolve_sqlite_db_file() -> Path:
+    if engine.url.get_backend_name() != "sqlite":
+        raise HTTPException(status_code=400, detail="当前仅支持 SQLite 数据库备份与恢复。")
+    db_name = (engine.url.database or "").strip()
+    if not db_name or db_name == ":memory:":
+        raise HTTPException(status_code=400, detail="内存数据库不支持备份与恢复。")
+    db_file = Path(db_name)
+    if not db_file.is_absolute():
+        db_file = (BASE_DIR / db_file).resolve()
+    return db_file
+
+
+def assert_safe_backup_file_name(file_name: str) -> str:
+    clean = Path(file_name or "").name
+    if clean != file_name:
+        raise HTTPException(status_code=400, detail="备份文件名非法。")
+    if not clean.endswith(".zip"):
+        raise HTTPException(status_code=400, detail="仅支持 .zip 备份文件。")
+    return clean
+
+
+def safe_extract_zip(zf: zipfile.ZipFile, target_dir: Path) -> None:
+    for member in zf.infolist():
+        member_path = Path(member.filename)
+        if member_path.is_absolute() or ".." in member_path.parts:
+            raise HTTPException(status_code=400, detail="备份压缩包包含非法路径。")
+    zf.extractall(target_dir)
+
+
+def create_backup_archive(actor: str, trigger: str) -> Path:
+    ensure_dirs()
+    db_file = resolve_sqlite_db_file()
+    if not db_file.exists():
+        raise HTTPException(status_code=404, detail="数据库文件不存在，无法备份。")
+
+    now = datetime.now()
+    backup_name = f"backup_{now.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.zip"
+    backup_path = BACKUP_DIR / backup_name
+    temp_db = BACKUP_DIR / f".tmp_{uuid.uuid4().hex}.db"
+
+    src_conn = sqlite3.connect(str(db_file))
+    dst_conn = sqlite3.connect(str(temp_db))
+    try:
+        with dst_conn:
+            src_conn.backup(dst_conn)
+    finally:
+        src_conn.close()
+        dst_conn.close()
+
+    manifest = {
+        "created_at": now.isoformat(),
+        "actor": actor,
+        "trigger": trigger,
+        "database_file": db_file.name,
+        "app_version": app.version,
+    }
+
+    try:
+        with zipfile.ZipFile(backup_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.write(temp_db, arcname="data/app.db")
+            if UPLOAD_DIR.exists():
+                for file_path in UPLOAD_DIR.rglob("*"):
+                    if not file_path.is_file():
+                        continue
+                    arcname = (Path("uploads") / file_path.relative_to(UPLOAD_DIR)).as_posix()
+                    zf.write(file_path, arcname=arcname)
+            zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+    finally:
+        if temp_db.exists():
+            temp_db.unlink()
+    return backup_path
 
 
 def hash_password(password: str) -> str:
@@ -1102,25 +1182,43 @@ def find_latest_docx_by_pattern(pattern: str) -> Path | None:
 
 
 def parse_docx_key_values(content: bytes) -> dict[str, str]:
-    doc = Document(io.BytesIO(content))
+    try:
+        doc = Document(io.BytesIO(content))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Word文件无法解析，请确认使用 .docx 且文件未损坏。") from exc
+
     result: dict[str, str] = {}
-    for para in doc.paragraphs:
-        text = para.text.strip()
+
+    def parse_line(text_line: str) -> None:
+        text = (text_line or "").strip()
         if not text:
-            continue
-        delimiter = None
-        if "：" in text:
-            delimiter = "："
-        elif ":" in text:
-            delimiter = ":"
+            return
+        delimiter = "：" if "：" in text else (":" if ":" in text else None)
         if not delimiter:
-            continue
+            return
         key, value = text.split(delimiter, 1)
         k = key.strip()
         v = value.strip()
         if k:
             result[k] = v
+
+    for para in doc.paragraphs:
+        parse_line(para.text)
+
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                lines = [line.strip() for line in (cell.text or "").splitlines() if line.strip()]
+                for line in lines:
+                    parse_line(line)
     return result
+
+
+def normalize_word_field_key(raw_key: str) -> str:
+    key = (raw_key or "").strip()
+    key = re.sub(r"[（(].*?[）)]", "", key)
+    key = key.replace(" ", "").replace("\u3000", "")
+    return key.strip()
 
 
 def to_bool_text(value: str | None) -> bool:
@@ -1257,15 +1355,34 @@ def log_knowledge_version(db: Session, doc: KnowledgeDocument, action: str, chan
 
 ORG_WORD_MAP = {
     "单位名称": "name",
+    "单位全称": "name",
     "统一社会信用代码": "credit_code",
+    "社会信用代码": "credit_code",
+    "统一社会代码": "credit_code",
     "单位负责人": "legal_representative",
+    "单位主要负责人": "legal_representative",
+    "主要负责人": "legal_representative",
+    "负责人": "legal_representative",
     "单位地址": "address",
+    "通讯地址": "address",
+    "单位通讯地址": "address",
     "办公电话": "office_phone",
+    "联系电话": "office_phone",
+    "固定电话": "office_phone",
     "移动电话": "mobile_phone",
+    "手机号": "mobile_phone",
+    "手机号码": "mobile_phone",
+    "联系电话手机": "mobile_phone",
     "邮箱": "email",
+    "电子邮箱": "email",
+    "电子邮件": "email",
     "所属行业": "industry",
+    "行业类别": "industry",
     "单位类型": "organization_type",
+    "单位性质": "organization_type",
     "备案地区": "filing_region",
+    "备案地市": "filing_region",
+    "属地": "filing_region",
     "主管部门": "supervising_department",
     "是否涉及国家秘密": "involves_state_secret",
     "是否关键信息基础设施": "is_cii",
@@ -1362,6 +1479,137 @@ def knowledge_page(request: Request) -> HTMLResponse:
 @app.get("/templates", response_class=HTMLResponse)
 def templates_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("templates.html", {"request": request})
+
+
+@app.get("/backup", response_class=HTMLResponse)
+def backup_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    require_roles(request, db, {"admin"})
+    return templates.TemplateResponse("backup.html", {"request": request})
+
+
+@app.get("/api/backup/list")
+def list_backups(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    require_roles(request, db, {"admin"})
+    ensure_dirs()
+    items: list[dict[str, Any]] = []
+    for path in BACKUP_DIR.glob("*.zip"):
+        if not path.is_file():
+            continue
+        stat = path.stat()
+        items.append(
+            {
+                "file_name": path.name,
+                "file_size": stat.st_size,
+                "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            }
+        )
+    items.sort(key=lambda x: x["updated_at"], reverse=True)
+    return {"items": items, "total": len(items)}
+
+
+@app.post("/api/backup/create")
+def create_backup(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin"})
+    backup_path = create_backup_archive(actor=actor, trigger="manual")
+    stat = backup_path.stat()
+    return {
+        "message": "备份创建成功",
+        "file_name": backup_path.name,
+        "file_size": stat.st_size,
+        "download_url": f"/api/backup/download/{quote(backup_path.name)}",
+    }
+
+
+@app.get("/api/backup/download/{file_name}")
+def download_backup(file_name: str, request: Request, db: Session = Depends(get_db)) -> FileResponse:
+    require_roles(request, db, {"admin"})
+    clean_name = assert_safe_backup_file_name(file_name)
+    backup_path = BACKUP_DIR / clean_name
+    if not backup_path.exists() or not backup_path.is_file():
+        raise HTTPException(status_code=404, detail="备份文件不存在。")
+    return FileResponse(path=backup_path, filename=backup_path.name, media_type="application/zip")
+
+
+@app.post("/api/backup/restore")
+def restore_backup(
+    request: Request,
+    file: UploadFile = File(...),
+    confirm: bool = Form(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin"})
+    if not confirm:
+        raise HTTPException(status_code=400, detail="恢复操作需要 confirm=true。")
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="请选择备份压缩包。")
+    if not str(file.filename).lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="仅支持 .zip 备份文件。")
+
+    ensure_dirs()
+    temp_root = BACKUP_DIR / f"_restore_{uuid.uuid4().hex}"
+    payload_dir = temp_root / "payload"
+    uploaded_zip = temp_root / "uploaded.zip"
+    temp_root.mkdir(parents=True, exist_ok=True)
+
+    upload_size = 0
+    try:
+        with uploaded_zip.open("wb") as out:
+            while True:
+                chunk = file.file.read(1024 * 1024)
+                if not chunk:
+                    break
+                upload_size += len(chunk)
+                if upload_size > MAX_BACKUP_FILE:
+                    raise HTTPException(status_code=400, detail="备份文件过大，已超过系统限制。")
+                out.write(chunk)
+        try:
+            with zipfile.ZipFile(uploaded_zip, mode="r") as zf:
+                safe_extract_zip(zf, payload_dir)
+        except zipfile.BadZipFile as ex:
+            raise HTTPException(status_code=400, detail="备份压缩包损坏或格式非法。") from ex
+
+        incoming_db = payload_dir / "data" / "app.db"
+        if not incoming_db.exists() or not incoming_db.is_file():
+            raise HTTPException(status_code=400, detail="备份包缺少 data/app.db，无法恢复。")
+        incoming_uploads = payload_dir / "uploads"
+
+        pre_restore = create_backup_archive(actor=actor, trigger="pre_restore")
+
+        db_file = resolve_sqlite_db_file()
+        db.close()
+        engine.dispose()
+
+        db_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(incoming_db, db_file)
+
+        moved_old_uploads = False
+        old_uploads_dir = BACKUP_DIR / f"_uploads_before_restore_{uuid.uuid4().hex[:8]}"
+        if incoming_uploads.exists() and incoming_uploads.is_dir():
+            if UPLOAD_DIR.exists():
+                UPLOAD_DIR.rename(old_uploads_dir)
+                moved_old_uploads = True
+            try:
+                shutil.copytree(incoming_uploads, UPLOAD_DIR)
+                if moved_old_uploads and old_uploads_dir.exists():
+                    shutil.rmtree(old_uploads_dir, ignore_errors=True)
+            except Exception:
+                if UPLOAD_DIR.exists():
+                    shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
+                if moved_old_uploads and old_uploads_dir.exists():
+                    old_uploads_dir.rename(UPLOAD_DIR)
+                raise
+
+        ensure_dirs()
+        init_db()
+    finally:
+        file.file.close()
+        if temp_root.exists():
+            shutil.rmtree(temp_root, ignore_errors=True)
+
+    return {
+        "message": "恢复成功",
+        "pre_restore_backup": pre_restore.name,
+    }
 
 
 @app.post("/api/auth/login")
@@ -2522,9 +2770,17 @@ async def import_organization_word(
     content = await file.read()
     kv = parse_docx_key_values(content)
     raw: dict[str, Any] = {}
-    for cn_key, model_key in ORG_WORD_MAP.items():
-        if cn_key in kv:
-            raw[model_key] = kv[cn_key]
+    for raw_key, raw_value in kv.items():
+        norm_key = normalize_word_field_key(raw_key)
+        model_key = ORG_WORD_MAP.get(norm_key)
+        if not model_key:
+            continue
+        if raw_value is None:
+            continue
+        value_text = str(raw_value).strip()
+        if not value_text:
+            continue
+        raw[model_key] = value_text
     if "involves_state_secret" in raw:
         raw["involves_state_secret"] = to_bool_text(str(raw["involves_state_secret"]))
     if "is_cii" in raw:
@@ -2533,7 +2789,19 @@ async def import_organization_word(
     required = ["name", "credit_code", "legal_representative", "address", "mobile_phone", "email", "industry", "organization_type", "filing_region"]
     missing = [k for k in required if not raw.get(k)]
     if missing:
-        raise HTTPException(status_code=400, detail=f"Word缺少必填字段: {', '.join(missing)}")
+        label_map = {
+            "name": "单位名称",
+            "credit_code": "统一社会信用代码",
+            "legal_representative": "单位负责人",
+            "address": "单位地址",
+            "mobile_phone": "移动电话",
+            "email": "邮箱",
+            "industry": "所属行业",
+            "organization_type": "单位类型",
+            "filing_region": "备案地区",
+        }
+        missing_labels = [label_map.get(k, k) for k in missing]
+        raise HTTPException(status_code=400, detail=f"Word缺少必填字段: {', '.join(missing_labels)}")
     raw = {k: v for k, v in raw.items() if k in ORG_CREATE_FIELDS}
     normalize_org_payload(raw)
     validate_org_payload(raw)

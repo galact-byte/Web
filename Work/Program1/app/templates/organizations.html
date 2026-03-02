@@ -195,21 +195,32 @@ async function createOrg() {
 }
 
 async function importOrgWord() {
-  const file = document.getElementById('orgWordFile').files[0];
-  if (!file) {
-    alert('请选择Word文件');
-    return;
+  try {
+    const file = document.getElementById('orgWordFile').files[0];
+    if (!file) {
+      setOrgResult('请选择Word文件后再导入。');
+      return;
+    }
+    setOrgResult('正在导入Word，请稍候...');
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/organizations/import/word?actor=tester', {method: 'POST', headers: authHeaders(), body: fd});
+    const text = await res.text();
+    let data = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (e) {
+      data = {detail: text || '服务返回了非JSON响应'};
+    }
+    if (!res.ok) {
+      setOrgResult(`导入失败：${apiErrorText(data)}`);
+      return;
+    }
+    setOrgResult(data.message || 'Word导入成功');
+    loadOrgs();
+  } catch (e) {
+    setOrgResult(`导入失败：${e?.message || '网络异常，请稍后重试'}`);
   }
-  const fd = new FormData();
-  fd.append('file', file);
-  const res = await fetch('/api/organizations/import/word?actor=tester', {method: 'POST', headers: authHeaders(), body: fd});
-  const data = await res.json();
-  if (!res.ok) {
-    setOrgResult(`导入失败：${apiErrorText(data)}`);
-    return;
-  }
-  setOrgResult(data.message || 'Word导入成功');
-  loadOrgs();
 }
 
 async function loadOrgs() {

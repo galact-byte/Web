@@ -25,6 +25,9 @@
         <a href="/users" class="{{ 'active' if request.url.path.startswith('/users') else '' }}" data-role-only="admin">
           <i class="fas fa-users-cog"></i> 用户管理
         </a>
+        <a href="/backup" class="{{ 'active' if request.url.path.startswith('/backup') else '' }}" data-role-only="admin">
+          <i class="fas fa-database"></i> 备份恢复
+        </a>
         <a href="/systems" class="{{ 'active' if request.url.path.startswith('/systems') else '' }}">
           <i class="fas fa-server"></i> 系统信息
         </a>
@@ -56,6 +59,7 @@
           <span>{{ '数据看板' if request.url.path == '/' else
                  '登录与用户' if request.url.path.startswith('/login') else
                  '用户管理' if request.url.path.startswith('/users') else
+                 '备份恢复' if request.url.path.startswith('/backup') else
                  '单位管理' if request.url.path.startswith('/organizations') else
                  '系统管理' if request.url.path.startswith('/systems') else
                  '报告审核' if request.url.path.startswith('/reports') else

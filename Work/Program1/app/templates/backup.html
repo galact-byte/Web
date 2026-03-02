@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel" data-role-only="admin">
+  <h2>数据备份与恢复</h2>
+  <p class="hint">建议至少每日备份一次。恢复会覆盖当前数据库与上传文件，请仅在确认需要回滚时执行。</p>
+  <div class="row">
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="createBackup()">创建备份并下载</button></div>
+    <div><label>恢复文件(.zip)</label><input id="restoreFile" type="file" accept=".zip" /></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="restoreBackup()">上传并恢复</button></div>
+  </div>
+  <pre class="result" id="backupResult">仅管理员可执行备份与恢复操作。</pre>
+</div>
+
+<div class="panel" data-role-only="admin">
+  <h2>备份文件列表</h2>
+  <button class="btn-lite" onclick="loadBackups()">刷新列表</button>
+  <table>
+    <thead><tr><th>文件名</th><th>大小(MB)</th><th>更新时间</th><th>操作</th></tr></thead>
+    <tbody id="backupTable"></tbody>
+  </table>
+</div>
+
+<script>
+function authHeaders() {
+  const token = localStorage.getItem('auth_token') || '';
+  return token ? {'X-Auth-Token': token} : {};
+}
+
+function setResult(text) {
+  document.getElementById('backupResult').textContent = text;
+}
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch] || ch));
+}
+
+function fmtMb(size) {
+  const mb = Number(size || 0) / 1024 / 1024;
+  return mb.toFixed(2);
+}
+
+async function createBackup() {
+  setResult('正在创建备份，请稍候...');
+  const res = await fetch('/api/backup/create', {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setResult(`创建失败：${data.detail || data.message || '未知错误'}`);
+    return;
+  }
+  setResult(`备份创建成功：${data.file_name}`);
+  loadBackups();
+  window.open(data.download_url || `/api/backup/download/${encodeURIComponent(data.file_name)}`, '_blank');
+}
+
+async function restoreBackup() {
+  const input = document.getElementById('restoreFile');
+  const file = input.files && input.files[0];
+  if (!file) {
+    setResult('请先选择备份压缩包。');
+    return;
+  }
+  if (!confirm('恢复将覆盖当前数据库与上传文件，确认继续？')) return;
+  if (!confirm('请再次确认：本次恢复不可撤销，是否继续执行？')) return;
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('confirm', 'true');
+  setResult('正在恢复，请勿关闭页面...');
+  const res = await fetch('/api/backup/restore', {method: 'POST', headers: authHeaders(), body: fd});
+  const data = await res.json();
+  if (!res.ok) {
+    setResult(`恢复失败：${data.detail || data.message || '未知错误'}`);
+    return;
+  }
+  setResult(`恢复成功。系统已自动生成恢复前快照：${data.pre_restore_backup || '-'}`);
+  loadBackups();
+}
+
+async function loadBackups() {
+  const res = await fetch('/api/backup/list', {headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setResult(`读取备份列表失败：${data.detail || data.message || '未知错误'}`);
+    document.getElementById('backupTable').innerHTML = '';
+    return;
+  }
+  const rows = (data.items || []).map(item => `
+    <tr>
+      <td>${esc(item.file_name)}</td>
+      <td>${fmtMb(item.file_size)}</td>
+      <td>${esc(item.updated_at || '')}</td>
+      <td><button class="btn-lite" onclick="window.open('/api/backup/download/${encodeURIComponent(item.file_name)}', '_blank')">下载</button></td>
+    </tr>
+  `).join('');
+  document.getElementById('backupTable').innerHTML = rows;
+  setResult(`共 ${data.total || 0} 个备份文件。`);
+}
+
+loadBackups();
+</script>
+{% endblock %}

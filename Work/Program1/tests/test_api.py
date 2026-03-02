@@ -1485,6 +1485,25 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn('用户管理', resp.text)
 
+    def test_33_admin_can_open_backup_page(self):
+        resp = self.client.get('/backup', headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('数据备份与恢复', resp.text)
+
+    def test_34_backup_create_returns_400_for_in_memory_database(self):
+        resp = self.client.post('/api/backup/create', headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('内存数据库', str(resp.json().get('detail', '')))
+
+    def test_35_organization_word_import_invalid_docx_returns_400(self):
+        bad_docx = b'not-a-valid-docx'
+        resp = self.client.post(
+            '/api/organizations/import/word?actor=tester',
+            files={'file': ('bad.docx', bad_docx, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('无法解析', str(resp.json().get('detail', '')))
+
 
 if __name__ == '__main__':
     unittest.main()
