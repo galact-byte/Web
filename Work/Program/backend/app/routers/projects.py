@@ -325,7 +325,25 @@ async def delete_project(
     return {"message": "删除成功"}
 
 
-@router.post("/{project_id}/assign")
+@router.patch("/{project_id}/status")
+async def update_project_status(
+    project_id: int,
+    new_status: str = Query(..., description="目标状态: assigned / completed"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_manager)
+):
+    """修改项目状态（仅经理）"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+
+    if new_status not in ("assigned", "completed"):
+        raise HTTPException(status_code=400, detail="无效的目标状态")
+
+    project.status = ProjectStatus(new_status)
+    db.commit()
+
+    return {"message": "状态更新成功", "status": new_status}
 async def assign_project(
     project_id: int,
     request: AssignRequest,

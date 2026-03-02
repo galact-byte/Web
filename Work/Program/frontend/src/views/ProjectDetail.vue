@@ -14,6 +14,12 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
             分发项目
           </button>
+          <button v-if="userStore.isManager && project.status === 'assigned'" class="btn btn-success" @click="completeProject" :disabled="changingStatus">
+            {{ changingStatus ? '处理中...' : '标记为已完成' }}
+          </button>
+          <button v-if="userStore.isManager && project.status === 'completed'" class="btn btn-warning" @click="reopenProject" :disabled="changingStatus">
+            {{ changingStatus ? '处理中...' : '重新开启' }}
+          </button>
           <router-link v-if="userStore.isManager" :to="`/projects/${project.id}/edit`" class="btn btn-secondary">编辑项目</router-link>
           <button class="btn btn-secondary" @click="exportWord">导出Word</button>
         </div>
@@ -119,6 +125,7 @@ const showAssignModal = ref(false)
 const selectedEmployees = ref([])
 const assigning = ref(false)
 const saving = ref(false)
+const changingStatus = ref(false)
 
 const contributionForm = reactive({ department: '', contribution: '' })
 
@@ -143,6 +150,26 @@ async function assignProject() {
     await fetchData()
   } catch (err) { console.error(err) }
   finally { assigning.value = false }
+}
+
+async function completeProject() {
+  if (!confirm('确定将此项目标记为已完成？已完成的项目将无法修改贡献率。')) return
+  changingStatus.value = true
+  try {
+    await projectsApi.updateStatus(route.params.id, 'completed')
+    await fetchData()
+  } catch (err) { console.error(err); alert(err.response?.data?.detail || '操作失败') }
+  finally { changingStatus.value = false }
+}
+
+async function reopenProject() {
+  if (!confirm('确定重新开启此项目？')) return
+  changingStatus.value = true
+  try {
+    await projectsApi.updateStatus(route.params.id, 'assigned')
+    await fetchData()
+  } catch (err) { console.error(err); alert(err.response?.data?.detail || '操作失败') }
+  finally { changingStatus.value = false }
 }
 
 async function saveContribution() {
@@ -217,4 +244,10 @@ onMounted(fetchData)
 .contribution-card { max-width: 600px; }
 .contribution-form { display: flex; flex-direction: column; gap: 1rem; }
 .employee-list { display: flex; flex-direction: column; gap: 0.75rem; max-height: 300px; overflow-y: auto; }
+.btn-success { background: #10b981; color: white; border: none; padding: 0.5rem 1rem; border-radius: var(--radius-sm); cursor: pointer; font-weight: 500; }
+.btn-success:hover { background: #059669; }
+.btn-success:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-warning { background: #f59e0b; color: white; border: none; padding: 0.5rem 1rem; border-radius: var(--radius-sm); cursor: pointer; font-weight: 500; }
+.btn-warning:hover { background: #d97706; }
+.btn-warning:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
