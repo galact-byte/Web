@@ -188,9 +188,6 @@ async def delete_user(
 
     # 清理该用户在项目表中的外键引用，避免级联错误
     from app.models import Project
-    db.query(Project).filter(Project.business_manager_id == user_id).update(
-        {"business_manager_id": None}, synchronize_session="fetch"
-    )
     db.query(Project).filter(Project.implementation_manager_id == user_id).update(
         {"implementation_manager_id": None}, synchronize_session="fetch"
     )

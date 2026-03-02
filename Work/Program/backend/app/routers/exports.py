@@ -179,7 +179,6 @@ async def export_word(
     project = db.query(Project).options(
         selectinload(Project.systems),
         selectinload(Project.assignments).selectinload(ProjectAssignment.assignee),
-        selectinload(Project.business_manager),
         selectinload(Project.implementation_manager)
     ).filter(Project.id == project_id).first()
 
@@ -205,7 +204,7 @@ async def export_word(
         ("合同状态", project.contract_status),
         ("定级备案状态", project.filing_status),
         ("审批完成时间", project.approval_date or "/"),
-        ("业务负责人", project.business_manager.display_name if project.business_manager else "/"),
+        ("业务负责人", project.business_manager_name or "/"),
         ("实施负责人", project.implementation_manager.display_name if project.implementation_manager else "/"),
     ]
 

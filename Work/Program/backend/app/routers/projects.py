@@ -116,12 +116,11 @@ def project_to_response(project: Project, db: Session) -> ProjectResponse:
         contract_status=project.contract_status,
         filing_status=project.filing_status,
         approval_date=project.approval_date,
-        business_manager_id=project.business_manager_id,
+        business_manager_name=project.business_manager_name,
         implementation_manager_id=project.implementation_manager_id,
         status=project.status.value,
         creator_id=project.creator_id,
         creator_name=project.creator.display_name if project.creator else None,
-        business_manager_name=project.business_manager.display_name if project.business_manager else None,
         implementation_manager_name=project.implementation_manager.display_name if project.implementation_manager else None,
         systems_count=len(project.systems),
         systems=[{
@@ -171,7 +170,7 @@ async def get_projects(
             contract_status=p.contract_status,
             filing_status=p.filing_status,
             approval_date=p.approval_date,
-            business_manager_id=p.business_manager_id,
+            business_manager_name=p.business_manager_name,
             implementation_manager_id=p.implementation_manager_id,
             status=p.status.value,
             systems_count=len(p.systems),
@@ -200,7 +199,6 @@ async def get_project(
     project = db.query(Project).options(
         selectinload(Project.systems),
         selectinload(Project.creator),
-        selectinload(Project.business_manager),
         selectinload(Project.implementation_manager)
     ).filter(Project.id == project_id).first()
 
@@ -231,7 +229,7 @@ async def create_project(
         contract_status=request.contract_status,
         filing_status=request.filing_status,
         approval_date=request.approval_date,
-        business_manager_id=request.business_manager_id,
+        business_manager_name=request.business_manager_name,
         implementation_manager_id=request.implementation_manager_id,
         creator_id=current_user.id,
         status=ProjectStatus.draft
@@ -286,7 +284,7 @@ async def update_project(
     project.contract_status = request.contract_status
     project.filing_status = request.filing_status
     project.approval_date = request.approval_date
-    project.business_manager_id = request.business_manager_id
+    project.business_manager_name = request.business_manager_name
     project.implementation_manager_id = request.implementation_manager_id
 
     # 更新系统：先清除关联的分配记录中的系统引用，再删除旧系统
