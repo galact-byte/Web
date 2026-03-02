@@ -1,3 +1,104 @@
+# 修改记录 — 定级备案管理系统（官方新备案表导入可用性修复）
+
+> **修订记录**
+>
+> - v1.2.45: 针对 `01-新备案表...docx` 增强字段抽取策略（表格列标签组合、字段别名扩展、弱值过滤、备案地区地址推断），确保模板目录中的官方表可直接导入成功。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/main.py — 官方新备案表兼容增强
+
+- **修改位置**：`parse_docx_key_values`、`ORG_WORD_MAP`、`import_organization_word`、`infer_filing_region_from_address`。
+- **修改内容**：
+  - 增加表格行去重与“主字段+子标签”组合键识别（如 `单位负责人姓名`、`联系人移动电话`）；
+  - 扩展官方新备案表常见字段别名映射；
+  - 导入时增加弱值过滤（避免 `办公电话/电子邮件` 这类标签文本误覆盖真实值）；
+  - 在缺少备案地区时从地址文本推断地市；
+  - 占位办公电话（如 `/`）自动归空，避免格式校验误杀。
+
+### tests/test_api.py — 官方模板导入回归测试
+
+- **修改位置**：新增 `test_37_organization_word_import_supports_official_new_form_docx`。
+- **修改内容**：
+  - 直接使用 `01-*.docx` 资源文件验证单位 Word 导入成功；
+  - 同时校验关键字段（单位名称/信用代码/手机号/邮箱）可被抽取。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.45。
+- **修改内容**：记录本次“官方新备案表可直接导入”修复。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/main.py |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- `.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
+# 修改记录 — 定级备案管理系统（新备案表 docx 兼容修复）
+
+> **修订记录**
+>
+> - v1.2.44: 修复“新备案表”docx 在 `python-docx` 无法识别包关系时导入失败的问题；新增底层 XML 兜底解析与表格键值兼容，避免再次出现“文件无法解析”误报。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/main.py — Word导入解析增强
+
+- **修改位置**：`parse_docx_key_values`、`ORG_WORD_MAP`、`import_organization_word`。
+- **修改内容**：
+  - 增加双通道解析：优先 `python-docx`，失败自动回退到 `word/document.xml` 原始解析；
+  - 增强表格键值识别能力（兼容“键在左列、值在右列”）；
+  - 保持非法文件明确返回 400，避免 500。
+
+### tests/test_api.py — 回归测试补充
+
+- **修改位置**：新增 `test_36_parse_docx_fallback_supports_missing_package_relationship`。
+- **修改内容**：
+  - 构造缺少 `_rels/.rels` 的异常 docx 包，验证兜底解析仍可提取字段。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.44。
+- **修改内容**：记录本次“新备案表”docx 解析兼容修复。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/main.py |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- `.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
 # 修改记录 — 定级备案管理系统（新增备份恢复 + Word导入稳健性修复）
 
 > **修订记录**

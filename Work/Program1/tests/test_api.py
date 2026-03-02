@@ -4,6 +4,7 @@ import io
 import json
 import os
 import unittest
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -1503,6 +1504,39 @@ class ApiFlowTests(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 400)
         self.assertIn('无法解析', str(resp.json().get('detail', '')))
+
+    def test_36_parse_docx_fallback_supports_missing_package_relationship(self):
+        root = Path(__file__).resolve().parent.parent
+        candidates = sorted(root.glob('01-*.docx'))
+        self.assertTrue(candidates, '测试资源缺失: 01-*.docx')
+        src = candidates[0].read_bytes()
+        in_buf = io.BytesIO(src)
+        out_buf = io.BytesIO()
+        with zipfile.ZipFile(in_buf, 'r') as zin, zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for name in zin.namelist():
+                if name == '_rels/.rels':
+                    continue
+                zout.writestr(name, zin.read(name))
+        kv = self.__class__.main_module.parse_docx_key_values(out_buf.getvalue())
+        self.assertGreater(len(kv), 0)
+
+    def test_37_organization_word_import_supports_official_new_form_docx(self):
+        root = Path(__file__).resolve().parent.parent
+        candidates = sorted(root.glob('01-*.docx'))
+        self.assertTrue(candidates, '测试资源缺失: 01-*.docx')
+        src = candidates[0]
+        resp = self.client.post(
+            '/api/organizations/import/word?actor=tester',
+            files={'file': (src.name, src.read_bytes(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
+        )
+        self.assertEqual(resp.status_code, 200, resp.text)
+        body = resp.json()
+        self.assertEqual(body.get('message'), 'Word导入成功')
+        data = body.get('data') or {}
+        self.assertTrue(str(data.get('name') or '').strip())
+        self.assertTrue(str(data.get('credit_code') or '').strip())
+        self.assertTrue(str(data.get('mobile_phone') or '').strip())
+        self.assertTrue(str(data.get('email') or '').strip())
 
 
 if __name__ == '__main__':
