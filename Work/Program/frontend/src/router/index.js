@@ -79,6 +79,9 @@ router.beforeEach((to, from, next) => {
     next('/')
   } else if (to.meta.requiresManager && !userStore.isManager) {
     next('/')
+  } else if (to.meta.requiresAuth && userStore.mustChangePassword && to.name !== 'Login') {
+    // 强制改密用户只能访问登录页（登录页会显示改密弹窗）
+    next('/login')
   } else {
     next()
   }

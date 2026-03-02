@@ -9,7 +9,7 @@ pydantic==2.5.3
 email-validator==2.1.0
 python-docx==1.1.0
 openpyxl==3.1.2
-python-multipart==0.0.6
+python-multipart==0.0.9
 python-dotenv==1.0.0
 
 # === PostgreSQL 驱动（默认安装，支持切换 DATABASE_URL 到 PostgreSQL） ===
