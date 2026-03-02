@@ -1,3 +1,581 @@
+# 修改记录 — 定级备案管理系统（测试产物清理规则补充）
+
+> **修订记录**
+>
+> - v1.2.39: 新增“测试后清理缓存/临时文件”全局规则；明确清理范围与锁文件处理方式，避免影响运行中的进程与环境。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### AGENTS.md — 测试后清理策略
+
+- **修改位置**：新增 `Post-test Cleanup Policy` 章节。
+- **修改内容**：
+  - 默认清理 `app/tests` 下 `__pycache__` 与常见测试临时文件（`__start_log.txt`、`pytestdebug.log`、`.coverage`）。
+  - 明确不清理 `.venv*` 目录内文件。
+  - 遇到文件占用时先报告，不强制终止无关进程。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.39。
+- **修改内容**：记录本次全局清理规则补充与执行约束。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | AGENTS.md |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 文档规则变更，无需运行单元测试。
+
+# 修改记录 — 定级备案管理系统（认证模型回归：管理员统一分发账号）
+
+> **修订记录**
+>
+> - v1.2.38: 认证流程调整为“管理员统一分发账号”模式：关闭自助注册、保留独立登录页、新增系统内管理员用户管理页；首次登录/重置后强制改密在登录页内闭环完成。
+
+## 新增文件 (如有)
+
+### app/templates/users.html — 管理员用户管理页面
+
+- **功能**：管理员统一新增用户、启停用户、重置密码。
+- **实现原理**：页面调用既有 `/api/auth/users`、`/api/auth/users/{id}/toggle`、`/api/auth/users/{id}/reset-password` 接口完成账户运维。
+
+---
+
+## 修改文件
+
+### app/main.py — 路由与认证策略调整
+
+- **修改位置**：`/login`、`/register`、`/users` 页面路由；`/api/auth/register`；鉴权白名单与精简模式屏蔽列表。
+- **修改内容**：
+  - `/register` 页面改为重定向 `/login`；
+  - `/api/auth/register` 改为返回 403（未开放自助注册）；
+  - 新增 `/users` 页面路由，仅管理员可访问；
+  - 保持登录态通过 token + cookie 识别，页面鉴权重定向策略不变。
+
+### app/templates/auth.html — 独立登录页调整
+
+- **修改位置**：登录页布局与脚本。
+- **修改内容**：
+  - 移除注册入口与注册逻辑；
+  - 新增首次登录/重置后强制改密面板（调用 `/api/auth/change-password`）；
+  - 登录成功写入 `localStorage` + `auth_token` Cookie，退出时双清理。
+
+### app/templates/base.html — 侧边导航调整
+
+- **修改位置**：侧边菜单与面包屑。
+- **修改内容**：
+  - 新增管理员可见“用户管理”入口（`/users`）；
+  - 保持顶部登录态按钮逻辑（登录/退出切换）。
+
+### tests/test_api.py — 认证行为测试更新
+
+- **修改位置**：更新 `test_31`，新增 `test_32`。
+- **修改内容**：
+  - `test_31` 改为校验自助注册被拒绝（403）；
+  - 新增 `test_32_admin_can_open_users_page` 校验管理员可访问用户管理页。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.38。
+- **修改内容**：记录本次认证模型回归与用户管理页补齐。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **新增** | app/templates/users.html |
+| **修改** | app/main.py |
+| **修改** | app/templates/auth.html |
+| **修改** | app/templates/base.html |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 全量回归：`.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
+# 修改记录 — 定级备案管理系统（界面优化：登录后隐藏“登录与用户”菜单）
+
+> **修订记录**
+>
+> - v1.2.37: 移除侧边栏“登录与用户”入口；顶部入口改为登录态自适应（未登录显示“登录”，已登录显示“退出”）。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/templates/base.html — 认证入口交互优化
+
+- **修改位置**：侧边导航、顶部用户区、页面脚本。
+- **修改内容**：
+  - 删除侧边栏“登录与用户”菜单项，避免登录后仍显示不符合认知；
+  - 顶部按钮新增 `authEntryBtn`，未登录显示“登录”，已登录显示“退出”；
+  - 新增 `logoutFromLayout()`，统一执行退出 API、清理 `localStorage/Cookie` 并跳转登录页。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.37。
+- **修改内容**：记录本次认证入口界面优化。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/templates/base.html |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 快速验证：`.\.venv\Scripts\python -m unittest tests.test_api.ApiFlowTests.test_30_login_page_is_accessible -v`
+
+# 修改记录 — 定级备案管理系统（登录修复：登录后页面跳转鉴权闭环）
+
+> **修订记录**
+>
+> - v1.2.36: 修复登录成功后仍停留/回跳登录页的问题；保持 API 登录返回结构不变，由前端认证页写入 `auth_token` Cookie，确保页面跳转请求可被服务端识别。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/main.py — 登录接口兼容修复
+
+- **修改位置**：`get_auth_token_from_request`、`auth_login`。
+- **修改内容**：
+  - 保留服务端读取 Cookie 的能力；
+  - `auth_login` 恢复为返回 JSON 字典（不再服务端强制下发 Cookie），避免影响既有 API 行为与测试基线。
+
+### app/templates/auth.html — 前端登录态落盘
+
+- **修改位置**：`login()`、`logout()`。
+- **修改内容**：
+  - 登录成功后除 `localStorage` 外，同步写入 `auth_token` Cookie（`Path=/; SameSite=Lax`）；
+  - 退出时同步清理 Cookie，避免残留会话。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.36。
+- **修改内容**：记录本次登录后跳转问题修复。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/main.py |
+| **修改** | app/templates/auth.html |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 全量回归：`.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
+# 修改记录 — 定级备案管理系统（认证改造：独立登录/注册页 + 注册后登录流程）
+
+> **修订记录**
+>
+> - v1.2.35: 新增独立认证页面（不依赖系统侧边栏布局）；新增公开注册接口 `/api/auth/register`；新增 `/register` 路由，支持“先注册再登录后进入系统功能”。
+
+## 新增文件 (如有)
+
+### app/templates/auth.html — 独立认证页面
+
+- **功能**：提供登录与注册双面板，登录后自动跳转到目标页面。
+- **实现原理**：
+  - 页面独立于 `base.html`，避免未登录时展示业务导航；
+  - 通过 `/api/auth/login`、`/api/auth/register` 完成认证流程；
+  - 使用 `next` 参数控制登录成功后的跳转路径。
+
+---
+
+## 修改文件
+
+### app/main.py — 认证路由与鉴权白名单扩展
+
+- **修改位置**：`/login`、新增 `/register` 路由；新增 `/api/auth/register`；鉴权豁免判断函数。
+- **修改内容**：
+  - `/login` 改为渲染独立认证模板 `auth.html`；
+  - 新增 `/register` 页面路由；
+  - 新增注册接口：创建默认 `evaluator` 角色账号（用户名唯一、密码长度校验、确认密码一致校验）；
+  - 鉴权白名单放行 `/register` 与 `/api/auth/register`；
+  - 精简模式下同步屏蔽 `/register` 页面（与既有登录策略一致）。
+
+### tests/test_api.py — 认证流程测试补充
+
+- **修改位置**：更新 `test_30`，新增 `test_31_register_then_login_success`。
+- **修改内容**：
+  - 验证 `/login` 页面可访问且包含登录/注册文案；
+  - 验证注册成功后可使用新账号登录并拿到 token。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.35。
+- **修改内容**：记录本次认证页面与注册登录流程改造。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **新增** | app/templates/auth.html |
+| **修改** | app/main.py |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 全量回归：`.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
+# 修改记录 — 定级备案管理系统（安全与启动体验修复：页面鉴权拦截、pip 输出降噪）
+
+> **修订记录**
+>
+> - v1.2.34: 新增非 API 页面级鉴权拦截（未登录访问业务页跳转登录页）；优化启动脚本依赖检查输出，静默已满足依赖并明确区分 System/Venv pip 信息。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/main.py — 页面级鉴权拦截
+
+- **修改位置**：`security_middleware`、鉴权豁免判断函数。
+- **修改内容**：
+  - 新增 `_is_web_auth_exempt`；
+  - 在 `API_AUTH_REQUIRED=1` 且非精简模式下，未登录访问受保护 HTML 页面时重定向到 `/login?next=...`；
+  - 保留 `/login`、`/health`、`/static/*`、`/organizations/collect/*` 等公开访问能力。
+
+### start.bat / start_lite.bat — pip 输出与依赖安装体验优化
+
+- **修改位置**：Python/pip 信息输出与依赖安装命令。
+- **修改内容**：
+  - 输出改为显式区分 `[INFO] System pip` 与 `[INFO] Venv pip`；
+  - 依赖安装增加 `--quiet`，避免刷屏 `Requirement already satisfied`；
+  - 仍保留 `-i https://pypi.org/simple --timeout 20 --retries 1` 参数。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.34。
+- **修改内容**：记录本次安全与启动体验修复。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/main.py |
+| **修改** | start.bat |
+| **修改** | start_lite.bat |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 启动脚本自检：`set DRY_RUN=1 && start.bat`
+- 精简版自检：`set DRY_RUN=1 && start_lite.bat`
+- 全量回归：`.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
+# 修改记录 — 定级备案管理系统（界面补充：登录入口显式化）
+
+> **修订记录**
+>
+> - v1.2.33: 补强登录界面入口可见性，侧边导航新增“登录与用户”入口，顶部始终显示登录按钮（含精简模式），并新增页面可达性回归测试。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/templates/base.html — 登录入口显式化
+
+- **修改位置**：侧边导航、面包屑标题、顶部用户区域。
+- **修改内容**：
+  - 新增侧边栏菜单项“登录与用户”（`/login`）；
+  - 面包屑增加 `/login` 显示文案；
+  - 顶部“登录”按钮不再受 `lite_mode` 限制，统一可见。
+
+### tests/test_api.py — 页面可达性测试补充
+
+- **修改位置**：新增 `test_30_login_page_is_accessible`。
+- **修改内容**：校验 `/login` 可访问且页面包含“账号登录”“登录与用户”关键文案。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.33。
+- **修改内容**：记录本次登录入口界面补充与测试覆盖。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/templates/base.html |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 全量回归：`.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
+# 修改记录 — 定级备案管理系统（启动修复：start.bat/start_lite.bat 可用性恢复）
+
+> **修订记录**
+>
+> - v1.2.32: 修复启动脚本因批处理代码块中未转义括号导致的提前 `pause` 问题；改为显式使用 `.venv\Scripts\python.exe` 执行依赖安装和服务启动，避免受损 `activate.bat` 影响；补充 `DRY_RUN=1` 自检模式。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### start.bat — 启动流程稳定性修复
+
+- **修改位置**：Python 检查分支、venv 依赖检查与安装、启动命令。
+- **修改内容**：
+  - 修复 `if (...)` 代码块中 `echo ... (recommended)` 语法陷阱导致的无条件 `pause`；
+  - 使用 `%CD%\.venv\Scripts\python.exe` 作为唯一解释器执行 `pip/uvicorn`，不再依赖 `activate.bat`；
+  - 增加 `DRY_RUN=1`，可只跑检查与依赖步骤而不拉起服务。
+
+### start_lite.bat — 启动流程稳定性修复
+
+- **修改位置**：Python 检查分支、venv 依赖检查与安装、标签跳转、启动命令。
+- **修改内容**：
+  - 同步修复未转义括号引发的批处理块解析问题；
+  - 修复依赖安装后未跳转启动段的流程缺陷；
+  - 使用 venv 解释器执行并支持 `DRY_RUN=1` 自检。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.32。
+- **修改内容**：记录本次启动脚本可用性修复。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | start.bat |
+| **修改** | start_lite.bat |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 启动脚本自检：`set DRY_RUN=1 && start.bat`
+- 精简版自检：`set DRY_RUN=1 && start_lite.bat`
+
+# 修改记录 — 定级备案管理系统（回归修复：知识库列表未分页调用向后兼容）
+
+> **修订记录**
+>
+> - v1.2.31: 修复知识库列表默认分页导致未传分页参数调用方只能获取前 50 条数据的回归；仅在显式传入 `page/page_size` 时启用分页，未传时返回全量结果。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/main.py — 知识库列表分页兼容修复
+
+- **修改位置**：`list_knowledge`。
+- **修改内容**：
+  - `page/page_size` 改为可选查询参数；
+  - 仅当请求显式传入 `page` 或 `page_size` 时执行 `offset/limit`；
+  - 未传分页参数时保持历史行为，返回全部匹配数据；
+  - 保留 SQL 置顶优先排序逻辑，避免回退到 Python 内存排序。
+
+### tests/test_api.py — 回归测试补充
+
+- **修改位置**：新增 `test_29_knowledge_list_without_pagination_returns_all_for_compatibility`。
+- **修改内容**：
+  - 直接构造 55 条知识库数据；
+  - 校验未传分页参数时 `total=55` 且 `items` 全量返回，验证向后兼容。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.31。
+- **修改内容**：记录本次向后兼容回归修复与测试覆盖。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/main.py |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 全量回归：`.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
+# 修改记录 — 定级备案管理系统（稳定性修复：模板/附件下载健壮性、流程规则输入校验、知识库列表分页优化）
+
+> **修订记录**
+>
+> - v1.2.30: 修复模板与附件文件缺失导致下载/预览 500；修复流程规则时限非法整数导致 500；知识库列表改为 SQL 排序并支持分页，降低大数据量内存与响应开销。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/main.py — 接口稳健性与查询性能优化
+
+- **修改位置**：`download_template`、`download_attachment`、`preview_attachment`、`update_workflow_rules`、`list_knowledge`、文件校验辅助函数。
+- **修改内容**：
+  - 新增 `ensure_file_exists` 统一校验下载文件是否存在；
+  - 模板下载、附件下载/预览在返回 `FileResponse` 前先检查 `Path.exists()/is_file()`，缺失时返回 404；
+  - 流程规则更新对 `time_limit_hours` 增加整数转换异常处理，非法值返回 400；
+  - 知识库列表由“全量拉取 + Python 内存排序”改为 SQL 外连接置顶表排序，并新增 `page/page_size` 分页参数。
+
+### tests/test_api.py — 回归测试补充
+
+- **修改位置**：新增 `test_25` 到 `test_28`。
+- **修改内容**：
+  - `test_25_template_download_returns_404_when_file_missing`：验证模板文件缺失返回 404；
+  - `test_26_attachment_file_endpoints_return_404_when_file_missing`：验证附件下载/预览文件缺失返回 404；
+  - `test_27_update_workflow_rules_invalid_time_limit_returns_400`：验证规则时限非法整数返回 400；
+  - `test_28_knowledge_list_pagination_and_pinned_order`：验证知识库列表分页与置顶优先排序行为。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.30。
+- **修改内容**：记录本次接口稳健性与性能优化及测试覆盖。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/main.py |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 全量回归：`.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
+# 修改记录 — 定级备案管理系统（稳定性修复：系统恢复一致性、导入校验、知识库下载健壮性、流程提醒性能）
+
+> **修订记录**
+>
+> - v1.2.29: 修复系统恢复孤儿问题；兼容 Excel datetime 日期导入；统一系统导入等级范围校验；知识库下载缺失文件返回 404；优化提醒接口避免规则查询 N+1，并补充回归测试。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/main.py — 一致性与健壮性修复
+
+- **修改位置**：`restore_system`、系统 Excel/Word 导入、`download_knowledge`、`workflow_reminders`、流程规则 owner 解析函数。
+- **修改内容**：
+  - 系统恢复时增加所属单位可用性校验，单位已删除或不存在时禁止恢复；
+  - 新增 `parse_proposed_level` 与 `parse_optional_go_live_date`，导入路径统一复用；
+  - 系统导入等级统一限制为 1-5；
+  - Excel 导入支持 `datetime/date` 单元格以及 `YYYY-MM-DD HH:MM:SS` 文本日期；
+  - 知识库下载前检查磁盘文件存在性，缺失时返回 404；
+  - 提醒接口在循环外一次性加载规则映射，避免循环内重复查询。
+
+### tests/test_api.py — 回归测试补充
+
+- **修改位置**：新增 `test_20` 到 `test_24`。
+- **修改内容**：
+  - `test_20_restore_deleted_system_requires_alive_org`：验证删除单位后禁止恢复其系统；
+  - `test_21_system_excel_import_accepts_datetime_cell`：验证 Excel `datetime` 上线时间可成功导入；
+  - `test_22_system_import_validates_proposed_level_range`：验证 Excel/Word 导入等级越界被拒绝；
+  - `test_23_knowledge_download_returns_404_when_file_missing`：验证知识库缺失文件返回 404；
+  - `test_24_workflow_reminders_reuse_rule_map`：验证提醒接口规则映射仅加载一次。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.29。
+- **修改内容**：记录本次稳定性与性能修复及测试覆盖。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/main.py |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- 全量回归：`.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
 # 修改记录 — 定级备案管理系统（仓库清理：停止追踪 AGENTS.md）
 
 > **修订记录**
@@ -1388,3 +1966,4 @@
 
 - 初版实现单位、系统、报告、流程、看板、知识库等模块。
 - 提供基础字段校验、导入导出、历史追溯与回收站机制。
+

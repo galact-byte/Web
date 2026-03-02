@@ -19,7 +19,7 @@ from urllib.parse import quote
 from docx import Document
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from openpyxl import Workbook, load_workbook
@@ -183,6 +183,7 @@ if APP_LITE_MODE:
             "/templates",
             "/knowledge",
             "/login",
+            "/register",
             "/api/workflow",
             "/api/templates",
             "/api/knowledge",
@@ -395,6 +396,9 @@ def get_auth_token_from_request(request: Request) -> str:
     header_token = (request.headers.get("X-Auth-Token") or "").strip()
     if header_token:
         return header_token
+    cookie_token = (request.cookies.get("auth_token") or "").strip()
+    if cookie_token:
+        return cookie_token
     return (request.query_params.get("token") or "").strip()
 
 
@@ -419,7 +423,21 @@ def _is_api_auth_exempt(path: str) -> bool:
         return True
     if path == "/api/auth/login":
         return True
+    if path == "/api/auth/register":
+        return True
     if path.startswith("/api/public/organizations/collect/"):
+        return True
+    return False
+
+
+def _is_web_auth_exempt(path: str) -> bool:
+    if path.startswith("/api/"):
+        return True
+    if path.startswith("/static/"):
+        return True
+    if path.startswith("/organizations/collect/"):
+        return True
+    if path in {"/login", "/register", "/health", "/favicon.ico"}:
         return True
     return False
 
@@ -434,9 +452,9 @@ async def security_middleware(request: Request, call_next):  # type: ignore[over
     if FORCE_HTTPS and req_scheme and req_scheme != "https":
         target = request.url.replace(scheme="https")
         return JSONResponse(status_code=307, content={"detail": "请使用 HTTPS 访问。", "redirect": str(target)})
+    path = request.url.path
 
     if API_AUTH_REQUIRED and not APP_LITE_MODE and request.method.upper() != "OPTIONS":
-        path = request.url.path
         if not _is_api_auth_exempt(path):
             token = get_auth_token_from_request(request)
             if not token:
@@ -448,6 +466,18 @@ async def security_middleware(request: Request, call_next):  # type: ignore[over
                     return JSONResponse(status_code=401, content={"detail": "登录令牌无效或已过期。"})
                 if bool(getattr(user, "must_change_password", False)) and not _is_password_change_exempt(path):
                     return JSONResponse(status_code=403, content={"detail": "当前账号需先修改密码后再继续操作。"})
+                request.state.current_user = user.username
+            finally:
+                db.close()
+        elif not _is_web_auth_exempt(path):
+            token = get_auth_token_from_request(request)
+            if not token:
+                return RedirectResponse(url=f"/login?next={quote(path)}", status_code=307)
+            db = SessionLocal()
+            try:
+                user = get_user_by_token(db, token)
+                if not user:
+                    return RedirectResponse(url=f"/login?next={quote(path)}", status_code=307)
                 request.state.current_user = user.username
             finally:
                 db.close()
@@ -1099,6 +1129,45 @@ def to_bool_text(value: str | None) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y", "是", "有"}
 
 
+def parse_proposed_level(raw_value: Any) -> int:
+    level_text = ("" if raw_value is None else str(raw_value)).strip().replace("级", "")
+    if not level_text:
+        raise ValueError("拟定等级不能为空。")
+    try:
+        level = int(level_text)
+    except Exception as exc:
+        raise ValueError(f"拟定等级格式错误: {exc}") from exc
+    if level < 1 or level > 5:
+        raise ValueError("拟定等级必须在1-5级范围内。")
+    return level
+
+
+def parse_optional_go_live_date(raw_value: Any) -> date | None:
+    if raw_value is None:
+        return None
+    if isinstance(raw_value, datetime):
+        return raw_value.date()
+    if isinstance(raw_value, date):
+        return raw_value
+    date_text = str(raw_value).strip()
+    if not date_text:
+        return None
+    date_text = date_text.replace("/", "-")
+    if " " in date_text:
+        date_text = date_text.split(" ", 1)[0]
+    try:
+        return date.fromisoformat(date_text)
+    except Exception as exc:
+        raise ValueError(f"上线时间格式错误(应为YYYY-MM-DD): {exc}") from exc
+
+
+def ensure_file_exists(path_value: str | None, not_found_detail: str) -> Path:
+    path = Path(str(path_value or ""))
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail=not_found_detail)
+    return path
+
+
 def get_or_create_workflow_step_rules(db: Session, config: WorkflowConfig) -> dict[str, WorkflowStepRule]:
     rows = (
         db.query(WorkflowStepRule)
@@ -1142,14 +1211,19 @@ def recalc_workflow_due_at(db: Session, instance: WorkflowInstance, config: Work
     instance.due_at = datetime.now() + timedelta(hours=hours)
 
 
-def get_workflow_step_owner(db: Session, config: WorkflowConfig, step_index: int) -> str:
+def get_workflow_step_owner(
+    db: Session,
+    config: WorkflowConfig,
+    step_index: int,
+    rule_map: dict[str, WorkflowStepRule] | None = None,
+) -> str:
     steps = config.steps_json or []
     if step_index < 0 or step_index >= len(steps):
         return ""
     step_name = steps[step_index]
-    rule_map = get_or_create_workflow_step_rules(db, config)
-    if step_name in rule_map:
-        return rule_map[step_name].owner
+    current_rule_map = rule_map if rule_map is not None else get_or_create_workflow_step_rules(db, config)
+    if step_name in current_rule_map:
+        return current_rule_map[step_name].owner
     return "system"
 
 
@@ -1233,7 +1307,13 @@ def organizations_page(request: Request) -> HTMLResponse:
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("login.html", {"request": request})
+    next_path = (request.query_params.get("next") or "/").strip() or "/"
+    return templates.TemplateResponse("auth.html", {"request": request, "mode": "login", "next_path": next_path})
+
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page() -> RedirectResponse:
+    return RedirectResponse(url="/login", status_code=307)
 
 
 @app.get("/organizations/collect/{token}", response_class=HTMLResponse)
@@ -1256,6 +1336,12 @@ def organizations_collect_page(token: str, request: Request, db: Session = Depen
 @app.get("/systems", response_class=HTMLResponse)
 def systems_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("systems.html", {"request": request})
+
+
+@app.get("/users", response_class=HTMLResponse)
+def users_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    require_roles(request, db, {"admin"})
+    return templates.TemplateResponse("users.html", {"request": request})
 
 
 @app.get("/reports", response_class=HTMLResponse)
@@ -1300,7 +1386,7 @@ def auth_login(payload: dict[str, Any], request: Request, db: Session = Depends(
     db.add(AuthSession(user_id=user.id, token=token, expires_at=expires_at))
     user.last_login_at = datetime.now()
     db.commit()
-    return {
+    data = {
         "message": "登录成功",
         "token": token,
         "expires_at": expires_at,
@@ -1311,18 +1397,26 @@ def auth_login(payload: dict[str, Any], request: Request, db: Session = Depends(
         },
         "must_change_password": bool(getattr(user, "must_change_password", False)),
     }
+    return data
+
+
+@app.post("/api/auth/register")
+def auth_register() -> dict[str, Any]:
+    raise HTTPException(status_code=403, detail="系统未开放自助注册，请联系管理员分发账号。")
 
 
 @app.post("/api/auth/logout")
-def auth_logout(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+def auth_logout(request: Request, db: Session = Depends(get_db)) -> JSONResponse:
     token = get_auth_token_from_request(request)
+    response = JSONResponse(content={"message": "已退出"})
+    response.delete_cookie("auth_token", path="/")
     if not token:
-        return {"message": "已退出"}
+        return response
     row = db.query(AuthSession).filter(AuthSession.token == token).first()
     if row:
         db.delete(row)
         db.commit()
-    return {"message": "已退出"}
+    return response
 
 
 @app.get("/api/auth/me")
@@ -1820,7 +1914,8 @@ def download_template(template_id: int, db: Session = Depends(get_db)) -> FileRe
     tpl = db.query(ReportTemplate).filter(ReportTemplate.id == template_id).first()
     if not tpl:
         raise HTTPException(status_code=404, detail="模板不存在。")
-    return FileResponse(path=tpl.file_path, filename=tpl.file_name)
+    path = ensure_file_exists(tpl.file_path, "模板文件不存在或已被移除。")
+    return FileResponse(path=str(path), filename=tpl.file_name)
 
 
 @app.post("/api/templates/{template_id}/test-fill")
@@ -2673,6 +2768,11 @@ def restore_system(system_id: int, actor: str = Query("system"), db: Session = D
         raise HTTPException(status_code=400, detail="该系统未删除。")
     if datetime.now() - system.deleted_at > timedelta(days=30):
         raise HTTPException(status_code=400, detail="超出30天回收站恢复期。")
+    org = db.query(Organization).filter(Organization.id == system.organization_id).first()
+    if not org:
+        raise HTTPException(status_code=400, detail="所属单位不存在，无法恢复系统。")
+    if org.deleted_at:
+        raise HTTPException(status_code=400, detail="所属单位已删除，请先恢复单位后再恢复系统。")
     system.deleted_at = None
     system.deleted_by = None
     db.commit()
@@ -2901,10 +3001,10 @@ async def import_systems_excel(
                 organization_id=org_id,
                 system_name=str(row[0]).strip(),
                 system_code=generate_system_code(db),
-                proposed_level=int(row[3]),
+                proposed_level=parse_proposed_level(row[3]),
                 deployment_mode=str(row[4]).strip() if row[4] else None,
                 system_type=str(row[5]).strip() if row[5] else None,
-                go_live_date=date.fromisoformat(str(row[6])) if row[6] else None,
+                go_live_date=parse_optional_go_live_date(row[6]),
                 created_by=actor,
             )
             db.add(sys)
@@ -2946,18 +3046,16 @@ async def import_system_word(
     level_text = str(raw.get("proposed_level", "")).strip()
     if not level_text:
         raise HTTPException(status_code=400, detail="Word缺少拟定等级。")
-    level_text = level_text.replace("级", "")
     try:
-        proposed_level = int(level_text)
+        proposed_level = parse_proposed_level(level_text)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"拟定等级格式错误: {exc}") from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     go_live_date = None
     if raw.get("go_live_date"):
-        date_text = str(raw["go_live_date"]).strip().replace("/", "-")
         try:
-            go_live_date = date.fromisoformat(date_text)
+            go_live_date = parse_optional_go_live_date(raw["go_live_date"])
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"上线时间格式错误(应为YYYY-MM-DD): {exc}") from exc
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     name = str(raw.get("system_name", "")).strip()
     if not name:
         raise HTTPException(status_code=400, detail="Word缺少系统名称。")
@@ -3123,7 +3221,8 @@ def download_attachment(attachment_id: int, db: Session = Depends(get_db)) -> Fi
     row = db.query(Attachment).filter(Attachment.id == attachment_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="附件不存在。")
-    return FileResponse(path=row.file_path, filename=row.file_name)
+    path = ensure_file_exists(row.file_path, "附件文件不存在或已被移除。")
+    return FileResponse(path=str(path), filename=row.file_name)
 
 
 @app.get("/api/attachment-files/{attachment_id}/preview")
@@ -3131,9 +3230,10 @@ def preview_attachment(attachment_id: int, db: Session = Depends(get_db)) -> Fil
     row = db.query(Attachment).filter(Attachment.id == attachment_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="附件不存在。")
+    path = ensure_file_exists(row.file_path, "附件文件不存在或已被移除。")
     guessed_type = mimetypes.guess_type(row.file_name)[0] or "application/octet-stream"
     return FileResponse(
-        path=row.file_path,
+        path=str(path),
         media_type=guessed_type,
         filename=row.file_name,
         content_disposition_type="inline",
@@ -3820,7 +3920,11 @@ def update_workflow_rules(request: Request, payload: dict[str, Any], db: Session
             raise HTTPException(status_code=400, detail=f"非法流程节点: {step_name}")
         owner = str(item.get("owner") or "system").strip()
         assert_safe_text(owner, "owner")
-        limit = int(item.get("time_limit_hours") or 24)
+        raw_limit = item.get("time_limit_hours", 24)
+        try:
+            limit = int(raw_limit)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"{step_name} 的 time_limit_hours 必须为整数。") from exc
         enabled = bool(item.get("enabled", True))
         row = (
             db.query(WorkflowStepRule)
@@ -3899,6 +4003,7 @@ def workflow_reminders(
     if channel not in {"in_app", "email", "both"}:
         raise HTTPException(status_code=400, detail="channel 仅支持 in_app/email/both。")
     config = get_workflow_config(db)
+    rule_map = get_or_create_workflow_step_rules(db, config)
     query = (
         db.query(WorkflowInstance, SystemInfo.system_name)
         .join(SystemInfo, SystemInfo.id == WorkflowInstance.system_id)
@@ -3906,8 +4011,9 @@ def workflow_reminders(
     )
     rows = query.order_by(WorkflowInstance.due_at.asc()).all()
     items: list[dict[str, Any]] = []
+    now = datetime.now()
     for instance, system_name in rows:
-        remaining_seconds = int((instance.due_at - datetime.now()).total_seconds())
+        remaining_seconds = int((instance.due_at - now).total_seconds())
         is_overdue = remaining_seconds < 0
         if mode == "overdue" and not is_overdue:
             continue
@@ -3916,7 +4022,7 @@ def workflow_reminders(
         step_name = ""
         if 0 <= instance.current_step_index < len(config.steps_json):
             step_name = config.steps_json[instance.current_step_index]
-        owner = get_workflow_step_owner(db, config, instance.current_step_index)
+        owner = get_workflow_step_owner(db, config, instance.current_step_index, rule_map=rule_map)
         item = {
             "instance_id": instance.id,
             "system_id": instance.system_id,
@@ -4443,6 +4549,8 @@ def list_knowledge(
     start_date: date | None = None,
     end_date: date | None = None,
     enabled_only: bool = True,
+    page: int | None = Query(None, ge=1),
+    page_size: int | None = Query(None, ge=1, le=200),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     q = db.query(KnowledgeDocument)
@@ -4473,29 +4581,40 @@ def list_knowledge(
         q = q.filter(KnowledgeDocument.uploaded_at >= datetime.combine(start_date, datetime.min.time()))
     if end_date:
         q = q.filter(KnowledgeDocument.uploaded_at <= datetime.combine(end_date, datetime.max.time()))
-    rows = q.order_by(KnowledgeDocument.uploaded_at.desc()).all()
-    pin_rows = db.query(KnowledgePin).filter(KnowledgePin.document_id.in_([r.id for r in rows])).all() if rows else []
-    pin_map = {p.document_id: p for p in pin_rows}
-    rows = sorted(rows, key=lambda r: (0 if r.id in pin_map else 1, -(pin_map[r.id].pinned_at.timestamp() if r.id in pin_map else 0), -(r.uploaded_at.timestamp() if hasattr(r.uploaded_at, "timestamp") else 0)))
+    total = q.count()
+    rows_query = (
+        q.outerjoin(KnowledgePin, KnowledgePin.document_id == KnowledgeDocument.id)
+        .add_columns(KnowledgePin.pinned_at.label("pinned_at"))
+        .order_by(
+            KnowledgePin.pinned_at.is_(None),
+            KnowledgePin.pinned_at.desc(),
+            KnowledgeDocument.uploaded_at.desc(),
+        )
+    )
+    if page is not None or page_size is not None:
+        effective_page = page or 1
+        effective_page_size = page_size or 50
+        rows_query = rows_query.offset((effective_page - 1) * effective_page_size).limit(effective_page_size)
+    rows = rows_query.all()
     return {
-        "total": len(rows),
+        "total": total,
         "items": [
             {
-                "id": r.id,
-                "title": r.title,
-                "doc_type": r.doc_type,
-                "city": r.city,
-                "district": r.district,
-                "protection_level": r.protection_level,
-                "version_no": r.version_no,
-                "status": r.status,
-                "file_name": r.file_name,
-                "uploaded_by": r.uploaded_by,
-                "uploaded_at": r.uploaded_at,
-                "pinned": r.id in pin_map,
-                "pinned_at": pin_map[r.id].pinned_at if r.id in pin_map else None,
+                "id": doc.id,
+                "title": doc.title,
+                "doc_type": doc.doc_type,
+                "city": doc.city,
+                "district": doc.district,
+                "protection_level": doc.protection_level,
+                "version_no": doc.version_no,
+                "status": doc.status,
+                "file_name": doc.file_name,
+                "uploaded_by": doc.uploaded_by,
+                "uploaded_at": doc.uploaded_at,
+                "pinned": pinned_at is not None,
+                "pinned_at": pinned_at,
             }
-            for r in rows
+            for doc, pinned_at in rows
         ],
     }
 
@@ -4687,9 +4806,10 @@ def download_knowledge(request: Request, doc_id: int, actor: str = Query("system
         raise HTTPException(status_code=404, detail="文档不存在。")
     if doc.status != "enabled":
         raise HTTPException(status_code=403, detail="文档已下架。")
+    path = ensure_file_exists(doc.file_path, "文档文件不存在或已被移除。")
     db.add(KnowledgeDownloadLog(document_id=doc.id, download_by=actor_name or actor))
     db.commit()
-    return FileResponse(path=doc.file_path, filename=doc.file_name)
+    return FileResponse(path=str(path), filename=doc.file_name)
 
 
 @app.post("/api/knowledge/batch-download")

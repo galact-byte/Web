@@ -1,0 +1,265 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>登录 - 定级备案管理系统</title>
+  <style>
+    :root {
+      --bg: #f3f7ff;
+      --card: #ffffff;
+      --line: #d9e3f5;
+      --text: #1e2a3d;
+      --muted: #66758f;
+      --primary: #2165d6;
+      --primary-hover: #1a53b1;
+      --danger: #d64545;
+      --ok: #1f9d5f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(circle at 15% 20%, #dbe9ff 0%, var(--bg) 35%, #eef3ff 100%);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+    .auth-wrap {
+      width: 100%;
+      max-width: 460px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(31, 71, 145, 0.14);
+      overflow: hidden;
+    }
+    .head { padding: 22px 24px 12px; }
+    .head h1 { margin: 0; font-size: 22px; font-weight: 700; }
+    .head p { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+    .panel { padding: 20px 24px 24px; }
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 6px;
+      color: #405168;
+      font-weight: 600;
+    }
+    .field input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+    }
+    .field input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(33, 101, 214, 0.14);
+    }
+    .actions { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+    .btn {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-ghost { background: #eef3ff; color: #335791; }
+    .hint { margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .status {
+      margin-top: 12px;
+      font-size: 13px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #f8fbff;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .status.ok { color: var(--ok); border-color: #bce8d1; background: #f2fbf6; }
+    .status.err { color: var(--danger); border-color: #f0cccc; background: #fff5f5; }
+    .footer {
+      padding: 0 24px 20px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+    }
+    .footer a {
+      color: #4568a5;
+      text-decoration: none;
+      font-size: 13px;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="head">
+      <h1>账号登录</h1>
+      <p>账号由管理员统一创建和分发，忘记密码请联系管理员重置。</p>
+    </div>
+
+    <div class="panel">
+      <div class="field">
+        <label for="login-username">用户名</label>
+        <input id="login-username" autocomplete="username" />
+      </div>
+      <div class="field">
+        <label for="login-password">密码</label>
+        <input id="login-password" type="password" autocomplete="current-password" />
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="login()">登录</button>
+        <button class="btn btn-ghost" onclick="logout()">退出登录</button>
+      </div>
+      <div class="hint">默认管理员账号：admin / admin123</div>
+      <div id="status-login" class="status">请输入账号密码。</div>
+    </div>
+
+    <div id="change-pwd-panel" class="panel hidden">
+      <div class="field">
+        <label for="current-password">当前密码</label>
+        <input id="current-password" type="password" autocomplete="current-password" />
+      </div>
+      <div class="field">
+        <label for="new-password">新密码（至少8位）</label>
+        <input id="new-password" type="password" autocomplete="new-password" />
+      </div>
+      <div class="field">
+        <label for="new-password2">确认新密码</label>
+        <input id="new-password2" type="password" autocomplete="new-password" />
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="changePassword()">确认修改</button>
+      </div>
+      <div id="status-pwd" class="status">首次登录或管理员重置密码后，请先修改密码。</div>
+    </div>
+
+    <div id="logged-box" class="footer hidden">
+      <a href="#" onclick="goNext(); return false;">进入系统</a>
+      <a href="#" onclick="logout(); return false;">退出</a>
+    </div>
+  </div>
+
+  <script>
+    const nextPathRaw = "{{ next_path }}";
+
+    function safeNextPath() {
+      if (!nextPathRaw || !nextPathRaw.startsWith("/")) return "/";
+      return nextPathRaw;
+    }
+
+    function authHeaders() {
+      const token = localStorage.getItem("auth_token") || "";
+      return token ? {"X-Auth-Token": token} : {};
+    }
+
+    function setStatus(text, kind) {
+      const el = document.getElementById("status-login");
+      el.textContent = text;
+      el.classList.remove("ok", "err");
+      if (kind === "ok") el.classList.add("ok");
+      if (kind === "err") el.classList.add("err");
+    }
+
+    function setPwdStatus(text, kind) {
+      const el = document.getElementById("status-pwd");
+      el.textContent = text;
+      el.classList.remove("ok", "err");
+      if (kind === "ok") el.classList.add("ok");
+      if (kind === "err") el.classList.add("err");
+    }
+
+    async function login() {
+      const username = document.getElementById("login-username").value.trim();
+      const password = document.getElementById("login-password").value;
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({username, password}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStatus(`登录失败：${data.detail || "用户名或密码错误"}`, "err");
+        return;
+      }
+      localStorage.setItem("auth_token", data.token);
+      document.cookie = `auth_token=${encodeURIComponent(data.token)}; Path=/; Max-Age=${12 * 3600}; SameSite=Lax`;
+      setStatus(`登录成功：${data.user?.username || username}`, "ok");
+      document.getElementById("logged-box").classList.remove("hidden");
+      if (data.must_change_password) {
+        document.getElementById("change-pwd-panel").classList.remove("hidden");
+        setPwdStatus("当前账号必须先修改密码后才能进入系统。", "err");
+        return;
+      }
+      window.location.href = safeNextPath();
+    }
+
+    async function logout() {
+      try {
+        await fetch("/api/auth/logout", {method: "POST", headers: authHeaders()});
+      } catch (e) {}
+      localStorage.removeItem("auth_token");
+      document.cookie = "auth_token=; Path=/; Max-Age=0; SameSite=Lax";
+      setStatus("已退出登录。", "ok");
+      document.getElementById("logged-box").classList.add("hidden");
+      document.getElementById("change-pwd-panel").classList.add("hidden");
+    }
+
+    function goNext() {
+      window.location.href = safeNextPath();
+    }
+
+    async function changePassword() {
+      const currentPassword = document.getElementById("current-password").value;
+      const newPassword = document.getElementById("new-password").value;
+      const newPassword2 = document.getElementById("new-password2").value;
+      if (!currentPassword || !newPassword || !newPassword2) {
+        setPwdStatus("请完整填写当前密码、新密码和确认密码。", "err");
+        return;
+      }
+      if (newPassword !== newPassword2) {
+        setPwdStatus("两次新密码输入不一致。", "err");
+        return;
+      }
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: {"Content-Type": "application/json", ...authHeaders()},
+        body: JSON.stringify({current_password: currentPassword, new_password: newPassword}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPwdStatus(`修改失败：${data.detail || "请重试"}`, "err");
+        return;
+      }
+      setPwdStatus(data.message || "密码修改成功，请重新登录。", "ok");
+      document.getElementById("change-pwd-panel").classList.add("hidden");
+      await logout();
+    }
+
+    async function initAuthState() {
+      const token = localStorage.getItem("auth_token") || "";
+      if (!token) return;
+      const res = await fetch("/api/auth/me", {headers: authHeaders()});
+      if (!res.ok) return;
+      const me = await res.json();
+      setStatus(`当前已登录：${me.username}（${me.role}）`, "ok");
+      document.getElementById("logged-box").classList.remove("hidden");
+      if (me.must_change_password) {
+        document.getElementById("change-pwd-panel").classList.remove("hidden");
+        setPwdStatus("当前账号必须先修改密码后才能进入系统。", "err");
+      }
+    }
+
+    initAuthState();
+  </script>
+</body>
+</html>
