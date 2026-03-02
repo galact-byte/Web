@@ -2,7 +2,7 @@
 
 > **修订记录**
 >
-> - v1.6: 业务负责人改为文本输入（脱离系统用户）、实施负责人下拉框显示所有用户
+> - v1.6: 业务负责人改为文本输入（脱离系统用户）、实施负责人下拉框显示所有用户、新增项目完成状态切换
 > - v1.5.1: 前端 DRY 重构 + 低优先级优化（侧边栏提取、主题 composable、表单警告、部门默认值）
 > - v1.5: 深度代码审查修复 — 消除冲突文件、安全加固、查询优化、前端健壮性提升（5 CRITICAL + 8 HIGH + 10 MEDIUM）
 > - v1.4: 全面代码审查修复（3 CRITICAL + 6 HIGH + 7 MEDIUM + 4 LOW）
@@ -11,7 +11,7 @@
 > - v1.2: 安全改造（管理员分发账户、首次改密、重置密码）+ bcrypt 兼容性修复
 > - v1.1: 修改启动行为，关闭 CMD 窗口时自动停止所有子进程
 
-## v1.6 — 业务负责人改为文本、实施负责人扩展选择范围
+## v1.6 — 业务负责人改为文本、实施负责人扩展选择范围、项目状态切换
 
 ### 修改文件
 
@@ -28,12 +28,13 @@
 - **修改位置**：`ProjectBase`
 - **修改内容**：`business_manager_id: Optional[int]` → `business_manager_name: Optional[str]`
 
-#### `backend/app/routers/projects.py` — 项目路由更新
+#### `backend/app/routers/projects.py` — 项目路由更新 + 新增状态切换接口
 
 - **修改内容**：
   - `project_to_response` 中 `business_manager_name` 直接读取字段值而非关联用户
   - 创建/更新项目使用 `business_manager_name` 字段
   - 移除 `selectinload(Project.business_manager)` 查询加载
+  - **新增** `PATCH /{project_id}/status` 接口，经理可将项目标记为已完成或重新开启
 
 #### `backend/app/routers/exports.py` — 导出更新
 
@@ -47,12 +48,23 @@
 
 - **修改内容**：移除删除用户时清理 `business_manager_id` 的逻辑（已不再是 FK）
 
+#### `frontend/src/api/index.js` — 新增状态切换 API
+
+- **修改内容**：`projectsApi` 新增 `updateStatus(id, status)` 方法
+
 #### `frontend/src/views/ProjectForm.vue` — 表单改造
 
 - **修改内容**：
   - 业务负责人：从下拉选择框改为文本输入框（`<input>`）
   - 实施负责人：从只加载经理用户改为加载所有用户（`usersApi.getAll()`）
   - 表单字段 `business_manager_id` → `business_manager_name`
+
+#### `frontend/src/views/ProjectDetail.vue` — 新增项目状态切换按钮
+
+- **修改内容**：
+  - 进行中项目显示"标记为已完成"按钮（绿色），点击后项目变为已完成
+  - 已完成项目显示"重新开启"按钮（橙色），点击后项目恢复为进行中
+  - 仅经理可见，操作前有确认弹窗
 
 ---
 
@@ -66,7 +78,9 @@
 | **修改** | `backend/app/routers/exports.py` |
 | **修改** | `backend/app/routers/backup.py` |
 | **修改** | `backend/app/routers/users.py` |
+| **修改** | `frontend/src/api/index.js` |
 | **修改** | `frontend/src/views/ProjectForm.vue` |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
 
 ---
 

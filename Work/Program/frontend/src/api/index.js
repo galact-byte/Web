@@ -65,6 +65,7 @@ export const projectsApi = {
   create: (data) => api.post('/api/projects/', data),
   update: (id, data) => api.put(`/api/projects/${id}`, data),
   delete: (id) => api.delete(`/api/projects/${id}`),
+  updateStatus: (id, status) => api.patch(`/api/projects/${id}/status`, null, { params: { new_status: status } }),
 
   // 分配
   assign: (projectId, data) => api.post(`/api/projects/${projectId}/assign`, data),
