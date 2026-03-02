@@ -2,6 +2,7 @@
 
 > **修订记录**
 >
+> - v1.6: 业务负责人改为文本输入（脱离系统用户）、实施负责人下拉框显示所有用户
 > - v1.5.1: 前端 DRY 重构 + 低优先级优化（侧边栏提取、主题 composable、表单警告、部门默认值）
 > - v1.5: 深度代码审查修复 — 消除冲突文件、安全加固、查询优化、前端健壮性提升（5 CRITICAL + 8 HIGH + 10 MEDIUM）
 > - v1.4: 全面代码审查修复（3 CRITICAL + 6 HIGH + 7 MEDIUM + 4 LOW）
@@ -9,6 +10,78 @@
 > - v1.2.1: 恢复 PostgreSQL 默认驱动依赖
 > - v1.2: 安全改造（管理员分发账户、首次改密、重置密码）+ bcrypt 兼容性修复
 > - v1.1: 修改启动行为，关闭 CMD 窗口时自动停止所有子进程
+
+## v1.6 — 业务负责人改为文本、实施负责人扩展选择范围
+
+### 修改文件
+
+#### `backend/app/models/models.py` — 业务负责人字段改为文本
+
+- **修改位置**：`Project` 类、`User` 类
+- **修改内容**：
+  - `business_manager_id`（Integer FK）→ `business_manager_name`（String(100)，纯文本姓名）
+  - 移除 `Project.business_manager` relationship
+  - 移除 `User.business_projects` relationship
+
+#### `backend/app/schemas/schemas.py` — Schema 对应更新
+
+- **修改位置**：`ProjectBase`
+- **修改内容**：`business_manager_id: Optional[int]` → `business_manager_name: Optional[str]`
+
+#### `backend/app/routers/projects.py` — 项目路由更新
+
+- **修改内容**：
+  - `project_to_response` 中 `business_manager_name` 直接读取字段值而非关联用户
+  - 创建/更新项目使用 `business_manager_name` 字段
+  - 移除 `selectinload(Project.business_manager)` 查询加载
+
+#### `backend/app/routers/exports.py` — 导出更新
+
+- **修改内容**：Word 导出中业务负责人从 `project.business_manager.display_name` 改为 `project.business_manager_name`
+
+#### `backend/app/routers/backup.py` — 备份恢复更新
+
+- **修改内容**：备份列名和恢复逻辑从 `business_manager_id`（FK 校验）改为 `business_manager_name`（纯文本）
+
+#### `backend/app/routers/users.py` — 删除用户级联清理
+
+- **修改内容**：移除删除用户时清理 `business_manager_id` 的逻辑（已不再是 FK）
+
+#### `frontend/src/views/ProjectForm.vue` — 表单改造
+
+- **修改内容**：
+  - 业务负责人：从下拉选择框改为文本输入框（`<input>`）
+  - 实施负责人：从只加载经理用户改为加载所有用户（`usersApi.getAll()`）
+  - 表单字段 `business_manager_id` → `business_manager_name`
+
+---
+
+## v1.6 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `backend/app/models/models.py` |
+| **修改** | `backend/app/schemas/schemas.py` |
+| **修改** | `backend/app/routers/projects.py` |
+| **修改** | `backend/app/routers/exports.py` |
+| **修改** | `backend/app/routers/backup.py` |
+| **修改** | `backend/app/routers/users.py` |
+| **修改** | `frontend/src/views/ProjectForm.vue` |
+
+---
+
+## v1.6 测试方式
+
+- **删除旧数据库**（`backend/project_completion.db`），因数据库结构已变更
+- 启动项目，新建项目时确认：
+  - 业务负责人是文本输入框，可以填任意名字
+  - 实施负责人下拉框显示所有用户（包括员工），不再只有经理
+- 编辑已有项目，确认业务负责人名称正确回显
+- 导出 Word 完结单，确认业务负责人名称正确显示
+- 备份导出 JSON，确认包含 `business_manager_name` 字段
+- 备份恢复，确认 `business_manager_name` 正确恢复
+
+---
 
 ## v1.5.1 — 前端 DRY 重构 + 低优先级优化
 

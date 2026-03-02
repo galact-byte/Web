@@ -34,12 +34,12 @@
           </div>
           <div class="input-group"><label for="approval_date">审批完成时间</label><input id="approval_date" v-model="form.approval_date" type="date" class="input" /></div>
           <div class="input-group">
-            <label for="business_manager_id">业务负责人</label>
-            <select id="business_manager_id" v-model="form.business_manager_id" class="select"><option :value="null">请选择</option><option v-for="u in managers" :key="u.id" :value="u.id">{{ u.display_name }}</option></select>
+            <label for="business_manager_name">业务负责人</label>
+            <input id="business_manager_name" v-model="form.business_manager_name" class="input" placeholder="输入业务负责人姓名" />
           </div>
           <div class="input-group">
             <label for="implementation_manager_id">实施负责人</label>
-            <select id="implementation_manager_id" v-model="form.implementation_manager_id" class="select"><option :value="null">请选择</option><option v-for="u in managers" :key="u.id" :value="u.id">{{ u.display_name }}</option></select>
+            <select id="implementation_manager_id" v-model="form.implementation_manager_id" class="select"><option :value="null">请选择</option><option v-for="u in allUsers" :key="u.id" :value="u.id">{{ u.display_name }}</option></select>
           </div>
         </div>
       </section>
@@ -100,7 +100,7 @@ const userStore = useUserStore()
 const isEdit = computed(() => !!route.params.id)
 const loading = ref(false)
 const submitting = ref(false)
-const managers = ref([])
+const allUsers = ref([])
 
 const categories = [
   { value: '等保测评', label: '等保测评' }, { value: '密码评估', label: '密码评估' },
@@ -112,7 +112,7 @@ const categories = [
 const form = reactive({
   project_code: '', project_name: '', client_name: '', business_category: '等保测评',
   project_location: '', contract_status: '未签订', filing_status: '未备案',
-  business_manager_id: null, implementation_manager_id: null, approval_date: '', systems: []
+  business_manager_name: '', implementation_manager_id: null, approval_date: '', systems: []
 })
 
 function addSystem() {
@@ -146,8 +146,8 @@ async function handleSubmit() {
 async function fetchData() {
   loading.value = true
   try {
-    const managersRes = await usersApi.getManagers()
-    managers.value = managersRes.data
+    const usersRes = await usersApi.getAll()
+    allUsers.value = usersRes.data
     if (isEdit.value) {
       const res = await projectsApi.get(route.params.id)
       const p = res.data
@@ -155,7 +155,7 @@ async function fetchData() {
         project_code: p.project_code, project_name: p.project_name, client_name: p.client_name,
         business_category: p.business_category, project_location: p.project_location,
         contract_status: p.contract_status, filing_status: p.filing_status,
-        business_manager_id: p.business_manager_id, implementation_manager_id: p.implementation_manager_id,
+        business_manager_name: p.business_manager_name || '', implementation_manager_id: p.implementation_manager_id,
         approval_date: p.approval_date || '',
         systems: p.systems.map(s => ({ system_code: s.system_code, system_name: s.system_name, system_level: s.system_level, system_type: s.system_type }))
       })

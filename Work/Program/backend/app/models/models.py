@@ -36,7 +36,6 @@ class User(Base):
 
     # 关系
     created_projects = relationship("Project", back_populates="creator", foreign_keys="Project.creator_id")
-    business_projects = relationship("Project", back_populates="business_manager", foreign_keys="Project.business_manager_id")
     impl_projects = relationship("Project", back_populates="implementation_manager", foreign_keys="Project.implementation_manager_id")
     assignments = relationship("ProjectAssignment", back_populates="assignee")
 
@@ -58,7 +57,7 @@ class Project(Base):
     
     # 外键
     creator_id = Column(Integer, ForeignKey("users.id"))
-    business_manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    business_manager_name = Column(String(100), nullable=True)  # 业务负责人姓名（纯文本）
     implementation_manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -66,7 +65,6 @@ class Project(Base):
 
     # 关系
     creator = relationship("User", back_populates="created_projects", foreign_keys=[creator_id])
-    business_manager = relationship("User", back_populates="business_projects", foreign_keys=[business_manager_id])
     implementation_manager = relationship("User", back_populates="impl_projects", foreign_keys=[implementation_manager_id])
     systems = relationship("System", back_populates="project", cascade="all, delete-orphan")
     assignments = relationship("ProjectAssignment", back_populates="project", cascade="all, delete-orphan")

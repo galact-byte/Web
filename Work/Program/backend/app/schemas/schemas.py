@@ -79,7 +79,7 @@ class ProjectBase(BaseModel):
     contract_status: str = "未签订"
     filing_status: str = "未备案"
     approval_date: Optional[str] = None
-    business_manager_id: Optional[int] = None
+    business_manager_name: Optional[str] = None
     implementation_manager_id: Optional[int] = None
 
 

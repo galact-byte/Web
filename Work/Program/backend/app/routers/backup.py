@@ -56,7 +56,7 @@ async def export_backup(
         "id", "project_code", "project_name", "client_name",
         "business_category", "project_location", "contract_status",
         "filing_status", "approval_date", "status",
-        "creator_id", "business_manager_id", "implementation_manager_id",
+        "creator_id", "business_manager_name", "implementation_manager_id",
         "created_at"
     ]
     system_cols = [
@@ -211,9 +211,7 @@ async def import_backup(
             creator_id = p.get("creator_id")
             if creator_id and creator_id not in valid_user_ids:
                 creator_id = None
-            bm_id = p.get("business_manager_id")
-            if bm_id and bm_id not in valid_user_ids:
-                bm_id = None
+            bm_name = p.get("business_manager_name")
             im_id = p.get("implementation_manager_id")
             if im_id and im_id not in valid_user_ids:
                 im_id = None
@@ -230,7 +228,7 @@ async def import_backup(
                 approval_date=p.get("approval_date"),
                 status=ProjectStatus(p.get("status", "draft")),
                 creator_id=creator_id,
-                business_manager_id=bm_id,
+                business_manager_name=bm_name,
                 implementation_manager_id=im_id,
             )
             db.add(project)
