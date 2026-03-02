@@ -1,0 +1,131 @@
+﻿{% extends "base.html" %}
+{% block content %}
+<div class="panel" data-role-only="admin">
+  <h2>用户管理</h2>
+  <div class="row">
+    <div><label>用户名</label><input id="newUsername" /></div>
+    <div><label>初始密码</label><input id="newPassword" type="password" /></div>
+    <div>
+      <label>角色</label>
+      <select id="newRole">
+        <option value="evaluator">evaluator</option>
+        <option value="reviewer">reviewer</option>
+        <option value="admin">admin</option>
+      </select>
+    </div>
+    <div><label>首次改密</label><input id="newRequireChange" type="checkbox" checked /></div>
+    <div><label>&nbsp;</label><button class="btn-lite" onclick="createUser()">新增用户</button></div>
+  </div>
+  <br />
+  <button class="btn-lite" onclick="loadUsers()">刷新用户列表</button>
+  <table>
+    <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>启用</th><th>首次改密</th><th>最近登录</th><th>操作</th></tr></thead>
+    <tbody id="userTable"></tbody>
+  </table>
+  <div class="result" id="userResult">仅管理员可访问该页面。</div>
+</div>
+
+<script>
+function authHeaders() {
+  const token = localStorage.getItem('auth_token') || '';
+  return token ? {'X-Auth-Token': token} : {};
+}
+
+function resultText(data, fallback='操作失败') {
+  if (!data) return fallback;
+  if (typeof data.detail === 'string') return data.detail;
+  return data.message || fallback;
+}
+
+function setUserResult(text) {
+  document.getElementById('userResult').textContent = text;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => (
+    {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch
+  ));
+}
+
+function encodeUserArg(value) {
+  return encodeURIComponent(String(value ?? '')).replace(/'/g, '%27');
+}
+
+async function loadUsers() {
+  const res = await fetch('/api/auth/users', {headers: authHeaders()});
+  const data = await res.json();
+  if (!res.ok) {
+    setUserResult(`读取用户失败：${resultText(data, '仅管理员可查看用户列表')}`);
+    document.getElementById('userTable').innerHTML = '';
+    return;
+  }
+  setUserResult(`用户列表已刷新，共 ${data.total || 0} 人。`);
+  document.getElementById('userTable').innerHTML = (data.items || []).map(u => {
+    const encodedUsername = encodeUserArg(u.username || '');
+    return `
+    <tr>
+      <td>${u.id}</td>
+      <td>${escapeHtml(u.username)}</td>
+      <td>${escapeHtml(u.role)}</td>
+      <td>${u.enabled ? '是' : '否'}</td>
+      <td>${u.must_change_password ? '是' : '否'}</td>
+      <td>${escapeHtml(u.last_login_at || '')}</td>
+      <td>
+        <button class="btn-lite" onclick="toggleUser(${u.id}, ${!u.enabled})">${u.enabled ? '停用' : '启用'}</button>
+        <button class="btn-lite" onclick="resetPassword(${u.id}, '${encodedUsername}')">重置密码</button>
+      </td>
+    </tr>
+  `;
+  }).join('');
+}
+
+async function createUser() {
+  const payload = {
+    username: document.getElementById('newUsername').value.trim(),
+    password: document.getElementById('newPassword').value,
+    role: document.getElementById('newRole').value,
+    require_password_change: document.getElementById('newRequireChange').checked
+  };
+  if (!payload.username || !payload.password) {
+    setUserResult('用户名和初始密码不能为空。');
+    return;
+  }
+  const res = await fetch('/api/auth/users', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', ...authHeaders()},
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  setUserResult(res.ok ? (data.message || '新增用户成功') : `新增失败：${resultText(data)}`);
+  if (res.ok) loadUsers();
+}
+
+async function toggleUser(id, enabled) {
+  const res = await fetch(`/api/auth/users/${id}/toggle?enabled=${enabled}`, {method: 'POST', headers: authHeaders()});
+  const data = await res.json();
+  setUserResult(res.ok ? '用户状态已更新。' : `更新失败：${resultText(data)}`);
+  if (res.ok) loadUsers();
+}
+
+async function resetPassword(id, usernameEncoded) {
+  const username = decodeURIComponent(usernameEncoded || '');
+  const newPassword = prompt(`请输入 ${username} 的新密码（至少8位）`, '');
+  if (newPassword === null) return;
+  const pwd = (newPassword || '').trim();
+  if (pwd.length < 8) {
+    setUserResult('重置密码至少8位。');
+    return;
+  }
+  const res = await fetch(`/api/auth/users/${id}/reset-password`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', ...authHeaders()},
+    body: JSON.stringify({new_password: pwd})
+  });
+  const data = await res.json();
+  setUserResult(res.ok ? (data.message || '密码已重置。') : `重置失败：${resultText(data)}`);
+  if (res.ok) loadUsers();
+}
+
+loadUsers();
+</script>
+{% endblock %}

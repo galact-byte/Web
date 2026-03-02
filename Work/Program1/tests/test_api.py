@@ -4,6 +4,7 @@ import io
 import json
 import os
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 from docx import Document
@@ -1118,6 +1119,371 @@ class ApiFlowTests(unittest.TestCase):
         finally:
             db.close()
         self.assertNotEqual(code1, code2)
+
+    def test_20_restore_deleted_system_requires_alive_org(self):
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '恢复校验单位',
+                'credit_code': '91350100M000100Y60',
+                'legal_representative': '丁',
+                'address': '恢复城',
+                'mobile_phone': '13100131006',
+                'email': 'restore60@example.com',
+                'industry': '政务',
+                'organization_type': '机关单位',
+                'filing_region': '恢复城',
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(org_resp.status_code, 200)
+        org_id = org_resp.json()['data']['id']
+
+        sys_resp = self.client.post(
+            '/api/systems',
+            json={'organization_id': org_id, 'system_name': '恢复校验系统', 'proposed_level': 2, 'created_by': 'tester'},
+        )
+        self.assertEqual(sys_resp.status_code, 200)
+        system_id = sys_resp.json()['data']['id']
+
+        delete_sys_resp = self.client.delete(f'/api/systems/{system_id}?actor=tester')
+        self.assertEqual(delete_sys_resp.status_code, 200)
+
+        delete_org_resp = self.client.delete(f'/api/organizations/{org_id}?actor=tester')
+        self.assertEqual(delete_org_resp.status_code, 200)
+
+        restore_sys_resp = self.client.post(f'/api/systems/{system_id}/restore?actor=tester')
+        self.assertEqual(restore_sys_resp.status_code, 400)
+        self.assertIn('先恢复单位', str(restore_sys_resp.json().get('detail', '')))
+
+    def test_21_system_excel_import_accepts_datetime_cell(self):
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': 'Excel日期单位',
+                'credit_code': '91350100M000100Y61',
+                'legal_representative': '戊',
+                'address': 'Excel城',
+                'mobile_phone': '13100131007',
+                'email': 'excel61@example.com',
+                'industry': '教育',
+                'organization_type': '事业单位',
+                'filing_region': 'Excel城',
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(org_resp.status_code, 200)
+        org_id = org_resp.json()['data']['id']
+
+        wb = Workbook()
+        ws = wb.active
+        ws.append(['系统名称', '系统编号', '单位ID', '拟定等级', '部署方式', '系统类型', '上线时间', '录入人'])
+        ws.append(['Excel日期系统', '', org_id, 3, '混合部署', '管理系统', datetime(2025, 1, 1, 0, 0, 0), 'tester'])
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+
+        resp = self.client.post(
+            '/api/systems/import/excel?actor=tester',
+            files={'file': ('systems_datetime.xlsx', bio.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['imported'], 1)
+        self.assertEqual(len(resp.json()['skipped']), 0)
+
+        list_resp = self.client.get('/api/systems?system_name=Excel日期系统')
+        self.assertEqual(list_resp.status_code, 200)
+        self.assertTrue(
+            any((item.get('go_live_date') or '').startswith('2025-01-01') for item in list_resp.json().get('items', []))
+        )
+
+    def test_22_system_import_validates_proposed_level_range(self):
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '等级校验单位',
+                'credit_code': '91350100M000100Y62',
+                'legal_representative': '己',
+                'address': '等级城',
+                'mobile_phone': '13100131008',
+                'email': 'level62@example.com',
+                'industry': '医疗',
+                'organization_type': '企业',
+                'filing_region': '等级城',
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(org_resp.status_code, 200)
+        org_id = org_resp.json()['data']['id']
+
+        wb = Workbook()
+        ws = wb.active
+        ws.append(['系统名称', '系统编号', '单位ID', '拟定等级', '部署方式', '系统类型', '上线时间', '录入人'])
+        ws.append(['非法等级系统', '', org_id, 10, '混合部署', '业务系统', '', 'tester'])
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+
+        excel_resp = self.client.post(
+            '/api/systems/import/excel?actor=tester',
+            files={'file': ('systems_invalid_level.xlsx', bio.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+        )
+        self.assertEqual(excel_resp.status_code, 200)
+        self.assertEqual(excel_resp.json()['imported'], 0)
+        self.assertTrue(any('1-5级范围' in msg for msg in excel_resp.json()['skipped']))
+
+        doc = Document()
+        doc.add_paragraph('系统名称: Word非法等级系统')
+        doc.add_paragraph(f'单位ID: {org_id}')
+        doc.add_paragraph('拟定等级: 10级')
+        bio_doc = io.BytesIO()
+        doc.save(bio_doc)
+        bio_doc.seek(0)
+        word_resp = self.client.post(
+            '/api/systems/import/word?actor=tester',
+            files={'file': ('sys_invalid_level.docx', bio_doc.getvalue(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
+        )
+        self.assertEqual(word_resp.status_code, 400)
+        self.assertIn('1-5级范围', str(word_resp.json().get('detail', '')))
+
+    def test_23_knowledge_download_returns_404_when_file_missing(self):
+        upload_resp = self.client.post(
+            '/api/knowledge/upload',
+            data={'title': '缺失文件下载校验', 'doc_type': '政策文件', 'actor': 'admin'},
+            files={'file': ('missing.docx', b'missing-content', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(upload_resp.status_code, 200)
+        doc_id = upload_resp.json()['data']['id']
+
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            row = db.query(self.__class__.main_module.KnowledgeDocument).filter_by(id=doc_id).first()
+            self.assertIsNotNone(row)
+            row.file_path = f"{row.file_path}.missing"
+            db.commit()
+        finally:
+            db.close()
+
+        download_resp = self.client.get(f'/api/knowledge/{doc_id}/download', headers=self.admin_headers)
+        self.assertEqual(download_resp.status_code, 404)
+        self.assertIn('文件不存在', str(download_resp.json().get('detail', '')))
+
+    def test_24_workflow_reminders_reuse_rule_map(self):
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '提醒性能单位',
+                'credit_code': '91350100M000100Y63',
+                'legal_representative': '庚',
+                'address': '提醒城',
+                'mobile_phone': '13100131009',
+                'email': 'wf63@example.com',
+                'industry': '能源',
+                'organization_type': '企业',
+                'filing_region': '提醒城',
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(org_resp.status_code, 200)
+        org_id = org_resp.json()['data']['id']
+
+        for idx in range(2):
+            sys_resp = self.client.post(
+                '/api/systems',
+                json={
+                    'organization_id': org_id,
+                    'system_name': f'提醒性能系统{idx}',
+                    'proposed_level': 2,
+                    'created_by': 'tester',
+                },
+            )
+            self.assertEqual(sys_resp.status_code, 200)
+
+        original_func = self.__class__.main_module.get_or_create_workflow_step_rules
+        call_count = {'value': 0}
+
+        def wrapped(db, config):
+            call_count['value'] += 1
+            return original_func(db, config)
+
+        self.__class__.main_module.get_or_create_workflow_step_rules = wrapped
+        try:
+            resp = self.client.get('/api/workflow/reminders?mode=all')
+        finally:
+            self.__class__.main_module.get_or_create_workflow_step_rules = original_func
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(call_count['value'], 1)
+
+    def test_25_template_download_returns_404_when_file_missing(self):
+        upload_resp = self.client.post(
+            '/api/templates/upload',
+            data={
+                'template_name': '缺失模板下载校验',
+                'report_type': 'grading_report',
+                'category': '测试',
+                'city': '测试城',
+                'protection_level': '2',
+                'is_default': 'false',
+                'config_json': '{}',
+            },
+            files={'file': ('missing_template.docx', b'template-content', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(upload_resp.status_code, 200)
+        tpl_id = upload_resp.json()['data']['id']
+
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            row = db.query(self.__class__.main_module.ReportTemplate).filter_by(id=tpl_id).first()
+            self.assertIsNotNone(row)
+            row.file_path = f"{row.file_path}.missing"
+            db.commit()
+        finally:
+            db.close()
+
+        download_resp = self.client.get(f'/api/templates/{tpl_id}/download')
+        self.assertEqual(download_resp.status_code, 404)
+        self.assertIn('模板文件不存在', str(download_resp.json().get('detail', '')))
+
+    def test_26_attachment_file_endpoints_return_404_when_file_missing(self):
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '附件缺失校验单位',
+                'credit_code': '91350100M000100Y64',
+                'legal_representative': '辛',
+                'address': '附件城',
+                'mobile_phone': '13100131010',
+                'email': 'att64@example.com',
+                'industry': '教育',
+                'organization_type': '事业单位',
+                'filing_region': '附件城',
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(org_resp.status_code, 200)
+        org_id = org_resp.json()['data']['id']
+
+        upload_resp = self.client.post(
+            f'/api/attachments/organization/{org_id}?actor=tester',
+            files={'file': ('attach.pdf', b'%PDF-1.4 attachment-content', 'application/pdf')},
+        )
+        self.assertEqual(upload_resp.status_code, 200)
+        attachment_id = upload_resp.json()['data']['id']
+
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            row = db.query(self.__class__.main_module.Attachment).filter_by(id=attachment_id).first()
+            self.assertIsNotNone(row)
+            row.file_path = f"{row.file_path}.missing"
+            db.commit()
+        finally:
+            db.close()
+
+        preview_resp = self.client.get(f'/api/attachment-files/{attachment_id}/preview')
+        self.assertEqual(preview_resp.status_code, 404)
+        self.assertIn('附件文件不存在', str(preview_resp.json().get('detail', '')))
+
+        download_resp = self.client.get(f'/api/attachment-files/{attachment_id}/download')
+        self.assertEqual(download_resp.status_code, 404)
+        self.assertIn('附件文件不存在', str(download_resp.json().get('detail', '')))
+
+    def test_27_update_workflow_rules_invalid_time_limit_returns_400(self):
+        bad_rule_payload = {
+            'updated_by': 'admin',
+            'rules': [
+                {'step_name': '信息收集', 'owner': 'collector', 'time_limit_hours': 'abc', 'enabled': True},
+            ],
+        }
+        resp = self.client.put('/api/workflow/rules', json=bad_rule_payload, headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('time_limit_hours', str(resp.json().get('detail', '')))
+
+    def test_28_knowledge_list_pagination_and_pinned_order(self):
+        keyword = '分页置顶专用关键字_001'
+        doc_ids: list[int] = []
+        for idx in range(3):
+            upload_resp = self.client.post(
+                '/api/knowledge/upload',
+                data={
+                    'title': f'分页置顶文档{idx}',
+                    'doc_type': '政策文件',
+                    'actor': 'admin',
+                    'keywords': keyword,
+                },
+                files={'file': (f'page_pin_{idx}.docx', f'content-{idx}'.encode('utf-8'), 'application/octet-stream')},
+                headers=self.admin_headers,
+            )
+            self.assertEqual(upload_resp.status_code, 200)
+            doc_ids.append(upload_resp.json()['data']['id'])
+
+        pin_resp = self.client.post(f'/api/knowledge/{doc_ids[-1]}/pin?enabled=true&actor=admin', headers=self.admin_headers)
+        self.assertEqual(pin_resp.status_code, 200)
+
+        list_resp = self.client.get('/api/knowledge', params={'keyword': keyword, 'match_mode': 'exact', 'page': 1, 'page_size': 2})
+        self.assertEqual(list_resp.status_code, 200)
+        data = list_resp.json()
+        self.assertEqual(data['total'], 3)
+        self.assertEqual(len(data['items']), 2)
+        self.assertTrue(data['items'][0]['pinned'])
+        self.assertEqual(data['items'][0]['id'], doc_ids[-1])
+
+    def test_29_knowledge_list_without_pagination_returns_all_for_compatibility(self):
+        keyword = f"兼容全量关键字_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            for idx in range(55):
+                db.add(
+                    self.__class__.main_module.KnowledgeDocument(
+                        title=f'兼容全量文档{idx}',
+                        keywords=keyword,
+                        city='兼容城',
+                        district='兼容区',
+                        doc_type='政策文件',
+                        protection_level='2',
+                        version_no=1,
+                        status='enabled',
+                        file_name=f'compat_{idx}.docx',
+                        file_path=f'/tmp/compat_{idx}.docx',
+                        file_size=10,
+                        uploaded_by='tester',
+                    )
+                )
+            db.commit()
+        finally:
+            db.close()
+
+        list_resp = self.client.get('/api/knowledge', params={'keyword': keyword, 'match_mode': 'exact'})
+        self.assertEqual(list_resp.status_code, 200)
+        data = list_resp.json()
+        self.assertEqual(data['total'], 55)
+        self.assertEqual(len(data['items']), 55)
+
+    def test_30_login_page_is_accessible(self):
+        resp = self.client.get('/login')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('账号登录', resp.text)
+        self.assertIn('管理员统一创建和分发', resp.text)
+        self.assertIn('默认管理员账号：admin / admin123', resp.text)
+
+    def test_31_register_then_login_success(self):
+        register_resp = self.client.post(
+            '/api/auth/register',
+            json={
+                'username': 'self_register_user',
+                'password': 'register123',
+                'confirm_password': 'register123',
+            },
+        )
+        self.assertEqual(register_resp.status_code, 403)
+        self.assertIn('未开放自助注册', str(register_resp.json().get('detail', '')))
+
+    def test_32_admin_can_open_users_page(self):
+        resp = self.client.get('/users', headers=self.admin_headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('用户管理', resp.text)
 
 
 if __name__ == '__main__':
