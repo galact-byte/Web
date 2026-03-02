@@ -12,6 +12,7 @@ import sqlite3
 import threading
 import uuid
 import zipfile
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -1182,11 +1183,6 @@ def find_latest_docx_by_pattern(pattern: str) -> Path | None:
 
 
 def parse_docx_key_values(content: bytes) -> dict[str, str]:
-    try:
-        doc = Document(io.BytesIO(content))
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="Word文件无法解析，请确认使用 .docx 且文件未损坏。") from exc
-
     result: dict[str, str] = {}
 
     def parse_line(text_line: str) -> None:
@@ -1199,18 +1195,122 @@ def parse_docx_key_values(content: bytes) -> dict[str, str]:
         key, value = text.split(delimiter, 1)
         k = key.strip()
         v = value.strip()
-        if k:
+        if k and v:
             result[k] = v
 
-    for para in doc.paragraphs:
-        parse_line(para.text)
+    def parse_table_pair(key_text: str, value_text: str) -> None:
+        k = (key_text or "").strip()
+        v = (value_text or "").strip()
+        if not k or not v:
+            return
+        if "：" in k or ":" in k:
+            return
+        if len(v) <= 10 and normalize_word_field_key(v) in {"姓名", "办公电话", "移动电话", "电子邮件", "电子邮箱", "职务/职称", "职务职称"}:
+            return
+        result[k] = v
 
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                lines = [line.strip() for line in (cell.text or "").splitlines() if line.strip()]
-                for line in lines:
-                    parse_line(line)
+    def dedup_texts(values: list[str]) -> list[str]:
+        compact: list[str] = []
+        for raw in values:
+            text = (raw or "").replace("\u3000", " ").strip()
+            if not text:
+                continue
+            if not compact or compact[-1] != text:
+                compact.append(text)
+        return compact
+
+    def is_cell_label(text: str) -> bool:
+        normalized = normalize_word_field_key(text)
+        if not normalized:
+            return False
+        return normalized in {
+            "姓名",
+            "办公电话",
+            "移动电话",
+            "电子邮件",
+            "电子邮箱",
+            "职务/职称",
+            "职务职称",
+            "行政区划代码",
+        }
+
+    def parse_with_python_docx() -> bool:
+        doc = Document(io.BytesIO(content))
+        for para in doc.paragraphs:
+            parse_line(para.text)
+        for table in doc.tables:
+            for row in table.rows:
+                cells = row.cells
+                row_values = dedup_texts([cell.text for cell in cells])
+                if len(row_values) >= 2:
+                    parse_table_pair(row_values[0], row_values[1])
+                    lead = row_values[0]
+                    idx = 1
+                    while idx + 1 < len(row_values):
+                        if is_cell_label(row_values[idx]):
+                            parse_table_pair(f"{lead}{row_values[idx]}", row_values[idx + 1])
+                            idx += 2
+                            continue
+                        idx += 1
+                for cell in cells:
+                    lines = [line.strip() for line in (cell.text or "").splitlines() if line.strip()]
+                    for line in lines:
+                        parse_line(line)
+        return True
+
+    def parse_with_raw_xml_fallback() -> bool:
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(content), mode="r")
+        except zipfile.BadZipFile:
+            return False
+        with zf:
+            if "word/document.xml" not in zf.namelist():
+                return False
+            try:
+                root = ET.fromstring(zf.read("word/document.xml"))
+            except Exception:
+                return False
+        ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        tag_p = ns + "p"
+        tag_tbl = ns + "tbl"
+        tag_tr = ns + "tr"
+        tag_tc = ns + "tc"
+        tag_t = ns + "t"
+        tag_body = ns + "body"
+        body = root.find(tag_body)
+        if body is None:
+            return False
+
+        def node_text(node: ET.Element) -> str:
+            return "".join((t.text or "") for t in node.iter(tag_t)).strip()
+
+        for child in list(body):
+            if child.tag == tag_p:
+                parse_line(node_text(child))
+            elif child.tag == tag_tbl:
+                for tr in child.findall(".//" + tag_tr):
+                    cells = tr.findall(tag_tc)
+                    row_values = dedup_texts([node_text(tc) for tc in cells])
+                    if len(row_values) >= 2:
+                        parse_table_pair(row_values[0], row_values[1])
+                        lead = row_values[0]
+                        idx = 1
+                        while idx + 1 < len(row_values):
+                            if is_cell_label(row_values[idx]):
+                                parse_table_pair(f"{lead}{row_values[idx]}", row_values[idx + 1])
+                                idx += 2
+                                continue
+                            idx += 1
+                    for tc in cells:
+                        for p in tc.findall(".//" + tag_p):
+                            parse_line(node_text(p))
+        return True
+
+    try:
+        parse_with_python_docx()
+    except Exception:
+        if not parse_with_raw_xml_fallback():
+            raise HTTPException(status_code=400, detail="Word文件无法解析，请确认使用 .docx 且文件未损坏。")
     return result
 
 
@@ -1219,6 +1319,21 @@ def normalize_word_field_key(raw_key: str) -> str:
     key = re.sub(r"[（(].*?[）)]", "", key)
     key = key.replace(" ", "").replace("\u3000", "")
     return key.strip()
+
+
+def infer_filing_region_from_address(address_text: str | None) -> str | None:
+    text = (address_text or "").strip()
+    if not text:
+        return None
+    text = text.replace("\n", " ")
+    m = re.search(r"([\u4e00-\u9fa5]{2,20})\s*地\(区、市、州、盟\)", text)
+    if m:
+        return m.group(1)
+    for ptn in [r"([\u4e00-\u9fa5]{2,20})市", r"([\u4e00-\u9fa5]{2,20})州", r"([\u4e00-\u9fa5]{2,20})盟", r"([\u4e00-\u9fa5]{2,20})地区"]:
+        m = re.search(ptn, text)
+        if m:
+            return m.group(1)
+    return None
 
 
 def to_bool_text(value: str | None) -> bool:
@@ -1356,10 +1471,13 @@ def log_knowledge_version(db: Session, doc: KnowledgeDocument, action: str, chan
 ORG_WORD_MAP = {
     "单位名称": "name",
     "单位全称": "name",
+    "备案单位": "name",
     "统一社会信用代码": "credit_code",
     "社会信用代码": "credit_code",
     "统一社会代码": "credit_code",
+    "单位统一社会信用代码": "credit_code",
     "单位负责人": "legal_representative",
+    "单位负责人姓名": "legal_representative",
     "单位主要负责人": "legal_representative",
     "主要负责人": "legal_representative",
     "负责人": "legal_representative",
@@ -1369,13 +1487,19 @@ ORG_WORD_MAP = {
     "办公电话": "office_phone",
     "联系电话": "office_phone",
     "固定电话": "office_phone",
+    "单位负责人办公电话": "office_phone",
+    "网络安全责任部门联系人办公电话": "office_phone",
     "移动电话": "mobile_phone",
     "手机号": "mobile_phone",
     "手机号码": "mobile_phone",
     "联系电话手机": "mobile_phone",
+    "单位负责人移动电话": "mobile_phone",
+    "网络安全责任部门联系人移动电话": "mobile_phone",
     "邮箱": "email",
     "电子邮箱": "email",
     "电子邮件": "email",
+    "单位负责人电子邮件": "email",
+    "网络安全责任部门联系人电子邮件": "email",
     "所属行业": "industry",
     "行业类别": "industry",
     "单位类型": "organization_type",
@@ -2770,6 +2894,18 @@ async def import_organization_word(
     content = await file.read()
     kv = parse_docx_key_values(content)
     raw: dict[str, Any] = {}
+
+    def value_quality(text: str) -> int:
+        value = (text or "").strip()
+        if not value:
+            return 0
+        if value in {"/", "／"}:
+            return 1
+        norm = normalize_word_field_key(value)
+        if norm in {"姓名", "办公电话", "移动电话", "电子邮件", "电子邮箱", "职务/职称", "职务职称"}:
+            return 1
+        return 2
+
     for raw_key, raw_value in kv.items():
         norm_key = normalize_word_field_key(raw_key)
         model_key = ORG_WORD_MAP.get(norm_key)
@@ -2780,11 +2916,21 @@ async def import_organization_word(
         value_text = str(raw_value).strip()
         if not value_text:
             continue
+        current = str(raw.get(model_key) or "").strip()
+        if value_quality(value_text) < value_quality(current):
+            continue
         raw[model_key] = value_text
+
+    if not str(raw.get("filing_region") or "").strip():
+        inferred_region = infer_filing_region_from_address(str(raw.get("address") or ""))
+        if inferred_region:
+            raw["filing_region"] = inferred_region
     if "involves_state_secret" in raw:
         raw["involves_state_secret"] = to_bool_text(str(raw["involves_state_secret"]))
     if "is_cii" in raw:
         raw["is_cii"] = to_bool_text(str(raw["is_cii"]))
+    if str(raw.get("office_phone") or "").strip() in {"/", "／", "-", "无", "暂无"}:
+        raw["office_phone"] = None
     raw["created_by"] = actor
     required = ["name", "credit_code", "legal_representative", "address", "mobile_phone", "email", "industry", "organization_type", "filing_region"]
     missing = [k for k in required if not raw.get(k)]
