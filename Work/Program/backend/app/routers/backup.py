@@ -5,9 +5,11 @@ import io
 import json
 import shutil
 import os
+import logging
 from datetime import datetime, date, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse, FileResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db, DATABASE_URL
@@ -15,6 +17,10 @@ from app.models import User, Project, System, ProjectAssignment, UserRole, Proje
 from app.services.auth import get_current_manager, hash_password
 
 router = APIRouter(prefix="/api/backup", tags=["备份恢复"])
+logger = logging.getLogger(__name__)
+
+# 序列重置白名单
+_ALLOWED_TABLES = ("users", "projects", "systems", "project_assignments")
 
 
 def _serialize_value(v):
@@ -122,7 +128,8 @@ async def download_db(
         # 清理失败的备份文件
         if os.path.exists(backup_path):
             os.remove(backup_path)
-        raise HTTPException(status_code=500, detail=f"备份失败: {str(e)}")
+        logger.error(f"数据库备份失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="备份失败，请联系管理员")
 
 
 def _cleanup_file(path: str):
@@ -142,8 +149,10 @@ async def import_backup(
     警告：此操作会清空现有数据并用备份数据替换！
     """
     # 验证文件类型
-    if not file.filename.endswith(".json"):
+    if not file.filename or not file.filename.endswith(".json"):
         raise HTTPException(status_code=400, detail="仅支持 .json 格式的备份文件")
+    if file.content_type and file.content_type not in ("application/json", "text/plain", "application/octet-stream"):
+        raise HTTPException(status_code=400, detail="文件类型不正确，仅支持 JSON 文件")
 
     # 限制文件大小（50MB）
     MAX_SIZE = 50 * 1024 * 1024
@@ -181,23 +190,34 @@ async def import_backup(
         db.query(User).delete()
         db.flush()
 
-        # 恢复用户（备份不含密码哈希，恢复后所有用户需重新设置密码）
+        # 恢复用户（安全：始终重置密码，强制改密，不信任备份中的 password_hash）
         default_hash = hash_password("123456")
         for u in tables["users"]:
             user = User(
                 id=u["id"],
                 username=u["username"],
-                password_hash=u.get("password_hash", default_hash),
+                password_hash=default_hash,
                 display_name=u["display_name"],
                 role=UserRole(u["role"]),
                 department=u.get("department", ""),
-                must_change_password=True if "password_hash" not in u else u.get("must_change_password", False),
+                must_change_password=True,
             )
             db.add(user)
         db.flush()
 
-        # 恢复项目
+        # 恢复项目（验证 creator_id 有效性）
+        valid_user_ids = {u["id"] for u in tables["users"]}
         for p in tables["projects"]:
+            creator_id = p.get("creator_id")
+            if creator_id and creator_id not in valid_user_ids:
+                creator_id = None
+            bm_id = p.get("business_manager_id")
+            if bm_id and bm_id not in valid_user_ids:
+                bm_id = None
+            im_id = p.get("implementation_manager_id")
+            if im_id and im_id not in valid_user_ids:
+                im_id = None
+
             project = Project(
                 id=p["id"],
                 project_code=p["project_code"],
@@ -209,15 +229,18 @@ async def import_backup(
                 filing_status=p.get("filing_status", "未备案"),
                 approval_date=p.get("approval_date"),
                 status=ProjectStatus(p.get("status", "draft")),
-                creator_id=p.get("creator_id"),
-                business_manager_id=p.get("business_manager_id"),
-                implementation_manager_id=p.get("implementation_manager_id"),
+                creator_id=creator_id,
+                business_manager_id=bm_id,
+                implementation_manager_id=im_id,
             )
             db.add(project)
         db.flush()
 
         # 恢复系统
+        valid_project_ids = {p["id"] for p in tables["projects"]}
         for s in tables["systems"]:
+            if s["project_id"] not in valid_project_ids:
+                continue
             system = System(
                 id=s["id"],
                 project_id=s["project_id"],
@@ -231,6 +254,10 @@ async def import_backup(
 
         # 恢复分配
         for a in tables["project_assignments"]:
+            if a["project_id"] not in valid_project_ids:
+                continue
+            if a["assignee_id"] not in valid_user_ids:
+                continue
             assignment = ProjectAssignment(
                 id=a["id"],
                 project_id=a["project_id"],
@@ -243,47 +270,17 @@ async def import_backup(
         db.commit()
 
         # 重置自增序列，防止后续插入主键冲突
-        if DATABASE_URL.startswith("sqlite"):
-            # SQLite: 更新 sqlite_sequence 表
-            for table_name, records in [
-                ("users", tables["users"]),
-                ("projects", tables["projects"]),
-                ("systems", tables["systems"]),
-                ("project_assignments", tables["project_assignments"]),
-            ]:
-                if records:
-                    max_id = max(r["id"] for r in records)
-                    db.execute(
-                        __import__('sqlalchemy').text(
-                            "INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES (:name, :seq)"
-                        ),
-                        {"name": table_name, "seq": max_id}
-                    )
-            db.commit()
-        else:
-            # PostgreSQL: 重置 sequence
-            for table_name, records in [
-                ("users", tables["users"]),
-                ("projects", tables["projects"]),
-                ("systems", tables["systems"]),
-                ("project_assignments", tables["project_assignments"]),
-            ]:
-                if records:
-                    max_id = max(r["id"] for r in records)
-                    db.execute(
-                        __import__('sqlalchemy').text(
-                            f"SELECT setval(pg_get_serial_sequence('{table_name}', 'id'), :max_id)"
-                        ),
-                        {"max_id": max_id}
-                    )
-            db.commit()
+        _reset_sequences(db, tables)
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"恢复失败: {str(e)}")
+        logger.error(f"数据库恢复失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="数据恢复失败，请联系管理员")
 
     return {
-        "message": "数据恢复成功",
+        "message": "数据恢复成功（所有用户密码已重置为 123456，请通知用户修改）",
         "stats": {
             "users": len(tables["users"]),
             "projects": len(tables["projects"]),
@@ -291,3 +288,37 @@ async def import_backup(
             "assignments": len(tables["project_assignments"]),
         }
     }
+
+
+def _reset_sequences(db: Session, tables: dict):
+    """重置自增序列"""
+    table_records = [
+        ("users", tables["users"]),
+        ("projects", tables["projects"]),
+        ("systems", tables["systems"]),
+        ("project_assignments", tables["project_assignments"]),
+    ]
+
+    if DATABASE_URL.startswith("sqlite"):
+        for table_name, records in table_records:
+            if table_name not in _ALLOWED_TABLES:
+                continue
+            if records:
+                max_id = max(r["id"] for r in records)
+                db.execute(
+                    text("INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES (:name, :seq)"),
+                    {"name": table_name, "seq": max_id}
+                )
+        db.commit()
+    else:
+        # PostgreSQL: 使用参数化查询重置 sequence
+        for table_name, records in table_records:
+            if table_name not in _ALLOWED_TABLES:
+                continue
+            if records:
+                max_id = max(r["id"] for r in records)
+                db.execute(
+                    text(f"SELECT setval(pg_get_serial_sequence(:tname, 'id'), :max_id)"),
+                    {"tname": table_name, "max_id": max_id}
+                )
+        db.commit()

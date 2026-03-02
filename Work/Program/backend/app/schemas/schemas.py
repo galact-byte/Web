@@ -1,21 +1,21 @@
 """
 Pydantic 数据模式
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
 
 # ============ 用户 ============
 class UserBase(BaseModel):
-    username: str
-    display_name: str
+    username: str = Field(..., min_length=3, max_length=50)
+    display_name: str = Field(..., min_length=1, max_length=100)
     role: str = "employee"
     department: Optional[str] = None
 
 
 class UserCreate(UserBase):
-    password: str
+    password: str = Field(..., min_length=6)
 
 
 class UserUpdate(BaseModel):
@@ -40,7 +40,7 @@ class LoginRequest(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    new_password: str
+    new_password: str = Field(..., min_length=6)
     old_password: Optional[str] = None  # 首次改密可不填，主动改密必填
 
 
@@ -53,7 +53,7 @@ class TokenResponse(BaseModel):
 # ============ 系统 ============
 class SystemBase(BaseModel):
     system_code: Optional[str] = None
-    system_name: str
+    system_name: str = Field(..., min_length=1)
     system_level: str = "第二级"
     system_type: str = "传统系统"
 
@@ -71,8 +71,8 @@ class SystemResponse(SystemBase):
 
 # ============ 项目 ============
 class ProjectBase(BaseModel):
-    project_code: str
-    project_name: str
+    project_code: str = Field(..., min_length=1)
+    project_name: str = Field(..., min_length=1)
     client_name: Optional[str] = None
     business_category: str = "等保测评"
     project_location: Optional[str] = None
@@ -118,7 +118,7 @@ class ProjectListResponse(ProjectBase):
 
 # ============ 分配 ============
 class AssignRequest(BaseModel):
-    assignee_ids: List[int]
+    assignee_ids: List[int] = Field(..., min_length=1)
 
 
 class ContributionUpdate(BaseModel):
@@ -141,7 +141,7 @@ class AssignmentResponse(BaseModel):
 
 # ============ 导出 ============
 class ExcelExportRequest(BaseModel):
-    project_ids: List[int]
+    project_ids: List[int] = Field(..., min_length=1)
     year: int
-    quarter: int
+    quarter: int = Field(..., ge=1, le=4)
     department: str = "软测部"

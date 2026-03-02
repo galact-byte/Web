@@ -34,6 +34,16 @@ def _check_rate_limit(client_ip: str):
         )
 
 
+def _record_failed_attempt(client_ip: str):
+    """记录一次失败登录"""
+    _login_attempts[client_ip].append(time())
+
+
+def _clear_attempts(client_ip: str):
+    """登录成功后清除该 IP 的失败记录"""
+    _login_attempts.pop(client_ip, None)
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
     """用户登录"""
@@ -43,14 +53,17 @@ async def login(request: LoginRequest, req: Request, db: Session = Depends(get_d
     user = db.query(User).filter(User.username == request.username).first()
 
     if not user or not verify_password(request.password, user.password_hash):
-        _login_attempts[client_ip].append(time())
+        _record_failed_attempt(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误"
         )
-    
+
+    # 登录成功，清除失败记录
+    _clear_attempts(client_ip)
+
     token = create_access_token({"sub": str(user.id)})
-    
+
     return TokenResponse(
         access_token=token,
         user=UserResponse(
@@ -72,12 +85,6 @@ async def change_password(
     db: Session = Depends(get_db)
 ):
     """修改当前用户密码（首次登录或主动修改）"""
-    if len(request.new_password) < 6:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="密码长度不能少于6位"
-        )
-
     # 非首次改密时，必须验证旧密码
     if not current_user.must_change_password:
         if not request.old_password:
@@ -90,6 +97,13 @@ async def change_password(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="当前密码错误"
             )
+
+    # 新密码不能与旧密码相同
+    if verify_password(request.new_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="新密码不能与当前密码相同"
+        )
 
     current_user.password_hash = hash_password(request.new_password)
     current_user.must_change_password = False

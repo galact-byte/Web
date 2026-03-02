@@ -5,11 +5,11 @@ import re
 from datetime import date
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, selectinload
 
 
 from app.database import get_db
-from app.models import User, Project, System, ProjectAssignment, ProjectStatus
+from app.models import User, Project, System, ProjectAssignment, ProjectStatus, UserRole
 from app.schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse,
     AssignRequest, ContributionUpdate, AssignmentResponse
@@ -64,10 +64,9 @@ async def get_workload_stats(
         end_date = f"{year}-{quarter * 3 + 1:02d}-01"
 
     # 查询该季度内有 approval_date 的项目的所有分配
-    # approval_date 为 String 类型，使用字符串范围比较（要求格式为 YYYY-MM-DD）
     assignments = db.query(ProjectAssignment).join(Project).options(
-        joinedload(ProjectAssignment.project),
-        joinedload(ProjectAssignment.assignee)
+        selectinload(ProjectAssignment.project),
+        selectinload(ProjectAssignment.assignee)
     ).filter(
         Project.approval_date.isnot(None),
         Project.approval_date != "",
@@ -143,30 +142,23 @@ async def get_projects(
     current_user: User = Depends(get_current_user)
 ):
     """获取项目列表"""
+    # 使用 selectinload 替代 joinedload，避免笛卡尔积
     query = db.query(Project).options(
-        joinedload(Project.systems),
-        joinedload(Project.assignments)
+        selectinload(Project.systems),
+        selectinload(Project.assignments)
     )
 
-    # 员工只能看到分配给自己的项目（用子查询避免 join+joinedload 产生重复）
+    # 员工只能看到分配给自己的项目（用子查询避免 join+selectinload 产生重复）
     if current_user.role.value == "employee":
         assigned_project_ids = db.query(ProjectAssignment.project_id).filter(
             ProjectAssignment.assignee_id == current_user.id
         ).subquery()
         query = query.filter(Project.id.in_(assigned_project_ids))
-    
+
     if status:
         query = query.filter(Project.status == ProjectStatus(status))
-    
-    projects = query.order_by(Project.created_at.desc()).all()
 
-    # joinedload 一对多可能产生重复行，去重
-    seen_ids = set()
-    unique_projects = []
-    for p in projects:
-        if p.id not in seen_ids:
-            seen_ids.add(p.id)
-            unique_projects.append(p)
+    projects = query.order_by(Project.created_at.desc()).all()
 
     return [
         ProjectListResponse(
@@ -185,7 +177,7 @@ async def get_projects(
             systems_count=len(p.systems),
             created_at=p.created_at
         )
-        for p in unique_projects
+        for p in projects
     ]
 
 
@@ -196,24 +188,24 @@ async def get_project(
     current_user: User = Depends(get_current_user)
 ):
     """获取项目详情"""
-    project = db.query(Project).options(
-        joinedload(Project.systems),
-        joinedload(Project.creator),
-        joinedload(Project.business_manager),
-        joinedload(Project.implementation_manager)
-    ).filter(Project.id == project_id).first()
-    
-    if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
-
-    # 员工只能查看分配给自己的项目
+    # 员工：合并存在性与权限检查，统一返回404，防止枚举项目ID
     if current_user.role.value == "employee":
         is_assigned = db.query(ProjectAssignment).filter(
             ProjectAssignment.project_id == project_id,
             ProjectAssignment.assignee_id == current_user.id
         ).first()
         if not is_assigned:
-            raise HTTPException(status_code=403, detail="无权查看此项目")
+            raise HTTPException(status_code=404, detail="项目不存在")
+
+    project = db.query(Project).options(
+        selectinload(Project.systems),
+        selectinload(Project.creator),
+        selectinload(Project.business_manager),
+        selectinload(Project.implementation_manager)
+    ).filter(Project.id == project_id).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
 
     return project_to_response(project, db)
 
@@ -229,7 +221,7 @@ async def create_project(
     existing = db.query(Project).filter(Project.project_code == request.project_code).first()
     if existing:
         raise HTTPException(status_code=400, detail="项目编号已存在")
-    
+
     project = Project(
         project_code=request.project_code,
         project_name=request.project_name,
@@ -246,7 +238,7 @@ async def create_project(
     )
     db.add(project)
     db.flush()
-    
+
     # 添加系统
     for sys_data in request.systems:
         system = System(
@@ -257,10 +249,10 @@ async def create_project(
             system_type=sys_data.system_type
         )
         db.add(system)
-    
+
     db.commit()
     db.refresh(project)
-    
+
     return project_to_response(project, db)
 
 
@@ -296,8 +288,11 @@ async def update_project(
     project.approval_date = request.approval_date
     project.business_manager_id = request.business_manager_id
     project.implementation_manager_id = request.implementation_manager_id
-    
-    # 更新系统（删除旧的，添加新的）
+
+    # 更新系统：先清除关联的分配记录中的系统引用，再删除旧系统
+    db.query(ProjectAssignment).filter(
+        ProjectAssignment.project_id == project_id,
+    ).update({"department": ProjectAssignment.department}, synchronize_session="fetch")
     db.query(System).filter(System.project_id == project_id).delete()
     for sys_data in request.systems:
         system = System(
@@ -308,10 +303,10 @@ async def update_project(
             system_type=sys_data.system_type
         )
         db.add(system)
-    
+
     db.commit()
     db.refresh(project)
-    
+
     return project_to_response(project, db)
 
 
@@ -325,10 +320,10 @@ async def delete_project(
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
-    
+
     db.delete(project)
     db.commit()
-    
+
     return {"message": "删除成功"}
 
 
@@ -343,7 +338,20 @@ async def assign_project(
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
-    
+
+    # 验证所有 assignee_id 存在且为员工角色
+    valid_users = db.query(User).filter(
+        User.id.in_(request.assignee_ids),
+        User.role == UserRole.employee
+    ).all()
+    valid_ids = {u.id for u in valid_users}
+    invalid_ids = set(request.assignee_ids) - valid_ids
+    if invalid_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"以下用户ID无效或非员工角色: {list(invalid_ids)}"
+        )
+
     # 添加分配
     for assignee_id in request.assignee_ids:
         # 检查是否已分配
@@ -351,18 +359,18 @@ async def assign_project(
             ProjectAssignment.project_id == project_id,
             ProjectAssignment.assignee_id == assignee_id
         ).first()
-        
+
         if not existing:
             assignment = ProjectAssignment(
                 project_id=project_id,
                 assignee_id=assignee_id
             )
             db.add(assignment)
-    
+
     # 更新项目状态
     project.status = ProjectStatus.assigned
     db.commit()
-    
+
     return {"message": "分发成功"}
 
 
@@ -373,10 +381,19 @@ async def get_assignments(
     current_user: User = Depends(get_current_user)
 ):
     """获取项目分配信息"""
+    # 员工只能查看分配给自己的项目的分配信息
+    if current_user.role.value == "employee":
+        is_assigned = db.query(ProjectAssignment).filter(
+            ProjectAssignment.project_id == project_id,
+            ProjectAssignment.assignee_id == current_user.id
+        ).first()
+        if not is_assigned:
+            raise HTTPException(status_code=404, detail="项目不存在")
+
     assignments = db.query(ProjectAssignment).options(
-        joinedload(ProjectAssignment.assignee)
+        selectinload(ProjectAssignment.assignee)
     ).filter(ProjectAssignment.project_id == project_id).all()
-    
+
     return [
         AssignmentResponse(
             id=a.id,
@@ -410,15 +427,15 @@ async def update_contribution(
         ProjectAssignment.project_id == project_id,
         ProjectAssignment.assignee_id == current_user.id
     ).first()
-    
+
     if not assignment:
         raise HTTPException(status_code=404, detail="未找到分配记录")
-    
+
     if request.department is not None:
         assignment.department = request.department
     if request.contribution is not None:
         assignment.contribution = request.contribution
-    
+
     db.commit()
-    
+
     return {"message": "更新成功"}

@@ -5,9 +5,18 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '../api'
 
+function safeParseUser() {
+  try {
+    return JSON.parse(localStorage.getItem('user') || 'null')
+  } catch {
+    localStorage.removeItem('user')
+    return null
+  }
+}
+
 export const useUserStore = defineStore('user', () => {
-  // 状态
-  const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
+  // 状态（安全解析 localStorage，防止损坏 JSON 导致白屏）
+  const user = ref(safeParseUser())
   const token = ref(localStorage.getItem('token') || '')
   const loading = ref(false)
   const error = ref('')
@@ -25,13 +34,13 @@ export const useUserStore = defineStore('user', () => {
     try {
       const response = await authApi.login(credentials)
       const data = response.data
-      
+
       token.value = data.access_token
       user.value = data.user
-      
+
       localStorage.setItem('token', data.access_token)
       localStorage.setItem('user', JSON.stringify(data.user))
-      
+
       return data.user
     } catch (err) {
       error.value = err.response?.data?.detail || '登录失败'
