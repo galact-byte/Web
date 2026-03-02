@@ -1,3 +1,217 @@
+# 修改记录 — 定级备案管理系统（新增备份恢复 + Word导入稳健性修复）
+
+> **修订记录**
+>
+> - v1.2.43: 新增管理员“备份与恢复”功能（备份列表/创建/下载/上传恢复）；修复单位 Word 导入遇到异常 docx 返回 500 导致前端无反馈的问题，并增强“新备案表”字段兼容能力。
+
+## 新增文件 (如有)
+
+### app/templates/backup.html — 管理员备份恢复页面
+
+- **功能**：提供一键创建备份、历史备份下载、上传备份恢复（双重确认）。
+- **实现原理**：调用新增 `/api/backup/*` 接口完成服务端打包与恢复，恢复前自动生成快照备份。
+
+---
+
+## 修改文件
+
+### app/main.py — 备份恢复 API + Word 解析稳健性
+
+- **修改位置**：目录初始化、工具函数、页面路由、备份 API、Word 解析函数与单位 Word 导入逻辑。
+- **修改内容**：
+  - 新增 `BACKUP_DIR` 与备份文件大小限制；
+  - 新增 SQLite 备份/恢复能力：`/api/backup/list`、`/api/backup/create`、`/api/backup/download/{file_name}`、`/api/backup/restore`；
+  - 新增 `/backup` 管理页面路由（管理员权限）；
+  - `parse_docx_key_values` 增加异常兜底与表格解析；
+  - 单位 Word 导入改为“字段名归一化 + 别名映射”，兼容更多“新备案表”字段写法。
+
+### app/templates/base.html — 导航入口补充
+
+- **修改位置**：侧边栏和面包屑。
+- **修改内容**：新增管理员可见“备份恢复”菜单与对应面包屑名称。
+
+### app/templates/organizations.html — Word导入错误提示修复
+
+- **修改位置**：`importOrgWord()`。
+- **修改内容**：增加 `try/catch` 与非 JSON 响应兜底，确保后端异常时页面能显示明确错误，而不是“无反应”。
+
+### tests/test_api.py — 回归测试补充
+
+- **修改位置**：新增 `test_33`~`test_35`。
+- **修改内容**：
+  - 校验管理员可访问 `/backup`；
+  - 校验内存数据库下备份创建返回 400（语义明确）；
+  - 校验非法 docx 导入单位接口返回 400，不再 500。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.43。
+- **修改内容**：记录本次备份恢复功能与 Word 导入稳健性修复。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **新增** | app/templates/backup.html |
+| **修改** | app/main.py |
+| **修改** | app/templates/base.html |
+| **修改** | app/templates/organizations.html |
+| **修改** | tests/test_api.py |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- `.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
+# 修改记录 — 定级备案管理系统（严格锁定依赖语义修复）
+
+> **修订记录**
+>
+> - v1.2.42: 修复 `STRICT_DEP_LOCK=1` 仍可能回退到 `requirements.txt` 的回归问题，严格模式下锁定安装失败将直接报错退出。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### start.bat — 严格锁定模式优先级修复
+
+- **修改位置**：环境变量互斥检查、`:INSTALL_DEPS` 回退分支。
+- **修改内容**：
+  - 增加 `STRICT_DEP_LOCK=1` 与 `PREFER_REQUIREMENTS_TXT=1` 的互斥校验；
+  - 当锁定依赖安装失败且 `STRICT_DEP_LOCK=1` 时，直接失败，不再回退 `requirements.txt`。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.42。
+- **修改内容**：记录严格依赖锁定语义修复。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | start.bat |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- `cmd /c "set DRY_RUN=1&& set STRICT_DEP_LOCK=1&& set PREFER_REQUIREMENTS_TXT=1&& .\\start.bat"`（预期失败）
+- `cmd /c "set DRY_RUN=1&& .\\start.bat"`（预期成功）
+
+# 修改记录 — 定级备案管理系统（启动兼容性增强：可跳过锁定依赖）
+
+> **修订记录**
+>
+> - v1.2.41: 新增 `PREFER_REQUIREMENTS_TXT=1` 启动开关，允许目标机器直接使用 `requirements.txt` 安装，绕过 `requirements.lock.txt` 中特定平台可能不可用的锁定包版本。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### start.bat — 依赖源选择开关
+
+- **修改位置**：依赖文件选择逻辑。
+- **修改内容**：
+  - 新增 `PREFER_REQUIREMENTS_TXT` 环境变量（默认 `0`）；
+  - 当该变量为 `1` 时，直接使用 `requirements.txt`，跳过锁定文件。
+
+### start_lite.bat — 依赖源选择开关
+
+- **修改位置**：依赖文件选择逻辑。
+- **修改内容**：
+  - 新增 `PREFER_REQUIREMENTS_TXT` 环境变量（默认 `0`）；
+  - 当该变量为 `1` 时，直接使用 `requirements.txt`，跳过锁定文件。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.41。
+- **修改内容**：记录启动脚本新增“跳过锁定依赖”能力。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | start.bat |
+| **修改** | start_lite.bat |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- `cmd /c "set DRY_RUN=1&& set PREFER_REQUIREMENTS_TXT=1&& .\\start.bat"`
+- `cmd /c "set DRY_RUN=1&& set PREFER_REQUIREMENTS_TXT=1&& .\\start_lite.bat"`
+
+# 修改记录 — 定级备案管理系统（启动兼容性修复：pydantic_core 安装失败兜底）
+
+> **修订记录**
+>
+> - v1.2.40: 启动脚本新增 Python 架构检查（强制 64 位）并在锁定依赖安装失败时自动回退到 `requirements.txt`，降低目标机器出现 `pydantic_core` 无可用版本的安装失败率。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### start.bat — 依赖安装鲁棒性增强
+
+- **修改位置**：Python 环境检测、依赖安装流程。
+- **修改内容**：
+  - 新增 Python 架构检测并拒绝 32 位解释器；
+  - 抽取 `:INSTALL_DEPS` 安装子流程；
+  - `requirements.lock.txt` 安装失败时自动回退 `requirements.txt`；
+  - 依赖安装失败时增加既有环境可用性检测（`fastapi/pydantic` 导入探测）。
+
+### start_lite.bat — 依赖安装鲁棒性增强
+
+- **修改位置**：Python 环境检测、依赖安装流程。
+- **修改内容**：
+  - 新增 Python 架构检测并拒绝 32 位解释器；
+  - 增加 `:INSTALL_DEPS` 安装子流程；
+  - `requirements.lock.txt` 失败时自动回退 `requirements.txt`。
+
+### CHANGES.md — 变更记录追加
+
+- **修改位置**：文件顶部新增 v1.2.40。
+- **修改内容**：记录启动脚本对目标机器依赖安装兼容性修复。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | start.bat |
+| **修改** | start_lite.bat |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+- `cmd /c "set DRY_RUN=1&& start.bat"`
+- `cmd /c "set DRY_RUN=1&& start_lite.bat"`
+
 # 修改记录 — 定级备案管理系统（测试产物清理规则补充）
 
 > **修订记录**

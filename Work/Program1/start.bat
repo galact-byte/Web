@@ -12,7 +12,14 @@ echo.
 
 if "%STRICT_DEP_LOCK%"=="" set "STRICT_DEP_LOCK=0"
 if "%STRICT_PY312%"=="" set "STRICT_PY312=0"
+if "%PREFER_REQUIREMENTS_TXT%"=="" set "PREFER_REQUIREMENTS_TXT=0"
 set "VENV_PY=%CD%\.venv\Scripts\python.exe"
+
+if "%STRICT_DEP_LOCK%"=="1" if "%PREFER_REQUIREMENTS_TXT%"=="1" (
+    echo [ERROR] STRICT_DEP_LOCK=1 cannot be used with PREFER_REQUIREMENTS_TXT=1
+    pause
+    exit /b 1
+)
 
 :: Check Python
 python --version >nul 2>&1
@@ -27,6 +34,14 @@ for /f "delims=" %%i in ('python -c "import sys; print(sys.executable)"') do set
 echo [INFO] Python path: %SYS_PY%
 for /f "delims=" %%i in ('python -m pip --version 2^>^&1') do set "SYS_PIP_VER=%%i"
 echo [INFO] System pip: %SYS_PIP_VER%
+for /f "delims=" %%i in ('python -c "import sys; print(sys.maxsize.bit_length()+1)"') do set "PY_BITS=%%i"
+echo [INFO] Python architecture: %PY_BITS%-bit
+if not "%PY_BITS%"=="64" (
+    echo [ERROR] Unsupported Python architecture: %PY_BITS%-bit
+    echo [ERROR] Please install 64-bit Python 3.12.x
+    pause
+    exit /b 1
+)
 for /f "tokens=1,2 delims=." %%a in ("%PY_VER%") do (
     set "PY_MAJOR=%%a"
     set "PY_MINOR=%%b"
@@ -47,7 +62,12 @@ if "%PY_MAJOR%.%PY_MINOR%"=="3.12" (
 echo.
 echo [INFO] Checking virtual environment...
 
-set "DEP_FILE=requirements.lock.txt"
+if "%PREFER_REQUIREMENTS_TXT%"=="1" (
+    set "DEP_FILE=requirements.txt"
+    echo [WARN] PREFER_REQUIREMENTS_TXT=1, skip lock file and use requirements.txt
+) else (
+    set "DEP_FILE=requirements.lock.txt"
+)
 if not exist "%DEP_FILE%" (
     if "%STRICT_DEP_LOCK%"=="1" (
         echo [ERROR] Missing requirements.lock.txt
@@ -86,12 +106,16 @@ if errorlevel 1 (
 for /f "delims=" %%i in ('"%VENV_PY%" -m pip --version 2^>^&1') do set "VENV_PIP_VER=%%i"
 echo [INFO] Venv pip: %VENV_PIP_VER%
 
-:: Install dependencies from locked list when available
-"%VENV_PY%" -m pip install -i https://pypi.org/simple --timeout 20 --retries 1 --disable-pip-version-check --quiet -r "%DEP_FILE%"
+call :INSTALL_DEPS
 if errorlevel 1 (
-    echo [WARN] Dependency installation may have issues, trying to continue...
-) else (
-    echo [INFO] Dependencies ready
+    echo [WARN] Dependency installation failed. Checking existing environment...
+    "%VENV_PY%" -c "import fastapi, pydantic" >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] Required dependencies are not available.
+        pause
+        exit /b 1
+    )
+    echo [WARN] Using existing installed dependencies.
 )
 
 goto LAUNCH
@@ -124,7 +148,7 @@ if errorlevel 1 (
 for /f "delims=" %%i in ('"%VENV_PY%" -m pip --version 2^>^&1') do set "VENV_PIP_VER=%%i"
 echo [INFO] Venv pip: %VENV_PIP_VER%
 
-"%VENV_PY%" -m pip install -i https://pypi.org/simple --timeout 20 --retries 1 --quiet -r "%DEP_FILE%"
+call :INSTALL_DEPS
 if errorlevel 1 (
     echo [ERROR] Failed to install dependencies
     pause
@@ -157,6 +181,27 @@ if errorlevel 1 (
 )
 echo [INFO] pip bootstrap completed.
 goto :eof
+
+:INSTALL_DEPS
+echo [INFO] Installing dependencies from %DEP_FILE%...
+"%VENV_PY%" -m pip install -i https://pypi.org/simple --timeout 20 --retries 1 --disable-pip-version-check --quiet -r "%DEP_FILE%"
+if not errorlevel 1 (
+    echo [INFO] Dependencies ready
+    exit /b 0
+)
+
+if /I not "%DEP_FILE%"=="requirements.lock.txt" exit /b 1
+if "%STRICT_DEP_LOCK%"=="1" (
+    echo [ERROR] Locked dependency install failed and STRICT_DEP_LOCK=1 forbids fallback.
+    exit /b 1
+)
+if not exist "requirements.txt" exit /b 1
+
+echo [WARN] Locked dependency install failed, fallback to requirements.txt
+"%VENV_PY%" -m pip install -i https://pypi.org/simple --timeout 20 --retries 1 --disable-pip-version-check --quiet -r requirements.txt
+if errorlevel 1 exit /b 1
+echo [INFO] Dependencies ready (fallback requirements.txt)
+exit /b 0
 
 
 :LAUNCH
