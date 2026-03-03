@@ -59,6 +59,34 @@
       </div>
     </div>
 
+    <!-- 完结申请通知（仅经理可见） -->
+    <div v-if="userStore.isManager && pendingSubmissions.length > 0" class="notice-section">
+      <div class="notice-card">
+        <div class="notice-header">
+          <div class="notice-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          </div>
+          <h3>完结申请待确认（{{ pendingSubmissions.length }}）</h3>
+        </div>
+        <div class="notice-list">
+          <router-link v-for="p in pendingSubmissions" :key="p.id" :to="`/projects/${p.id}`" class="notice-item">
+            <div class="notice-project">
+              <span class="notice-name">{{ p.project_name }}</span>
+              <code>{{ p.project_code }}</code>
+            </div>
+            <div class="notice-progress">
+              <div class="progress-bar">
+                <div class="progress-fill" :style="{ width: (p.submitted_count / p.total_employee_count * 100) + '%' }"></div>
+              </div>
+              <span class="progress-text" :class="{ 'all-done': p.submitted_count === p.total_employee_count }">
+                {{ p.submitted_count }}/{{ p.total_employee_count }} 人已提交
+              </span>
+            </div>
+          </router-link>
+        </div>
+      </div>
+    </div>
+
     <!-- 最近项目 -->
     <div class="recent-section">
       <div class="section-header">
@@ -100,7 +128,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useUserStore } from '../stores/user'
 import { projectsApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
@@ -108,8 +136,14 @@ import AppLayout from '../components/AppLayout.vue'
 const userStore = useUserStore()
 
 const loading = ref(true)
+const allProjects = ref([])
 const recentProjects = ref([])
 const stats = reactive({ total: 0, draft: 0, assigned: 0, completed: 0 })
+
+// 有员工提交完结申请的进行中项目（仅经理用）
+const pendingSubmissions = computed(() =>
+  allProjects.value.filter(p => p.status === 'assigned' && p.submitted_count > 0)
+)
 
 const categoryMap = { '等保测评': '等保', '密码评估': '密评', '风险评估': '风评', '安全评估': '安评', '数据评估': '数评', '软件测试': '软测', '安全服务': '安服', '其他': '其他' }
 function getCategoryShort(category) { return categoryMap[category] || category }
@@ -121,6 +155,7 @@ async function fetchData() {
   try {
     const response = await projectsApi.getAll()
     const projects = response.data
+    allProjects.value = projects
     recentProjects.value = projects.slice(0, 6)
     stats.total = projects.length
     stats.draft = projects.filter(p => p.status === 'draft').length
@@ -166,4 +201,20 @@ onMounted(fetchData)
 @media (max-width: 768px) {
   .stats-grid, .projects-grid { grid-template-columns: 1fr; }
 }
+
+.notice-section { margin-bottom: 2rem; }
+.notice-card { background: var(--bg-card); border: 1px solid #f59e0b; border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; }
+.notice-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; }
+.notice-header h3 { font-size: 1rem; font-weight: 600; color: #f59e0b; }
+.notice-icon { color: #f59e0b; display: flex; }
+.notice-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.notice-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: var(--radius-md); text-decoration: none; color: inherit; transition: all var(--transition-normal); }
+.notice-item:hover { border-color: var(--accent-primary); box-shadow: 0 0 12px var(--accent-glow); transform: translateX(4px); }
+.notice-project { display: flex; align-items: center; gap: 0.75rem; }
+.notice-name { font-weight: 500; }
+.notice-progress { display: flex; align-items: center; gap: 0.75rem; }
+.progress-bar { width: 80px; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden; border: 1px solid var(--border-color); }
+.progress-fill { height: 100%; background: #f59e0b; border-radius: 3px; transition: width 0.3s; }
+.progress-text { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
+.progress-text.all-done { color: #10b981; font-weight: 500; }
 </style>

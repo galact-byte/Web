@@ -110,6 +110,8 @@ class ProjectListResponse(ProjectBase):
     id: int
     status: str
     systems_count: int = 0
+    submitted_count: int = 0       # 已提交完结的员工数
+    total_employee_count: int = 0   # 总分配员工数
     created_at: Optional[datetime] = None
 
     class Config:

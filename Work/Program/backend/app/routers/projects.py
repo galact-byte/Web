@@ -137,6 +137,23 @@ def project_to_response(project: Project, db: Session) -> ProjectResponse:
     )
 
 
+def _calc_submit_progress(assignments) -> dict:
+    """按员工去重计算提交进度"""
+    if not assignments:
+        return {"submitted_count": 0, "total_employee_count": 0}
+    by_emp = {}
+    for a in assignments:
+        eid = a.assignee_id
+        if eid not in by_emp:
+            by_emp[eid] = True
+        if (a.status or "pending") != "submitted":
+            by_emp[eid] = False
+    return {
+        "submitted_count": sum(1 for v in by_emp.values() if v),
+        "total_employee_count": len(by_emp)
+    }
+
+
 @router.get("/", response_model=List[ProjectListResponse])
 async def get_projects(
     status: Optional[str] = None,
@@ -177,6 +194,7 @@ async def get_projects(
             implementation_manager_id=p.implementation_manager_id,
             status=p.status.value,
             systems_count=len(p.systems),
+            **_calc_submit_progress(p.assignments),
             created_at=p.created_at
         )
         for p in projects
