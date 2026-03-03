@@ -42,7 +42,12 @@
             <td><span class="badge badge-primary">{{ getCategoryShort(project.business_category) }}</span></td>
             <td>{{ project.project_location || '/' }}</td>
             <td>{{ project.systems_count }}</td>
-            <td><span class="badge" :class="getStatusClass(project.status)">{{ getStatusText(project.status) }}</span></td>
+            <td>
+              <span class="badge" :class="getStatusClass(project.status)">{{ getStatusText(project.status) }}</span>
+              <span v-if="project.status === 'assigned' && project.total_employee_count > 0" class="submit-progress">
+                {{ project.submitted_count }}/{{ project.total_employee_count }}
+              </span>
+            </td>
             <td>
               <div class="action-btns">
                 <router-link :to="`/projects/${project.id}`" class="btn btn-ghost btn-sm" title="查看">
@@ -142,4 +147,5 @@ onMounted(fetchProjects)
 .project-link:hover { text-decoration: underline; }
 .action-btns { display: flex; gap: 0.25rem; }
 code { background: var(--bg-tertiary); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.85rem; }
+.submit-progress { font-size: 0.75rem; color: var(--text-muted); margin-left: 0.4rem; }
 </style>

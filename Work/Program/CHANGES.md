@@ -2,6 +2,9 @@
 
 > **修订记录**
 >
+> - v1.9: 后端 API 修复 — 路由顺序修正、新增趋势API、导入大小限制、错误处理加固
+> - v1.8.2: 项目列表页和仪表盘显示完结申请进度，经理登录首页即可看到待确认的提交通知
+> - v1.8.1: 移除人员分配中每个人员的"待提交/已提交"状态标签（提交为项目整体操作）
 > - v1.8: 员工完结申请功能 — 员工可提交/撤回完结申请，经理可查看提交进度并确认完成
 > - v1.7: 人员分配贡献率编辑改造 — 弹窗编辑/删除替代底部独立表单，新增"添加贡献"支持多部门分开记录
 > - v1.6: 业务负责人改为文本输入（脱离系统用户）、实施负责人下拉框显示所有用户、新增项目完成状态切换
@@ -12,6 +15,93 @@
 > - v1.2.1: 恢复 PostgreSQL 默认驱动依赖
 > - v1.2: 安全改造（管理员分发账户、首次改密、重置密码）+ bcrypt 兼容性修复
 > - v1.1: 修改启动行为，关闭 CMD 窗口时自动停止所有子进程
+
+## v1.9 — 后端 API 修复与接口完善
+
+### 修改文件
+
+#### `app/main.py` — 路由顺序修正、新增趋势API、导入加固
+
+- **修改位置**：知识库路由区块（约第 5049-5067 行）、Dashboard 区块（约第 4795 行）、导入端点（约第 2687、3126 行）、系统Word导入（约第 3207 行）
+
+- **修改内容**：
+  1. **路由顺序修正（CRITICAL）**：`GET /api/knowledge/download-logs` 和 `POST /api/knowledge/batch-download` 原本定义在 `/{doc_id}` 参数路由之后，导致 FastAPI 将 "download-logs"/"batch-download" 误当作整数参数解析（400错误）。已将两个静态路由移至所有 `/{doc_id}` 路由之前。
+  2. **新增趋势API**：新增 `GET /api/dashboard/trend` 端点，返回按月统计的组织和系统新增数量，支持 `months`（1-60）、`industry`、`city`、`level` 过滤参数，自动补全连续月份（无数据月份填0）。
+  3. **导入文件大小限制**：`POST /api/organizations/import/excel` 和 `POST /api/systems/import/excel` 新增50MB大小限制校验，防止超大文件拖垮服务。
+  4. **系统Word导入错误处理**：`POST /api/systems/import/word` 的DB操作包裹 `try/except` + `db.rollback()`，防止异常时事务悬挂。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `app/main.py` |
+
+---
+
+## 测试方式
+
+- 访问 `GET /api/knowledge/download-logs`：应返回下载日志列表（不再报 422/400）
+- 访问 `POST /api/knowledge/batch-download`：传入 `doc_ids` 列表应正常打包下载
+- 访问 `GET /api/dashboard/trend?months=6`：应返回最近6个月的趋势数据
+- 上传超过50MB的Excel文件至 `/api/organizations/import/excel`：应返回400错误提示
+- 导入格式错误的系统Word文件：应返回500错误并无事务残留
+
+---
+
+## v1.8.2 — 项目列表页显示提交进度
+
+### 修改文件
+
+#### `backend/app/schemas/schemas.py` — ProjectListResponse 加进度字段
+
+- **修改内容**：新增 `submitted_count`（已提交员工数）和 `total_employee_count`（总分配员工数）
+
+#### `backend/app/routers/projects.py` — 计算提交进度
+
+- **修改内容**：新增 `_calc_submit_progress()` 辅助函数，按员工去重统计；`get_projects` 返回进度数据
+
+#### `frontend/src/views/Dashboard.vue` — 仪表盘新增完结申请通知卡片
+
+- **修改内容**：经理登录后，仪表盘统计卡片与最近项目之间显示醒目的通知区域，列出所有有员工提交完结申请的进行中项目，每条显示项目名、进度条和 `X/Y 人已提交`，点击可跳转项目详情
+
+#### `frontend/src/views/Projects.vue` — 状态列显示进度
+
+- **修改内容**：进行中的项目状态标签旁显示 `2/3` 格式的提交进度
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `backend/app/schemas/schemas.py` |
+| **修改** | `backend/app/routers/projects.py` |
+| **修改** | `frontend/src/views/Projects.vue` |
+| **修改** | `frontend/src/views/Dashboard.vue` |
+
+---
+
+## v1.8.1 — 移除人员分配中的个人提交状态标签
+
+### 修改文件
+
+#### `frontend/src/views/ProjectDetail.vue` — 移除"待提交/已提交"badge
+
+- **修改位置**：人员分配列表中 `.assignee-name` 区域（原第 83-85 行）
+- **修改内容**：移除每个分配人员名字旁的 `<span>` 状态标签（"待提交"/"已提交"），因为提交是项目整体操作，不需要在每个人员卡片上单独显示
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
+
+### 测试方式
+
+- 进入已分配项目详情页，确认人员分配列表中人员名字旁不再显示"待提交"标签
+- 经理视角标题旁的提交进度统计（如 `2/3 人已提交`）保持不变
+
+---
 
 ## v1.8 — 员工完结申请功能
 

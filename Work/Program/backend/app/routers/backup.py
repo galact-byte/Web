@@ -19,6 +19,8 @@ from app.services.auth import get_current_manager, hash_password
 router = APIRouter(prefix="/api/backup", tags=["备份恢复"])
 logger = logging.getLogger(__name__)
 
+IS_DEV = os.getenv("ENV", "dev").lower() == "dev"
+
 # 序列重置白名单
 _ALLOWED_TABLES = ("users", "projects", "systems", "project_assignments")
 
@@ -65,7 +67,7 @@ async def export_backup(
     ]
     assignment_cols = [
         "id", "project_id", "assignee_id",
-        "department", "contribution", "created_at"
+        "department", "contribution", "status", "created_at"
     ]
 
     backup_data = {
@@ -262,6 +264,7 @@ async def import_backup(
                 assignee_id=a["assignee_id"],
                 department=a.get("department", ""),
                 contribution=a.get("contribution", ""),
+                status=a.get("status", "pending"),
             )
             db.add(assignment)
 
@@ -275,7 +278,8 @@ async def import_backup(
     except Exception as e:
         db.rollback()
         logger.error(f"数据库恢复失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="数据恢复失败，请联系管理员")
+        detail = f"数据恢复失败: {str(e)}" if IS_DEV else "数据恢复失败，请联系管理员"
+        raise HTTPException(status_code=500, detail=detail)
 
     return {
         "message": "数据恢复成功（所有用户密码已重置为 123456，请通知用户修改）",
@@ -297,26 +301,30 @@ def _reset_sequences(db: Session, tables: dict):
         ("project_assignments", tables["project_assignments"]),
     ]
 
-    if DATABASE_URL.startswith("sqlite"):
-        for table_name, records in table_records:
-            if table_name not in _ALLOWED_TABLES:
-                continue
-            if records:
-                max_id = max(r["id"] for r in records)
-                db.execute(
-                    text("INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES (:name, :seq)"),
-                    {"name": table_name, "seq": max_id}
-                )
-        db.commit()
-    else:
-        # PostgreSQL: 使用参数化查询重置 sequence
-        for table_name, records in table_records:
-            if table_name not in _ALLOWED_TABLES:
-                continue
-            if records:
-                max_id = max(r["id"] for r in records)
-                db.execute(
-                    text(f"SELECT setval(pg_get_serial_sequence(:tname, 'id'), :max_id)"),
-                    {"tname": table_name, "max_id": max_id}
-                )
-        db.commit()
+    try:
+        if DATABASE_URL.startswith("sqlite"):
+            for table_name, records in table_records:
+                if table_name not in _ALLOWED_TABLES:
+                    continue
+                if records:
+                    max_id = max(r["id"] for r in records)
+                    db.execute(
+                        text("INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES (:name, :seq)"),
+                        {"name": table_name, "seq": max_id}
+                    )
+            db.commit()
+        else:
+            # PostgreSQL: 使用参数化查询重置 sequence
+            for table_name, records in table_records:
+                if table_name not in _ALLOWED_TABLES:
+                    continue
+                if records:
+                    max_id = max(r["id"] for r in records)
+                    db.execute(
+                        text(f"SELECT setval(pg_get_serial_sequence(:tname, 'id'), :max_id)"),
+                        {"tname": table_name, "max_id": max_id}
+                    )
+            db.commit()
+    except Exception as e:
+        logger.warning(f"重置自增序列失败（不影响已恢复的数据）: {e}")
+        db.rollback()

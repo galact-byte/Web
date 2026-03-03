@@ -100,14 +100,12 @@ async def export_excel(
     for project in projects:
         # 汇总所有分配记录的贡献率（修复：不再只取第一条）
         contributions = []
-        departments = []
         for a in project.assignments:
             if a.contribution:
                 contributions.append(a.contribution)
-            if a.department:
-                departments.append(a.department)
         contribution = "\n".join(contributions) if contributions else "/"
-        department = departments[0] if departments else request.department
+        # 部门使用经理在导出配置中指定的值
+        department = request.department
 
         category_short = CATEGORY_SHORT.get(project.business_category, project.business_category)
 
@@ -245,7 +243,7 @@ async def export_word(
             p.add_run(a.assignee.display_name if a.assignee else "未知")
             run_label2 = p.add_run("  部门: ")
             run_label2.bold = True
-            p.add_run(a.department or "/")
+            p.add_run(a.department or (a.assignee.department if a.assignee else None) or "/")
             doc.add_paragraph(f"贡献率: {a.contribution or '/'}")
     else:
         doc.add_paragraph("暂无人员分配")

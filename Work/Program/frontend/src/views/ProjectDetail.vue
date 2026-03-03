@@ -14,6 +14,9 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
             分发项目
           </button>
+          <span v-if="userStore.isManager && project.status === 'assigned' && totalEmployeeCount > 0" class="submit-progress">
+            {{ submittedEmployeeCount }}/{{ totalEmployeeCount }} 人已提交
+          </span>
           <button v-if="userStore.isManager && project.status === 'assigned'" class="btn btn-success" @click="completeProject" :disabled="changingStatus">
             {{ changingStatus ? '处理中...' : '标记为已完成' }}
           </button>
@@ -65,12 +68,7 @@
 
         <section class="card">
           <div class="section-header">
-            <h2>
-              人员分配
-              <span v-if="userStore.isManager && assignments.length > 0 && project.status === 'assigned'" class="submit-progress">
-                （{{ submittedEmployeeCount }}/{{ totalEmployeeCount }} 人已提交）
-              </span>
-            </h2>
+            <h2>人员分配</h2>
             <button v-if="project.status !== 'completed' && myAssignmentExists && !mySubmitted" class="btn btn-sm btn-primary" @click="openAddContribution">添加贡献</button>
           </div>
           <div v-if="assignments.length > 0" class="assignments-list">
@@ -80,9 +78,6 @@
                 <div>
                   <div class="assignee-name">
                     {{ a.assignee_name }}
-                    <span v-if="project.status === 'assigned'" class="badge badge-sm" :class="a.status === 'submitted' ? 'badge-success' : 'badge-warning'">
-                      {{ a.status === 'submitted' ? '已提交' : '待提交' }}
-                    </span>
                   </div>
                   <div class="assignee-dept text-muted">{{ a.department || '未填写部门' }}</div>
                 </div>
