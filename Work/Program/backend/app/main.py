@@ -13,6 +13,7 @@ from app.database import engine, Base, SessionLocal
 from app.routers import auth_router, users_router, projects_router, exports_router, backup_router
 from app.models import User, UserRole
 from app.services.auth import hash_password
+from sqlalchemy import inspect as sa_inspect, text as sa_text
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,25 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if not IS_DEV:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
+
+
+def _migrate_db():
+    """兼容旧数据库：检测并添加缺失的列"""
+    try:
+        inspector = sa_inspect(engine)
+        if inspector.has_table("project_assignments"):
+            columns = [c["name"] for c in inspector.get_columns("project_assignments")]
+            if "status" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(
+                        sa_text(
+                            "ALTER TABLE project_assignments ADD COLUMN status VARCHAR(20) DEFAULT 'pending' NOT NULL"
+                        )
+                    )
+                    conn.commit()
+                logger.info("已为 project_assignments 表添加 status 列")
+    except Exception as e:
+        logger.warning(f"数据库迁移检查失败: {e}")
 
 
 # 种子数据：首次启动时创建默认管理员账户
@@ -98,6 +118,7 @@ app.include_router(backup_router)
 def on_startup():
     """启动时初始化数据库表和种子数据"""
     Base.metadata.create_all(bind=engine)
+    _migrate_db()
     _seed_admin()
 
 

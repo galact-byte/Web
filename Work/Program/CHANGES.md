@@ -2,6 +2,8 @@
 
 > **修订记录**
 >
+> - v1.8: 员工完结申请功能 — 员工可提交/撤回完结申请，经理可查看提交进度并确认完成
+> - v1.7: 人员分配贡献率编辑改造 — 弹窗编辑/删除替代底部独立表单，新增"添加贡献"支持多部门分开记录
 > - v1.6: 业务负责人改为文本输入（脱离系统用户）、实施负责人下拉框显示所有用户、新增项目完成状态切换
 > - v1.5.1: 前端 DRY 重构 + 低优先级优化（侧边栏提取、主题 composable、表单警告、部门默认值）
 > - v1.5: 深度代码审查修复 — 消除冲突文件、安全加固、查询优化、前端健壮性提升（5 CRITICAL + 8 HIGH + 10 MEDIUM）
@@ -10,6 +12,140 @@
 > - v1.2.1: 恢复 PostgreSQL 默认驱动依赖
 > - v1.2: 安全改造（管理员分发账户、首次改密、重置密码）+ bcrypt 兼容性修复
 > - v1.1: 修改启动行为，关闭 CMD 窗口时自动停止所有子进程
+
+## v1.8 — 员工完结申请功能
+
+### 修改文件
+
+#### `backend/app/models/models.py` — 新增 AssignmentStatus 枚举 + status 字段
+
+- **修改位置**：ProjectStatus 枚举后、ProjectAssignment 模型
+- **修改内容**：
+  - 新增 `AssignmentStatus` 枚举：`pending`（待提交）/ `submitted`（已提交完结）
+  - `ProjectAssignment` 新增 `status` 字段：`Column(String(20), server_default="pending")`
+
+#### `backend/app/models/__init__.py` — 导出新枚举
+
+- **修改内容**：新增 `AssignmentStatus` 导出
+
+#### `backend/app/main.py` — 兼容旧库自动加列
+
+- **修改位置**：`on_startup` 前新增 `_migrate_db()` 函数
+- **修改内容**：启动时检测 `project_assignments` 表是否缺少 `status` 列，缺少则自动 `ALTER TABLE ADD COLUMN`
+
+#### `backend/app/schemas/schemas.py` — AssignmentResponse 加 status 字段
+
+- **修改位置**：`AssignmentResponse` 类
+- **修改内容**：新增 `status: str = "pending"` 字段
+
+#### `backend/app/routers/projects.py` — 新增 submit/retract 接口 + 编辑/删除/添加拦截
+
+- **修改内容**：
+  - 新增 `PATCH /{project_id}/submit-completion` — 员工提交完结申请（批量锁定自己的所有分配）
+  - 新增 `PATCH /{project_id}/retract-completion` — 员工撤回完结申请（批量解锁）
+  - `update_assignment` / `delete_assignment` / `add_contribution` — 已提交分配禁止操作
+  - `update_project_status` — 标记完成时返回未提交人员名单作为警告信息
+  - `get_assignments` — 返回 `status` 字段
+
+#### `frontend/src/api/index.js` — 新增 2 个 API 方法
+
+- **修改内容**：
+  - `submitCompletion(projectId)` → PATCH submit-completion
+  - `retractCompletion(projectId)` → PATCH retract-completion
+
+#### `frontend/src/views/ProjectDetail.vue` — UI 状态展示 + 按钮逻辑
+
+- **修改内容**：
+  - 每条分配显示状态标签：「待提交」/「已提交」
+  - 员工 pending 状态：显示「编辑」「删除」「提交完结」按钮
+  - 员工 submitted 状态：仅显示「撤回」按钮
+  - 经理视角：标题旁显示提交进度（如 `2/3 已提交`）
+  - 标记完成时：未全部提交弹出警告显示未提交名单，确认后可强制完成
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `backend/app/models/models.py` |
+| **修改** | `backend/app/models/__init__.py` |
+| **修改** | `backend/app/main.py` |
+| **修改** | `backend/app/schemas/schemas.py` |
+| **修改** | `backend/app/routers/projects.py` |
+| **修改** | `frontend/src/api/index.js` |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
+
+### 测试方式
+
+1. 启动后端+前端，用员工账号登录，进入已分配项目
+2. 填写贡献后点「提交完结」，状态变为「已提交」，编辑/删除按钮消失
+3. 点「撤回」，状态回到「待提交」，编辑/删除按钮恢复
+4. 用经理账号登录，查看人员分配区域显示提交进度
+5. 部分员工未提交时点「标记完成」，弹出警告显示未提交名单，确认后可强制完成
+6. 全部员工提交后，点「标记完成」直接弹正常确认框
+7. 已完成项目所有操作按钮不可见
+8. 删除旧数据库文件，验证新库创建正常；保留旧库文件，验证自动加列
+
+---
+
+## v1.7 — 人员分配贡献率编辑改造
+
+### 修改文件
+
+#### `backend/app/schemas/schemas.py` — 新增 AssignmentUpdate 和 ContributionCreate Schema
+
+- **修改位置**：分配区块（第 128 行后）
+- **修改内容**：
+  - 新增 `AssignmentUpdate(BaseModel)`，含 `department`、`contribution` 可选字段
+  - 新增 `ContributionCreate(BaseModel)`，含 `assignee_id`（经理指定员工）、`department`、`contribution`
+
+#### `backend/app/routers/projects.py` — 新增分配编辑/删除/添加接口
+
+- **修改位置**：文件末尾新增三个 endpoint
+- **修改内容**：
+  - `PUT /{project_id}/assignments/{assignment_id}` — 编辑分配的部门和贡献率（经理可编辑任意，员工仅自己的，已完成项目禁止修改）
+  - `DELETE /{project_id}/assignments/{assignment_id}` — 删除分配记录（仅经理，已完成项目禁止删除）
+  - `POST /{project_id}/contributions` — 添加贡献记录（经理可为任意员工添加，员工为自己添加，已完成项目禁止添加）
+  - import 新增 `AssignmentUpdate`、`ContributionCreate`
+
+#### `frontend/src/api/index.js` — 新增分配编辑/删除/添加 API
+
+- **修改位置**：`projectsApi` 对象
+- **修改内容**：新增 `updateAssignment`、`deleteAssignment`、`addContribution` 方法
+
+#### `frontend/src/views/ProjectDetail.vue` — UI 改造
+
+- **修改内容**：
+  - **移除**底部"填写我的贡献信息"独立区块
+  - **人员分配列表**每项新增操作按钮：经理可编辑/删除所有分配，员工仅可编辑自己的分配
+  - **已完成项目**不显示操作按钮
+  - **新增编辑弹窗**：部门 + 贡献率描述两个字段
+  - **新增"添加贡献"按钮和弹窗**：员工可为自己添加多条贡献记录（不同部门分开写），经理可为任意员工添加
+
+---
+
+## v1.7 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `backend/app/schemas/schemas.py` |
+| **修改** | `backend/app/routers/projects.py` |
+| **修改** | `frontend/src/api/index.js` |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
+
+---
+
+## v1.7 测试方式
+
+- 经理登录：点击任意分配的"编辑"按钮，弹窗填写部门和贡献率后保存，确认数据更新
+- 经理登录：点击"删除"按钮，确认分配被移除
+- 经理登录：点击"添加贡献"按钮，选择员工并填写部门和贡献率，确认新记录出现
+- 员工登录：只能看到自己分配的"编辑"按钮，无删除按钮，保存后数据正确
+- 员工登录：点击"添加贡献"按钮，为自己添加第二条贡献记录（如渗透部的贡献），确认新记录出现
+- 已完成项目：不显示编辑/删除/添加贡献按钮
+- 后端 `python -c "from app.routers.projects import router"` 无报错
+- 前端 `npm run build` 构建通过
+
+---
 
 ## v1.6 — 业务负责人改为文本、实施负责人扩展选择范围、项目状态切换
 

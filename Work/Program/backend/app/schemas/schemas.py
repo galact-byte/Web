@@ -126,6 +126,17 @@ class ContributionUpdate(BaseModel):
     contribution: Optional[str] = None
 
 
+class AssignmentUpdate(BaseModel):
+    department: Optional[str] = None
+    contribution: Optional[str] = None
+
+
+class ContributionCreate(BaseModel):
+    assignee_id: Optional[int] = None  # 经理指定员工；员工默认自己
+    department: Optional[str] = None
+    contribution: Optional[str] = None
+
+
 class AssignmentResponse(BaseModel):
     id: int
     project_id: int
@@ -133,6 +144,7 @@ class AssignmentResponse(BaseModel):
     assignee_name: str
     department: Optional[str] = None
     contribution: Optional[str] = None
+    status: str = "pending"
     created_at: Optional[datetime] = None
 
     class Config:
