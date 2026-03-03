@@ -71,6 +71,11 @@ export const projectsApi = {
   assign: (projectId, data) => api.post(`/api/projects/${projectId}/assign`, data),
   getAssignments: (projectId) => api.get(`/api/projects/${projectId}/assignments`),
   updateContribution: (projectId, data) => api.put(`/api/projects/${projectId}/contribution`, data),
+  updateAssignment: (projectId, assignmentId, data) => api.put(`/api/projects/${projectId}/assignments/${assignmentId}`, data),
+  deleteAssignment: (projectId, assignmentId) => api.delete(`/api/projects/${projectId}/assignments/${assignmentId}`),
+  addContribution: (projectId, data) => api.post(`/api/projects/${projectId}/contributions`, data),
+  submitCompletion: (projectId) => api.patch(`/api/projects/${projectId}/submit-completion`),
+  retractCompletion: (projectId) => api.patch(`/api/projects/${projectId}/retract-completion`),
   getWorkloadStats: (year, quarter) => api.get('/api/projects/workload-stats', { params: { year, quarter } })
 }
 

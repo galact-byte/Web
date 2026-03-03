@@ -1,1 +1,1 @@
-from app.models.models import User, Project, System, ProjectAssignment, UserRole, ProjectStatus
+from app.models.models import User, Project, System, ProjectAssignment, UserRole, ProjectStatus, AssignmentStatus

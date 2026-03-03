@@ -9,10 +9,10 @@ from sqlalchemy.orm import Session, selectinload
 
 
 from app.database import get_db
-from app.models import User, Project, System, ProjectAssignment, ProjectStatus, UserRole
+from app.models import User, Project, System, ProjectAssignment, ProjectStatus, UserRole, AssignmentStatus
 from app.schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse,
-    AssignRequest, ContributionUpdate, AssignmentResponse
+    AssignRequest, ContributionUpdate, AssignmentUpdate, ContributionCreate, AssignmentResponse
 )
 from app.services.auth import get_current_user, get_current_manager
 
@@ -21,9 +21,12 @@ router = APIRouter(prefix="/api/projects", tags=["项目"])
 
 # ============ 贡献率解析工具 ============
 
-# 匹配 "姓名XX%" 格式，支持: 张三85%、张三 85%、张三：85%、张三:85%、张三（85%）
+# 匹配 "姓名XX%" 格式
+# 支持: 张三85%、张三 85%、张三：85%、张三:85%、张三（85%）
+# 也支持中间有工作描述: 张三：报告撰写（10%）、张三，代码审计，50%
+# 姓名限制为2-4个汉字，后面必须跟非汉字字符（作为姓名边界）
 _CONTRIBUTION_PATTERN = re.compile(
-    r'([\u4e00-\u9fa5a-zA-Z]{2,10})\s*[：:（(]?\s*(\d+(?:\.\d+)?)\s*%'
+    r'([\u4e00-\u9fa5]{2,4})(?=[^\u4e00-\u9fa5]).*?(\d+(?:\.\d+)?)\s*%'
 )
 
 
@@ -340,10 +343,45 @@ async def update_project_status(
     if new_status not in ("assigned", "completed"):
         raise HTTPException(status_code=400, detail="无效的目标状态")
 
+    # 标记完成时，检查所有分配是否已提交完结（按员工去重）
+    warning = None
+    if new_status == "completed":
+        assignments = db.query(ProjectAssignment).options(
+            selectinload(ProjectAssignment.assignee)
+        ).filter(ProjectAssignment.project_id == project_id).all()
+
+        # 按员工分组，检查每个员工是否全部提交
+        employee_map = {}
+        for a in assignments:
+            eid = a.assignee_id
+            if eid not in employee_map:
+                employee_map[eid] = {
+                    "name": a.assignee.display_name if a.assignee else f"用户#{eid}",
+                    "all_submitted": True
+                }
+            if (a.status or "pending") != AssignmentStatus.submitted.value:
+                employee_map[eid]["all_submitted"] = False
+
+        not_submitted = [
+            info["name"] for info in employee_map.values()
+            if not info["all_submitted"]
+        ]
+        if not_submitted:
+            warning = {
+                "not_submitted_names": not_submitted,
+                "message": f"以下人员尚未提交完结申请：{'、'.join(not_submitted)}"
+            }
+
     project.status = ProjectStatus(new_status)
     db.commit()
 
-    return {"message": "状态更新成功", "status": new_status}
+    result = {"message": "状态更新成功", "status": new_status}
+    if warning:
+        result["warning"] = warning
+    return result
+
+
+@router.post("/{project_id}/assign")
 async def assign_project(
     project_id: int,
     request: AssignRequest,
@@ -418,6 +456,7 @@ async def get_assignments(
             assignee_name=a.assignee.display_name if a.assignee else "未知",
             department=a.department,
             contribution=a.contribution,
+            status=a.status or "pending",
             created_at=a.created_at
         )
         for a in assignments
@@ -447,6 +486,10 @@ async def update_contribution(
     if not assignment:
         raise HTTPException(status_code=404, detail="未找到分配记录")
 
+    # 已提交完结的分配禁止编辑
+    if assignment.status == AssignmentStatus.submitted.value:
+        raise HTTPException(status_code=400, detail="已提交完结申请，请先撤回后再编辑")
+
     if request.department is not None:
         assignment.department = request.department
     if request.contribution is not None:
@@ -455,3 +498,180 @@ async def update_contribution(
     db.commit()
 
     return {"message": "更新成功"}
+
+
+@router.put("/{project_id}/assignments/{assignment_id}")
+async def update_assignment(
+    project_id: int,
+    assignment_id: int,
+    request: AssignmentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """编辑指定分配的部门和贡献率（员工只能编辑自己的分配）"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    if project.status == ProjectStatus.completed:
+        raise HTTPException(status_code=400, detail="项目已完成，无法修改")
+
+    assignment = db.query(ProjectAssignment).filter(
+        ProjectAssignment.id == assignment_id,
+        ProjectAssignment.project_id == project_id
+    ).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="未找到分配记录")
+
+    # 只能编辑自己的分配
+    if assignment.assignee_id != current_user.id:
+        raise HTTPException(status_code=403, detail="只能编辑自己的贡献信息")
+
+    # 已提交完结的分配禁止编辑
+    if assignment.status == AssignmentStatus.submitted.value:
+        raise HTTPException(status_code=400, detail="已提交完结申请，请先撤回后再编辑")
+
+    if request.department is not None:
+        assignment.department = request.department
+    if request.contribution is not None:
+        assignment.contribution = request.contribution
+
+    db.commit()
+    return {"message": "更新成功"}
+
+
+@router.delete("/{project_id}/assignments/{assignment_id}")
+async def delete_assignment(
+    project_id: int,
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """删除自己的贡献记录"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    if project.status == ProjectStatus.completed:
+        raise HTTPException(status_code=400, detail="项目已完成，无法删除")
+
+    assignment = db.query(ProjectAssignment).filter(
+        ProjectAssignment.id == assignment_id,
+        ProjectAssignment.project_id == project_id
+    ).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="未找到分配记录")
+
+    # 只能删除自己的记录
+    if assignment.assignee_id != current_user.id:
+        raise HTTPException(status_code=403, detail="只能删除自己的贡献记录")
+
+    # 已提交完结的分配禁止删除
+    if assignment.status == AssignmentStatus.submitted.value:
+        raise HTTPException(status_code=400, detail="已提交完结申请，请先撤回后再删除")
+
+    db.delete(assignment)
+    db.commit()
+    return {"message": "删除成功"}
+
+
+@router.post("/{project_id}/contributions")
+async def add_contribution(
+    project_id: int,
+    request: ContributionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """添加贡献记录（员工只能为自己添加，且必须已被分配到此项目）"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    if project.status == ProjectStatus.completed:
+        raise HTTPException(status_code=400, detail="项目已完成，无法添加贡献")
+
+    # 必须已被分配到此项目
+    my_assignments = db.query(ProjectAssignment).filter(
+        ProjectAssignment.project_id == project_id,
+        ProjectAssignment.assignee_id == current_user.id
+    ).all()
+    if not my_assignments:
+        raise HTTPException(status_code=403, detail="您未被分配到此项目")
+
+    # 如果已提交完结，禁止添加新贡献
+    if any((a.status or "pending") == AssignmentStatus.submitted.value for a in my_assignments):
+        raise HTTPException(status_code=400, detail="已提交完结申请，请先撤回后再添加贡献")
+
+    assignment = ProjectAssignment(
+        project_id=project_id,
+        assignee_id=current_user.id,
+        department=request.department,
+        contribution=request.contribution
+    )
+    db.add(assignment)
+    db.commit()
+
+    return {"message": "添加成功"}
+
+
+@router.patch("/{project_id}/submit-completion")
+async def submit_completion(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """员工提交完结申请（批量锁定自己在该项目的所有分配记录）"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    if project.status == ProjectStatus.completed:
+        raise HTTPException(status_code=400, detail="项目已完成，无法操作")
+
+    my_assignments = db.query(ProjectAssignment).filter(
+        ProjectAssignment.project_id == project_id,
+        ProjectAssignment.assignee_id == current_user.id
+    ).all()
+    if not my_assignments:
+        raise HTTPException(status_code=404, detail="您未被分配到此项目")
+
+    already_submitted = all(
+        (a.status or "pending") == AssignmentStatus.submitted.value
+        for a in my_assignments
+    )
+    if already_submitted:
+        raise HTTPException(status_code=400, detail="已经提交过完结申请")
+
+    for a in my_assignments:
+        a.status = AssignmentStatus.submitted.value
+    db.commit()
+    return {"message": "完结申请已提交"}
+
+
+@router.patch("/{project_id}/retract-completion")
+async def retract_completion(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """员工撤回完结申请（批量解锁自己在该项目的所有分配记录）"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    if project.status == ProjectStatus.completed:
+        raise HTTPException(status_code=400, detail="项目已完成，无法操作")
+
+    my_assignments = db.query(ProjectAssignment).filter(
+        ProjectAssignment.project_id == project_id,
+        ProjectAssignment.assignee_id == current_user.id
+    ).all()
+    if not my_assignments:
+        raise HTTPException(status_code=404, detail="您未被分配到此项目")
+
+    any_submitted = any(
+        (a.status or "pending") == AssignmentStatus.submitted.value
+        for a in my_assignments
+    )
+    if not any_submitted:
+        raise HTTPException(status_code=400, detail="当前状态无法撤回")
+
+    for a in my_assignments:
+        a.status = AssignmentStatus.pending.value
+    db.commit()
+    return {"message": "完结申请已撤回"}

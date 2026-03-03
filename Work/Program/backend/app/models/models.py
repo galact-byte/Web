@@ -20,6 +20,11 @@ class ProjectStatus(str, enum.Enum):
     completed = "completed"  # 已完成
 
 
+class AssignmentStatus(str, enum.Enum):
+    pending = "pending"      # 待提交
+    submitted = "submitted"  # 已提交完结
+
+
 class User(Base):
     """用户表"""
     __tablename__ = "users"
@@ -96,7 +101,8 @@ class ProjectAssignment(Base):
     assignee_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     department = Column(String(100), nullable=True)  # 部门
     contribution = Column(Text, nullable=True)  # 人员贡献率描述
-    
+    status = Column(String(20), server_default="pending", nullable=False)  # pending / submitted
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
