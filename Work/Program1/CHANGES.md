@@ -1,3 +1,134 @@
+# 修改记录 — 定级备案管理系统（后端 Bug 修复）
+
+> **修订记录**
+>
+> - v1.2.47: 修复3个后端 Bug：FastAPI 路由顺序冲突（静态路径被参数路径拦截）、密码长度策略不一致、API 安全性缺陷。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### `app/main.py` — Bug 1: FastAPI 路由顺序冲突修复
+
+- **修改位置**：organizations 路由区域（原行 2596 附近）、systems 路由区域（原行 3044 附近）
+- **修改内容**：将以下静态路由函数移动到对应参数路由之前：
+  - `/api/organizations/recycle-bin/list`、`/api/organizations/recycle-bin/cleanup`
+  - `/api/organizations/export/excel`、`/api/organizations/import/excel`、`/api/organizations/import/word`
+  - `/api/systems/recycle-bin/list`、`/api/systems/recycle-bin/cleanup`
+  - `/api/systems/export/excel`、`/api/systems/import/excel`、`/api/systems/import/word`
+  - 全部移动到 `/{org_id}` 和 `/{system_id}` 参数路由之前，确保 FastAPI 优先匹配静态路径
+
+### `app/main.py` — Bug 2: 密码长度策略统一
+
+- **修改位置**：第 1841 行（`POST /api/auth/users` 创建用户处）
+- **修改内容**：
+  ```python
+  # 修改前
+  if not username or len(password) < 6:
+      raise HTTPException(status_code=400, detail="用户名不能为空，密码至少6位。")
+  # 修改后
+  if not username or len(password) < 8:
+      raise HTTPException(status_code=400, detail="用户名不能为空，密码至少8位。")
+  ```
+
+### `app/main.py` — Bug 3: API 安全性修复
+
+- **修改位置**：第 2001 行（`POST /api/templates/import-local-official` 函数参数）
+- **修改内容**：
+  ```python
+  # 修改前
+  actor: str = Query("admin"),
+  # 修改后
+  actor: str = Query("system"),
+  ```
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `app/main.py` |
+
+---
+
+## 测试方式
+
+1. 启动后端服务：`uvicorn app.main:app --reload`
+2. 访问 `GET /api/organizations/recycle-bin/list`，确认返回回收站列表而非 404/422
+3. 访问 `GET /api/organizations/export/excel`，确认返回 Excel 文件而非路由参数错误
+4. 访问 `GET /api/systems/recycle-bin/list`，确认返回回收站列表而非 404/422
+5. 访问 `GET /api/systems/export/excel`，确认返回 Excel 文件而非路由参数错误
+6. 尝试创建用户时设置7位密码，确认返回"密码至少8位"错误
+7. 验证 `/api/templates/import-local-official` 的 actor 默认值为 system
+
+---
+
+# 修改记录 — 定级备案管理系统（数据看板前端 UI 增强）
+
+> **修订记录**
+>
+> - v1.2.46: 对数据看板进行5项前端 UI 优化：统计卡片彩色边框、图表容器视觉增强、下钻表格序号列、空状态友好提示、移动端汉堡菜单按钮。
+
+## 新增文件 (如有)
+
+无
+
+---
+
+## 修改文件
+
+### app/static/style.css — 视觉增强与移动端适配
+
+- **修改位置**：`.card` 区块、`.charts` 区块、`@media (max-width: 1024px)` 媒体查询。
+- **修改内容**：
+  - 新增 `.card-blue`、`.card-green`、`.card-orange`、`.card-purple` 四个彩色左边框类及对应数字颜色规则；
+  - `.charts > div` 添加 `padding:16px`、`border-radius:8px`、`background:var(--bg-main)`、`border:1px solid var(--border-color)` 及 `position:relative`；
+  - 新增 `.empty-hint` 样式（默认隐藏，居中灰色"暂无数据"提示）；
+  - 新增 `.sidebar-toggle` 默认隐藏的汉堡菜单按钮样式；
+  - 媒体查询中启用 `.sidebar-toggle { display: inline-flex; }` 并添加 `.sidebar.sidebar-open` 固定展开状态。
+
+### app/templates/index.html — 看板结构与交互增强
+
+- **修改位置**：`.cards` 区块、`.charts` 区块、下钻表格、`loadDashboard` 函数、`loadDrilldown` 函数。
+- **修改内容**：
+  - 四张统计卡片分别添加 `card-blue`、`card-green`、`card-orange`、`card-purple` 类名；
+  - 每个图表 `canvas` 旁添加 `<span class="empty-hint">暂无数据</span>`；
+  - 下钻表格表头由4列扩展为6列：序号、类型、ID、名称、行业/等级、地区/编号；
+  - 新增 `showChart()` 辅助函数处理空数据状态（隐藏 canvas / 显示 empty-hint）；
+  - `loadDashboard` 改用 `showChart()` 包装三个图表渲染调用；
+  - `loadDrilldown` 使用统一计数器 `idx` 为单位行和系统行生成连续序号，列数据分别拆为行业/等级与地区/编号两列。
+
+### app/templates/base.html — 移动端导航增强
+
+- **修改位置**：`top-header` 内 `breadcrumb` 前。
+- **修改内容**：插入汉堡菜单按钮，点击后对 `.sidebar` 切换 `sidebar-open` 类，在小屏幕下以固定定位方式展开侧边栏。
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | app/static/style.css |
+| **修改** | app/templates/index.html |
+| **修改** | app/templates/base.html |
+| **修改** | CHANGES.md |
+
+---
+
+## 测试方式
+
+1. 启动服务（`python -m uvicorn app.main:app --reload` 或对应启动脚本），访问 `http://localhost:8000/`。
+2. 确认4张统计卡片分别显示蓝/绿/橙/紫色左边框，且数字颜色与边框一致。
+3. 在筛选条件下使数据为空，确认图表区域显示"暂无数据"灰色文字，canvas 被隐藏。
+4. 点击图表柱子触发下钻，确认明细表格显示6列（含序号列），序号从1连续递增。
+5. 缩小浏览器宽度至 1024px 以下，确认顶部出现汉堡菜单按钮，点击可展开/收起侧边栏。
+
 # 修改记录 — 定级备案管理系统（官方新备案表导入可用性修复）
 
 > **修订记录**

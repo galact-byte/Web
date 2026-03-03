@@ -60,19 +60,19 @@
 </div>
 
 <div class="cards">
-  <div class="card">
+  <div class="card card-blue">
     <div class="hint">单位总数 <i class="fas fa-building" style="float:right;opacity:0.5"></i></div>
     <b id="orgCount">0</b>
   </div>
-  <div class="card">
+  <div class="card card-green">
     <div class="hint">系统总数 <i class="fas fa-server" style="float:right;opacity:0.5"></i></div>
     <b id="sysCount">0</b>
   </div>
-  <div class="card">
+  <div class="card card-orange">
     <div class="hint">待审核报告 <i class="fas fa-clipboard-check" style="float:right;opacity:0.5"></i></div>
     <b id="pendingReports">0</b>
   </div>
-  <div class="card">
+  <div class="card card-purple">
     <div class="hint">进行中项目 <i class="fas fa-spinner" style="float:right;opacity:0.5"></i></div>
     <b id="inProgressProjects">0</b>
   </div>
@@ -81,9 +81,9 @@
 <div class="panel">
   <h2><i class="fas fa-chart-pie"></i> 分布统计（点击柱子可下钻）</h2>
   <div class="charts">
-    <div style="height:300px"><canvas id="regionChart"></canvas></div>
-    <div style="height:300px"><canvas id="industryChart"></canvas></div>
-    <div style="height:300px"><canvas id="levelChart"></canvas></div>
+    <div style="height:300px"><canvas id="regionChart"></canvas><span class="empty-hint">暂无数据</span></div>
+    <div style="height:300px"><canvas id="industryChart"></canvas><span class="empty-hint">暂无数据</span></div>
+    <div style="height:300px"><canvas id="levelChart"></canvas><span class="empty-hint">暂无数据</span></div>
   </div>
 </div>
 
@@ -97,7 +97,7 @@
   <p class="hint" id="drillHint">点击上方图表柱子查看明细</p>
   <table>
     <thead>
-      <tr><th>类型</th><th>ID</th><th>名称</th><th>附加信息</th></tr>
+      <tr><th>序号</th><th>类型</th><th>ID</th><th>名称</th><th>行业/等级</th><th>地区/编号</th></tr>
     </thead>
     <tbody id="drillTable"></tbody>
   </table>
@@ -183,6 +183,19 @@ function upsertChart(inst, el, label, dataset, color, dimension) {
   });
 }
 
+function showChart(canvasId, dataset, renderFn) {
+  const canvas = document.getElementById(canvasId);
+  const hint = canvas ? canvas.parentElement.querySelector('.empty-hint') : null;
+  if (!dataset || dataset.length === 0) {
+    if (canvas) canvas.style.display = 'none';
+    if (hint) hint.style.display = 'block';
+    return null;
+  }
+  if (canvas) canvas.style.display = '';
+  if (hint) hint.style.display = 'none';
+  return renderFn();
+}
+
 async function loadDashboard() {
   const params = getFilters();
   const res = await fetch('/api/dashboard/summary?' + params.toString(), {headers: authHeaders()});
@@ -196,9 +209,12 @@ async function loadDashboard() {
   document.getElementById('pendingReports').textContent = data.totals.pending_review_reports;
   document.getElementById('inProgressProjects').textContent = data.totals.in_progress_projects;
 
-  regionChart = upsertChart(regionChart, 'regionChart', '地区分布', data.region_distribution, '#3b82f6', 'region');
-  industryChart = upsertChart(industryChart, 'industryChart', '行业分布', data.industry_distribution, '#10b981', 'industry');
-  levelChart = upsertChart(levelChart, 'levelChart', '系统级别分布', data.level_distribution, '#f59e0b', 'level');
+  regionChart = showChart('regionChart', data.region_distribution, () =>
+    upsertChart(regionChart, 'regionChart', '地区分布', data.region_distribution, '#3b82f6', 'region'));
+  industryChart = showChart('industryChart', data.industry_distribution, () =>
+    upsertChart(industryChart, 'industryChart', '行业分布', data.industry_distribution, '#10b981', 'industry'));
+  levelChart = showChart('levelChart', data.level_distribution, () =>
+    upsertChart(levelChart, 'levelChart', '系统级别分布', data.level_distribution, '#f59e0b', 'level'));
   renderHeatMap(data.region_distribution || []);
 }
 
@@ -247,11 +263,14 @@ async function loadDrilldown(dimension, value) {
   }
   document.getElementById('drillHint').textContent = `当前下钻: ${dimension} = ${value}`;
   const rows = [];
+  let idx = 0;
   for (const i of data.organizations) {
-    rows.push(`<tr><td>单位</td><td>${esc(i.id)}</td><td>${esc(i.name)}</td><td>${esc(i.industry || '')} / ${esc(i.filing_region || '')}</td></tr>`);
+    rows.push(`<tr><td>${idx+1}</td><td>单位</td><td>${esc(i.id)}</td><td>${esc(i.name)}</td><td>${esc(i.industry || '-')}</td><td>${esc(i.filing_region || '-')}</td></tr>`);
+    idx++;
   }
   for (const i of data.systems) {
-    rows.push(`<tr><td>系统</td><td>${esc(i.id)}</td><td>${esc(i.system_name)}</td><td>${esc(i.system_code)} / ${esc(i.proposed_level)}级</td></tr>`);
+    rows.push(`<tr><td>${idx+1}</td><td>系统</td><td>${esc(i.id)}</td><td>${esc(i.system_name)}</td><td>${esc(i.proposed_level)}级</td><td>${esc(i.system_code || '-')}</td></tr>`);
+    idx++;
   }
   document.getElementById('drillTable').innerHTML = rows.join('');
 }
