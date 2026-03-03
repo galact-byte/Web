@@ -1,81 +1,134 @@
 {% extends "base.html" %}
 {% block content %}
+
+<!-- 系统信息录入面板 -->
 <div class="panel">
-  <h2>系统信息录入</h2>
+  <h2><i class="fas fa-server"></i> 系统信息录入</h2>
   <div class="grid grid-3">
-    <div><label>关联单位ID*</label><input id="organizationId" type="number" /></div>
-    <div><label>系统名称*</label><input id="systemName" /></div>
-    <div><label>拟定等级*</label>
+    <div><label>关联单位ID <span style="color:var(--danger)">*</span></label><input id="organizationId" type="number" placeholder="单位数字ID" /></div>
+    <div><label>系统名称 <span style="color:var(--danger)">*</span></label><input id="systemName" /></div>
+    <div>
+      <label>拟定等级 <span style="color:var(--danger)">*</span></label>
       <select id="proposedLevel">
-        <option value="1">1级</option><option value="2">2级</option><option value="3" selected>3级</option>
-        <option value="4">4级</option><option value="5">5级</option>
+        <option value="1">1级</option>
+        <option value="2">2级</option>
+        <option value="3" selected>3级</option>
+        <option value="4">4级</option>
+        <option value="5">5级</option>
       </select>
     </div>
-    <div><label>系统类型</label><input id="systemType" /></div>
+    <div><label>系统类型</label><input id="systemType" placeholder="如：业务系统/管理系统" /></div>
     <div><label>部署方式</label><input id="deploymentMode" placeholder="本地部署/云平台部署/混合部署" /></div>
     <div><label>录入人</label><input id="createdBy" value="tester" /></div>
-    <div class="grid-3" style="grid-column: 1 / -1;">
-      <div><label>业务描述</label><textarea id="businessDescription"></textarea></div>
-      <div><label>定级依据</label><textarea id="levelBasis"></textarea></div>
-      <div><label>定级理由</label><textarea id="levelReason"></textarea></div>
+    <!-- 文本域跨列 -->
+    <div style="grid-column: 1 / -1; display:grid; grid-template-columns: repeat(3,1fr); gap:16px;">
+      <div><label>业务描述</label><textarea id="businessDescription" placeholder="系统承载的业务说明"></textarea></div>
+      <div><label>定级依据</label><textarea id="levelBasis" placeholder="定级依据说明"></textarea></div>
+      <div><label>定级理由</label><textarea id="levelReason" placeholder="定级理由说明"></textarea></div>
     </div>
   </div>
   <br />
-  <button onclick="createSystem()">保存系统</button>
-  <input id="sysWordFile" type="file" accept=".docx" />
-  <button class="btn-lite" onclick="importSystemWord()">Word导入</button>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <button onclick="createSystem()"><i class="fas fa-save"></i> 保存系统</button>
+    <label style="margin:0;display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+      <input id="sysWordFile" type="file" accept=".docx" style="width:auto;padding:4px;" />
+    </label>
+    <button class="btn-lite" onclick="importSystemWord()"><i class="fas fa-file-word"></i> Word导入</button>
+  </div>
   <div class="result" id="sysResult">可在此查看操作结果。</div>
 </div>
 
+<!-- 系统列表面板 -->
 <div class="panel">
-  <h2>系统列表</h2>
-  <div class="row">
-    <div><label>系统名称</label><input id="searchSystemName" /></div>
-    <div><label>系统编号</label><input id="searchSystemCode" /></div>
-    <div><label>单位名称</label><input id="searchOrganizationName" /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="loadSystems()">查询</button></div>
+  <h2><i class="fas fa-list"></i> 系统列表</h2>
+  <!-- 搜索工具栏 -->
+  <div class="search-bar">
+    <div>
+      <label>系统名称</label>
+      <input id="searchSystemName" placeholder="模糊搜索" onkeydown="if(event.key==='Enter')loadSystems()" />
+    </div>
+    <div>
+      <label>系统编号</label>
+      <input id="searchSystemCode" placeholder="精确匹配" onkeydown="if(event.key==='Enter')loadSystems()" />
+    </div>
+    <div>
+      <label>单位名称</label>
+      <input id="searchOrganizationName" placeholder="关键字" onkeydown="if(event.key==='Enter')loadSystems()" />
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button onclick="loadSystems()"><i class="fas fa-search"></i> 查询</button>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="clearSysSearch()"><i class="fas fa-times"></i> 清空</button>
+    </div>
   </div>
-  <br />
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th><th>系统名称</th><th>系统编号</th><th>单位</th><th>等级</th><th>部署方式</th><th>状态</th><th>操作</th>
-      </tr>
-    </thead>
-    <tbody id="sysTable"></tbody>
-  </table>
+
+  <div class="table-wrapper">
+    <table class="table-sticky">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>系统名称</th>
+          <th>系统编号</th>
+          <th>所属单位</th>
+          <th>等级</th>
+          <th>部署方式</th>
+          <th>状态</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="sysTable">
+        <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px;">加载中…</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
+<!-- 系统回收站面板 -->
 <div class="panel">
-  <h2>系统回收站（30天）</h2>
-  <button class="btn-lite" onclick="loadRecycleSystems()">刷新回收站</button>
-  <button class="btn-lite" onclick="cleanupRecycleSystems()">清理已过期</button>
-  <br /><br />
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th><th>系统名称</th><th>删除人</th><th>删除时间</th><th>剩余天数</th><th>操作</th>
-      </tr>
-    </thead>
-    <tbody id="sysRecycleTable"></tbody>
-  </table>
+  <h2><i class="fas fa-trash-restore"></i> 系统回收站（30天）</h2>
+  <div style="display:flex;gap:8px;margin-bottom:16px;">
+    <button class="btn-lite" onclick="loadRecycleSystems()"><i class="fas fa-sync-alt"></i> 刷新回收站</button>
+    <button class="btn-lite btn-danger" onclick="cleanupRecycleSystems()"><i class="fas fa-broom"></i> 清理已过期</button>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>系统名称</th><th>删除人</th><th>删除时间</th><th>剩余天数</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="sysRecycleTable">
+        <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">暂无数据</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
+<!-- 系统删除申请面板 -->
 <div class="panel">
-  <h2>系统删除申请</h2>
-  <button class="btn-lite" onclick="loadSystemDeleteRequests()">刷新申请列表</button>
-  <br /><br />
-  <table>
-    <thead>
-      <tr>
-        <th>申请ID</th><th>系统ID</th><th>申请人</th><th>状态</th><th>原因</th><th>操作</th>
-      </tr>
-    </thead>
-    <tbody id="sysDeleteReqTable"></tbody>
-  </table>
+  <h2><i class="fas fa-clipboard-list"></i> 系统删除申请</h2>
+  <div style="margin-bottom:16px;">
+    <button class="btn-lite" onclick="loadSystemDeleteRequests()"><i class="fas fa-sync-alt"></i> 刷新申请列表</button>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>申请ID</th><th>系统ID</th><th>申请人</th><th>状态</th><th>原因</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="sysDeleteReqTable">
+        <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">暂无数据</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <script>
+/* 工具函数 */
 function authHeaders() {
   const token = localStorage.getItem('auth_token') || '';
   return token ? {'X-Auth-Token': token} : {};
@@ -88,10 +141,48 @@ function apiErrorText(data) {
   return data.message || '请求失败';
 }
 
-function setSysResult(text) {
-  document.getElementById('sysResult').textContent = text;
+function esc(v) {
+  return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
+function setSysResult(text) {
+  const el = document.getElementById('sysResult');
+  el.textContent = text;
+  el.style.borderColor = 'var(--primary)';
+  setTimeout(() => { el.style.borderColor = ''; }, 1200);
+}
+
+/* 等级徽章 */
+function levelBadge(level) {
+  const colors = {
+    1: '#64748b', 2: '#0891b2', 3: '#16a34a', 4: '#d97706', 5: '#dc2626'
+  };
+  const color = colors[level] || '#64748b';
+  return `<span style="display:inline-block;padding:2px 10px;border-radius:99px;font-size:0.78rem;font-weight:600;background:${color}18;color:${color};">${esc(level)}级</span>`;
+}
+
+/* 状态徽章 */
+function statusBadge(archived) {
+  return archived
+    ? '<span class="status-badge status-archived">已归档</span>'
+    : '<span class="status-badge status-active">在用</span>';
+}
+
+function reqStatusBadge(status) {
+  const map = { pending: ['status-pending', '待审核'], approved: ['status-approved', '已通过'], rejected: ['status-rejected', '已驳回'] };
+  const [cls, label] = map[status] || ['', status];
+  return `<span class="status-badge ${cls}">${esc(label)}</span>`;
+}
+
+/* 清空搜索 */
+function clearSysSearch() {
+  document.getElementById('searchSystemName').value = '';
+  document.getElementById('searchSystemCode').value = '';
+  document.getElementById('searchOrganizationName').value = '';
+  loadSystems();
+}
+
+/* 表单数据 */
 function formSystemPayload() {
   return {
     organization_id: Number(document.getElementById('organizationId').value),
@@ -108,6 +199,14 @@ function formSystemPayload() {
 
 async function createSystem() {
   const payload = formSystemPayload();
+  if (!payload.organization_id || isNaN(payload.organization_id)) {
+    setSysResult('关联单位ID不能为空，请填写有效的数字ID。');
+    return;
+  }
+  if (!payload.system_name) {
+    setSysResult('系统名称为必填项，不能为空。');
+    return;
+  }
   const res = await fetch('/api/systems', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', ...authHeaders()},
@@ -125,9 +224,10 @@ async function createSystem() {
 async function importSystemWord() {
   const file = document.getElementById('sysWordFile').files[0];
   if (!file) {
-    alert('请选择Word文件');
+    setSysResult('请选择Word文件后再导入。');
     return;
   }
+  setSysResult('正在导入Word，请稍候...');
   const fd = new FormData();
   fd.append('file', file);
   const res = await fetch('/api/systems/import/word?actor=tester', {method: 'POST', headers: authHeaders(), body: fd});
@@ -149,19 +249,30 @@ async function loadSystems() {
   if (systemCode) params.set('system_code', systemCode);
   if (organizationName) params.set('organization_name', organizationName);
   const res = await fetch('/api/systems?' + params.toString(), {headers: authHeaders()});
+  if (!res.ok) {
+    document.getElementById('sysTable').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:24px;">加载失败，请刷新重试</td></tr>';
+    return;
+  }
   const data = await res.json();
-  document.getElementById('sysTable').innerHTML = data.items.map(i => `
+  const items = data.items || [];
+  if (!items.length) {
+    document.getElementById('sysTable').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px;">暂无数据</td></tr>';
+    return;
+  }
+  document.getElementById('sysTable').innerHTML = items.map(i => `
     <tr>
-      <td>${i.id}</td>
-      <td>${i.system_name}</td>
-      <td>${i.system_code}</td>
-      <td>${i.organization_name || ''}</td>
-      <td>${i.proposed_level}级</td>
-      <td>${i.deployment_mode || ''}</td>
-      <td>${i.archived ? '已归档' : '在用'}</td>
+      <td style="color:var(--text-muted);font-size:0.82rem;">${esc(i.id)}</td>
+      <td><strong>${esc(i.system_name)}</strong></td>
+      <td style="font-family:monospace;font-size:0.85rem;color:var(--text-muted);">${esc(i.system_code || '-')}</td>
+      <td>${esc(i.organization_name || '-')}</td>
+      <td>${levelBadge(i.proposed_level)}</td>
+      <td>${esc(i.deployment_mode || '-')}</td>
+      <td>${statusBadge(i.archived)}</td>
       <td>
-        <button class="btn-lite" onclick="archiveSystem(${i.id})">归档</button>
-        <button class="btn-lite" onclick="deleteSystemRow(${i.id})">删除</button>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-lite btn-sm" onclick="archiveSystem(${i.id})"><i class="fas fa-archive"></i> 归档</button>
+          <button class="btn-lite btn-sm btn-danger" onclick="deleteSystemRow(${i.id})"><i class="fas fa-trash"></i> 删除</button>
+        </div>
       </td>
     </tr>
   `).join('');
@@ -171,9 +282,10 @@ async function archiveSystem(id) {
   const res = await fetch(`/api/systems/${id}/archive?actor=tester`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
-    alert(apiErrorText(data));
+    setSysResult(`归档失败：${apiErrorText(data)}`);
     return;
   }
+  setSysResult(`系统 #${id} 已归档。`);
   loadSystems();
 }
 
@@ -191,15 +303,28 @@ async function deleteSystemRow(id) {
 
 async function loadRecycleSystems() {
   const res = await fetch('/api/systems/recycle-bin/list', {headers: authHeaders()});
+  if (!res.ok) {
+    document.getElementById('sysRecycleTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:24px;">加载失败</td></tr>';
+    return;
+  }
   const data = await res.json();
-  document.getElementById('sysRecycleTable').innerHTML = data.items.map(i => `
+  const items = data.items || [];
+  if (!items.length) {
+    document.getElementById('sysRecycleTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">回收站为空</td></tr>';
+    return;
+  }
+  document.getElementById('sysRecycleTable').innerHTML = items.map(i => `
     <tr>
-      <td>${i.id}</td>
-      <td>${i.system_name}</td>
-      <td>${i.deleted_by || ''}</td>
-      <td>${i.deleted_at || ''}</td>
-      <td>${i.days_left}</td>
-      <td><button class="btn-lite" onclick="restoreSystem(${i.id})">恢复</button></td>
+      <td>${esc(i.id)}</td>
+      <td>${esc(i.system_name)}</td>
+      <td>${esc(i.deleted_by || '-')}</td>
+      <td style="font-size:0.85rem;color:var(--text-muted);">${esc(i.deleted_at || '-')}</td>
+      <td>
+        <span style="color:${i.days_left <= 7 ? 'var(--danger)' : 'var(--text-main)'}">
+          ${esc(i.days_left)} 天
+        </span>
+      </td>
+      <td><button class="btn-lite btn-sm" onclick="restoreSystem(${i.id})"><i class="fas fa-undo"></i> 恢复</button></td>
     </tr>
   `).join('');
 }
@@ -230,19 +355,30 @@ async function cleanupRecycleSystems() {
 
 async function loadSystemDeleteRequests() {
   const res = await fetch('/api/delete-requests?entity_type=system', {headers: authHeaders()});
+  if (!res.ok) {
+    document.getElementById('sysDeleteReqTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:24px;">加载失败</td></tr>';
+    return;
+  }
   const data = await res.json();
-  document.getElementById('sysDeleteReqTable').innerHTML = (data.items || []).map(i => `
+  const items = data.items || [];
+  if (!items.length) {
+    document.getElementById('sysDeleteReqTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">暂无申请</td></tr>';
+    return;
+  }
+  document.getElementById('sysDeleteReqTable').innerHTML = items.map(i => `
     <tr>
-      <td>${i.id}</td>
-      <td>${i.entity_id}</td>
-      <td>${i.requested_by || ''}</td>
-      <td>${i.status}</td>
-      <td>${i.reason || ''}</td>
+      <td>${esc(i.id)}</td>
+      <td>${esc(i.entity_id)}</td>
+      <td>${esc(i.requested_by || '-')}</td>
+      <td>${reqStatusBadge(i.status)}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${esc(i.reason || '-')}</td>
       <td>
         ${i.status === 'pending' ? `
-          <button class="btn-lite" onclick="reviewSystemDeleteReq(${i.id}, 'approve')">通过</button>
-          <button class="btn-lite" onclick="reviewSystemDeleteReq(${i.id}, 'reject')">驳回</button>
-        ` : ''}
+          <div style="display:flex;gap:6px;">
+            <button class="btn-lite btn-sm" onclick="reviewSystemDeleteReq(${i.id}, 'approve')"><i class="fas fa-check"></i> 通过</button>
+            <button class="btn-lite btn-sm btn-danger" onclick="reviewSystemDeleteReq(${i.id}, 'reject')"><i class="fas fa-times"></i> 驳回</button>
+          </div>
+        ` : '-'}
       </td>
     </tr>
   `).join('');
@@ -262,6 +398,7 @@ async function reviewSystemDeleteReq(id, action) {
   loadRecycleSystems();
 }
 
+/* 页面初始化 */
 loadSystems();
 loadRecycleSystems();
 loadSystemDeleteRequests();

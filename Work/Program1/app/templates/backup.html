@@ -1,23 +1,48 @@
 {% extends "base.html" %}
 {% block content %}
+
+<!-- 备份与恢复操作面板 -->
 <div class="panel" data-role-only="admin">
-  <h2>数据备份与恢复</h2>
+  <h2><i class="fas fa-database"></i> 数据备份与恢复</h2>
   <p class="hint">建议至少每日备份一次。恢复会覆盖当前数据库与上传文件，请仅在确认需要回滚时执行。</p>
-  <div class="row">
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="createBackup()">创建备份并下载</button></div>
-    <div><label>恢复文件(.zip)</label><input id="restoreFile" type="file" accept=".zip" /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="restoreBackup()">上传并恢复</button></div>
+
+  <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;">
+    <div>
+      <button onclick="createBackup()"><i class="fas fa-download"></i> 创建备份并下载</button>
+    </div>
+    <div>
+      <label style="margin-bottom:6px;">恢复文件（.zip）</label>
+      <input id="restoreFile" type="file" accept=".zip" style="width:auto;padding:6px;" />
+    </div>
+    <div>
+      <button class="btn-lite btn-danger" onclick="restoreBackup()"><i class="fas fa-upload"></i> 上传并恢复</button>
+    </div>
   </div>
-  <pre class="result" id="backupResult">仅管理员可执行备份与恢复操作。</pre>
+
+  <pre class="result" id="backupResult" style="min-height:48px;">仅管理员可执行备份与恢复操作。</pre>
 </div>
 
+<!-- 备份文件列表面板 -->
 <div class="panel" data-role-only="admin">
-  <h2>备份文件列表</h2>
-  <button class="btn-lite" onclick="loadBackups()">刷新列表</button>
-  <table>
-    <thead><tr><th>文件名</th><th>大小(MB)</th><th>更新时间</th><th>操作</th></tr></thead>
-    <tbody id="backupTable"></tbody>
-  </table>
+  <h2><i class="fas fa-archive"></i> 备份文件列表</h2>
+  <div style="margin-bottom:16px;">
+    <button class="btn-lite" onclick="loadBackups()"><i class="fas fa-sync-alt"></i> 刷新列表</button>
+  </div>
+  <div class="table-wrapper">
+    <table class="table-sticky">
+      <thead>
+        <tr>
+          <th>文件名</th>
+          <th>大小（MB）</th>
+          <th>更新时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="backupTable">
+        <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:32px;">加载中…</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <script>
@@ -27,16 +52,21 @@ function authHeaders() {
 }
 
 function setResult(text) {
-  document.getElementById('backupResult').textContent = text;
+  const el = document.getElementById('backupResult');
+  el.textContent = text;
+  el.style.borderColor = 'var(--primary)';
+  setTimeout(() => { el.style.borderColor = ''; }, 1500);
 }
 
 function esc(v) {
-  return String(v ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch] || ch));
+  return String(v ?? '').replace(/[&<>"']/g, ch =>
+    ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch)
+  );
 }
 
 function fmtMb(size) {
   const mb = Number(size || 0) / 1024 / 1024;
-  return mb.toFixed(2);
+  return mb < 0.01 ? '< 0.01' : mb.toFixed(2);
 }
 
 async function createBackup() {
@@ -56,7 +86,7 @@ async function restoreBackup() {
   const input = document.getElementById('restoreFile');
   const file = input.files && input.files[0];
   if (!file) {
-    setResult('请先选择备份压缩包。');
+    setResult('请先选择备份压缩包（.zip）。');
     return;
   }
   if (!confirm('恢复将覆盖当前数据库与上传文件，确认继续？')) return;
@@ -81,19 +111,28 @@ async function loadBackups() {
   const data = await res.json();
   if (!res.ok) {
     setResult(`读取备份列表失败：${data.detail || data.message || '未知错误'}`);
-    document.getElementById('backupTable').innerHTML = '';
+    document.getElementById('backupTable').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--danger);padding:24px;">加载失败</td></tr>';
     return;
   }
-  const rows = (data.items || []).map(item => `
+  const items = data.items || [];
+  if (!items.length) {
+    document.getElementById('backupTable').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">暂无备份文件</td></tr>';
+    setResult(`共 0 个备份文件。`);
+    return;
+  }
+  document.getElementById('backupTable').innerHTML = items.map(item => `
     <tr>
-      <td>${esc(item.file_name)}</td>
-      <td>${fmtMb(item.file_size)}</td>
-      <td>${esc(item.updated_at || '')}</td>
-      <td><button class="btn-lite" onclick="window.open('/api/backup/download/${encodeURIComponent(item.file_name)}', '_blank')">下载</button></td>
+      <td style="font-family:monospace;font-size:0.85rem;">${esc(item.file_name)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;">${fmtMb(item.file_size)}</td>
+      <td style="font-size:0.85rem;color:var(--text-muted);">${esc(item.updated_at || '-')}</td>
+      <td>
+        <button class="btn-lite btn-sm" onclick="window.open('/api/backup/download/${encodeURIComponent(item.file_name)}', '_blank')">
+          <i class="fas fa-download"></i> 下载
+        </button>
+      </td>
     </tr>
   `).join('');
-  document.getElementById('backupTable').innerHTML = rows;
-  setResult(`共 ${data.total || 0} 个备份文件。`);
+  setResult(`共 ${data.total || items.length} 个备份文件。`);
 }
 
 loadBackups();

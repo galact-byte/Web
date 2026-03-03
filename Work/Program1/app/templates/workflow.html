@@ -1,25 +1,46 @@
 {% extends "base.html" %}
 {% block content %}
+
+<!-- 流程节点规则面板 -->
 <div class="panel">
-  <h2>流程节点规则</h2>
+  <h2><i class="fas fa-diagram-project"></i> 流程节点规则</h2>
   <p class="hint">可设置每个流程节点负责人与办理时限（小时）。点击输入框可直接编辑，保存后立即生效。</p>
-  <button class="btn-lite" onclick="loadRules()">加载规则</button>
-  <button class="btn-lite" onclick="saveRules()">保存规则</button>
-  <div class="result" id="rulesResult">点击“加载规则”后即可编辑。</div>
-  <table>
-    <thead>
-      <tr><th>节点</th><th>负责人</th><th>时限(小时)</th><th>启用</th></tr>
-    </thead>
-    <tbody id="rulesTable"></tbody>
-  </table>
+  <div style="display:flex;gap:8px;margin-bottom:16px;">
+    <button class="btn-lite" onclick="loadRules()"><i class="fas fa-sync-alt"></i> 加载规则</button>
+    <button onclick="saveRules()"><i class="fas fa-save"></i> 保存规则</button>
+  </div>
+  <div class="result" id="rulesResult">点击"加载规则"后即可编辑。</div>
+  <div class="table-wrapper" style="margin-top:12px;">
+    <table>
+      <thead>
+        <tr>
+          <th>节点名称</th>
+          <th>负责人</th>
+          <th>时限（小时）</th>
+          <th>启用</th>
+        </tr>
+      </thead>
+      <tbody id="rulesTable">
+        <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">点击"加载规则"查看</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
+<!-- 流程实例推进面板 -->
 <div class="panel">
-  <h2>流程实例推进</h2>
-  <div class="row">
-    <div><label>系统ID</label><input id="systemId" type="number" /></div>
-    <div><label>执行人</label><input id="actor" value="tester" /></div>
-    <div><label>动作</label>
+  <h2><i class="fas fa-play-circle"></i> 流程实例推进</h2>
+  <div class="search-bar">
+    <div>
+      <label>系统ID</label>
+      <input id="systemId" type="number" placeholder="关联系统ID" />
+    </div>
+    <div>
+      <label>执行人</label>
+      <input id="actor" value="tester" />
+    </div>
+    <div>
+      <label>动作</label>
       <select id="action">
         <option value="complete">完成当前节点</option>
         <option value="approve">审核通过</option>
@@ -28,43 +49,78 @@
         <option value="reset">重置流程</option>
       </select>
     </div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="advanceWorkflow()">推进</button></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="loadInstance()">查看实例</button></div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="loadInstance()"><i class="fas fa-eye"></i> 查看实例</button>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button onclick="advanceWorkflow()"><i class="fas fa-arrow-right"></i> 推进</button>
+    </div>
   </div>
-  <div class="row">
-    <div><label>延时小时</label><input id="extendHours" type="number" value="24" /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="extendDue()">延长时限</button></div>
+  <div class="search-bar" style="margin-top:0;">
+    <div>
+      <label>延时小时</label>
+      <input id="extendHours" type="number" value="24" min="1" style="max-width:120px;" />
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="extendDue()"><i class="fas fa-clock"></i> 延长时限</button>
+    </div>
   </div>
   <div class="result" id="instanceResult">可在此查看流程实例状态。</div>
 </div>
 
+<!-- 超时/临期提醒面板 -->
 <div class="panel">
-  <h2>超时/临期提醒</h2>
-  <div class="row">
-    <div><label>模式</label>
+  <h2><i class="fas fa-bell"></i> 超时/临期提醒</h2>
+  <div class="search-bar">
+    <div>
+      <label>模式</label>
       <select id="mode">
         <option value="all">全部</option>
         <option value="due">临期</option>
         <option value="overdue">超时</option>
       </select>
     </div>
-    <div><label>临期阈值(小时)</label><input id="withinHours" type="number" value="4" /></div>
-    <div><label>提醒渠道</label>
+    <div>
+      <label>临期阈值（小时）</label>
+      <input id="withinHours" type="number" value="4" min="1" />
+    </div>
+    <div>
+      <label>提醒渠道</label>
       <select id="reminderChannel">
         <option value="in_app">站内消息</option>
         <option value="email">邮件</option>
         <option value="both">站内+邮件</option>
       </select>
     </div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="loadReminders(false)">仅查看</button></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="loadReminders(true)">发送提醒</button></div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="loadReminders(false)"><i class="fas fa-search"></i> 仅查看</button>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button onclick="loadReminders(true)"><i class="fas fa-paper-plane"></i> 发送提醒</button>
+    </div>
   </div>
-  <table>
-    <thead>
-      <tr><th>系统</th><th>节点</th><th>负责人</th><th>到期时间</th><th>剩余秒</th><th>状态</th></tr>
-    </thead>
-    <tbody id="reminderTable"></tbody>
-  </table>
+  <div class="table-wrapper" style="margin-top:12px;">
+    <table>
+      <thead>
+        <tr>
+          <th>系统</th>
+          <th>节点</th>
+          <th>负责人</th>
+          <th>到期时间</th>
+          <th>剩余秒</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody id="reminderTable">
+        <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">点击"仅查看"或"发送提醒"加载数据</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <script>
@@ -75,11 +131,38 @@ function authHeaders() {
   return token ? {'X-Auth-Token': token} : {};
 }
 
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, ch =>
+    ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch)
+  );
+}
+
 function getErrorText(data, fallback='请求失败') {
   if (!data) return fallback;
   if (typeof data.detail === 'string') return data.detail;
   if (data.detail) return '请求参数不合法';
   return data.message || fallback;
+}
+
+function setResult(id, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.style.borderColor = 'var(--primary)';
+  setTimeout(() => { el.style.borderColor = ''; }, 1200);
+}
+
+/* 流程实例状态徽章 */
+function instanceStatusBadge(status) {
+  const map = {
+    pending:    ['status-pending', '待处理'],
+    in_progress:['status-active', '进行中'],
+    completed:  ['status-approved', '已完成'],
+    overdue:    ['status-rejected', '已超时'],
+    abnormal:   ['status-rejected', '异常']
+  };
+  const [cls, label] = map[status] || ['', status];
+  return `<span class="status-badge ${cls}">${esc(label || status)}</span>`;
 }
 
 function formatInstanceText(data) {
@@ -97,24 +180,31 @@ async function loadRules() {
   const res = await fetch('/api/workflow/rules', {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
-    document.getElementById('rulesResult').textContent = `加载失败：${getErrorText(data)}`;
+    setResult('rulesResult', `加载失败：${getErrorText(data)}`);
     return;
   }
   workflowRules = data.rules || [];
+  if (!workflowRules.length) {
+    document.getElementById('rulesTable').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">暂无规则</td></tr>';
+    setResult('rulesResult', '未找到规则配置。');
+    return;
+  }
   document.getElementById('rulesTable').innerHTML = workflowRules.map((r, i) => `
     <tr>
-      <td>${r.step_name}</td>
-      <td><input id="owner_${i}" value="${r.owner || ''}" /></td>
-      <td><input id="hours_${i}" type="number" min="1" value="${r.time_limit_hours || 24}" /></td>
-      <td><input id="enabled_${i}" type="checkbox" ${r.enabled ? 'checked' : ''} /></td>
+      <td><strong>${esc(r.step_name)}</strong></td>
+      <td><input id="owner_${i}" value="${esc(r.owner || '')}" style="max-width:160px;" /></td>
+      <td><input id="hours_${i}" type="number" min="1" value="${r.time_limit_hours || 24}" style="max-width:100px;" /></td>
+      <td style="text-align:center;">
+        <input id="enabled_${i}" type="checkbox" ${r.enabled ? 'checked' : ''} style="width:auto;padding:0;cursor:pointer;" />
+      </td>
     </tr>
   `).join('');
-  document.getElementById('rulesResult').textContent = `已加载 ${workflowRules.length} 条规则，可直接编辑后保存。`;
+  setResult('rulesResult', `已加载 ${workflowRules.length} 条规则，可直接编辑后保存。`);
 }
 
 async function saveRules() {
   if (!workflowRules.length) {
-    document.getElementById('rulesResult').textContent = '请先加载规则。';
+    setResult('rulesResult', '请先加载规则。');
     return;
   }
   const rules = workflowRules.map((r, i) => ({
@@ -130,15 +220,20 @@ async function saveRules() {
   });
   const data = await res.json();
   if (!res.ok) {
-    document.getElementById('rulesResult').textContent = `保存失败：${getErrorText(data)}`;
+    setResult('rulesResult', `保存失败：${getErrorText(data)}`);
     return;
   }
-  document.getElementById('rulesResult').textContent = data.message || '保存成功';
+  setResult('rulesResult', data.message || '保存成功');
   loadRules();
 }
 
 function getSystemId() {
-  return document.getElementById('systemId').value.trim();
+  const val = document.getElementById('systemId').value.trim();
+  if (!val) {
+    setResult('instanceResult', '请填写系统ID。');
+    return null;
+  }
+  return val;
 }
 
 async function loadInstance() {
@@ -146,7 +241,7 @@ async function loadInstance() {
   if (!systemId) return;
   const res = await fetch(`/api/workflow/instances/${systemId}`, {headers: authHeaders()});
   const data = await res.json();
-  document.getElementById('instanceResult').textContent = res.ok ? formatInstanceText(data) : `读取失败：${getErrorText(data)}`;
+  setResult('instanceResult', res.ok ? formatInstanceText(data) : `读取失败：${getErrorText(data)}`);
 }
 
 async function advanceWorkflow() {
@@ -156,7 +251,7 @@ async function advanceWorkflow() {
   const action = document.getElementById('action').value;
   const res = await fetch(`/api/workflow/instances/${systemId}/advance?actor=${encodeURIComponent(actor)}&action=${action}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
-  document.getElementById('instanceResult').textContent = res.ok ? (data.message || '流程已更新') : `推进失败：${getErrorText(data)}`;
+  setResult('instanceResult', res.ok ? (data.message || '流程已更新') : `推进失败：${getErrorText(data)}`);
   loadInstance();
 }
 
@@ -167,7 +262,7 @@ async function extendDue() {
   const actor = document.getElementById('actor').value.trim() || 'admin';
   const res = await fetch(`/api/workflow/instances/${systemId}/extend?hours=${hours}&actor=${encodeURIComponent(actor)}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
-  document.getElementById('instanceResult').textContent = res.ok ? (data.message || '时限已延长') : `延时失败：${getErrorText(data)}`;
+  setResult('instanceResult', res.ok ? (data.message || '时限已延长') : `延时失败：${getErrorText(data)}`);
   loadInstance();
 }
 
@@ -177,16 +272,28 @@ async function loadReminders(send) {
   const channel = document.getElementById('reminderChannel').value;
   const res = await fetch(`/api/workflow/reminders?mode=${mode}&within_hours=${withinHours}&send=${send}&channel=${channel}`, {method: 'GET', headers: authHeaders()});
   const data = await res.json();
-  document.getElementById('reminderTable').innerHTML = (data.items || []).map(i => `
+  const items = data.items || [];
+  if (!items.length) {
+    document.getElementById('reminderTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">暂无提醒项</td></tr>';
+    return;
+  }
+  document.getElementById('reminderTable').innerHTML = items.map(i => {
+    /* 剩余秒转为可读时间 */
+    const sec = Number(i.remaining_seconds);
+    const timeStr = isNaN(sec) ? '-' : sec < 0
+      ? `<span style="color:var(--danger);">已超时 ${Math.abs(Math.round(sec/3600))}h</span>`
+      : `${Math.round(sec/3600)}h`;
+    return `
     <tr>
-      <td>${i.system_name || ''}</td>
-      <td>${i.step_name || ''}</td>
-      <td>${i.owner || ''}</td>
-      <td>${i.due_at || ''}</td>
-      <td>${i.remaining_seconds}</td>
-      <td>${i.status}</td>
+      <td>${esc(i.system_name || '-')}</td>
+      <td>${esc(i.step_name || '-')}</td>
+      <td>${esc(i.owner || '-')}</td>
+      <td style="font-size:0.85rem;color:var(--text-muted);">${esc(i.due_at || '-')}</td>
+      <td>${timeStr}</td>
+      <td>${instanceStatusBadge(i.status)}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 loadRules();
