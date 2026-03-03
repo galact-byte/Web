@@ -1838,8 +1838,8 @@ def create_user(request: Request, payload: dict[str, Any], db: Session = Depends
     assert_safe_text(username, "用户名")
     if role not in {"admin", "reviewer", "evaluator"}:
         raise HTTPException(status_code=400, detail="role 仅支持 admin/reviewer/evaluator。")
-    if not username or len(password) < 6:
-        raise HTTPException(status_code=400, detail="用户名不能为空，密码至少6位。")
+    if not username or len(password) < 8:
+        raise HTTPException(status_code=400, detail="用户名不能为空，密码至少8位。")
     if require_password_change is None:
         require_password_change = role != "admin"
     exists = db.query(UserAccount).filter(UserAccount.username == username).first()
@@ -1998,7 +1998,7 @@ async def upload_report_template(
 @app.post("/api/templates/import-local-official")
 def import_local_official_templates(
     request: Request,
-    actor: str = Query("admin"),
+    actor: str = Query("system"),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     assert_safe_text(actor, "actor")
@@ -2593,170 +2593,6 @@ def review_org_submission(
     return {"message": "审核通过并已入库", "status": row.status, "organization_id": target_org_id}
 
 
-@app.get("/api/organizations/{org_id}")
-def get_organization(org_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
-    org = get_org_or_404(db, org_id)
-    return obj_to_dict(org, ORG_FIELDS)
-
-
-@app.put("/api/organizations/{org_id}")
-def update_organization(
-    request: Request,
-    org_id: int,
-    payload: OrganizationUpdate,
-    actor: str = Query("system"),
-    is_admin: bool = Query(False),
-    db: Session = Depends(get_db),
-) -> dict[str, Any]:
-    assert_safe_text(actor, "actor")
-    org = get_org_or_404(db, org_id)
-    effective_is_admin = is_current_user_admin(request, db, allow_legacy_flag=True, legacy_is_admin=is_admin)
-    if org.archived and org.locked and not effective_is_admin:
-        raise HTTPException(status_code=403, detail="已归档单位默认不可编辑，请管理员解锁。")
-    data = payload.model_dump(exclude_unset=True)
-    normalize_org_payload(data)
-    validate_org_partial(data)
-    if "credit_code" in data:
-        assert_credit_code_available(db, data["credit_code"], current_org_id=org.id)
-    before = obj_to_dict(org, ORG_FIELDS)
-    for key, value in data.items():
-        setattr(org, key, value)
-    db.commit()
-    db.refresh(org)
-    record_org_history(db, org.id, actor, "update", before, obj_to_dict(org, ORG_FIELDS))
-    db.commit()
-    return {"message": "更新成功", "data": obj_to_dict(org, ORG_FIELDS)}
-
-
-@app.get("/api/organizations/{org_id}/history")
-def organization_history(org_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
-    get_org_or_404(db, org_id)
-    rows = (
-        db.query(OrganizationHistory)
-        .filter(OrganizationHistory.organization_id == org_id)
-        .order_by(OrganizationHistory.changed_at.desc())
-        .all()
-    )
-    return {
-        "total": len(rows),
-        "items": [
-            {
-                "changed_by": r.changed_by,
-                "change_type": r.change_type,
-                "before_data": r.before_data,
-                "after_data": r.after_data,
-                "changed_at": r.changed_at,
-            }
-            for r in rows
-        ],
-    }
-
-
-@app.post("/api/organizations/{org_id}/archive")
-def archive_organization(org_id: int, actor: str = Query("system"), db: Session = Depends(get_db)) -> dict[str, Any]:
-    org = get_org_or_404(db, org_id)
-    before = obj_to_dict(org, ORG_FIELDS)
-    org.archived = True
-    org.locked = True
-    db.commit()
-    db.refresh(org)
-    record_org_history(db, org.id, actor, "archive", before, obj_to_dict(org, ORG_FIELDS))
-    db.commit()
-    return {"message": "归档成功", "data": obj_to_dict(org, ORG_FIELDS)}
-
-
-@app.post("/api/organizations/{org_id}/unlock")
-def unlock_organization(
-    request: Request,
-    org_id: int,
-    actor: str = Query("admin"),
-    is_admin: bool = Query(True),
-    db: Session = Depends(get_db),
-) -> dict[str, Any]:
-    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=is_admin)
-    org = get_org_or_404(db, org_id)
-    org.locked = False
-    db.commit()
-    db.refresh(org)
-    record_org_history(db, org.id, actor_name or actor, "unlock", None, {"locked": False})
-    db.commit()
-    return {"message": "解锁成功", "data": obj_to_dict(org, ORG_FIELDS)}
-
-
-@app.delete("/api/organizations/{org_id}")
-def delete_organization(
-    request: Request,
-    org_id: int,
-    actor: str = Query("system"),
-    is_admin: bool = Query(False),
-    db: Session = Depends(get_db),
-) -> dict[str, Any]:
-    org = get_org_or_404(db, org_id)
-    actor_name = actor
-    if is_admin:
-        actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
-    assert_org_deletable(db, org, is_admin=is_admin)
-    before = obj_to_dict(org, ORG_FIELDS)
-    org.deleted_at = datetime.now()
-    org.deleted_by = actor_name
-    db.commit()
-    db.refresh(org)
-    record_org_history(db, org.id, actor_name, "delete", before, obj_to_dict(org, ORG_FIELDS))
-    db.commit()
-    return {"message": "已移入回收站（保留30天）。"}
-
-
-@app.post("/api/organizations/{org_id}/restore")
-def restore_organization(org_id: int, actor: str = Query("system"), db: Session = Depends(get_db)) -> dict[str, Any]:
-    org = db.query(Organization).filter(Organization.id == org_id).first()
-    if not org:
-        raise HTTPException(status_code=404, detail="单位不存在。")
-    if not org.deleted_at:
-        raise HTTPException(status_code=400, detail="该单位未删除。")
-    if datetime.now() - org.deleted_at > timedelta(days=30):
-        raise HTTPException(status_code=400, detail="超出30天回收站恢复期。")
-    org.deleted_at = None
-    org.deleted_by = None
-    db.commit()
-    db.refresh(org)
-    record_org_history(db, org.id, actor, "restore", None, obj_to_dict(org, ORG_FIELDS))
-    db.commit()
-    return {"message": "恢复成功", "data": obj_to_dict(org, ORG_FIELDS)}
-
-
-@app.post("/api/organizations/{org_id}/delete-request")
-def create_org_delete_request(
-    org_id: int,
-    actor: str = Query("system"),
-    reason: str = Query(""),
-    db: Session = Depends(get_db),
-) -> dict[str, Any]:
-    org = get_org_or_404(db, org_id)
-    assert_org_deletable(db, org, is_admin=False)
-    exists = (
-        db.query(DeleteRequest)
-        .filter(
-            DeleteRequest.entity_type == "organization",
-            DeleteRequest.entity_id == org_id,
-            DeleteRequest.status == "pending",
-        )
-        .first()
-    )
-    if exists:
-        raise HTTPException(status_code=409, detail="已存在待处理删除申请。")
-    row = DeleteRequest(
-        entity_type="organization",
-        entity_id=org_id,
-        reason=reason.strip() or None,
-        status="pending",
-        requested_by=actor,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return {"message": "删除申请已提交", "data": {"request_id": row.id, "status": row.status}}
-
-
 @app.get("/api/organizations/recycle-bin/list")
 def list_organization_recycle_bin(
     include_expired: bool = Query(False),
@@ -2961,6 +2797,170 @@ async def import_organization_word(
     return {"message": "Word导入成功", "data": obj_to_dict(org, ORG_FIELDS)}
 
 
+@app.get("/api/organizations/{org_id}")
+def get_organization(org_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    org = get_org_or_404(db, org_id)
+    return obj_to_dict(org, ORG_FIELDS)
+
+
+@app.put("/api/organizations/{org_id}")
+def update_organization(
+    request: Request,
+    org_id: int,
+    payload: OrganizationUpdate,
+    actor: str = Query("system"),
+    is_admin: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    assert_safe_text(actor, "actor")
+    org = get_org_or_404(db, org_id)
+    effective_is_admin = is_current_user_admin(request, db, allow_legacy_flag=True, legacy_is_admin=is_admin)
+    if org.archived and org.locked and not effective_is_admin:
+        raise HTTPException(status_code=403, detail="已归档单位默认不可编辑，请管理员解锁。")
+    data = payload.model_dump(exclude_unset=True)
+    normalize_org_payload(data)
+    validate_org_partial(data)
+    if "credit_code" in data:
+        assert_credit_code_available(db, data["credit_code"], current_org_id=org.id)
+    before = obj_to_dict(org, ORG_FIELDS)
+    for key, value in data.items():
+        setattr(org, key, value)
+    db.commit()
+    db.refresh(org)
+    record_org_history(db, org.id, actor, "update", before, obj_to_dict(org, ORG_FIELDS))
+    db.commit()
+    return {"message": "更新成功", "data": obj_to_dict(org, ORG_FIELDS)}
+
+
+@app.get("/api/organizations/{org_id}/history")
+def organization_history(org_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    get_org_or_404(db, org_id)
+    rows = (
+        db.query(OrganizationHistory)
+        .filter(OrganizationHistory.organization_id == org_id)
+        .order_by(OrganizationHistory.changed_at.desc())
+        .all()
+    )
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "changed_by": r.changed_by,
+                "change_type": r.change_type,
+                "before_data": r.before_data,
+                "after_data": r.after_data,
+                "changed_at": r.changed_at,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.post("/api/organizations/{org_id}/archive")
+def archive_organization(org_id: int, actor: str = Query("system"), db: Session = Depends(get_db)) -> dict[str, Any]:
+    org = get_org_or_404(db, org_id)
+    before = obj_to_dict(org, ORG_FIELDS)
+    org.archived = True
+    org.locked = True
+    db.commit()
+    db.refresh(org)
+    record_org_history(db, org.id, actor, "archive", before, obj_to_dict(org, ORG_FIELDS))
+    db.commit()
+    return {"message": "归档成功", "data": obj_to_dict(org, ORG_FIELDS)}
+
+
+@app.post("/api/organizations/{org_id}/unlock")
+def unlock_organization(
+    request: Request,
+    org_id: int,
+    actor: str = Query("admin"),
+    is_admin: bool = Query(True),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=is_admin)
+    org = get_org_or_404(db, org_id)
+    org.locked = False
+    db.commit()
+    db.refresh(org)
+    record_org_history(db, org.id, actor_name or actor, "unlock", None, {"locked": False})
+    db.commit()
+    return {"message": "解锁成功", "data": obj_to_dict(org, ORG_FIELDS)}
+
+
+@app.delete("/api/organizations/{org_id}")
+def delete_organization(
+    request: Request,
+    org_id: int,
+    actor: str = Query("system"),
+    is_admin: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    org = get_org_or_404(db, org_id)
+    actor_name = actor
+    if is_admin:
+        actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    assert_org_deletable(db, org, is_admin=is_admin)
+    before = obj_to_dict(org, ORG_FIELDS)
+    org.deleted_at = datetime.now()
+    org.deleted_by = actor_name
+    db.commit()
+    db.refresh(org)
+    record_org_history(db, org.id, actor_name, "delete", before, obj_to_dict(org, ORG_FIELDS))
+    db.commit()
+    return {"message": "已移入回收站（保留30天）。"}
+
+
+@app.post("/api/organizations/{org_id}/restore")
+def restore_organization(org_id: int, actor: str = Query("system"), db: Session = Depends(get_db)) -> dict[str, Any]:
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="单位不存在。")
+    if not org.deleted_at:
+        raise HTTPException(status_code=400, detail="该单位未删除。")
+    if datetime.now() - org.deleted_at > timedelta(days=30):
+        raise HTTPException(status_code=400, detail="超出30天回收站恢复期。")
+    org.deleted_at = None
+    org.deleted_by = None
+    db.commit()
+    db.refresh(org)
+    record_org_history(db, org.id, actor, "restore", None, obj_to_dict(org, ORG_FIELDS))
+    db.commit()
+    return {"message": "恢复成功", "data": obj_to_dict(org, ORG_FIELDS)}
+
+
+@app.post("/api/organizations/{org_id}/delete-request")
+def create_org_delete_request(
+    org_id: int,
+    actor: str = Query("system"),
+    reason: str = Query(""),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    org = get_org_or_404(db, org_id)
+    assert_org_deletable(db, org, is_admin=False)
+    exists = (
+        db.query(DeleteRequest)
+        .filter(
+            DeleteRequest.entity_type == "organization",
+            DeleteRequest.entity_id == org_id,
+            DeleteRequest.status == "pending",
+        )
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=409, detail="已存在待处理删除申请。")
+    row = DeleteRequest(
+        entity_type="organization",
+        entity_id=org_id,
+        reason=reason.strip() or None,
+        status="pending",
+        requested_by=actor,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"message": "删除申请已提交", "data": {"request_id": row.id, "status": row.status}}
+
+
 @app.get("/api/organizations/{org_id}/export/word")
 def export_organization_word(org_id: int, db: Session = Depends(get_db)) -> FileResponse:
     org = get_org_or_404(db, org_id)
@@ -3039,6 +3039,187 @@ def list_systems(
         data["organization_name"] = org_name
         items.append(data)
     return {"total": len(items), "items": items}
+
+
+@app.get("/api/systems/recycle-bin/list")
+def list_system_recycle_bin(
+    include_expired: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    rows = (
+        db.query(SystemInfo)
+        .filter(SystemInfo.deleted_at.is_not(None))
+        .order_by(SystemInfo.deleted_at.desc())
+        .all()
+    )
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        meta = recycle_meta(row.deleted_at)
+        if meta["expired"] and not include_expired:
+            continue
+        data = obj_to_dict(row, SYSTEM_FIELDS)
+        data["organization_name"] = row.organization.name if row.organization else ""
+        data.update(meta)
+        items.append(data)
+    return {"total": len(items), "items": items}
+
+
+@app.post("/api/systems/recycle-bin/cleanup")
+def cleanup_system_recycle_bin(
+    request: Request,
+    actor: str = Query("admin"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
+    threshold = datetime.now() - timedelta(days=30)
+    rows = db.query(SystemInfo).filter(SystemInfo.deleted_at.is_not(None), SystemInfo.deleted_at <= threshold).all()
+    purged = 0
+    skipped: list[str] = []
+    for row in rows:
+        report_count = db.query(Report).filter(Report.system_id == row.id).count()
+        if report_count > 0:
+            skipped.append(f"{row.id}:{row.system_name} 仍有关联报告({report_count})")
+            continue
+        db.delete(row)
+        purged += 1
+    db.commit()
+    return {"message": "系统回收站清理完成", "purged": purged, "skipped": skipped, "actor": actor_name or actor}
+
+
+@app.get("/api/systems/export/excel")
+def export_systems_excel(db: Session = Depends(get_db)) -> FileResponse:
+    rows = db.query(SystemInfo).filter(SystemInfo.deleted_at.is_(None)).all()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "系统信息"
+    headers = ["系统名称", "系统编号", "单位ID", "拟定等级", "部署方式", "系统类型", "上线时间", "录入人"]
+    ws.append(headers)
+    for i in rows:
+        ws.append(
+            [
+                i.system_name,
+                i.system_code,
+                i.organization_id,
+                i.proposed_level,
+                i.deployment_mode,
+                i.system_type,
+                i.go_live_date.isoformat() if i.go_live_date else "",
+                i.created_by,
+            ]
+        )
+    path = EXPORT_DIR / f"systems_{datetime.now():%Y%m%d%H%M%S}.xlsx"
+    wb.save(path)
+    return FileResponse(path=str(path), filename=path.name)
+
+
+@app.post("/api/systems/import/excel")
+async def import_systems_excel(
+    actor: str = Query("system"), file: UploadFile = File(...), db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    if not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="仅支持xlsx格式。")
+    content = await file.read()
+    wb = load_workbook(io.BytesIO(content))
+    ws = wb.active
+    imported = 0
+    skipped: list[str] = []
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row or not row[0]:
+            continue
+        try:
+            org_id = int(row[2])
+            org = get_org_or_404(db, org_id)
+            if org.archived and org.locked:
+                skipped.append(f"第{idx}行：单位已归档锁定")
+                continue
+            sys = SystemInfo(
+                organization_id=org_id,
+                system_name=str(row[0]).strip(),
+                system_code=generate_system_code(db),
+                proposed_level=parse_proposed_level(row[3]),
+                deployment_mode=str(row[4]).strip() if row[4] else None,
+                system_type=str(row[5]).strip() if row[5] else None,
+                go_live_date=parse_optional_go_live_date(row[6]),
+                created_by=actor,
+            )
+            db.add(sys)
+            db.flush()
+            instance = WorkflowInstance(system_id=sys.id, current_step_index=0, status="in_progress")
+            db.add(instance)
+            recalc_workflow_due_at(db, instance, get_workflow_config(db))
+            record_system_history(db, sys.id, actor, "import", None, obj_to_dict(sys, SYSTEM_FIELDS))
+            imported += 1
+        except Exception as exc:
+            skipped.append(f"第{idx}行：{exc}")
+    db.commit()
+    return {"message": "导入完成", "imported": imported, "skipped": skipped}
+
+
+@app.post("/api/systems/import/word")
+async def import_system_word(
+    actor: str = Query("system"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="仅支持docx格式。")
+    content = await file.read()
+    kv = parse_docx_key_values(content)
+    raw: dict[str, Any] = {}
+    for cn_key, model_key in SYSTEM_WORD_MAP.items():
+        if cn_key in kv:
+            raw[model_key] = kv[cn_key]
+    if "organization_id" not in raw:
+        raise HTTPException(status_code=400, detail="Word缺少单位ID。")
+    try:
+        org_id = int(str(raw["organization_id"]).strip())
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"单位ID格式错误: {exc}") from exc
+    org = get_org_or_404(db, org_id)
+    if org.archived and org.locked:
+        raise HTTPException(status_code=403, detail="单位已归档锁定，不可新增系统。")
+    level_text = str(raw.get("proposed_level", "")).strip()
+    if not level_text:
+        raise HTTPException(status_code=400, detail="Word缺少拟定等级。")
+    try:
+        proposed_level = parse_proposed_level(level_text)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    go_live_date = None
+    if raw.get("go_live_date"):
+        try:
+            go_live_date = parse_optional_go_live_date(raw["go_live_date"])
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    name = str(raw.get("system_name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Word缺少系统名称。")
+    system = SystemInfo(
+        organization_id=org_id,
+        system_name=name,
+        system_code=generate_system_code(db),
+        proposed_level=proposed_level,
+        business_description=str(raw.get("business_description") or "").strip() or None,
+        deployment_mode=str(raw.get("deployment_mode") or "").strip() or None,
+        system_type=str(raw.get("system_type") or "").strip() or None,
+        go_live_date=go_live_date,
+        level_basis=str(raw.get("level_basis") or "").strip() or None,
+        level_reason=str(raw.get("level_reason") or "").strip() or None,
+        boundary=str(raw.get("boundary") or "").strip() or None,
+        subsystems=str(raw.get("subsystems") or "").strip() or None,
+        service_object=str(raw.get("service_object") or "").strip() or None,
+        service_scope=str(raw.get("service_scope") or "").strip() or None,
+        created_by=actor,
+    )
+    db.add(system)
+    db.flush()
+    instance = WorkflowInstance(system_id=system.id, current_step_index=0, status="in_progress")
+    db.add(instance)
+    recalc_workflow_due_at(db, instance, get_workflow_config(db))
+    record_system_history(db, system.id, actor, "import_word", None, obj_to_dict(system, SYSTEM_FIELDS))
+    db.commit()
+    db.refresh(system)
+    return {"message": "Word导入成功", "data": obj_to_dict(system, SYSTEM_FIELDS)}
 
 
 @app.get("/api/systems/{system_id}")
@@ -3229,51 +3410,6 @@ def create_system_delete_request(
     return {"message": "删除申请已提交", "data": {"request_id": row.id, "status": row.status}}
 
 
-@app.get("/api/systems/recycle-bin/list")
-def list_system_recycle_bin(
-    include_expired: bool = Query(False),
-    db: Session = Depends(get_db),
-) -> dict[str, Any]:
-    rows = (
-        db.query(SystemInfo)
-        .filter(SystemInfo.deleted_at.is_not(None))
-        .order_by(SystemInfo.deleted_at.desc())
-        .all()
-    )
-    items: list[dict[str, Any]] = []
-    for row in rows:
-        meta = recycle_meta(row.deleted_at)
-        if meta["expired"] and not include_expired:
-            continue
-        data = obj_to_dict(row, SYSTEM_FIELDS)
-        data["organization_name"] = row.organization.name if row.organization else ""
-        data.update(meta)
-        items.append(data)
-    return {"total": len(items), "items": items}
-
-
-@app.post("/api/systems/recycle-bin/cleanup")
-def cleanup_system_recycle_bin(
-    request: Request,
-    actor: str = Query("admin"),
-    db: Session = Depends(get_db),
-) -> dict[str, Any]:
-    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
-    threshold = datetime.now() - timedelta(days=30)
-    rows = db.query(SystemInfo).filter(SystemInfo.deleted_at.is_not(None), SystemInfo.deleted_at <= threshold).all()
-    purged = 0
-    skipped: list[str] = []
-    for row in rows:
-        report_count = db.query(Report).filter(Report.system_id == row.id).count()
-        if report_count > 0:
-            skipped.append(f"{row.id}:{row.system_name} 仍有关联报告({report_count})")
-            continue
-        db.delete(row)
-        purged += 1
-    db.commit()
-    return {"message": "系统回收站清理完成", "purged": purged, "skipped": skipped, "actor": actor_name or actor}
-
-
 @app.get("/api/delete-requests")
 def list_delete_requests(
     request: Request,
@@ -3363,142 +3499,6 @@ def review_delete_request(
     row.review_comment = comment.strip() or None
     db.commit()
     return {"message": "删除申请处理完成", "status": row.status}
-
-
-@app.get("/api/systems/export/excel")
-def export_systems_excel(db: Session = Depends(get_db)) -> FileResponse:
-    rows = db.query(SystemInfo).filter(SystemInfo.deleted_at.is_(None)).all()
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "系统信息"
-    headers = ["系统名称", "系统编号", "单位ID", "拟定等级", "部署方式", "系统类型", "上线时间", "录入人"]
-    ws.append(headers)
-    for i in rows:
-        ws.append(
-            [
-                i.system_name,
-                i.system_code,
-                i.organization_id,
-                i.proposed_level,
-                i.deployment_mode,
-                i.system_type,
-                i.go_live_date.isoformat() if i.go_live_date else "",
-                i.created_by,
-            ]
-        )
-    path = EXPORT_DIR / f"systems_{datetime.now():%Y%m%d%H%M%S}.xlsx"
-    wb.save(path)
-    return FileResponse(path=str(path), filename=path.name)
-
-
-@app.post("/api/systems/import/excel")
-async def import_systems_excel(
-    actor: str = Query("system"), file: UploadFile = File(...), db: Session = Depends(get_db)
-) -> dict[str, Any]:
-    if not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail="仅支持xlsx格式。")
-    content = await file.read()
-    wb = load_workbook(io.BytesIO(content))
-    ws = wb.active
-    imported = 0
-    skipped: list[str] = []
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        if not row or not row[0]:
-            continue
-        try:
-            org_id = int(row[2])
-            org = get_org_or_404(db, org_id)
-            if org.archived and org.locked:
-                skipped.append(f"第{idx}行：单位已归档锁定")
-                continue
-            sys = SystemInfo(
-                organization_id=org_id,
-                system_name=str(row[0]).strip(),
-                system_code=generate_system_code(db),
-                proposed_level=parse_proposed_level(row[3]),
-                deployment_mode=str(row[4]).strip() if row[4] else None,
-                system_type=str(row[5]).strip() if row[5] else None,
-                go_live_date=parse_optional_go_live_date(row[6]),
-                created_by=actor,
-            )
-            db.add(sys)
-            db.flush()
-            instance = WorkflowInstance(system_id=sys.id, current_step_index=0, status="in_progress")
-            db.add(instance)
-            recalc_workflow_due_at(db, instance, get_workflow_config(db))
-            record_system_history(db, sys.id, actor, "import", None, obj_to_dict(sys, SYSTEM_FIELDS))
-            imported += 1
-        except Exception as exc:
-            skipped.append(f"第{idx}行：{exc}")
-    db.commit()
-    return {"message": "导入完成", "imported": imported, "skipped": skipped}
-
-
-@app.post("/api/systems/import/word")
-async def import_system_word(
-    actor: str = Query("system"),
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-) -> dict[str, Any]:
-    if not file.filename.lower().endswith(".docx"):
-        raise HTTPException(status_code=400, detail="仅支持docx格式。")
-    content = await file.read()
-    kv = parse_docx_key_values(content)
-    raw: dict[str, Any] = {}
-    for cn_key, model_key in SYSTEM_WORD_MAP.items():
-        if cn_key in kv:
-            raw[model_key] = kv[cn_key]
-    if "organization_id" not in raw:
-        raise HTTPException(status_code=400, detail="Word缺少单位ID。")
-    try:
-        org_id = int(str(raw["organization_id"]).strip())
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"单位ID格式错误: {exc}") from exc
-    org = get_org_or_404(db, org_id)
-    if org.archived and org.locked:
-        raise HTTPException(status_code=403, detail="单位已归档锁定，不可新增系统。")
-    level_text = str(raw.get("proposed_level", "")).strip()
-    if not level_text:
-        raise HTTPException(status_code=400, detail="Word缺少拟定等级。")
-    try:
-        proposed_level = parse_proposed_level(level_text)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    go_live_date = None
-    if raw.get("go_live_date"):
-        try:
-            go_live_date = parse_optional_go_live_date(raw["go_live_date"])
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-    name = str(raw.get("system_name", "")).strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="Word缺少系统名称。")
-    system = SystemInfo(
-        organization_id=org_id,
-        system_name=name,
-        system_code=generate_system_code(db),
-        proposed_level=proposed_level,
-        business_description=str(raw.get("business_description") or "").strip() or None,
-        deployment_mode=str(raw.get("deployment_mode") or "").strip() or None,
-        system_type=str(raw.get("system_type") or "").strip() or None,
-        go_live_date=go_live_date,
-        level_basis=str(raw.get("level_basis") or "").strip() or None,
-        level_reason=str(raw.get("level_reason") or "").strip() or None,
-        boundary=str(raw.get("boundary") or "").strip() or None,
-        subsystems=str(raw.get("subsystems") or "").strip() or None,
-        service_object=str(raw.get("service_object") or "").strip() or None,
-        service_scope=str(raw.get("service_scope") or "").strip() or None,
-        created_by=actor,
-    )
-    db.add(system)
-    db.flush()
-    instance = WorkflowInstance(system_id=system.id, current_step_index=0, status="in_progress")
-    db.add(instance)
-    recalc_workflow_due_at(db, instance, get_workflow_config(db))
-    record_system_history(db, system.id, actor, "import_word", None, obj_to_dict(system, SYSTEM_FIELDS))
-    db.commit()
-    db.refresh(system)
-    return {"message": "Word导入成功", "data": obj_to_dict(system, SYSTEM_FIELDS)}
 
 
 @app.get("/api/systems/{system_id}/export/word")

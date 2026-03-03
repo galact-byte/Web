@@ -209,6 +209,17 @@ body {
   color: var(--primary);
 }
 
+/* 统计卡片彩色边框主题 */
+.card-blue   { border-left: 4px solid #3b82f6; }
+.card-green  { border-left: 4px solid #10b981; }
+.card-orange { border-left: 4px solid #f59e0b; }
+.card-purple { border-left: 4px solid #8b5cf6; }
+
+.card-blue   b { color: #3b82f6; }
+.card-green  b { color: #10b981; }
+.card-orange b { color: #f59e0b; }
+.card-purple b { color: #8b5cf6; }
+
 /* Form Elements */
 .grid {
   display: grid;
@@ -345,6 +356,37 @@ tr:hover td {
   gap: 24px;
 }
 
+.charts > div {
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  position: relative;
+}
+
+/* 空状态提示 */
+.empty-hint {
+  display: none;
+  text-align: center;
+  color: var(--text-muted);
+  padding-top: 120px;
+  font-size: 0.95rem;
+}
+
+/* 移动端侧边栏切换按钮 */
+.sidebar-toggle {
+  display: none;
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--text-main);
+  cursor: pointer;
+  padding: 8px;
+  margin-right: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Responsiveness */
 @media (max-width: 1024px) {
   .layout {
@@ -352,6 +394,19 @@ tr:hover td {
   }
   .sidebar {
     display: none; /* In a real app we'd add a mobile menu toggle */
+  }
+  .sidebar.sidebar-open {
+    display: flex;
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    width: 260px;
+    z-index: 100;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.15);
+  }
+  .sidebar-toggle {
+    display: inline-flex;
   }
   .grid-2, .grid-3 {
     grid-template-columns: 1fr;

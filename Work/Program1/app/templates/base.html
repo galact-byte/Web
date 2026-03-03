@@ -54,6 +54,9 @@
     </aside>
     <main class="main-wrapper">
       <header class="top-header">
+        <button class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('sidebar-open')">
+          <i class="fas fa-bars"></i>
+        </button>
         <div class="breadcrumb">
           <i class="fas fa-home"></i> / 
           <span>{{ '数据看板' if request.url.path == '/' else
