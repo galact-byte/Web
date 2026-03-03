@@ -14,11 +14,12 @@
   --danger: #ef4444;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 8px 16px -4px rgb(0 0 0 / 0.12);
 }
 
 * {
   box-sizing: border-box;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.15s ease;
 }
 
 body {
@@ -35,7 +36,7 @@ body {
   min-height: 100vh;
 }
 
-/* Sidebar Styling */
+/* ========== Sidebar ========== */
 .sidebar {
   background: var(--bg-side);
   border-right: 1px solid var(--border-color);
@@ -106,10 +107,11 @@ body {
   font-size: 0.9rem;
 }
 
-/* Main Content Area */
+/* ========== Main Content ========== */
 .main-wrapper {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .top-header {
@@ -121,6 +123,9 @@ body {
   justify-content: space-between;
   padding: 0 32px;
   box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 40;
 }
 
 .breadcrumb {
@@ -155,7 +160,7 @@ body {
   width: 100%;
 }
 
-/* Panels and Cards */
+/* ========== Panels ========== */
 .panel {
   background: var(--card-bg);
   border: 1px solid var(--border-color);
@@ -179,7 +184,7 @@ body {
   color: var(--text-main);
 }
 
-/* Dashboard Cards */
+/* ========== Dashboard Cards ========== */
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -193,6 +198,12 @@ body {
   border-radius: 12px;
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .card .hint {
@@ -209,6 +220,23 @@ body {
   color: var(--primary);
 }
 
+/* 同比/环比增长指示 */
+.card-trend {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  min-height: 20px;
+}
+
+.trend-up {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.trend-down {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 /* 统计卡片彩色边框主题 */
 .card-blue   { border-left: 4px solid #3b82f6; }
 .card-green  { border-left: 4px solid #10b981; }
@@ -220,7 +248,7 @@ body {
 .card-orange b { color: #f59e0b; }
 .card-purple b { color: #8b5cf6; }
 
-/* Form Elements */
+/* ========== Form Elements ========== */
 .grid {
   display: grid;
   gap: 20px;
@@ -271,6 +299,7 @@ input, select, textarea {
   background: #ffffff;
   font-size: 0.95rem;
   color: var(--text-main);
+  font-family: inherit;
 }
 
 input:focus, select:focus, textarea:focus {
@@ -279,6 +308,16 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
+input::placeholder {
+  color: #94a3b8;
+}
+
+textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+/* ========== Buttons ========== */
 button {
   padding: 10px 20px;
   border-radius: 8px;
@@ -288,14 +327,31 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   background: var(--primary);
   color: white;
+  font-size: 0.9rem;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 button:hover {
   background: var(--primary-hover);
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37,99,235,0.25);
+}
+
+button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-lite {
@@ -305,51 +361,133 @@ button:hover {
 
 .btn-lite:hover {
   background: #dbeafe;
+  box-shadow: none;
 }
 
-/* Table Styling */
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 0.82rem;
+}
+
+.btn-danger {
+  background: #fef2f2;
+  color: var(--danger);
+}
+
+.btn-danger:hover {
+  background: #fee2e2;
+  box-shadow: none;
+}
+
+/* ========== Table Styling ========== */
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
 table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  margin-top: 8px;
+  margin-top: 0;
+}
+
+/* 固定表头 */
+.table-sticky thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 th {
   background: var(--bg-main);
   padding: 12px 16px;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 700;
   color: var(--text-muted);
   border-bottom: 2px solid var(--border-color);
   text-align: left;
+  white-space: nowrap;
+  letter-spacing: 0.03em;
 }
 
 td {
-  padding: 14px 16px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--border-color);
   font-size: 0.9rem;
+  vertical-align: middle;
 }
 
 tr:last-child td {
   border-bottom: none;
 }
 
-tr:hover td {
-  background: var(--primary-soft);
+/* 斑马纹 */
+tbody tr:nth-child(even) td {
+  background: #f8fafc;
 }
 
-/* Results & Pre-wrap */
+tbody tr:nth-child(odd) td {
+  background: #ffffff;
+}
+
+/* hover 高亮（覆盖斑马纹） */
+tbody tr:hover td {
+  background: var(--primary-soft) !important;
+  cursor: default;
+}
+
+/* 类型徽章 */
+.type-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.type-org {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.type-sys {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+/* ========== Pagination ========== */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.page-info {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ========== Results & Pre-wrap ========== */
 .result {
   background: var(--bg-main);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 16px;
-  font-family: 'Consolas', monospace;
+  padding: 14px 16px;
+  font-family: 'Consolas', 'Courier New', monospace;
   font-size: 0.85rem;
   line-height: 1.6;
+  color: var(--text-main);
+  margin-top: 12px;
+  word-break: break-all;
 }
 
+/* ========== Charts Grid ========== */
 .charts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
@@ -364,7 +502,7 @@ tr:hover td {
   position: relative;
 }
 
-/* 空状态提示 */
+/* ========== Empty State ========== */
 .empty-hint {
   display: none;
   text-align: center;
@@ -373,7 +511,51 @@ tr:hover td {
   font-size: 0.95rem;
 }
 
-/* 移动端侧边栏切换按钮 */
+.hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+/* ========== 搜索工具栏 ========== */
+.search-bar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--bg-main);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.search-bar > div {
+  min-width: 160px;
+  flex: 1;
+}
+
+.search-bar > div:last-child {
+  flex: 0 0 auto;
+  min-width: auto;
+}
+
+/* ========== Status Badges ========== */
+.status-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.status-active   { background: #f0fdf4; color: #16a34a; }
+.status-archived { background: #f8fafc; color: #64748b; }
+.status-pending  { background: #fffbeb; color: #d97706; }
+.status-approved { background: #f0fdf4; color: #16a34a; }
+.status-rejected { background: #fef2f2; color: #dc2626; }
+
+/* ========== 移动端侧边栏切换 ========== */
 .sidebar-toggle {
   display: none;
   background: transparent;
@@ -385,16 +567,26 @@ tr:hover td {
   margin-right: 8px;
   align-items: center;
   justify-content: center;
+  box-shadow: none;
+  transform: none;
 }
 
-/* Responsiveness */
+.sidebar-toggle:hover {
+  background: var(--primary-soft);
+  transform: none;
+  box-shadow: none;
+}
+
+/* ========== Responsive ========== */
 @media (max-width: 1024px) {
   .layout {
     grid-template-columns: 1fr;
   }
+
   .sidebar {
-    display: none; /* In a real app we'd add a mobile menu toggle */
+    display: none;
   }
+
   .sidebar.sidebar-open {
     display: flex;
     position: fixed;
@@ -403,22 +595,62 @@ tr:hover td {
     height: 100vh;
     width: 260px;
     z-index: 100;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.15);
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
   }
+
   .sidebar-toggle {
     display: inline-flex;
   }
+
   .grid-2, .grid-3 {
     grid-template-columns: 1fr;
   }
+
+  .content {
+    padding: 16px;
+  }
+
   .dashboard-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
+
   .dashboard-actions > div {
     width: 100%;
   }
+
   .dashboard-actions button {
     width: 100%;
+  }
+
+  .charts {
+    grid-template-columns: 1fr;
+  }
+
+  .cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+  }
+
+  th, td {
+    padding: 10px 12px;
+    font-size: 0.82rem;
+  }
+
+  .top-header {
+    padding: 0 16px;
+  }
+
+  .panel {
+    padding: 16px;
   }
 }

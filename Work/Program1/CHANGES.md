@@ -1,8 +1,63 @@
-# 修改记录 — 定级备案管理系统（后端 Bug 修复）
+# 修改记录 — 定级备案管理系统（后端模型层优化）
 
 > **修订记录**
 >
+> - v1.3.2: 扩展前端 UI 优化至全部模板页——reports、users、backup、workflow、knowledge、templates 六个页面统一使用 search-bar、table-wrapper、status-badge、btn-sm/btn-danger 等组件，补充空状态/错误提示、图标、下载修复（appendChild/removeChild）。
+> - v1.3.1: 完善 schemas Response 模型、validators 校验函数增强（系统编号/信用代码校验位/IP/URL）、reporting 服务健壮性提升（数据完整性检查、日志、容错）。
+> - v1.3.0: 前端 UI 全面优化——数据看板图表增强（趋势折线图、动画、悬停提示）、下钻表格分页、统计卡片同比增长指示、表格斑马纹与hover高亮、搜索工具栏交互改进、状态徽章、响应式布局完善。
 > - v1.2.47: 修复3个后端 Bug：FastAPI 路由顺序冲突（静态路径被参数路径拦截）、密码长度策略不一致、API 安全性缺陷。
+
+---
+
+## 修改文件（v1.3.1）
+
+### `app/schemas.py` — 新增核心 Response 响应模型
+
+- **修改内容**：
+  - 新增 `OrganizationResponse`：包含 id、archived、locked、created_at、updated_at 等完整字段，`model_config = ConfigDict(from_attributes=True)`
+  - 新增 `SystemInfoResponse`：包含 system_code 及所有业务字段与审计字段
+  - 新增 `ReportResponse`：包含 report_type、version_no、status、content、generated_at 等
+  - 新增 `WorkflowConfigResponse`：包含 steps_json、updated_by、updated_at
+  - 所有 Response 模型均支持从 SQLAlchemy ORM 对象直接构造（`from_attributes=True`）
+
+### `app/validators.py` — 增强校验函数
+
+- **修改内容**：
+  - **信用代码校验位**：新增 `_calc_credit_code_checksum()` 实现 GB/T 32100-2015 算法；`validate_credit_code()` 同时验证格式和校验位；新增 `validate_credit_code_format_only()` 仅做格式校验
+  - **系统编号**：新增 `validate_system_code()`，4~64 位字母/数字/连字符/下划线，首尾必须为字母或数字
+  - **IP/URL**：新增 `validate_ipv4()`、`validate_url()`、`validate_network_topology_field()`，用于网络拓扑字段验证
+
+### `app/services/reporting.py` — 完善报告生成健壮性
+
+- **修改内容**：
+  - 新增 `ReportDataError` 异常类及 `check_report_data_integrity()` 函数，在生成报告前验证关键字段
+  - `generate_report_payload()` 调用完整性检查，缺失字段时提前报错
+  - `export_report_docx/pdf` 系列函数：新增参数校验、自动创建输出目录、东亚字体 AttributeError 容错、logging 日志输出
+
+---
+
+## 文件清单总览（v1.3.1）
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `app/schemas.py` |
+| **修改** | `app/validators.py` |
+| **修改** | `app/services/reporting.py` |
+
+---
+
+## 测试方式（v1.3.1）
+
+1. `python -m py_compile app/schemas.py app/validators.py app/services/reporting.py`
+2. `validate_credit_code("91110000000000001H")` → `True`；篡改校验位 → `False`
+3. `validate_system_code("SYS-001")` → `True`；`validate_ipv4("192.168.1.1")` → `True`
+4. 调用 `generate_report_payload()` 传入缺字段对象，确认抛出 `ReportDataError`
+
+---
+
+# 修改记录 — 定级备案管理系统（旧版记录）
+
+> **修订记录**（延续）
 
 ## 新增文件 (如有)
 

@@ -1,31 +1,70 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block content %}
+
+<!-- 用户管理面板（仅管理员可见） -->
 <div class="panel" data-role-only="admin">
-  <h2>用户管理</h2>
-  <div class="row">
-    <div><label>用户名</label><input id="newUsername" /></div>
-    <div><label>初始密码</label><input id="newPassword" type="password" /></div>
+  <h2><i class="fas fa-users-cog"></i> 用户管理</h2>
+
+  <!-- 新增用户表单 -->
+  <div class="search-bar">
+    <div>
+      <label>用户名 <span style="color:var(--danger)">*</span></label>
+      <input id="newUsername" placeholder="登录用户名" />
+    </div>
+    <div>
+      <label>初始密码 <span style="color:var(--danger)">*</span></label>
+      <input id="newPassword" type="password" placeholder="至少8位" />
+    </div>
     <div>
       <label>角色</label>
       <select id="newRole">
-        <option value="evaluator">evaluator</option>
-        <option value="reviewer">reviewer</option>
-        <option value="admin">admin</option>
+        <option value="evaluator">evaluator（测评师）</option>
+        <option value="reviewer">reviewer（审核员）</option>
+        <option value="admin">admin（管理员）</option>
       </select>
     </div>
-    <div><label>首次改密</label><input id="newRequireChange" type="checkbox" checked /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="createUser()">新增用户</button></div>
+    <div style="display:flex;align-items:flex-end;gap:8px;min-width:120px;">
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:0;font-weight:500;cursor:pointer;">
+        <input id="newRequireChange" type="checkbox" checked style="width:auto;padding:0;" />
+        首次改密
+      </label>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button onclick="createUser()"><i class="fas fa-user-plus"></i> 新增用户</button>
+    </div>
   </div>
-  <br />
-  <button class="btn-lite" onclick="loadUsers()">刷新用户列表</button>
-  <table>
-    <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>启用</th><th>首次改密</th><th>最近登录</th><th>操作</th></tr></thead>
-    <tbody id="userTable"></tbody>
-  </table>
+
+  <!-- 用户列表 -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <span style="font-size:0.9rem;color:var(--text-muted);" id="userCountHint"></span>
+    <button class="btn-lite btn-sm" onclick="loadUsers()"><i class="fas fa-sync-alt"></i> 刷新列表</button>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="table-sticky">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>用户名</th>
+          <th>角色</th>
+          <th>启用状态</th>
+          <th>首次改密</th>
+          <th>最近登录</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="userTable">
+        <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">加载中…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
   <div class="result" id="userResult">仅管理员可访问该页面。</div>
 </div>
 
 <script>
+/* 工具函数 */
 function authHeaders() {
   const token = localStorage.getItem('auth_token') || '';
   return token ? {'X-Auth-Token': token} : {};
@@ -38,17 +77,38 @@ function resultText(data, fallback='操作失败') {
 }
 
 function setUserResult(text) {
-  document.getElementById('userResult').textContent = text;
+  const el = document.getElementById('userResult');
+  el.textContent = text;
+  el.style.borderColor = 'var(--primary)';
+  setTimeout(() => { el.style.borderColor = ''; }, 1200);
 }
 
 function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, ch => (
-    {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch
-  ));
+  return String(value ?? '').replace(/[&<>"']/g, ch =>
+    ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch)
+  );
 }
 
 function encodeUserArg(value) {
   return encodeURIComponent(String(value ?? '')).replace(/'/g, '%27');
+}
+
+/* 角色徽章 */
+function roleBadge(role) {
+  const map = {
+    admin:     ['#dc2626', '管理员'],
+    reviewer:  ['#0891b2', '审核员'],
+    evaluator: ['#16a34a', '测评师']
+  };
+  const [color, label] = map[role] || ['#64748b', role];
+  return `<span style="display:inline-block;padding:2px 10px;border-radius:99px;font-size:0.78rem;font-weight:600;background:${color}18;color:${color};">${escapeHtml(label)}</span>`;
+}
+
+/* 启用状态徽章 */
+function enabledBadge(enabled) {
+  return enabled
+    ? '<span class="status-badge status-active">启用</span>'
+    : '<span class="status-badge status-archived">停用</span>';
 }
 
 async function loadUsers() {
@@ -56,23 +116,41 @@ async function loadUsers() {
   const data = await res.json();
   if (!res.ok) {
     setUserResult(`读取用户失败：${resultText(data, '仅管理员可查看用户列表')}`);
-    document.getElementById('userTable').innerHTML = '';
+    document.getElementById('userTable').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:24px;">无权限或加载失败</td></tr>';
     return;
   }
-  setUserResult(`用户列表已刷新，共 ${data.total || 0} 人。`);
-  document.getElementById('userTable').innerHTML = (data.items || []).map(u => {
+  const items = data.items || [];
+  const hint = document.getElementById('userCountHint');
+  if (hint) hint.textContent = `共 ${data.total || items.length} 位用户`;
+
+  if (!items.length) {
+    document.getElementById('userTable').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px;">暂无用户</td></tr>';
+    return;
+  }
+
+  document.getElementById('userTable').innerHTML = items.map(u => {
     const encodedUsername = encodeUserArg(u.username || '');
     return `
     <tr>
-      <td>${u.id}</td>
-      <td>${escapeHtml(u.username)}</td>
-      <td>${escapeHtml(u.role)}</td>
-      <td>${u.enabled ? '是' : '否'}</td>
-      <td>${u.must_change_password ? '是' : '否'}</td>
-      <td>${escapeHtml(u.last_login_at || '')}</td>
+      <td style="color:var(--text-muted);font-size:0.82rem;">${escapeHtml(u.id)}</td>
+      <td><strong>${escapeHtml(u.username)}</strong></td>
+      <td>${roleBadge(u.role)}</td>
+      <td>${enabledBadge(u.enabled)}</td>
       <td>
-        <button class="btn-lite" onclick="toggleUser(${u.id}, ${!u.enabled})">${u.enabled ? '停用' : '启用'}</button>
-        <button class="btn-lite" onclick="resetPassword(${u.id}, '${encodedUsername}')">重置密码</button>
+        ${u.must_change_password
+          ? '<span class="status-badge status-pending">待改密</span>'
+          : '<span class="status-badge status-active">已完成</span>'}
+      </td>
+      <td style="font-size:0.83rem;color:var(--text-muted);">${escapeHtml(u.last_login_at || '从未登录')}</td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn-lite btn-sm" onclick="toggleUser(${u.id}, ${!u.enabled})">
+            <i class="fas fa-${u.enabled ? 'ban' : 'check'}"></i> ${u.enabled ? '停用' : '启用'}
+          </button>
+          <button class="btn-lite btn-sm" onclick="resetPassword(${u.id}, '${encodedUsername}')">
+            <i class="fas fa-key"></i> 重置密码
+          </button>
+        </div>
       </td>
     </tr>
   `;
@@ -90,20 +168,29 @@ async function createUser() {
     setUserResult('用户名和初始密码不能为空。');
     return;
   }
+  if (payload.password.length < 8) {
+    setUserResult('初始密码至少8位。');
+    return;
+  }
   const res = await fetch('/api/auth/users', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', ...authHeaders()},
     body: JSON.stringify(payload)
   });
   const data = await res.json();
-  setUserResult(res.ok ? (data.message || '新增用户成功') : `新增失败：${resultText(data)}`);
-  if (res.ok) loadUsers();
+  setUserResult(res.ok ? (data.message || `新增用户 "${payload.username}" 成功`) : `新增失败：${resultText(data)}`);
+  if (res.ok) {
+    /* 清空表单 */
+    document.getElementById('newUsername').value = '';
+    document.getElementById('newPassword').value = '';
+    loadUsers();
+  }
 }
 
 async function toggleUser(id, enabled) {
   const res = await fetch(`/api/auth/users/${id}/toggle?enabled=${enabled}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
-  setUserResult(res.ok ? '用户状态已更新。' : `更新失败：${resultText(data)}`);
+  setUserResult(res.ok ? `用户状态已${enabled ? '启用' : '停用'}。` : `更新失败：${resultText(data)}`);
   if (res.ok) loadUsers();
 }
 
@@ -122,10 +209,11 @@ async function resetPassword(id, usernameEncoded) {
     body: JSON.stringify({new_password: pwd})
   });
   const data = await res.json();
-  setUserResult(res.ok ? (data.message || '密码已重置。') : `重置失败：${resultText(data)}`);
+  setUserResult(res.ok ? (data.message || `用户 "${username}" 密码已重置。`) : `重置失败：${resultText(data)}`);
   if (res.ok) loadUsers();
 }
 
+/* 页面初始化 */
 loadUsers();
 </script>
 {% endblock %}

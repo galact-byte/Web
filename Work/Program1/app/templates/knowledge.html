@@ -1,56 +1,137 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block content %}
+
+<!-- 知识库文档上传面板 -->
 <div class="panel">
-  <h2>知识库文档上传</h2>
+  <h2><i class="fas fa-upload"></i> 知识库文档上传</h2>
   <div class="grid grid-3">
-    <div><label>文档标题*</label><input id="title" /></div>
-    <div><label>文档类型*</label><input id="docType" placeholder="备案表模板/政策文件..." /></div>
-    <div><label>关键词</label><input id="keywords" /></div>
-    <div><label>地市</label><input id="city" /></div>
-    <div><label>区县</label><input id="district" /></div>
-    <div><label>等保级别</label><input id="protectionLevel" /></div>
-    <div><label>版本号</label><input id="versionNo" type="number" value="1" /></div>
+    <div><label>文档标题 <span style="color:var(--danger)">*</span></label><input id="title" placeholder="文档标题" /></div>
+    <div><label>文档类型 <span style="color:var(--danger)">*</span></label><input id="docType" placeholder="备案表模板/政策文件…" /></div>
+    <div><label>关键词</label><input id="keywords" placeholder="逗号分隔" /></div>
+    <div><label>地市</label><input id="city" placeholder="如：福州" /></div>
+    <div><label>区县</label><input id="district" placeholder="如：鼓楼区" /></div>
+    <div><label>等保级别</label><input id="protectionLevel" placeholder="如：3" /></div>
+    <div><label>版本号</label><input id="versionNo" type="number" value="1" min="1" /></div>
     <div><label>上传人</label><input id="actor" value="admin" /></div>
-    <div><label>文件*</label><input id="file" type="file" /></div>
+    <div>
+      <label>文件 <span style="color:var(--danger)">*</span></label>
+      <input id="file" type="file" style="padding:6px;" />
+    </div>
   </div>
   <br />
-  <button onclick="uploadKnowledge()">上传文档</button>
-  <pre class="result" id="knowledgeResult"></pre>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <button onclick="uploadKnowledge()"><i class="fas fa-upload"></i> 上传文档</button>
+  </div>
+  <pre class="result" id="knowledgeResult" style="margin-top:12px;"></pre>
 </div>
 
+<!-- 知识库检索与管理面板 -->
 <div class="panel">
-  <h2>知识库检索与管理</h2>
-  <div class="row">
-    <div><label>关键词</label><input id="searchKeyword" /></div>
-    <div><label>匹配模式</label>
+  <h2><i class="fas fa-book"></i> 知识库检索与管理</h2>
+  <div class="search-bar">
+    <div>
+      <label>关键词</label>
+      <input id="searchKeyword" placeholder="模糊/精确搜索" onkeydown="if(event.key==='Enter')loadKnowledge()" />
+    </div>
+    <div>
+      <label>匹配模式</label>
       <select id="searchMatchMode">
         <option value="fuzzy">模糊</option>
         <option value="exact">精确</option>
       </select>
     </div>
-    <div><label>地市</label><input id="searchCity" /></div>
-    <div><label>区县</label><input id="searchDistrict" /></div>
-    <div><label>文档类型</label><input id="searchType" /></div>
-    <div><label>等保级别</label><input id="searchLevel" /></div>
-    <div><label>开始日期</label><input id="searchStart" type="date" /></div>
-    <div><label>结束日期</label><input id="searchEnd" type="date" /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="loadKnowledge()">查询</button></div>
+    <div>
+      <label>地市</label>
+      <input id="searchCity" placeholder="如：福州" onkeydown="if(event.key==='Enter')loadKnowledge()" />
+    </div>
+    <div>
+      <label>区县</label>
+      <input id="searchDistrict" onkeydown="if(event.key==='Enter')loadKnowledge()" />
+    </div>
+    <div>
+      <label>文档类型</label>
+      <input id="searchType" onkeydown="if(event.key==='Enter')loadKnowledge()" />
+    </div>
+    <div>
+      <label>等保级别</label>
+      <input id="searchLevel" placeholder="如：3" onkeydown="if(event.key==='Enter')loadKnowledge()" />
+    </div>
+    <div>
+      <label>开始日期</label>
+      <input id="searchStart" type="date" />
+    </div>
+    <div>
+      <label>结束日期</label>
+      <input id="searchEnd" type="date" />
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button onclick="loadKnowledge()"><i class="fas fa-search"></i> 查询</button>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="clearKnowledgeSearch()"><i class="fas fa-times"></i> 清空</button>
+    </div>
   </div>
-  <br />
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th><th>置顶</th><th>标题</th><th>类型</th><th>地市</th><th>版本</th><th>状态</th><th>操作</th>
-      </tr>
-    </thead>
-    <tbody id="knowledgeTable"></tbody>
-  </table>
+
+  <div class="table-wrapper">
+    <table class="table-sticky">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>置顶</th>
+          <th>标题</th>
+          <th>类型</th>
+          <th>地市</th>
+          <th>版本</th>
+          <th>状态</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="knowledgeTable">
+        <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px;">加载中…</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <script>
 function authHeaders() {
   const token = localStorage.getItem('auth_token') || '';
   return token ? {'X-Auth-Token': token} : {};
+}
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, ch =>
+    ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch)
+  );
+}
+
+function setResult(text) {
+  const el = document.getElementById('knowledgeResult');
+  el.textContent = text;
+  el.style.borderColor = 'var(--primary)';
+  setTimeout(() => { el.style.borderColor = ''; }, 1200);
+}
+
+/* 状态徽章 */
+function docStatusBadge(status) {
+  const map = {
+    enabled:  ['status-active', '已启用'],
+    disabled: ['status-archived', '已下架'],
+    draft:    ['status-pending', '草稿']
+  };
+  const [cls, label] = map[status] || ['', status];
+  return `<span class="status-badge ${cls}">${esc(label || status)}</span>`;
+}
+
+function clearKnowledgeSearch() {
+  ['searchKeyword','searchCity','searchDistrict','searchType','searchLevel','searchStart','searchEnd'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('searchMatchMode').value = 'fuzzy';
+  loadKnowledge();
 }
 
 function buildSearchParams() {
@@ -85,14 +166,12 @@ async function uploadKnowledge() {
   fd.append('version_no', document.getElementById('versionNo').value.trim() || '1');
   fd.append('actor', document.getElementById('actor').value.trim() || 'admin');
   const file = document.getElementById('file').files[0];
-  if (!file) {
-    document.getElementById('knowledgeResult').textContent = '请选择文件';
-    return;
-  }
+  if (!file) { setResult('请选择文件后再上传。'); return; }
   fd.append('file', file);
+  setResult('正在上传，请稍候...');
   const res = await fetch('/api/knowledge/upload', {method: 'POST', headers: authHeaders(), body: fd});
   const data = await res.json();
-  document.getElementById('knowledgeResult').textContent = res.ok ? (data.message || '上传成功') : (data.detail || '上传失败');
+  setResult(res.ok ? (data.message || '上传成功') : (data.detail || '上传失败'));
   if (res.ok) loadKnowledge();
 }
 
@@ -115,11 +194,13 @@ async function editDoc(id, currentTitle, currentType, currentCity, currentDistri
   if (city === null) return;
   const district = prompt('区县', currentDistrict || '');
   if (district === null) return;
-  await fetch(`/api/knowledge/${id}?actor=admin`, {
+  const res = await fetch(`/api/knowledge/${id}?actor=admin`, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json', ...authHeaders()},
     body: JSON.stringify({title, doc_type: docType, city, district})
   });
+  const data = await res.json();
+  setResult(res.ok ? (data.message || '更新成功') : (data.detail || '更新失败'));
   loadKnowledge();
 }
 
@@ -133,7 +214,7 @@ async function uploadNewVersion(id) {
     fd.append('file', input.files[0]);
     const res = await fetch(`/api/knowledge/${id}/new-version`, {method: 'POST', headers: authHeaders(), body: fd});
     const data = await res.json();
-    alert(data.message || data.detail || '完成');
+    setResult(data.message || data.detail || '完成');
     loadKnowledge();
   };
   input.click();
@@ -147,7 +228,7 @@ async function showVersions(id) {
   if (!versionId) return;
   const rb = await fetch(`/api/knowledge/${id}/rollback/${versionId}?actor=admin`, {method: 'POST', headers: authHeaders()});
   const rbData = await rb.json();
-  alert(rbData.message || rbData.detail || '完成');
+  setResult(rbData.message || rbData.detail || '完成');
   loadKnowledge();
 }
 
@@ -155,7 +236,7 @@ async function deleteDoc(id) {
   if (!confirm('确认删除该文档？')) return;
   const res = await fetch(`/api/knowledge/${id}?actor=admin`, {method: 'DELETE', headers: authHeaders()});
   const data = await res.json();
-  alert(data.message || data.detail || '完成');
+  setResult(data.message || data.detail || '完成');
   loadKnowledge();
 }
 
@@ -163,7 +244,7 @@ async function downloadDoc(id, fileName) {
   const res = await fetch(`/api/knowledge/${id}/download`, {headers: authHeaders()});
   if (!res.ok) {
     const data = await res.json();
-    alert(data.detail || '下载失败');
+    setResult(data.detail || '下载失败');
     return;
   }
   const blob = await res.blob();
@@ -171,31 +252,46 @@ async function downloadDoc(id, fileName) {
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName || `knowledge_${id}`;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   window.URL.revokeObjectURL(url);
 }
 
 async function loadKnowledge() {
   const params = buildSearchParams();
   const res = await fetch('/api/knowledge?' + params.toString(), {headers: authHeaders()});
+  if (!res.ok) {
+    document.getElementById('knowledgeTable').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:24px;">加载失败</td></tr>';
+    return;
+  }
   const data = await res.json();
-  document.getElementById('knowledgeTable').innerHTML = data.items.map(i => `
+  const items = data.items || [];
+  if (!items.length) {
+    document.getElementById('knowledgeTable').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px;">暂无文档</td></tr>';
+    return;
+  }
+  document.getElementById('knowledgeTable').innerHTML = items.map(i => `
     <tr>
-      <td>${i.id}</td>
-      <td>${i.pinned ? '是' : ''}</td>
-      <td>${i.title}</td>
-      <td>${i.doc_type}</td>
-      <td>${i.city || ''}${i.district ? '/' + i.district : ''}</td>
-      <td>V${i.version_no}</td>
-      <td>${i.status}</td>
+      <td style="color:var(--text-muted);font-size:0.82rem;">${esc(i.id)}</td>
+      <td style="text-align:center;">
+        ${i.pinned ? '<i class="fas fa-thumbtack" style="color:var(--warning);"></i>' : ''}
+      </td>
+      <td><strong>${esc(i.title)}</strong></td>
+      <td style="font-size:0.85rem;">${esc(i.doc_type)}</td>
+      <td>${esc(i.city || '')}${i.district ? '/' + esc(i.district) : ''}</td>
+      <td><span style="font-family:monospace;">V${esc(i.version_no)}</span></td>
+      <td>${docStatusBadge(i.status)}</td>
       <td>
-        <button class="btn-lite" onclick="downloadDoc(${i.id}, '${(i.file_name || '').replace(/'/g, "\\'")}')">下载</button>
-        <button class="btn-lite" onclick="toggleDoc(${i.id}, ${i.status !== 'enabled'})">${i.status === 'enabled' ? '下架' : '启用'}</button>
-        <button class="btn-lite" onclick="pinDoc(${i.id}, ${!i.pinned})">${i.pinned ? '取消置顶' : '置顶'}</button>
-        <button class="btn-lite" onclick="editDoc(${i.id}, '${(i.title || '').replace(/'/g, "\\'")}', '${(i.doc_type || '').replace(/'/g, "\\'")}', '${(i.city || '').replace(/'/g, "\\'")}', '${(i.district || '').replace(/'/g, "\\'")}')">编辑</button>
-        <button class="btn-lite" onclick="uploadNewVersion(${i.id})">新版本</button>
-        <button class="btn-lite" onclick="showVersions(${i.id})">版本</button>
-        <button class="btn-lite" onclick="deleteDoc(${i.id})">删除</button>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button class="btn-lite btn-sm" onclick="downloadDoc(${i.id}, '${(i.file_name || '').replace(/'/g, "\\'")}')"><i class="fas fa-download"></i></button>
+          <button class="btn-lite btn-sm" onclick="toggleDoc(${i.id}, ${i.status !== 'enabled'})">${i.status === 'enabled' ? '下架' : '启用'}</button>
+          <button class="btn-lite btn-sm" onclick="pinDoc(${i.id}, ${!i.pinned})">${i.pinned ? '取消置顶' : '置顶'}</button>
+          <button class="btn-lite btn-sm" onclick="editDoc(${i.id}, '${(i.title||'').replace(/'/g,"\\'")}', '${(i.doc_type||'').replace(/'/g,"\\'")}', '${(i.city||'').replace(/'/g,"\\'")}', '${(i.district||'').replace(/'/g,"\\'")}')">编辑</button>
+          <button class="btn-lite btn-sm" onclick="uploadNewVersion(${i.id})">新版本</button>
+          <button class="btn-lite btn-sm" onclick="showVersions(${i.id})">版本</button>
+          <button class="btn-lite btn-sm btn-danger" onclick="deleteDoc(${i.id})"><i class="fas fa-trash"></i></button>
+        </div>
       </td>
     </tr>
   `).join('');

@@ -2683,6 +2683,9 @@ async def import_organizations_excel(
     if not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="仅支持xlsx格式。")
     content = await file.read()
+    # 限制导入文件大小，防止恶意上传超大文件
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="导入文件过大，请限制在50MB以内。")
     wb = load_workbook(io.BytesIO(content))
     ws = wb.active
     imported = 0
@@ -3119,6 +3122,9 @@ async def import_systems_excel(
     if not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="仅支持xlsx格式。")
     content = await file.read()
+    # 限制导入文件大小，防止恶意上传超大文件
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="导入文件过大，请限制在50MB以内。")
     wb = load_workbook(io.BytesIO(content))
     ws = wb.active
     imported = 0
@@ -3194,31 +3200,38 @@ async def import_system_word(
     name = str(raw.get("system_name", "")).strip()
     if not name:
         raise HTTPException(status_code=400, detail="Word缺少系统名称。")
-    system = SystemInfo(
-        organization_id=org_id,
-        system_name=name,
-        system_code=generate_system_code(db),
-        proposed_level=proposed_level,
-        business_description=str(raw.get("business_description") or "").strip() or None,
-        deployment_mode=str(raw.get("deployment_mode") or "").strip() or None,
-        system_type=str(raw.get("system_type") or "").strip() or None,
-        go_live_date=go_live_date,
-        level_basis=str(raw.get("level_basis") or "").strip() or None,
-        level_reason=str(raw.get("level_reason") or "").strip() or None,
-        boundary=str(raw.get("boundary") or "").strip() or None,
-        subsystems=str(raw.get("subsystems") or "").strip() or None,
-        service_object=str(raw.get("service_object") or "").strip() or None,
-        service_scope=str(raw.get("service_scope") or "").strip() or None,
-        created_by=actor,
-    )
-    db.add(system)
-    db.flush()
-    instance = WorkflowInstance(system_id=system.id, current_step_index=0, status="in_progress")
-    db.add(instance)
-    recalc_workflow_due_at(db, instance, get_workflow_config(db))
-    record_system_history(db, system.id, actor, "import_word", None, obj_to_dict(system, SYSTEM_FIELDS))
-    db.commit()
-    db.refresh(system)
+    try:
+        system = SystemInfo(
+            organization_id=org_id,
+            system_name=name,
+            system_code=generate_system_code(db),
+            proposed_level=proposed_level,
+            business_description=str(raw.get("business_description") or "").strip() or None,
+            deployment_mode=str(raw.get("deployment_mode") or "").strip() or None,
+            system_type=str(raw.get("system_type") or "").strip() or None,
+            go_live_date=go_live_date,
+            level_basis=str(raw.get("level_basis") or "").strip() or None,
+            level_reason=str(raw.get("level_reason") or "").strip() or None,
+            boundary=str(raw.get("boundary") or "").strip() or None,
+            subsystems=str(raw.get("subsystems") or "").strip() or None,
+            service_object=str(raw.get("service_object") or "").strip() or None,
+            service_scope=str(raw.get("service_scope") or "").strip() or None,
+            created_by=actor,
+        )
+        db.add(system)
+        db.flush()
+        instance = WorkflowInstance(system_id=system.id, current_step_index=0, status="in_progress")
+        db.add(instance)
+        recalc_workflow_due_at(db, instance, get_workflow_config(db))
+        record_system_history(db, system.id, actor, "import_word", None, obj_to_dict(system, SYSTEM_FIELDS))
+        db.commit()
+        db.refresh(system)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"系统Word导入失败: {exc}") from exc
     return {"message": "Word导入成功", "data": obj_to_dict(system, SYSTEM_FIELDS)}
 
 
@@ -4779,6 +4792,85 @@ def dashboard_drilldown(
     }
 
 
+@app.get("/api/dashboard/trend")
+def dashboard_trend(
+    request: Request,
+    months: int = Query(12, ge=1, le=60),
+    industry: str | None = None,
+    city: str | None = None,
+    level: int | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """按月统计备案数量变化趋势，返回最近N个月的组织和系统新增数量。"""
+    current_user = get_current_user_optional(request, db)
+    role = current_user.role if current_user else ""
+    username = current_user.username if current_user else ""
+
+    # 计算起始时间
+    now = datetime.now()
+    start_dt = datetime(now.year, now.month, 1) - timedelta(days=30 * (months - 1))
+    # 向前移到月初
+    start_dt = datetime(start_dt.year, start_dt.month, 1)
+
+    org_q = db.query(
+        func.strftime("%Y-%m", Organization.created_at).label("month"),
+        func.count(Organization.id).label("count"),
+    ).filter(
+        Organization.deleted_at.is_(None),
+        Organization.created_at >= start_dt,
+    )
+    if industry:
+        org_q = org_q.filter(Organization.industry == industry)
+    if city:
+        org_q = org_q.filter(Organization.filing_region.like(f"%{city}%"))
+    if role == "evaluator":
+        org_q = org_q.filter(Organization.created_by == username)
+    org_q = org_q.group_by(func.strftime("%Y-%m", Organization.created_at)).order_by(
+        func.strftime("%Y-%m", Organization.created_at)
+    )
+
+    sys_q = db.query(
+        func.strftime("%Y-%m", SystemInfo.created_at).label("month"),
+        func.count(SystemInfo.id).label("count"),
+    ).join(Organization, Organization.id == SystemInfo.organization_id).filter(
+        SystemInfo.deleted_at.is_(None),
+        Organization.deleted_at.is_(None),
+        SystemInfo.created_at >= start_dt,
+    )
+    if industry:
+        sys_q = sys_q.filter(Organization.industry == industry)
+    if city:
+        sys_q = sys_q.filter(Organization.filing_region.like(f"%{city}%"))
+    if level:
+        sys_q = sys_q.filter(SystemInfo.proposed_level == level)
+    if role == "evaluator":
+        sys_q = sys_q.filter(SystemInfo.created_by == username)
+    sys_q = sys_q.group_by(func.strftime("%Y-%m", SystemInfo.created_at)).order_by(
+        func.strftime("%Y-%m", SystemInfo.created_at)
+    )
+
+    org_by_month = {row.month: row.count for row in org_q.all()}
+    sys_by_month = {row.month: row.count for row in sys_q.all()}
+
+    # 生成连续月份列表
+    result = []
+    cur = start_dt
+    for _ in range(months):
+        label = cur.strftime("%Y-%m")
+        result.append({
+            "month": label,
+            "organization_count": org_by_month.get(label, 0),
+            "system_count": sys_by_month.get(label, 0),
+        })
+        # 移到下个月
+        if cur.month == 12:
+            cur = datetime(cur.year + 1, 1, 1)
+        else:
+            cur = datetime(cur.year, cur.month + 1, 1)
+
+    return {"months": months, "trend": result}
+
+
 @app.get("/api/dashboard/export/excel")
 def export_dashboard_excel(
     request: Request,
@@ -5033,6 +5125,52 @@ def list_knowledge(
     }
 
 
+@app.get("/api/knowledge/download-logs")
+def knowledge_download_logs(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    # 仅管理员可查看下载日志
+    require_roles(request, db, {"admin"})
+    rows = db.query(KnowledgeDownloadLog).order_by(KnowledgeDownloadLog.downloaded_at.desc()).limit(500).all()
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "document_id": r.document_id,
+                "download_by": r.download_by,
+                "downloaded_at": r.downloaded_at,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.post("/api/knowledge/batch-download")
+def batch_download_knowledge(
+    request: Request,
+    doc_ids: list[int],
+    actor: str = Query("system"),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    # 批量下载知识库文档（打包为zip）
+    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"})
+    if not doc_ids:
+        raise HTTPException(status_code=400, detail="doc_ids 不能为空。")
+    rows = db.query(KnowledgeDocument).filter(KnowledgeDocument.id.in_(doc_ids)).all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="未找到文档。")
+    disabled = [row.id for row in rows if row.status != "enabled"]
+    if disabled:
+        raise HTTPException(status_code=403, detail=f"包含已下架文档，禁止下载: {disabled}")
+    zip_path = EXPORT_DIR / f"knowledge_batch_{datetime.now():%Y%m%d%H%M%S}.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for doc in rows:
+            src = Path(doc.file_path)
+            if src.exists():
+                zf.write(src, arcname=doc.file_name)
+                db.add(KnowledgeDownloadLog(document_id=doc.id, download_by=actor_name or actor))
+    db.commit()
+    return FileResponse(path=str(zip_path), filename=zip_path.name)
+
+
 @app.put("/api/knowledge/{doc_id}")
 def update_knowledge(
     request: Request,
@@ -5177,23 +5315,6 @@ def pin_knowledge(
     return {"message": "置顶状态已更新", "pinned": enabled}
 
 
-@app.get("/api/knowledge/download-logs")
-def knowledge_download_logs(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
-    require_roles(request, db, {"admin"})
-    rows = db.query(KnowledgeDownloadLog).order_by(KnowledgeDownloadLog.downloaded_at.desc()).limit(500).all()
-    return {
-        "total": len(rows),
-        "items": [
-            {
-                "document_id": r.document_id,
-                "download_by": r.download_by,
-                "downloaded_at": r.downloaded_at,
-            }
-            for r in rows
-        ],
-    }
-
-
 @app.post("/api/knowledge/{doc_id}/toggle")
 def toggle_knowledge(
     request: Request,
@@ -5224,33 +5345,6 @@ def download_knowledge(request: Request, doc_id: int, actor: str = Query("system
     db.add(KnowledgeDownloadLog(document_id=doc.id, download_by=actor_name or actor))
     db.commit()
     return FileResponse(path=str(path), filename=doc.file_name)
-
-
-@app.post("/api/knowledge/batch-download")
-def batch_download_knowledge(
-    request: Request,
-    doc_ids: list[int],
-    actor: str = Query("system"),
-    db: Session = Depends(get_db),
-) -> FileResponse:
-    actor_name, _ = require_roles(request, db, {"admin", "reviewer", "evaluator"})
-    if not doc_ids:
-        raise HTTPException(status_code=400, detail="doc_ids 不能为空。")
-    rows = db.query(KnowledgeDocument).filter(KnowledgeDocument.id.in_(doc_ids)).all()
-    if not rows:
-        raise HTTPException(status_code=404, detail="未找到文档。")
-    disabled = [row.id for row in rows if row.status != "enabled"]
-    if disabled:
-        raise HTTPException(status_code=403, detail=f"包含已下架文档，禁止下载: {disabled}")
-    zip_path = EXPORT_DIR / f"knowledge_batch_{datetime.now():%Y%m%d%H%M%S}.zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for doc in rows:
-            src = Path(doc.file_path)
-            if src.exists():
-                zf.write(src, arcname=doc.file_name)
-                db.add(KnowledgeDownloadLog(document_id=doc.id, download_by=actor_name or actor))
-    db.commit()
-    return FileResponse(path=str(zip_path), filename=zip_path.name)
 
 
 @app.delete("/api/knowledge/{doc_id}")

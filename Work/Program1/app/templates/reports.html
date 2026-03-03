@@ -1,99 +1,191 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block content %}
+
+<!-- 自动报告生成面板 -->
 <div class="panel">
-  <h2>自动报告生成</h2>
-  <div class="row">
-    <div><label>系统ID*</label><input id="systemId" type="number" /></div>
+  <h2><i class="fas fa-magic"></i> 自动报告生成</h2>
+  <div class="search-bar">
     <div>
-      <label>报告类型*</label>
+      <label>系统ID <span style="color:var(--danger)">*</span></label>
+      <input id="systemId" type="number" placeholder="关联系统数字ID" />
+    </div>
+    <div>
+      <label>报告类型 <span style="color:var(--danger)">*</span></label>
       <select id="reportType">
         <option value="grading_report">定级报告</option>
         <option value="filing_form">定级备案表</option>
         <option value="expert_review_form">专家评审意见表</option>
       </select>
     </div>
-    <div><label>模板ID(可选)</label><input id="templateId" type="number" /></div>
-    <div><label>生成人</label><input id="reportActor" value="tester" /></div>
-    <div><label>&nbsp;</label><button onclick="generateReport()">生成报告</button></div>
+    <div>
+      <label>模板ID（可选）</label>
+      <input id="templateId" type="number" placeholder="留空使用默认模板" />
+    </div>
+    <div>
+      <label>生成人</label>
+      <input id="reportActor" value="tester" />
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button onclick="generateReport()"><i class="fas fa-cogs"></i> 生成报告</button>
+    </div>
   </div>
   <div class="result" id="reportResult">可在此查看操作结果。</div>
 </div>
 
+<!-- 报告章节管理面板 -->
 <div class="panel">
-  <h2>报告章节管理</h2>
-  <div class="row">
-    <div><label>报告ID</label><input id="reportId" type="number" /></div>
-    <div><label>章节名称</label><input id="sectionName" placeholder="新章节名称" /></div>
-    <div><label>章节内容(JSON可选)</label><input id="sectionContent" placeholder='{"字段":"值"}' /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="addSection()">新增章节</button></div>
+  <h2><i class="fas fa-list-ol"></i> 报告章节管理</h2>
+  <div class="search-bar">
+    <div>
+      <label>报告ID</label>
+      <input id="reportId" type="number" placeholder="填写后操作生效" />
+    </div>
+    <div>
+      <label>章节名称</label>
+      <input id="sectionName" placeholder="新章节名称" />
+    </div>
+    <div>
+      <label>章节内容（JSON可选）</label>
+      <input id="sectionContent" placeholder='{"字段":"值"}' />
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="addSection()"><i class="fas fa-plus"></i> 新增章节</button>
+    </div>
   </div>
-  <div class="row">
-    <div><label>删除章节索引</label><input id="deleteSectionIndex" type="number" min="0" /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="deleteSection()">删除章节</button></div>
-    <div><label>从索引</label><input id="fromIndex" type="number" min="0" /></div>
-    <div><label>到索引</label><input id="toIndex" type="number" min="0" /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="reorderSection()">调整顺序</button></div>
+  <div class="search-bar" style="margin-top:0;">
+    <div>
+      <label>删除章节索引</label>
+      <input id="deleteSectionIndex" type="number" min="0" placeholder="从0开始" />
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite btn-danger" onclick="deleteSection()"><i class="fas fa-trash"></i> 删除章节</button>
+    </div>
+    <div>
+      <label>从索引</label>
+      <input id="fromIndex" type="number" min="0" />
+    </div>
+    <div>
+      <label>到索引</label>
+      <input id="toIndex" type="number" min="0" />
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="reorderSection()"><i class="fas fa-sort"></i> 调整顺序</button>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="showReportSections()"><i class="fas fa-eye"></i> 查看章节</button>
+    </div>
   </div>
-  <button class="btn-lite" onclick="showReportSections()">查看章节</button>
   <div class="result" id="sectionResult">可在此查看章节摘要。</div>
 </div>
 
+<!-- 报告审核流转面板 -->
 <div class="panel">
-  <h2>报告审核流转</h2>
-  <div class="row">
-    <div><label>审核人</label><input id="reviewer" value="leader" /></div>
-    <div><label>操作</label>
+  <h2><i class="fas fa-check-double"></i> 报告审核流转</h2>
+  <div class="search-bar">
+    <div>
+      <label>审核人</label>
+      <input id="reviewer" value="leader" />
+    </div>
+    <div>
+      <label>操作</label>
       <select id="reviewAction">
         <option value="approve">通过</option>
         <option value="reject">驳回</option>
       </select>
     </div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="reviewReport()">执行审核</button></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="submitReport()">提交审核</button></div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="submitReport()"><i class="fas fa-paper-plane"></i> 提交审核</button>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="reviewReport()"><i class="fas fa-gavel"></i> 执行审核</button>
+    </div>
   </div>
   <div class="result" id="reviewResult">可在此查看审核操作结果。</div>
 </div>
 
+<!-- 签章设置面板 -->
 <div class="panel">
-  <h2>签章设置</h2>
-  <div class="row">
-    <div><label>公司签章</label><input id="companySeal" placeholder="公司电子签章ID/名称" /></div>
-    <div><label>测评师签章</label><input id="evaluatorSeal" placeholder="测评师签章ID/名称" /></div>
-    <div><label>签章位置</label><input id="sealPosition" placeholder="第3页右下角" /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="setSignature()">保存签章</button></div>
+  <h2><i class="fas fa-stamp"></i> 签章设置</h2>
+  <div class="search-bar">
+    <div>
+      <label>公司签章</label>
+      <input id="companySeal" placeholder="公司电子签章ID/名称" />
+    </div>
+    <div>
+      <label>测评师签章</label>
+      <input id="evaluatorSeal" placeholder="测评师签章ID/名称" />
+    </div>
+    <div>
+      <label>签章位置</label>
+      <input id="sealPosition" placeholder="如：第3页右下角" />
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="setSignature()"><i class="fas fa-save"></i> 保存签章</button>
+    </div>
   </div>
   <div class="result" id="signatureResult">可在此查看签章保存结果。</div>
 </div>
 
+<!-- 报告列表面板 -->
 <div class="panel">
-  <h2>报告列表</h2>
-  <div class="row">
-    <div><label>PDF密码（可选）</label><input id="pdfPassword" placeholder="导出PDF时加密" /></div>
+  <h2><i class="fas fa-file-alt"></i> 报告列表</h2>
+  <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;">
+    <div>
+      <label>PDF密码（可选）</label>
+      <input id="pdfPassword" placeholder="导出PDF时加密" style="width:200px;" />
+    </div>
+    <button class="btn-lite" onclick="loadReports()"><i class="fas fa-sync-alt"></i> 刷新列表</button>
   </div>
-  <br />
-  <button class="btn-lite" onclick="loadReports()">刷新列表</button>
-  <br /><br />
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th><th>标题</th><th>类型</th><th>版本</th><th>状态</th><th>导出</th><th>操作</th>
-      </tr>
-    </thead>
-    <tbody id="reportTable"></tbody>
-  </table>
+  <div class="table-wrapper">
+    <table class="table-sticky">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>标题</th>
+          <th>类型</th>
+          <th>版本</th>
+          <th>状态</th>
+          <th>导出</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="reportTable">
+        <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">加载中…</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
+<!-- 版本差异对比面板 -->
 <div class="panel">
-  <h2>版本差异对比</h2>
-  <div class="row">
-    <div><label>左侧报告ID</label><input id="compareLeftId" type="number" /></div>
-    <div><label>右侧报告ID</label><input id="compareRightId" type="number" /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="compareReports()">对比差异</button></div>
+  <h2><i class="fas fa-code-branch"></i> 版本差异对比</h2>
+  <div class="search-bar">
+    <div>
+      <label>左侧报告ID</label>
+      <input id="compareLeftId" type="number" placeholder="旧版本" />
+    </div>
+    <div>
+      <label>右侧报告ID</label>
+      <input id="compareRightId" type="number" placeholder="新版本" />
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="btn-lite" onclick="compareReports()"><i class="fas fa-exchange-alt"></i> 对比差异</button>
+    </div>
   </div>
   <div class="result" id="compareResult">可在此查看版本差异摘要。</div>
 </div>
 
 <script>
+/* 工具函数 */
 function msg(data, fallback='操作失败') {
   if (!data) return fallback;
   if (typeof data.detail === 'string') return data.detail;
@@ -114,20 +206,45 @@ function esc(v) {
   return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
+/* 报告状态徽章 */
+function reportStatusBadge(status) {
+  const map = {
+    draft:     ['status-archived', '草稿'],
+    pending_review: ['status-pending', '待审核'],
+    approved:  ['status-approved', '已通过'],
+    rejected:  ['status-rejected', '已驳回'],
+    published: ['status-active', '已发布']
+  };
+  const [cls, label] = map[status] || ['', status];
+  return `<span class="status-badge ${cls}">${esc(label || status)}</span>`;
+}
+
+function setResult(id, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.style.borderColor = 'var(--primary)';
+  setTimeout(() => { el.style.borderColor = ''; }, 1200);
+}
+
 async function generateReport() {
   const systemId = document.getElementById('systemId').value;
   const reportType = document.getElementById('reportType').value;
   const templateId = document.getElementById('templateId').value.trim();
   const actor = document.getElementById('reportActor').value.trim() || 'tester';
+  if (!systemId) {
+    setResult('reportResult', '请填写系统ID。');
+    return;
+  }
   const suffix = templateId ? `&template_id=${encodeURIComponent(templateId)}` : '';
   const url = `/api/reports/generate?system_id=${systemId}&report_type=${reportType}&actor=${encodeURIComponent(actor)}${suffix}`;
   const res = await fetch(url, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
-    document.getElementById('reportResult').textContent = `生成失败：${msg(data)}`;
+    setResult('reportResult', `生成失败：${msg(data)}`);
     return;
   }
-  document.getElementById('reportResult').textContent = `生成成功：报告ID=${data?.data?.id || '-'}，版本 V${data?.data?.version_no || '-'}`;
+  setResult('reportResult', `生成成功：报告ID=${data?.data?.id || '-'}，版本 V${data?.data?.version_no || '-'}`);
   document.getElementById('reportId').value = data.data.id;
   loadReports();
   showReportSections();
@@ -148,29 +265,36 @@ async function setSignature() {
     body: JSON.stringify(payload)
   });
   const data = await res.json();
-  document.getElementById('signatureResult').textContent = res.ok ? (data.message || '签章已保存') : `保存失败：${msg(data)}`;
+  setResult('signatureResult', res.ok ? (data.message || '签章已保存') : `保存失败：${msg(data)}`);
 }
 
 function getReportId() {
-  return document.getElementById('reportId').value.trim();
+  const val = document.getElementById('reportId').value.trim();
+  if (!val) {
+    setResult('sectionResult', '请先填写报告ID。');
+    return null;
+  }
+  return val;
 }
 
 async function submitReport() {
   const reportId = getReportId();
+  if (!reportId) return;
   const reviewer = document.getElementById('reviewer').value.trim() || 'leader';
   const res = await fetch(`/api/reports/${reportId}/submit?actor=tester&reviewer=${encodeURIComponent(reviewer)}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
-  document.getElementById('reviewResult').textContent = res.ok ? (data.message || '已提交审核') : `提交失败：${msg(data)}`;
+  setResult('reviewResult', res.ok ? (data.message || '已提交审核') : `提交失败：${msg(data)}`);
   loadReports();
 }
 
 async function reviewReport() {
   const reportId = getReportId();
+  if (!reportId) return;
   const reviewer = document.getElementById('reviewer').value.trim() || 'leader';
   const action = document.getElementById('reviewAction').value;
   const res = await fetch(`/api/reports/${reportId}/review?actor=${encodeURIComponent(reviewer)}&action=${action}&comment=页面操作`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
-  document.getElementById('reviewResult').textContent = res.ok ? (data.message || '审核完成') : `审核失败：${msg(data)}`;
+  setResult('reviewResult', res.ok ? (data.message || '审核完成') : `审核失败：${msg(data)}`);
   loadReports();
 }
 
@@ -180,12 +304,12 @@ async function showReportSections() {
   const res = await fetch(`/api/reports/${reportId}`, {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
-    document.getElementById('sectionResult').textContent = `读取失败：${msg(data)}`;
+    setResult('sectionResult', `读取失败：${msg(data)}`);
     return;
   }
   const sections = (data.content && data.content['章节']) || [];
   const names = sections.map((s, idx) => `${idx}. ${s['名称'] || '未命名章节'}`).join(' | ');
-  document.getElementById('sectionResult').textContent = sections.length ? `章节数：${sections.length}。${names}` : '当前报告暂无章节。';
+  setResult('sectionResult', sections.length ? `章节数：${sections.length}。${names}` : '当前报告暂无章节。');
 }
 
 function parseSectionContent() {
@@ -200,9 +324,10 @@ function parseSectionContent() {
 
 async function addSection() {
   const reportId = getReportId();
+  if (!reportId) return;
   const name = document.getElementById('sectionName').value.trim();
   if (!name) {
-    alert('请填写章节名称');
+    setResult('sectionResult', '请填写章节名称。');
     return;
   }
   const payload = {name, content: parseSectionContent()};
@@ -212,26 +337,28 @@ async function addSection() {
     body: JSON.stringify(payload)
   });
   const data = await res.json();
-  document.getElementById('sectionResult').textContent = res.ok ? (data.message || '章节新增成功') : `新增失败：${msg(data)}`;
+  setResult('sectionResult', res.ok ? (data.message || '章节新增成功') : `新增失败：${msg(data)}`);
   showReportSections();
 }
 
 async function deleteSection() {
   const reportId = getReportId();
+  if (!reportId) return;
   const idx = document.getElementById('deleteSectionIndex').value;
   const res = await fetch(`/api/reports/${reportId}/sections/${idx}?actor=tester`, {method: 'DELETE', headers: authHeaders()});
   const data = await res.json();
-  document.getElementById('sectionResult').textContent = res.ok ? (data.message || '章节删除成功') : `删除失败：${msg(data)}`;
+  setResult('sectionResult', res.ok ? (data.message || '章节删除成功') : `删除失败：${msg(data)}`);
   showReportSections();
 }
 
 async function reorderSection() {
   const reportId = getReportId();
+  if (!reportId) return;
   const fromIndex = document.getElementById('fromIndex').value;
   const toIndex = document.getElementById('toIndex').value;
   const res = await fetch(`/api/reports/${reportId}/sections/reorder?from_index=${fromIndex}&to_index=${toIndex}&actor=tester`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
-  document.getElementById('sectionResult').textContent = res.ok ? (data.message || '章节顺序已调整') : `调整失败：${msg(data)}`;
+  setResult('sectionResult', res.ok ? (data.message || '章节顺序已调整') : `调整失败：${msg(data)}`);
   showReportSections();
 }
 
@@ -246,22 +373,33 @@ async function loadReports() {
   const res = await fetch('/api/reports', {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
-    document.getElementById('reportTable').innerHTML = `<tr><td colspan="7">${esc(data.detail || '请先登录后查看报告列表。')}</td></tr>`;
+    document.getElementById('reportTable').innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:24px;">${esc(data.detail || '请先登录后查看报告列表。')}</td></tr>`;
     return;
   }
-  document.getElementById('reportTable').innerHTML = data.items.map(i => `
+  const items = data.items || [];
+  if (!items.length) {
+    document.getElementById('reportTable').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">暂无报告</td></tr>';
+    return;
+  }
+  document.getElementById('reportTable').innerHTML = items.map(i => `
     <tr>
-      <td>${esc(i.id)}</td>
-      <td>${esc(i.title)}</td>
-      <td>${esc(i.report_type)}</td>
-      <td>V${esc(i.version_no)}</td>
-      <td>${esc(i.status)}</td>
+      <td style="color:var(--text-muted);font-size:0.82rem;">${esc(i.id)}</td>
+      <td><strong>${esc(i.title)}</strong></td>
+      <td style="font-size:0.85rem;">${esc(i.report_type)}</td>
+      <td><span style="font-family:monospace;">V${esc(i.version_no)}</span></td>
+      <td>${reportStatusBadge(i.status)}</td>
       <td>
-        <a href="/api/reports/${i.id}/export/word${wordSuffix}" target="_blank">Word</a> |
-        <a href="/api/reports/${i.id}/export/pdf${pdfLinkSuffix}" target="_blank">PDF</a>
+        <div style="display:flex;gap:6px;">
+          <a class="btn-lite btn-sm" href="/api/reports/${i.id}/export/word${wordSuffix}" target="_blank" style="text-decoration:none;">
+            <i class="fas fa-file-word"></i> Word
+          </a>
+          <a class="btn-lite btn-sm" href="/api/reports/${i.id}/export/pdf${pdfLinkSuffix}" target="_blank" style="text-decoration:none;">
+            <i class="fas fa-file-pdf"></i> PDF
+          </a>
+        </div>
       </td>
       <td>
-        <button class="btn-lite" onclick="useReportId(${i.id})">设为当前</button>
+        <button class="btn-lite btn-sm" onclick="useReportId(${i.id})"><i class="fas fa-crosshairs"></i> 设为当前</button>
       </td>
     </tr>
   `).join('');
@@ -281,18 +419,19 @@ async function compareReports() {
   const left = document.getElementById('compareLeftId').value.trim();
   const right = document.getElementById('compareRightId').value.trim();
   if (!left || !right) {
-    alert('请先填写两个报告ID');
+    setResult('compareResult', '请先填写两个报告ID。');
     return;
   }
   const res = await fetch(`/api/reports/${left}/compare/${right}`, {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
-    document.getElementById('compareResult').textContent = `对比失败：${msg(data)}`;
+    setResult('compareResult', `对比失败：${msg(data)}`);
     return;
   }
   const s = data.summary || {};
-  document.getElementById('compareResult').textContent =
-    `字段变化 ${s.field_change_count || 0} 项，新增章节 ${s.section_added_count || 0} 项，删除章节 ${s.section_removed_count || 0} 项，章节内容变化 ${s.section_changed_count || 0} 项。`;
+  setResult('compareResult',
+    `字段变化 ${s.field_change_count || 0} 项，新增章节 ${s.section_added_count || 0} 项，删除章节 ${s.section_removed_count || 0} 项，章节内容变化 ${s.section_changed_count || 0} 项。`
+  );
 }
 
 loadReports();

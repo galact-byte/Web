@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block content %}
 <div class="panel" id="dashboardCapture">
   <h2><i class="fas fa-filter"></i> 筛选过滤</h2>
@@ -52,32 +52,46 @@
 
 <div class="panel">
   <div class="row dashboard-actions">
-    <div><button class="btn-lite" onclick="exportDashboardExcel()">导出Excel</button></div>
-    <div><button class="btn-lite" onclick="exportDashboardPdf()">导出PDF</button></div>
-    <div><button class="btn-lite" onclick="captureDashboard()">截图PNG</button></div>
-    <div><button class="btn-lite" onclick="toggleFullscreen()">全屏展示</button></div>
+    <div><button class="btn-lite" onclick="exportDashboardExcel()"><i class="fas fa-file-excel"></i> 导出Excel</button></div>
+    <div><button class="btn-lite" onclick="exportDashboardPdf()"><i class="fas fa-file-pdf"></i> 导出PDF</button></div>
+    <div><button class="btn-lite" onclick="captureDashboard()"><i class="fas fa-camera"></i> 截图PNG</button></div>
+    <div><button class="btn-lite" onclick="toggleFullscreen()"><i class="fas fa-expand"></i> 全屏展示</button></div>
   </div>
 </div>
 
+<!-- 统计卡片：包含同比增长指示 -->
 <div class="cards">
   <div class="card card-blue">
-    <div class="hint">单位总数 <i class="fas fa-building" style="float:right;opacity:0.5"></i></div>
+    <div class="hint">
+      单位总数 <i class="fas fa-building" style="float:right;opacity:0.5"></i>
+    </div>
     <b id="orgCount">0</b>
+    <div class="card-trend" id="orgTrend"></div>
   </div>
   <div class="card card-green">
-    <div class="hint">系统总数 <i class="fas fa-server" style="float:right;opacity:0.5"></i></div>
+    <div class="hint">
+      系统总数 <i class="fas fa-server" style="float:right;opacity:0.5"></i>
+    </div>
     <b id="sysCount">0</b>
+    <div class="card-trend" id="sysTrend"></div>
   </div>
   <div class="card card-orange">
-    <div class="hint">待审核报告 <i class="fas fa-clipboard-check" style="float:right;opacity:0.5"></i></div>
+    <div class="hint">
+      待审核报告 <i class="fas fa-clipboard-check" style="float:right;opacity:0.5"></i>
+    </div>
     <b id="pendingReports">0</b>
+    <div class="card-trend" id="reportTrend"></div>
   </div>
   <div class="card card-purple">
-    <div class="hint">进行中项目 <i class="fas fa-spinner" style="float:right;opacity:0.5"></i></div>
+    <div class="hint">
+      进行中项目 <i class="fas fa-spinner" style="float:right;opacity:0.5"></i>
+    </div>
     <b id="inProgressProjects">0</b>
+    <div class="card-trend" id="projectTrend"></div>
   </div>
 </div>
 
+<!-- 分布图表区域 -->
 <div class="panel">
   <h2><i class="fas fa-chart-pie"></i> 分布统计（点击柱子可下钻）</h2>
   <div class="charts">
@@ -87,30 +101,67 @@
   </div>
 </div>
 
+<!-- 趋势折线图区域 -->
+<div class="panel">
+  <h2><i class="fas fa-chart-line"></i> 备案数量趋势（按月）</h2>
+  <div style="height:280px;position:relative;">
+    <canvas id="trendChart"></canvas>
+    <span class="empty-hint" id="trendEmptyHint" style="display:none;padding-top:100px;">暂无趋势数据</span>
+  </div>
+</div>
+
+<!-- 地图热力图 -->
 <div class="panel">
   <h2><i class="fas fa-map"></i> 地图热力图（点击省份下钻）</h2>
   <div style="height:420px" id="heatMap"></div>
 </div>
 
+<!-- 下钻明细表格（含分页） -->
 <div class="panel">
   <h2><i class="fas fa-list"></i> 下钻明细</h2>
   <p class="hint" id="drillHint">点击上方图表柱子查看明细</p>
-  <table>
-    <thead>
-      <tr><th>序号</th><th>类型</th><th>ID</th><th>名称</th><th>行业/等级</th><th>地区/编号</th></tr>
-    </thead>
-    <tbody id="drillTable"></tbody>
-  </table>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>序号</th>
+          <th>类型</th>
+          <th>ID</th>
+          <th>名称</th>
+          <th>行业/等级</th>
+          <th>地区/编号</th>
+        </tr>
+      </thead>
+      <tbody id="drillTable"></tbody>
+    </table>
+  </div>
+  <!-- 分页控件 -->
+  <div class="pagination" id="drillPagination" style="display:none;">
+    <button class="btn-lite btn-sm" id="prevPage" onclick="changePage(-1)">
+      <i class="fas fa-chevron-left"></i> 上一页
+    </button>
+    <span class="page-info" id="pageInfo">第 1 页 / 共 1 页</span>
+    <button class="btn-lite btn-sm" id="nextPage" onclick="changePage(1)">
+      下一页 <i class="fas fa-chevron-right"></i>
+    </button>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/map/js/china.js"></script>
 <script>
+/* 图表实例 */
 let regionChart;
 let industryChart;
 let levelChart;
 let heatMapChart;
+let trendChartInst;
+
+/* 下钻分页状态 */
+let drillAllRows = [];
+const DRILL_PAGE_SIZE = 15;
+let drillCurrentPage = 1;
 
 function authToken() {
   return localStorage.getItem('auth_token') || '';
@@ -121,6 +172,7 @@ function authHeaders() {
   return token ? {'X-Auth-Token': token} : {};
 }
 
+/* XSS 转义 */
 function esc(v) {
   return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
@@ -144,16 +196,33 @@ function getFilters() {
   return params;
 }
 
+/* 渲染同比增长指示箭头 */
+function renderTrend(elId, value) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (value === null || value === undefined) {
+    el.innerHTML = '';
+    return;
+  }
+  const pct = Number(value);
+  const isUp = pct >= 0;
+  const icon = isUp ? 'fa-arrow-up' : 'fa-arrow-down';
+  const cls = isUp ? 'trend-up' : 'trend-down';
+  el.innerHTML = `<span class="${cls}"><i class="fas ${icon}"></i> ${Math.abs(pct).toFixed(1)}% 同比</span>`;
+}
+
+/* 通用 Chart.js 柱状图构建 */
 function upsertChart(inst, el, label, dataset, color, dimension) {
   if (inst) inst.destroy();
   return new Chart(document.getElementById(el), {
     type: 'bar',
     data: {
       labels: dataset.map(i => i.name),
-      datasets: [{ 
+      datasets: [{
         label,
         data: dataset.map(i => i.value),
         backgroundColor: color,
+        hoverBackgroundColor: color.replace(')', ', 0.75)').replace('rgb', 'rgba'),
         borderRadius: 6,
         borderWidth: 0
       }]
@@ -161,6 +230,11 @@ function upsertChart(inst, el, label, dataset, color, dimension) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      /* 入场动画 */
+      animation: {
+        duration: 600,
+        easing: 'easeOutQuart'
+      },
       onClick: async (evt, elements) => {
         if (!elements || !elements.length) return;
         const idx = elements[0].index;
@@ -170,19 +244,47 @@ function upsertChart(inst, el, label, dataset, color, dimension) {
         if (dimension === 'level') value = String(clicked.name).replace('级', '');
         await loadDrilldown(dimension, value);
       },
-      plugins: { 
+      plugins: {
         legend: { display: false },
-        title: { display: true, text: label, font: { size: 14, weight: 'bold' } },
-        tooltip: { enabled: true }
+        title: {
+          display: true,
+          text: label,
+          font: { size: 14, weight: 'bold' },
+          color: '#1e293b'
+        },
+        /* 悬停提示美化 */
+        tooltip: {
+          enabled: true,
+          backgroundColor: 'rgba(30,41,59,0.92)',
+          titleColor: '#f1f5f9',
+          bodyColor: '#cbd5e1',
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} 条`
+          }
+        }
       },
       scales: {
-        y: { beginAtZero: true, grid: { display: false } },
-        x: { grid: { display: false } }
+        y: {
+          beginAtZero: true,
+          grid: { color: '#f1f5f9' },
+          ticks: { color: '#64748b', precision: 0 }
+        },
+        x: {
+          grid: { display: false },
+          ticks: {
+            color: '#64748b',
+            maxRotation: 45,
+            minRotation: 0
+          }
+        }
       }
     }
   });
 }
 
+/* 空状态处理 */
 function showChart(canvasId, dataset, renderFn) {
   const canvas = document.getElementById(canvasId);
   const hint = canvas ? canvas.parentElement.querySelector('.empty-hint') : null;
@@ -196,42 +298,135 @@ function showChart(canvasId, dataset, renderFn) {
   return renderFn();
 }
 
+/* 加载趋势折线图 */
+async function loadTrendChart() {
+  const params = getFilters();
+  try {
+    const res = await fetch('/api/dashboard/trend?' + params.toString(), { headers: authHeaders() });
+    if (!res.ok) {
+      document.getElementById('trendEmptyHint').style.display = 'block';
+      return;
+    }
+    const data = await res.json();
+    const trendData = data.trend || data.items || data || [];
+    if (!Array.isArray(trendData) || trendData.length === 0) {
+      document.getElementById('trendEmptyHint').style.display = 'block';
+      return;
+    }
+    document.getElementById('trendEmptyHint').style.display = 'none';
+    if (trendChartInst) trendChartInst.destroy();
+    trendChartInst = new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels: trendData.map(i => i.month || i.label || i.name || ''),
+        datasets: [{
+          label: '备案数量',
+          data: trendData.map(i => i.count || i.value || 0),
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37,99,235,0.08)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 4,
+          pointHoverRadius: 7,
+          pointBackgroundColor: '#2563eb',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 700, easing: 'easeOutCubic' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            enabled: true,
+            backgroundColor: 'rgba(30,41,59,0.92)',
+            titleColor: '#f1f5f9',
+            bodyColor: '#cbd5e1',
+            padding: 10,
+            cornerRadius: 8,
+            callbacks: {
+              label: ctx => ` 备案数量: ${ctx.parsed.y} 条`
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: '#f1f5f9' },
+            ticks: { color: '#64748b', precision: 0 }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: '#64748b' }
+          }
+        }
+      }
+    });
+  } catch (e) {
+    /* API 可能尚未实现，静默处理 */
+    document.getElementById('trendEmptyHint').style.display = 'block';
+  }
+}
+
+/* 主看板加载 */
 async function loadDashboard() {
   const params = getFilters();
-  const res = await fetch('/api/dashboard/summary?' + params.toString(), {headers: authHeaders()});
+  const res = await fetch('/api/dashboard/summary?' + params.toString(), { headers: authHeaders() });
   const data = await res.json();
   if (!res.ok) {
     document.getElementById('drillHint').textContent = `读取看板失败：${data.detail || '请先登录'}`;
     return;
   }
+  /* 填充统计卡片 */
   document.getElementById('orgCount').textContent = data.totals.organization_count;
   document.getElementById('sysCount').textContent = data.totals.system_count;
   document.getElementById('pendingReports').textContent = data.totals.pending_review_reports;
   document.getElementById('inProgressProjects').textContent = data.totals.in_progress_projects;
 
+  /* 同比增长指示（API 若返回 growth 字段则显示） */
+  const g = data.growth || {};
+  renderTrend('orgTrend', g.organization_count ?? null);
+  renderTrend('sysTrend', g.system_count ?? null);
+  renderTrend('reportTrend', g.pending_review_reports ?? null);
+  renderTrend('projectTrend', g.in_progress_projects ?? null);
+
+  /* 渲染图表 */
   regionChart = showChart('regionChart', data.region_distribution, () =>
     upsertChart(regionChart, 'regionChart', '地区分布', data.region_distribution, '#3b82f6', 'region'));
   industryChart = showChart('industryChart', data.industry_distribution, () =>
     upsertChart(industryChart, 'industryChart', '行业分布', data.industry_distribution, '#10b981', 'industry'));
   levelChart = showChart('levelChart', data.level_distribution, () =>
     upsertChart(levelChart, 'levelChart', '系统级别分布', data.level_distribution, '#f59e0b', 'level'));
+
   renderHeatMap(data.region_distribution || []);
+  loadTrendChart();
 }
 
+/* ECharts 热力图（地图） */
 function renderHeatMap(dataset) {
   const el = document.getElementById('heatMap');
   if (!el || !window.echarts) return;
   if (!heatMapChart) {
     heatMapChart = echarts.init(el);
+    /* 点击省份下钻 */
     heatMapChart.on('click', async (params) => {
       if (!params || !params.name) return;
       await loadDrilldown('region', params.name);
     });
+    /* 响应式 resize */
+    window.addEventListener('resize', () => heatMapChart.resize());
   }
   const maxValue = Math.max(1, ...dataset.map(i => Number(i.value || 0)));
-  const mapData = dataset.map(i => ({name: i.name, value: Number(i.value || 0)}));
+  const mapData = dataset.map(i => ({ name: i.name, value: Number(i.value || 0) }));
   heatMapChart.setOption({
-    tooltip: {trigger: 'item'},
+    tooltip: {
+      trigger: 'item',
+      formatter: params => `${params.name}<br/>单位数量：${params.value ?? 0}`,
+      backgroundColor: 'rgba(30,41,59,0.92)',
+      textStyle: { color: '#f1f5f9' },
+      borderWidth: 0
+    },
     visualMap: {
       min: 0,
       max: maxValue,
@@ -239,42 +434,99 @@ function renderHeatMap(dataset) {
       top: 'bottom',
       text: ['高', '低'],
       calculable: true,
-      inRange: {color: ['#dbeafe', '#93c5fd', '#1d4ed8']}
+      inRange: { color: ['#dbeafe', '#93c5fd', '#1d4ed8'] },
+      textStyle: { color: '#64748b' }
     },
-    series: [
-      {
-        name: '单位数量',
-        type: 'map',
-        map: 'china',
-        roam: true,
-        data: mapData
-      }
-    ]
+    series: [{
+      name: '单位数量',
+      type: 'map',
+      map: 'china',
+      roam: true,
+      /* 入场动画 */
+      animationDuration: 600,
+      label: {
+        show: false,
+        color: '#1e293b',
+        fontSize: 11
+      },
+      emphasis: {
+        label: { show: true },
+        itemStyle: { areaColor: '#bfdbfe' }
+      },
+      data: mapData
+    }]
   });
 }
 
+/* 下钻数据加载 */
 async function loadDrilldown(dimension, value) {
-  const params = new URLSearchParams({dimension, value});
-  const res = await fetch('/api/dashboard/drilldown?' + params.toString(), {headers: authHeaders()});
+  const params = new URLSearchParams({ dimension, value });
+  const res = await fetch('/api/dashboard/drilldown?' + params.toString(), { headers: authHeaders() });
   const data = await res.json();
   if (!res.ok) {
     document.getElementById('drillHint').textContent = `下钻失败：${data.detail || '请先登录'}`;
     return;
   }
-  document.getElementById('drillHint').textContent = `当前下钻: ${dimension} = ${value}`;
-  const rows = [];
+  document.getElementById('drillHint').textContent = `当前下钻: ${dimension} = ${value}（共 ${(data.organizations?.length || 0) + (data.systems?.length || 0)} 条）`;
+
+  /* 构建全量行数据 */
+  drillAllRows = [];
   let idx = 0;
   for (const i of data.organizations) {
-    rows.push(`<tr><td>${idx+1}</td><td>单位</td><td>${esc(i.id)}</td><td>${esc(i.name)}</td><td>${esc(i.industry || '-')}</td><td>${esc(i.filing_region || '-')}</td></tr>`);
-    idx++;
+    drillAllRows.push({ idx: ++idx, type: '单位', id: i.id, name: i.name, col4: i.industry || '-', col5: i.filing_region || '-' });
   }
   for (const i of data.systems) {
-    rows.push(`<tr><td>${idx+1}</td><td>系统</td><td>${esc(i.id)}</td><td>${esc(i.system_name)}</td><td>${esc(i.proposed_level)}级</td><td>${esc(i.system_code || '-')}</td></tr>`);
-    idx++;
+    drillAllRows.push({ idx: ++idx, type: '系统', id: i.id, name: i.system_name, col4: `${esc(i.proposed_level)}级`, col5: i.system_code || '-' });
   }
-  document.getElementById('drillTable').innerHTML = rows.join('');
+
+  drillCurrentPage = 1;
+  renderDrillPage();
 }
 
+/* 渲染下钻当前页 */
+function renderDrillPage() {
+  const total = drillAllRows.length;
+  const totalPages = Math.max(1, Math.ceil(total / DRILL_PAGE_SIZE));
+  const start = (drillCurrentPage - 1) * DRILL_PAGE_SIZE;
+  const pageRows = drillAllRows.slice(start, start + DRILL_PAGE_SIZE);
+
+  document.getElementById('drillTable').innerHTML = pageRows.map(r =>
+    `<tr>
+      <td>${r.idx}</td>
+      <td><span class="type-badge type-${r.type === '单位' ? 'org' : 'sys'}">${esc(r.type)}</span></td>
+      <td>${esc(r.id)}</td>
+      <td>${esc(r.name)}</td>
+      <td>${esc(r.col4)}</td>
+      <td>${esc(r.col5)}</td>
+    </tr>`
+  ).join('');
+
+  /* 分页控件 */
+  const pager = document.getElementById('drillPagination');
+  if (total > DRILL_PAGE_SIZE) {
+    pager.style.display = 'flex';
+    document.getElementById('pageInfo').textContent = `第 ${drillCurrentPage} 页 / 共 ${totalPages} 页（${total} 条）`;
+    document.getElementById('prevPage').disabled = drillCurrentPage <= 1;
+    document.getElementById('nextPage').disabled = drillCurrentPage >= totalPages;
+  } else {
+    pager.style.display = total > 0 ? 'flex' : 'none';
+    if (total > 0) {
+      document.getElementById('pageInfo').textContent = `共 ${total} 条`;
+      document.getElementById('prevPage').disabled = true;
+      document.getElementById('nextPage').disabled = true;
+    }
+  }
+}
+
+/* 翻页 */
+function changePage(delta) {
+  const total = drillAllRows.length;
+  const totalPages = Math.max(1, Math.ceil(total / DRILL_PAGE_SIZE));
+  drillCurrentPage = Math.min(totalPages, Math.max(1, drillCurrentPage + delta));
+  renderDrillPage();
+}
+
+/* 导出功能 */
 function exportDashboardExcel() {
   const params = getFilters();
   const token = authToken();
@@ -291,7 +543,7 @@ function exportDashboardPdf() {
 
 async function captureDashboard() {
   const el = document.getElementById('dashboardCapture');
-  const canvas = await html2canvas(el, {backgroundColor: '#ffffff', scale: 2});
+  const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 });
   const a = document.createElement('a');
   a.href = canvas.toDataURL('image/png');
   a.download = 'dashboard_capture.png';
