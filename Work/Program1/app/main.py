@@ -2,6 +2,7 @@ import io
 import hmac
 import hashlib
 import json
+import logging
 import mimetypes
 import os
 import re
@@ -13,6 +14,7 @@ import threading
 import uuid
 import zipfile
 import xml.etree.ElementTree as ET
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -30,7 +32,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfgen import canvas
-from sqlalchemy import func, inspect, or_, text
+from sqlalchemy import extract, func, inspect, or_, text
 from sqlalchemy.orm import Session
 
 from .db import SessionLocal, engine, get_db, init_db
@@ -76,7 +78,7 @@ from .services.reporting import (
 )
 from .validators import (
     is_placeholder_value,
-    validate_credit_code,
+    validate_credit_code_format_only,
     validate_email,
     validate_mobile_phone,
     validate_office_phone,
@@ -123,6 +125,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "25"))
 SMTP_USER = (os.getenv("SMTP_USER") or "").strip()
 SMTP_PASS = os.getenv("SMTP_PASS", "")
 SMTP_FROM = (os.getenv("SMTP_FROM") or "").strip()
+logger = logging.getLogger(__name__)
 
 
 def env_to_bool(value: str | None, default: bool) -> bool:
@@ -165,12 +168,20 @@ SCRIPT_TAG_RE = re.compile(r"<\s*/?\s*[a-zA-Z!]|on\w+\s*=|javascript\s*:", re.IG
 LOGIN_ATTEMPTS: dict[str, dict[str, Any]] = {}
 LOGIN_ATTEMPTS_LOCK = threading.Lock()
 
+
+@asynccontextmanager
+async def app_lifespan(_: FastAPI):
+    run_startup_tasks()
+    yield
+
+
 app = FastAPI(
     title="定级备案管理系统",
     version="1.2.0",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
+    lifespan=app_lifespan,
 )
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
@@ -419,8 +430,7 @@ def ensure_user_account_schema() -> None:
             conn.execute(text("ALTER TABLE user_accounts ADD COLUMN password_updated_at DATETIME NULL"))
 
 
-@app.on_event("startup")
-def startup() -> None:
+def run_startup_tasks() -> None:
     ensure_dirs()
     init_db()
     ensure_user_account_schema()
@@ -660,7 +670,7 @@ def require_roles(
         if user.role not in allowed_roles:
             raise HTTPException(status_code=403, detail="当前账号无权限执行此操作。")
         return user.username, user.role
-    if legacy_admin and "admin" in allowed_roles:
+    if legacy_admin and "admin" in allowed_roles and not STRICT_AUTH and (APP_LITE_MODE or not API_AUTH_REQUIRED):
         return "legacy_admin", "admin"
     if STRICT_AUTH or allowed_roles:
         raise HTTPException(status_code=401, detail="请先登录。")
@@ -824,7 +834,7 @@ def validate_org_payload(data: dict[str, Any]) -> None:
     name = str(data.get("name") or "").strip()
     if not name or is_placeholder_value(name):
         raise HTTPException(status_code=400, detail="单位名称不能为空，且不能仅填写“/”。")
-    if not validate_credit_code(data["credit_code"]):
+    if not validate_credit_code_format_only(data["credit_code"]):
         raise HTTPException(status_code=400, detail="统一社会信用代码格式错误，应为18位大写字母或数字。")
     if not validate_mobile_phone(data["mobile_phone"]):
         raise HTTPException(status_code=400, detail="手机号格式错误，应为11位中国大陆手机号。")
@@ -856,7 +866,7 @@ def validate_org_partial(data: dict[str, Any]) -> None:
         name = str(data.get("name") or "").strip()
         if not name or is_placeholder_value(name):
             raise HTTPException(status_code=400, detail="单位名称不能为空，且不能仅填写“/”。")
-    if "credit_code" in data and not validate_credit_code(str(data.get("credit_code") or "")):
+    if "credit_code" in data and not validate_credit_code_format_only(str(data.get("credit_code") or "")):
         raise HTTPException(status_code=400, detail="统一社会信用代码格式错误，应为18位大写字母或数字。")
     if "mobile_phone" in data and not validate_mobile_phone(data["mobile_phone"]):
         raise HTTPException(status_code=400, detail="手机号格式错误，应为11位中国大陆手机号。")
@@ -1384,11 +1394,22 @@ def ensure_file_exists(path_value: str | None, not_found_detail: str) -> Path:
 def get_or_create_workflow_step_rules(db: Session, config: WorkflowConfig) -> dict[str, WorkflowStepRule]:
     rows = (
         db.query(WorkflowStepRule)
-        .filter(WorkflowStepRule.config_name == config.name, WorkflowStepRule.enabled.is_(True))
+        .filter(WorkflowStepRule.config_name == config.name)
+        .order_by(WorkflowStepRule.id.desc())
         .all()
     )
-    rule_map = {r.step_name: r for r in rows}
+    rule_map: dict[str, WorkflowStepRule] = {}
+    duplicate_rows: list[WorkflowStepRule] = []
+    for row in rows:
+        # 同一节点可能因历史缺陷出现多条配置，保留最新一条并清理旧数据。
+        if row.step_name in rule_map:
+            duplicate_rows.append(row)
+            continue
+        rule_map[row.step_name] = row
     changed = False
+    for dup in duplicate_rows:
+        db.delete(dup)
+        changed = True
     for step in config.steps_json:
         if step not in rule_map:
             row = WorkflowStepRule(
@@ -1538,18 +1559,18 @@ def health() -> dict[str, str]:
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html", {"request": request})
 
 
 @app.get("/organizations", response_class=HTMLResponse)
 def organizations_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("organizations.html", {"request": request})
+    return templates.TemplateResponse(request, "organizations.html", {"request": request})
 
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request) -> HTMLResponse:
     next_path = (request.query_params.get("next") or "/").strip() or "/"
-    return templates.TemplateResponse("auth.html", {"request": request, "mode": "login", "next_path": next_path})
+    return templates.TemplateResponse(request, "auth.html", {"request": request, "mode": "login", "next_path": next_path})
 
 
 @app.get("/register", response_class=HTMLResponse)
@@ -1571,44 +1592,44 @@ def organizations_collect_page(token: str, request: Request, db: Session = Depen
         org = db.query(Organization).filter(Organization.id == link.organization_id, Organization.deleted_at.is_(None)).first()
         if org:
             initial = obj_to_dict(org, ORG_FIELDS)
-    return templates.TemplateResponse("organization_collect.html", {"request": request, "token": token, "initial": initial})
+    return templates.TemplateResponse(request, "organization_collect.html", {"request": request, "token": token, "initial": initial})
 
 
 @app.get("/systems", response_class=HTMLResponse)
 def systems_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("systems.html", {"request": request})
+    return templates.TemplateResponse(request, "systems.html", {"request": request})
 
 
 @app.get("/users", response_class=HTMLResponse)
 def users_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     require_roles(request, db, {"admin"})
-    return templates.TemplateResponse("users.html", {"request": request})
+    return templates.TemplateResponse(request, "users.html", {"request": request})
 
 
 @app.get("/reports", response_class=HTMLResponse)
 def reports_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("reports.html", {"request": request})
+    return templates.TemplateResponse(request, "reports.html", {"request": request})
 
 
 @app.get("/workflow", response_class=HTMLResponse)
 def workflow_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("workflow.html", {"request": request})
+    return templates.TemplateResponse(request, "workflow.html", {"request": request})
 
 
 @app.get("/knowledge", response_class=HTMLResponse)
 def knowledge_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("knowledge.html", {"request": request})
+    return templates.TemplateResponse(request, "knowledge.html", {"request": request})
 
 
 @app.get("/templates", response_class=HTMLResponse)
 def templates_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("templates.html", {"request": request})
+    return templates.TemplateResponse(request, "templates.html", {"request": request})
 
 
 @app.get("/backup", response_class=HTMLResponse)
 def backup_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     require_roles(request, db, {"admin"})
-    return templates.TemplateResponse("backup.html", {"request": request})
+    return templates.TemplateResponse(request, "backup.html", {"request": request})
 
 
 @app.get("/api/backup/list")
@@ -1958,7 +1979,6 @@ async def upload_report_template(
     target_dir = UPLOAD_DIR / "templates"
     target_dir.mkdir(parents=True, exist_ok=True)
     path = target_dir / save_name
-    path.write_bytes(content)
     cfg = None
     if config_json.strip():
         try:
@@ -1968,6 +1988,7 @@ async def upload_report_template(
             assert_safe_payload(cfg, "config_json")
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"config_json 解析失败: {exc}") from exc
+    path.write_bytes(content)
     if is_default:
         exists = db.query(ReportTemplate).filter(ReportTemplate.report_type == report_type, ReportTemplate.is_default.is_(True)).all()
         for row in exists:
@@ -2147,6 +2168,8 @@ def update_report_template(
     for key in ["template_name", "category", "city", "protection_level", "description", "status", "config_json"]:
         if key in payload:
             value = payload[key]
+            if value is None and key in {"template_name", "status"}:
+                raise HTTPException(status_code=400, detail=f"{key} 不能为空。")
             if isinstance(value, str):
                 value = value.strip()
             if value == "":
@@ -2158,11 +2181,19 @@ def update_report_template(
             if key == "status" and value is not None and str(value) not in {"enabled", "disabled"}:
                 raise HTTPException(status_code=400, detail="status 仅支持 enabled/disabled。")
             setattr(row, key, value)
-    if "is_default" in payload and bool(payload["is_default"]):
-        exists = db.query(ReportTemplate).filter(ReportTemplate.report_type == row.report_type, ReportTemplate.is_default.is_(True)).all()
-        for old in exists:
-            old.is_default = False
-        row.is_default = True
+    if "is_default" in payload:
+        parsed_default = parse_optional_bool(payload.get("is_default"), "is_default")
+        if parsed_default is True:
+            exists = (
+                db.query(ReportTemplate)
+                .filter(ReportTemplate.report_type == row.report_type, ReportTemplate.is_default.is_(True))
+                .all()
+            )
+            for old in exists:
+                old.is_default = False
+            row.is_default = True
+        elif parsed_default is False:
+            row.is_default = False
     db.commit()
     return {"message": "模板更新成功"}
 
@@ -2899,10 +2930,11 @@ def delete_organization(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     org = get_org_or_404(db, org_id)
-    actor_name = actor
-    if is_admin:
-        actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
-    assert_org_deletable(db, org, is_admin=is_admin)
+    effective_is_admin = is_current_user_admin(request, db, allow_legacy_flag=True, legacy_is_admin=is_admin)
+    if not effective_is_admin:
+        raise HTTPException(status_code=403, detail="请先提交删除申请，由管理员审核后删除。")
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin" and is_admin))
+    assert_org_deletable(db, org, is_admin=True)
     before = obj_to_dict(org, ORG_FIELDS)
     org.deleted_at = datetime.now()
     org.deleted_by = actor_name
@@ -3133,27 +3165,28 @@ async def import_systems_excel(
         if not row or not row[0]:
             continue
         try:
-            org_id = int(row[2])
-            org = get_org_or_404(db, org_id)
-            if org.archived and org.locked:
-                skipped.append(f"第{idx}行：单位已归档锁定")
-                continue
-            sys = SystemInfo(
-                organization_id=org_id,
-                system_name=str(row[0]).strip(),
-                system_code=generate_system_code(db),
-                proposed_level=parse_proposed_level(row[3]),
-                deployment_mode=str(row[4]).strip() if row[4] else None,
-                system_type=str(row[5]).strip() if row[5] else None,
-                go_live_date=parse_optional_go_live_date(row[6]),
-                created_by=actor,
-            )
-            db.add(sys)
-            db.flush()
-            instance = WorkflowInstance(system_id=sys.id, current_step_index=0, status="in_progress")
-            db.add(instance)
-            recalc_workflow_due_at(db, instance, get_workflow_config(db))
-            record_system_history(db, sys.id, actor, "import", None, obj_to_dict(sys, SYSTEM_FIELDS))
+            with db.begin_nested():
+                org_id = int(row[2])
+                org = get_org_or_404(db, org_id)
+                if org.archived and org.locked:
+                    skipped.append(f"第{idx}行：单位已归档锁定")
+                    continue
+                sys = SystemInfo(
+                    organization_id=org_id,
+                    system_name=str(row[0]).strip(),
+                    system_code=generate_system_code(db),
+                    proposed_level=parse_proposed_level(row[3]),
+                    deployment_mode=str(row[4]).strip() if row[4] else None,
+                    system_type=str(row[5]).strip() if row[5] else None,
+                    go_live_date=parse_optional_go_live_date(row[6]),
+                    created_by=actor,
+                )
+                db.add(sys)
+                db.flush()
+                instance = WorkflowInstance(system_id=sys.id, current_step_index=0, status="in_progress")
+                db.add(instance)
+                recalc_workflow_due_at(db, instance, get_workflow_config(db))
+                record_system_history(db, sys.id, actor, "import", None, obj_to_dict(sys, SYSTEM_FIELDS))
             imported += 1
         except Exception as exc:
             skipped.append(f"第{idx}行：{exc}")
@@ -3353,10 +3386,11 @@ def delete_system(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     system = get_system_or_404(db, system_id)
-    actor_name = actor
-    if is_admin:
-        actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin"))
-    assert_system_deletable(db, system, is_admin=is_admin)
+    effective_is_admin = is_current_user_admin(request, db, allow_legacy_flag=True, legacy_is_admin=is_admin)
+    if not effective_is_admin:
+        raise HTTPException(status_code=403, detail="请先提交删除申请，由管理员审核后删除。")
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=(actor == "admin" and is_admin))
+    assert_system_deletable(db, system, is_admin=True)
     before = obj_to_dict(system, SYSTEM_FIELDS)
     system.deleted_at = datetime.now()
     system.deleted_by = actor_name
@@ -4260,8 +4294,8 @@ def export_report_word(report_id: int, db: Session = Depends(get_db)) -> FileRes
             try:
                 export_report_docx_with_template(Path(tpl.file_path), field_map, path)
                 return FileResponse(path=str(path), filename=path.name)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.exception("模板导出失败，已回退普通导出。report_id=%s template_id=%s error=%s", report.id, template_id, exc)
     export_report_docx(report.title, export_content, path)
     return FileResponse(path=str(path), filename=path.name)
 
@@ -4352,10 +4386,13 @@ def update_workflow_rules(request: Request, payload: dict[str, Any], db: Session
             limit = int(raw_limit)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"{step_name} 的 time_limit_hours 必须为整数。") from exc
-        enabled = bool(item.get("enabled", True))
+        enabled_raw = item.get("enabled", True)
+        enabled_parsed = parse_optional_bool(enabled_raw, f"{step_name}.enabled")
+        enabled = True if enabled_parsed is None else enabled_parsed
         row = (
             db.query(WorkflowStepRule)
             .filter(WorkflowStepRule.config_name == config.name, WorkflowStepRule.step_name == step_name)
+            .order_by(WorkflowStepRule.id.desc())
             .first()
         )
         if not row:
@@ -4437,6 +4474,20 @@ def workflow_reminders(
         .filter(WorkflowInstance.status == "in_progress", WorkflowInstance.due_at.is_not(None))
     )
     rows = query.order_by(WorkflowInstance.due_at.asc()).all()
+    owner_email_map: dict[str, str] = {}
+    if send and channel in {"email", "both"}:
+        owner_candidates: set[str] = set()
+        for instance, _ in rows:
+            owner_name = get_workflow_step_owner(db, config, instance.current_step_index, rule_map=rule_map)
+            if owner_name and "@" not in owner_name:
+                owner_candidates.add(owner_name)
+        if owner_candidates:
+            users = db.query(UserAccount).filter(UserAccount.username.in_(owner_candidates)).all()
+            owner_email_map = {
+                user.username: user.username
+                for user in users
+                if user.username and "@" in user.username
+            }
     items: list[dict[str, Any]] = []
     now = datetime.now()
     for instance, system_name in rows:
@@ -4481,9 +4532,7 @@ def workflow_reminders(
                 if owner and "@" in owner:
                     to_email = owner
                 else:
-                    user = db.query(UserAccount).filter(UserAccount.username == (owner or "")).first()
-                    if user and "@" in user.username:
-                        to_email = user.username
+                    to_email = owner_email_map.get(owner or "", "")
                 if not to_email:
                     to_email = WORKFLOW_EMAIL_DEFAULT_TO
                 ok = False
@@ -4808,12 +4857,18 @@ def dashboard_trend(
 
     # 计算起始时间
     now = datetime.now()
-    start_dt = datetime(now.year, now.month, 1) - timedelta(days=30 * (months - 1))
-    # 向前移到月初
-    start_dt = datetime(start_dt.year, start_dt.month, 1)
+    start_year = now.year
+    start_month = now.month - (months - 1)
+    while start_month <= 0:
+        start_month += 12
+        start_year -= 1
+    start_dt = datetime(start_year, start_month, 1)
 
+    org_year = extract("year", Organization.created_at)
+    org_month = extract("month", Organization.created_at)
     org_q = db.query(
-        func.strftime("%Y-%m", Organization.created_at).label("month"),
+        org_year.label("year"),
+        org_month.label("month"),
         func.count(Organization.id).label("count"),
     ).filter(
         Organization.deleted_at.is_(None),
@@ -4825,12 +4880,13 @@ def dashboard_trend(
         org_q = org_q.filter(Organization.filing_region.like(f"%{city}%"))
     if role == "evaluator":
         org_q = org_q.filter(Organization.created_by == username)
-    org_q = org_q.group_by(func.strftime("%Y-%m", Organization.created_at)).order_by(
-        func.strftime("%Y-%m", Organization.created_at)
-    )
+    org_q = org_q.group_by(org_year, org_month).order_by(org_year, org_month)
 
+    sys_year = extract("year", SystemInfo.created_at)
+    sys_month = extract("month", SystemInfo.created_at)
     sys_q = db.query(
-        func.strftime("%Y-%m", SystemInfo.created_at).label("month"),
+        sys_year.label("year"),
+        sys_month.label("month"),
         func.count(SystemInfo.id).label("count"),
     ).join(Organization, Organization.id == SystemInfo.organization_id).filter(
         SystemInfo.deleted_at.is_(None),
@@ -4845,12 +4901,17 @@ def dashboard_trend(
         sys_q = sys_q.filter(SystemInfo.proposed_level == level)
     if role == "evaluator":
         sys_q = sys_q.filter(SystemInfo.created_by == username)
-    sys_q = sys_q.group_by(func.strftime("%Y-%m", SystemInfo.created_at)).order_by(
-        func.strftime("%Y-%m", SystemInfo.created_at)
-    )
+    sys_q = sys_q.group_by(sys_year, sys_month).order_by(sys_year, sys_month)
 
-    org_by_month = {row.month: row.count for row in org_q.all()}
-    sys_by_month = {row.month: row.count for row in sys_q.all()}
+    org_by_month: dict[str, int] = {}
+    for row in org_q.all():
+        label = f"{int(row.year):04d}-{int(row.month):02d}"
+        org_by_month[label] = int(row.count)
+
+    sys_by_month: dict[str, int] = {}
+    for row in sys_q.all():
+        label = f"{int(row.year):04d}-{int(row.month):02d}"
+        sys_by_month[label] = int(row.count)
 
     # 生成连续月份列表
     result = []
@@ -5009,7 +5070,7 @@ async def upload_knowledge(
     safe_name = Path(file.filename).name
     save_name = f"{uuid.uuid4().hex}_{safe_name}"
     path = UPLOAD_DIR / "knowledge" / save_name
-    path.write_bytes(content)
+    path.parent.mkdir(parents=True, exist_ok=True)
     final_version = version_no
     if source_doc_id:
         source = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == source_doc_id).first()
@@ -5022,6 +5083,7 @@ async def upload_knowledge(
         keywords = keywords or source.keywords or ""
         protection_level = protection_level or source.protection_level or ""
         final_version = max(source.version_no + 1, version_no)
+    path.write_bytes(content)
     row = KnowledgeDocument(
         title=title,
         keywords=keywords,
@@ -5198,6 +5260,8 @@ def update_knowledge(
     }
     for k, v in payload.items():
         if k in fields:
+            if k in {"title", "doc_type", "status", "version_no"} and v is None:
+                raise HTTPException(status_code=400, detail=f"{k} 不能为空。")
             setattr(doc, k, v)
     db.commit()
     return {"message": "更新成功"}
@@ -5222,6 +5286,7 @@ async def new_knowledge_version(
     safe_name = Path(file.filename).name
     save_name = f"{uuid.uuid4().hex}_{safe_name}"
     path = UPLOAD_DIR / "knowledge" / save_name
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
     doc.file_name = safe_name
     doc.file_path = str(path)
