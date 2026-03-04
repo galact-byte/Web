@@ -62,35 +62,47 @@ def decode_token(token: str) -> Optional[dict]:
         return None
 
 
-async def get_current_user(
+async def get_current_user_raw(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    """获取当前登录用户"""
+    """从 Token 获取用户（不检查改密标志，仅供 /me 和 /change-password 使用）"""
     token = credentials.credentials
     payload = decode_token(token)
-    
+
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token 无效或已过期"
         )
-    
+
     user_id = payload.get("sub")
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token 无效"
         )
-    
+
     user = db.query(User).filter(User.id == int(user_id)).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在"
         )
-    
+
     return user
+
+
+async def get_current_user(
+    current_user: User = Depends(get_current_user_raw)
+) -> User:
+    """获取当前登录用户（强制改密检查）"""
+    if current_user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="请先修改密码"
+        )
+    return current_user
 
 
 async def get_current_manager(current_user: User = Depends(get_current_user)) -> User:

@@ -16,7 +16,7 @@ from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from app.database import get_db
-from app.models import User, Project, ProjectAssignment
+from app.models import User, UserRole, Project, ProjectAssignment
 from app.schemas import ExcelExportRequest
 from app.services.auth import get_current_user
 
@@ -46,16 +46,28 @@ def _sanitize_filename(name: str) -> str:
 
 
 @router.post("/excel")
-async def export_excel(
+def export_excel(
     request: ExcelExportRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """导出Excel格式的季度完结单"""
+    # 员工只能导出自己被分配到的项目
+    project_ids = request.project_ids
+    if current_user.role == UserRole.employee:
+        assigned_ids = {
+            a.project_id for a in db.query(ProjectAssignment.project_id).filter(
+                ProjectAssignment.assignee_id == current_user.id
+            ).all()
+        }
+        project_ids = [pid for pid in project_ids if pid in assigned_ids]
+        if not project_ids:
+            raise HTTPException(status_code=403, detail="没有权限导出这些项目")
+
     projects = db.query(Project).options(
         selectinload(Project.systems),
         selectinload(Project.assignments).selectinload(ProjectAssignment.assignee)
-    ).filter(Project.id.in_(request.project_ids)).all()
+    ).filter(Project.id.in_(project_ids)).all()
 
     if not projects:
         raise HTTPException(status_code=404, detail="未找到选中的项目")
@@ -169,12 +181,21 @@ async def export_excel(
 
 
 @router.post("/word/{project_id}")
-async def export_word(
+def export_word(
     project_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """导出单个项目的Word完结单"""
+    # 员工只能导出自己被分配到的项目
+    if current_user.role == UserRole.employee:
+        is_assigned = db.query(ProjectAssignment).filter(
+            ProjectAssignment.project_id == project_id,
+            ProjectAssignment.assignee_id == current_user.id
+        ).first()
+        if not is_assigned:
+            raise HTTPException(status_code=403, detail="没有权限导出此项目")
+
     project = db.query(Project).options(
         selectinload(Project.systems),
         selectinload(Project.assignments).selectinload(ProjectAssignment.assignee),

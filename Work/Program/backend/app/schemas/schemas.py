@@ -35,12 +35,12 @@ class UserResponse(UserBase):
 
 # ============ 认证 ============
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., min_length=1, max_length=50)
+    password: str = Field(..., min_length=1, max_length=128)
 
 
 class ChangePasswordRequest(BaseModel):
-    new_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=6, max_length=128)
     old_password: Optional[str] = None  # 首次改密可不填，主动改密必填
 
 
@@ -134,7 +134,6 @@ class AssignmentUpdate(BaseModel):
 
 
 class ContributionCreate(BaseModel):
-    assignee_id: Optional[int] = None  # 经理指定员工；员工默认自己
     department: Optional[str] = None
     contribution: Optional[str] = None
 

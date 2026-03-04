@@ -156,6 +156,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { projectsApi, usersApi, exportsApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
+import { getCategoryShort, getStatusClass, getStatusText } from '../utils/project'
 
 const route = useRoute()
 const router = useRouter()
@@ -178,7 +179,7 @@ const savingAssignment = ref(false)
 
 // 添加贡献弹窗状态
 const showAddModal = ref(false)
-const addForm = reactive({ assignee_id: null, department: '', contribution: '' })
+const addForm = reactive({ department: '', contribution: '' })
 const addingContribution = ref(false)
 
 const myAssignmentExists = computed(() => assignments.value.some(a => a.assignee_id === userStore.user?.id))
@@ -200,11 +201,6 @@ const submittedEmployeeCount = computed(() => {
   }
   return Object.values(byEmployee).filter(e => e.all).length
 })
-
-const categoryMap = { '等保测评': '等保', '密码评估': '密评', '风险评估': '风评', '安全评估': '安评', '数据评估': '数评', '软件测试': '软测', '安全服务': '安服', '其他': '其他' }
-function getCategoryShort(cat) { return categoryMap[cat] || cat }
-function getStatusClass(s) { return { draft: 'badge-warning', assigned: 'badge-info', completed: 'badge-success' }[s] || 'badge-info' }
-function getStatusText(s) { return { draft: '待分发', assigned: '进行中', completed: '已完成' }[s] || s }
 
 function openEditAssignment(a) {
   editingAssignment.value = a
@@ -232,7 +228,6 @@ async function deleteAssignment(a) {
 }
 
 function openAddContribution() {
-  addForm.assignee_id = null
   addForm.department = ''
   addForm.contribution = ''
   showAddModal.value = true

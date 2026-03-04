@@ -132,6 +132,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useUserStore } from '../stores/user'
 import { projectsApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
+import { getCategoryShort, getStatusClass, getStatusText } from '../utils/project'
 
 const userStore = useUserStore()
 
@@ -144,11 +145,6 @@ const stats = reactive({ total: 0, draft: 0, assigned: 0, completed: 0 })
 const pendingSubmissions = computed(() =>
   allProjects.value.filter(p => p.status === 'assigned' && p.submitted_count > 0)
 )
-
-const categoryMap = { '等保测评': '等保', '密码评估': '密评', '风险评估': '风评', '安全评估': '安评', '数据评估': '数评', '软件测试': '软测', '安全服务': '安服', '其他': '其他' }
-function getCategoryShort(category) { return categoryMap[category] || category }
-function getStatusClass(status) { return { draft: 'badge-warning', assigned: 'badge-info', completed: 'badge-success' }[status] || 'badge-info' }
-function getStatusText(status) { return { draft: '待分发', assigned: '进行中', completed: '已完成' }[status] || status }
 
 async function fetchData() {
   loading.value = true

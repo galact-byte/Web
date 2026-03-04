@@ -2,7 +2,120 @@
 
 > **修订记录**
 >
+> - v2.0: 代码审查修复 — 15 项安全/质量/性能问题修复
 > - v1.9: 后端 API 修复 — 路由顺序修正、新增趋势API、导入大小限制、错误处理加固
+
+## v2.0 — 代码审查修复（15 项问题）
+
+### 新增文件
+
+### `frontend/src/utils/project.js` — 共享工具函数
+
+- **功能**：抽取 `categoryMap`、`getCategoryShort`、`getStatusClass`、`getStatusText` 共享函数
+- **原因**：消除 4 个 Vue 组件中的重复定义（DRY 原则）
+
+---
+
+### 修改文件
+
+### `backend/app/routers/auth.py` — 限流器修复 + async 移除
+
+- **修改内容**：
+  - [CRITICAL] 替换 `defaultdict(list)` 为有上限（10000 IP）的普通 `dict`，超限时自动清理过期条目
+  - 路由函数从 `async def` 改为 `def`（同步 DB 操作不应阻塞事件循环）
+  - `change_password` 和 `get_me` 改用 `get_current_user_raw`（绕过改密检查）
+
+### `backend/app/services/auth.py` — 后端强制改密检查
+
+- **修改内容**：
+  - [HIGH] 拆分 `get_current_user` 为 `get_current_user_raw`（仅验证 token）和 `get_current_user`（额外检查 `must_change_password`）
+  - 未改密用户调用 API 时返回 403，防止绕过前端直接操作
+
+### `backend/app/schemas/schemas.py` — 输入校验 + 死代码清理
+
+- **修改内容**：
+  - [HIGH] `LoginRequest` 添加 `min_length=1, max_length=50/128`，防止超长输入攻击
+  - [MEDIUM] 移除 `ContributionCreate.assignee_id` 未使用字段
+
+### `backend/app/routers/users.py` — 用户删除修复 + async 移除
+
+- **修改内容**：
+  - [HIGH] 删除用户前先清理 `ProjectAssignment` 记录，防止外键孤儿
+  - 所有路由从 `async def` 改为 `def`
+
+### `backend/app/routers/exports.py` — 导出权限控制 + async 移除
+
+- **修改内容**：
+  - [MEDIUM] Excel/Word 导出添加员工权限校验，员工只能导出自己被分配的项目
+  - 所有路由从 `async def` 改为 `def`
+
+### `backend/app/routers/projects.py` — 状态机校验 + async 移除
+
+- **修改内容**：
+  - [MEDIUM] `update_project_status` 添加状态转换校验（draft→assigned→completed↔assigned）
+  - 所有路由从 `async def` 改为 `def`
+
+### `backend/app/routers/backup.py` — async 移除
+
+- **修改内容**：`export_backup` 和 `download_db` 从 `async def` 改为 `def`（`import_backup` 保留 async，因使用 `await file.read()`）
+
+### `backend/app/main.py` — 启动流程优化
+
+- **修改内容**：
+  - [LOW] 移除未使用的 `contextmanager` import，改为 `asynccontextmanager`
+  - [LOW] `@app.on_event("startup")` 替换为 `lifespan` 上下文管理器
+  - [MEDIUM] `_migrate_db` 细化异常处理（区分 `OperationalError` 和其他异常）
+  - [MEDIUM] `_seed_admin` 生产环境失败时抛出 `RuntimeError` 阻止启动
+  - 新增 `from sqlalchemy.exc import OperationalError`
+
+### `frontend/src/views/Dashboard.vue` — 使用共享工具
+
+- **修改内容**：移除本地 `categoryMap`/`getCategoryShort`/`getStatusClass`/`getStatusText`，改为从 `utils/project.js` 导入
+
+### `frontend/src/views/Projects.vue` — 使用共享工具
+
+- **修改内容**：同上
+
+### `frontend/src/views/ProjectDetail.vue` — 使用共享工具
+
+- **修改内容**：同上
+
+### `frontend/src/views/Export.vue` — 使用共享工具
+
+- **修改内容**：移除本地 `categoryMap`/`getCategoryShort`，改为从 `utils/project.js` 导入
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **新增** | `frontend/src/utils/project.js` |
+| **修改** | `backend/app/routers/auth.py` |
+| **修改** | `backend/app/services/auth.py` |
+| **修改** | `backend/app/schemas/schemas.py` |
+| **修改** | `backend/app/routers/users.py` |
+| **修改** | `backend/app/routers/exports.py` |
+| **修改** | `backend/app/routers/projects.py` |
+| **修改** | `backend/app/routers/backup.py` |
+| **修改** | `backend/app/main.py` |
+| **修改** | `frontend/src/views/Dashboard.vue` |
+| **修改** | `frontend/src/views/Projects.vue` |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
+| **修改** | `frontend/src/views/Export.vue` |
+
+---
+
+## 测试方式
+
+1. 启动后端 `uvicorn app.main:app --reload --port 8000`，确认无报错
+2. 启动前端 `npm run dev`，确认页面正常加载
+3. 登录管理员账户，验证各页面功能正常
+4. 测试改密流程：重置用户密码后，该用户调用非改密 API 应返回 403
+5. 测试导出：员工账户尝试导出未分配项目应返回 403
+6. 测试状态转换：draft 状态直接改 completed 应返回 400
+
+---
 > - v1.8.2: 项目列表页和仪表盘显示完结申请进度，经理登录首页即可看到待确认的提交通知
 > - v1.8.1: 移除人员分配中每个人员的"待提交/已提交"状态标签（提交为项目整体操作）
 > - v1.8: 员工完结申请功能 — 员工可提交/撤回完结申请，经理可查看提交进度并确认完成
