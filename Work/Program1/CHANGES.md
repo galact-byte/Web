@@ -2,10 +2,78 @@
 
 > **修订记录**
 >
+- v1.3.4: 修复高风险流程缺陷（删除流程绕过、布尔字符串误判、知识库目录缺失崩溃），并补充 6 个回归测试覆盖关键场景，同时为模板导出失败补充异常日志。
+- v1.3.3: 按《需求.docx》将单位统一社会信用代码校验从“校验位强校验”调整为“格式校验”，修复单位创建/导入链路批量失败问题，恢复核心业务闭环。
 > - v1.3.2: 扩展前端 UI 优化至全部模板页——reports、users、backup、workflow、knowledge、templates 六个页面统一使用 search-bar、table-wrapper、status-badge、btn-sm/btn-danger 等组件，补充空状态/错误提示、图标、下载修复（appendChild/removeChild）。
 > - v1.3.1: 完善 schemas Response 模型、validators 校验函数增强（系统编号/信用代码校验位/IP/URL）、reporting 服务健壮性提升（数据完整性检查、日志、容错）。
 > - v1.3.0: 前端 UI 全面优化——数据看板图表增强（趋势折线图、动画、悬停提示）、下钻表格分页、统计卡片同比增长指示、表格斑马纹与hover高亮、搜索工具栏交互改进、状态徽章、响应式布局完善。
 > - v1.2.47: 修复3个后端 Bug：FastAPI 路由顺序冲突（静态路径被参数路径拦截）、密码长度策略不一致、API 安全性缺陷。
+
+---
+
+## 修改文件（v1.3.4）
+
+### `app/main.py` — 删除流程与布尔解析修复
+
+- **修改位置**：`update_report_template`、`update_workflow_rules`、`delete_organization`、`delete_system`、`get_or_create_workflow_step_rules`、`upload_knowledge`、`new_knowledge_version`。
+- **修改内容**：
+  - 模板更新的 `is_default` 改为显式布尔解析，修复 `"false"` 被误判为 `True` 的问题。
+  - 工作流规则 `enabled` 改为显式布尔解析，修复 `"false"` 失效问题。
+  - 修复工作流规则历史重复记录导致“禁用后被自动补回启用”的根因：按最新记录去重并清理旧重复项。
+  - 组织/系统直接删除改为管理员路径，非管理员需先走删除申请。
+  - 知识库上传与新版本上传补充目录自动创建，避免目录缺失时抛 `FileNotFoundError`。
+  - 报告模板导出失败时新增异常日志，保留回退导出能力，避免静默吞错。
+  - 启动流程迁移为 FastAPI `lifespan`，移除 `@app.on_event("startup")` 弃用路径。
+  - 全部页面 `TemplateResponse` 调用改为新签名（`TemplateResponse(request, name, context)`），消除运行时弃用告警。
+  - 看板趋势统计将月份聚合从 SQLite 专用 `strftime` 改为 `extract(year/month)`，提升跨数据库兼容性。
+
+### `tests/test_api.py` — 回归测试补充与旧断言同步
+
+- **修改内容**：
+  - 新增 `test_46`~`test_51`，覆盖上述修复场景（含工作流重复规则清理回归）。
+  - 调整与新删除流程冲突的旧用例（`test_08`、`test_20`）到“管理员删除/删除申请”语义。
+
+---
+
+## 文件清单总览（v1.3.4）
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `app/main.py` |
+| **修改** | `tests/test_api.py` |
+
+---
+
+## 测试方式（v1.3.4）
+
+1. `.\.venv\Scripts\python -m unittest tests.test_api.ApiFlowTests.test_46_update_workflow_rules_string_false_should_disable_step tests.test_api.ApiFlowTests.test_47_update_template_is_default_string_false_should_not_set_true tests.test_api.ApiFlowTests.test_48_direct_delete_organization_requires_admin_review_path tests.test_api.ApiFlowTests.test_49_direct_delete_system_requires_admin_review_path tests.test_api.ApiFlowTests.test_50_knowledge_upload_should_create_missing_knowledge_dir -v`
+2. `.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
+
+---
+
+## 修改文件（v1.3.3）
+
+### `app/main.py` — 单位信用代码校验回归修复
+
+- **修改位置**：`validate_org_payload`、`validate_org_partial`，以及 validators 导入区。
+- **修改内容**：
+  - 将单位信用代码校验从 `validate_credit_code`（格式+校验位）切换为 `validate_credit_code_format_only`（仅格式）。
+  - 保持原错误文案与接口入参不变，仅修正校验策略，避免影响现有调用方。
+
+---
+
+## 文件清单总览（v1.3.3）
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `app/main.py` |
+
+---
+
+## 测试方式（v1.3.3）
+
+1. `.\.venv\Scripts\python -m unittest tests.test_api.ApiFlowTests.test_02_validation_and_dashboard tests.test_api.ApiFlowTests.test_17_import_excel_flush_error_does_not_break_whole_transaction -v`
+2. `.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`
 
 ---
 

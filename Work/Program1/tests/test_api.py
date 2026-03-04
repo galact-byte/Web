@@ -538,11 +538,17 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(sys_resp.status_code, 200)
         system_id = sys_resp.json()['data']['id']
 
-        delete_org_fail = self.client.delete(f'/api/organizations/{org_id}?actor=tester')
+        delete_org_fail = self.client.delete(
+            f'/api/organizations/{org_id}?actor=admin&is_admin=true',
+            headers=self.admin_headers,
+        )
         self.assertEqual(delete_org_fail.status_code, 400)
         self.assertIn('关联系统', str(delete_org_fail.json().get('detail', '')))
 
-        delete_sys_ok = self.client.delete(f'/api/systems/{system_id}?actor=tester')
+        delete_sys_ok = self.client.delete(
+            f'/api/systems/{system_id}?actor=admin&is_admin=true',
+            headers=self.admin_headers,
+        )
         self.assertEqual(delete_sys_ok.status_code, 200)
 
         sys_recycle = self.client.get('/api/systems/recycle-bin/list')
@@ -579,7 +585,7 @@ class ApiFlowTests(unittest.TestCase):
         self.assertIn('summary', compare_resp.json())
         self.assertGreaterEqual(compare_resp.json()['summary']['field_change_count'], 1)
 
-        delete_sys_blocked = self.client.delete(f'/api/systems/{system_id}?actor=tester')
+        delete_sys_blocked = self.client.post(f'/api/systems/{system_id}/delete-request?actor=tester')
         self.assertEqual(delete_sys_blocked.status_code, 400)
         self.assertIn('关联报告', str(delete_sys_blocked.json().get('detail', '')))
 
@@ -1147,10 +1153,16 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(sys_resp.status_code, 200)
         system_id = sys_resp.json()['data']['id']
 
-        delete_sys_resp = self.client.delete(f'/api/systems/{system_id}?actor=tester')
+        delete_sys_resp = self.client.delete(
+            f'/api/systems/{system_id}?actor=admin&is_admin=true',
+            headers=self.admin_headers,
+        )
         self.assertEqual(delete_sys_resp.status_code, 200)
 
-        delete_org_resp = self.client.delete(f'/api/organizations/{org_id}?actor=tester')
+        delete_org_resp = self.client.delete(
+            f'/api/organizations/{org_id}?actor=admin&is_admin=true',
+            headers=self.admin_headers,
+        )
         self.assertEqual(delete_org_resp.status_code, 200)
 
         restore_sys_resp = self.client.post(f'/api/systems/{system_id}/restore?actor=tester')
@@ -1537,6 +1549,500 @@ class ApiFlowTests(unittest.TestCase):
         self.assertTrue(str(data.get('credit_code') or '').strip())
         self.assertTrue(str(data.get('mobile_phone') or '').strip())
         self.assertTrue(str(data.get('email') or '').strip())
+
+    def test_38_update_template_null_required_fields_returns_400(self):
+        upload_resp = self.client.post(
+            '/api/templates/upload',
+            data={
+                'template_name': 'Null必填模板',
+                'report_type': 'grading_report',
+                'category': '测试',
+                'city': '测试城',
+                'protection_level': '2',
+                'is_default': 'false',
+                'config_json': '{}',
+            },
+            files={'file': ('null_required_template.docx', b'template', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(upload_resp.status_code, 200, upload_resp.text)
+        tpl_id = upload_resp.json()['data']['id']
+
+        bad_status = self.client.put(
+            f'/api/templates/{tpl_id}',
+            json={'status': None},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(bad_status.status_code, 400, bad_status.text)
+
+        bad_name = self.client.put(
+            f'/api/templates/{tpl_id}',
+            json={'template_name': None},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(bad_name.status_code, 400, bad_name.text)
+
+    def test_39_update_knowledge_null_status_returns_400(self):
+        upload_resp = self.client.post(
+            '/api/knowledge/upload',
+            data={'title': 'Null状态知识库', 'doc_type': '制度文档', 'actor': 'admin'},
+            files={'file': ('null_status_knowledge.docx', b'knowledge', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(upload_resp.status_code, 200, upload_resp.text)
+        doc_id = upload_resp.json()['data']['id']
+
+        update_resp = self.client.put(
+            f'/api/knowledge/{doc_id}?actor=admin',
+            json={'status': None},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(update_resp.status_code, 400, update_resp.text)
+
+    def test_40_dashboard_trend_uses_calendar_month_window(self):
+        original_datetime = self.__class__.main_module.datetime
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                base = cls(2026, 3, 15, 10, 0, 0)
+                if tz is not None:
+                    return base.replace(tzinfo=tz)
+                return base
+
+        self.__class__.main_module.datetime = FixedDateTime
+        try:
+            resp = self.client.get('/api/dashboard/trend?months=2')
+        finally:
+            self.__class__.main_module.datetime = original_datetime
+
+        self.assertEqual(resp.status_code, 200, resp.text)
+        months = [item['month'] for item in resp.json().get('trend', [])]
+        self.assertEqual(months, ['2026-02', '2026-03'])
+
+    def test_41_workflow_reminders_email_user_lookup_not_n_plus_one(self):
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            org = self.__class__.main_module.Organization(
+                name='提醒N1优化单位',
+                credit_code=f'N1TEST{datetime.now():%Y%m%d%H%M%S}',
+                legal_representative='辛',
+                address='提醒优化城',
+                mobile_phone='13100131011',
+                email='wf65@example.com',
+                industry='互联网',
+                organization_type='企业',
+                filing_region='提醒优化城',
+                created_by='tester',
+            )
+            db.add(org)
+            db.commit()
+            db.refresh(org)
+            org_id = org.id
+        finally:
+            db.close()
+
+        for idx in range(2):
+            sys_resp = self.client.post(
+                '/api/systems',
+                json={
+                    'organization_id': org_id,
+                    'system_name': f'提醒N1系统{idx}',
+                    'proposed_level': 2,
+                    'created_by': 'tester',
+                },
+            )
+            self.assertEqual(sys_resp.status_code, 200, sys_resp.text)
+
+        rule_resp = self.client.put(
+            '/api/workflow/rules',
+            json={
+                'updated_by': 'admin',
+                'rules': [
+                    {'step_name': '信息收集', 'owner': 'owner_n1', 'time_limit_hours': 24, 'enabled': True},
+                    {'step_name': '信息审核', 'owner': 'reviewer_n1', 'time_limit_hours': 24, 'enabled': True},
+                ],
+            },
+            headers=self.admin_headers,
+        )
+        self.assertEqual(rule_resp.status_code, 200, rule_resp.text)
+
+        session_cls = self.__class__.main_module.Session
+        original_query = session_cls.query
+        user_query_count = {'value': 0}
+
+        def wrapped_query(session_self, *entities, **kwargs):
+            if len(entities) == 1 and entities[0] is self.__class__.main_module.UserAccount:
+                user_query_count['value'] += 1
+            return original_query(session_self, *entities, **kwargs)
+
+        session_cls.query = wrapped_query
+        try:
+            remind_resp = self.client.get('/api/workflow/reminders?mode=all&send=true&channel=email')
+        finally:
+            session_cls.query = original_query
+
+        self.assertEqual(remind_resp.status_code, 200, remind_resp.text)
+        self.assertLessEqual(user_query_count['value'], 1, f"UserAccount查询次数过多: {user_query_count['value']}")
+
+    def test_42_legacy_admin_blocked_when_strict_auth_enabled(self):
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            org = self.__class__.main_module.Organization(
+                name='严格鉴权绕过校验单位',
+                credit_code=f'STRICT{datetime.now():%y%m%d%H%M%S%f}'[:18],
+                legal_representative='壬',
+                address='严格鉴权城',
+                mobile_phone='13100131012',
+                email='strict-auth@example.com',
+                industry='政务',
+                organization_type='机关单位',
+                filing_region='严格鉴权城',
+                created_by='tester',
+            )
+            db.add(org)
+            db.commit()
+            db.refresh(org)
+            org_id = org.id
+        finally:
+            db.close()
+
+        original_strict = self.__class__.main_module.STRICT_AUTH
+        self.__class__.main_module.STRICT_AUTH = True
+        try:
+            resp = self.client.post(f'/api/organizations/{org_id}/unlock?actor=admin')
+        finally:
+            self.__class__.main_module.STRICT_AUTH = original_strict
+
+        self.assertEqual(resp.status_code, 401, resp.text)
+
+    def test_43_system_excel_import_row_failure_should_not_break_whole_commit(self):
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            org = self.__class__.main_module.Organization(
+                name='系统导入回滚校验单位',
+                credit_code=f'RLBK{datetime.now():%y%m%d%H%M%S%f}'[:18],
+                legal_representative='癸',
+                address='回滚城',
+                mobile_phone='13100131013',
+                email='rollback-import@example.com',
+                industry='制造',
+                organization_type='企业',
+                filing_region='回滚城',
+                created_by='tester',
+            )
+            db.add(org)
+            db.flush()
+            db.add(
+                self.__class__.main_module.SystemInfo(
+                    organization_id=org.id,
+                    system_name='已有重复编号系统',
+                    system_code='DUP-SYSTEM-CODE-001',
+                    proposed_level=2,
+                    created_by='tester',
+                )
+            )
+            db.commit()
+            db.refresh(org)
+            org_id = org.id
+        finally:
+            db.close()
+
+        wb = Workbook()
+        ws = wb.active
+        ws.append(['系统名称', '系统编号', '单位ID', '拟定等级', '部署方式', '系统类型', '上线时间', '录入人'])
+        ws.append(['重复编号导入系统', '', org_id, 2, '本地部署', '业务系统', '', 'tester'])
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+
+        original_generate_code = self.__class__.main_module.generate_system_code
+        self.__class__.main_module.generate_system_code = lambda _db: 'DUP-SYSTEM-CODE-001'
+        try:
+            resp = self.client.post(
+                '/api/systems/import/excel?actor=tester',
+                files={'file': ('systems_duplicate_code.xlsx', bio.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+            )
+        finally:
+            self.__class__.main_module.generate_system_code = original_generate_code
+
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(resp.json().get('imported'), 0)
+        self.assertGreaterEqual(len(resp.json().get('skipped') or []), 1)
+
+    def test_44_knowledge_upload_invalid_source_should_not_leave_orphan_file(self):
+        knowledge_dir = self.__class__.main_module.UPLOAD_DIR / 'knowledge'
+        before = {p.name for p in knowledge_dir.glob('*') if p.is_file()}
+
+        resp = self.client.post(
+            '/api/knowledge/upload',
+            data={
+                'title': '无效来源文档上传',
+                'doc_type': '制度文档',
+                'actor': 'admin',
+                'source_doc_id': 99999999,
+            },
+            files={'file': ('orphan_source_check.docx', b'orphan-check', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(resp.status_code, 404, resp.text)
+
+        after = {p.name for p in knowledge_dir.glob('*') if p.is_file()}
+        self.assertEqual(after, before, '无效 source_doc_id 不应在 uploads/knowledge 留下孤儿文件')
+
+    def test_45_template_upload_invalid_config_should_not_leave_orphan_file(self):
+        template_dir = self.__class__.main_module.UPLOAD_DIR / 'templates'
+        before = {p.name for p in template_dir.glob('*') if p.is_file()}
+
+        resp = self.client.post(
+            '/api/templates/upload',
+            data={
+                'template_name': '非法配置模板',
+                'report_type': 'grading_report',
+                'category': '测试',
+                'city': '测试城',
+                'protection_level': '2',
+                'is_default': 'false',
+                'config_json': '{"bad_json":',
+            },
+            files={'file': ('orphan_config_check.docx', b'orphan-config-check', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(resp.status_code, 400, resp.text)
+        self.assertIn('config_json', str(resp.json().get('detail', '')))
+
+        after = {p.name for p in template_dir.glob('*') if p.is_file()}
+        self.assertEqual(after, before, '非法 config_json 不应在 uploads/templates 留下孤儿文件')
+
+    def test_46_update_workflow_rules_string_false_should_disable_step(self):
+        get_resp = self.client.get('/api/workflow/rules', headers=self.admin_headers)
+        self.assertEqual(get_resp.status_code, 200, get_resp.text)
+        rules = get_resp.json().get('rules') or []
+        self.assertTrue(rules, 'workflow rules 不能为空')
+
+        first = dict(rules[0])
+        first['enabled'] = 'false'
+        put_resp = self.client.put(
+            '/api/workflow/rules',
+            json={'updated_by': 'admin', 'rules': [first]},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(put_resp.status_code, 200, put_resp.text)
+
+        after_resp = self.client.get('/api/workflow/rules', headers=self.admin_headers)
+        self.assertEqual(after_resp.status_code, 200, after_resp.text)
+        after_rules = after_resp.json().get('rules') or []
+        target = next((r for r in after_rules if r.get('step_name') == first.get('step_name')), None)
+        self.assertIsNotNone(target, '未找到目标流程节点')
+        self.assertFalse(target.get('enabled'))
+
+    def test_47_update_template_is_default_string_false_should_not_set_true(self):
+        upload_1 = self.client.post(
+            '/api/templates/upload',
+            data={
+                'template_name': '布尔解析模板1',
+                'report_type': 'filing_form',
+                'is_default': 'true',
+            },
+            files={'file': ('bool_tpl_1.docx', b'a', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(upload_1.status_code, 200, upload_1.text)
+        tpl_id_1 = upload_1.json()['data']['id']
+
+        upload_2 = self.client.post(
+            '/api/templates/upload',
+            data={
+                'template_name': '布尔解析模板2',
+                'report_type': 'filing_form',
+                'is_default': 'false',
+            },
+            files={'file': ('bool_tpl_2.docx', b'b', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(upload_2.status_code, 200, upload_2.text)
+        tpl_id_2 = upload_2.json()['data']['id']
+
+        update_resp = self.client.put(
+            f'/api/templates/{tpl_id_2}',
+            json={'is_default': 'false'},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(update_resp.status_code, 200, update_resp.text)
+
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            row_1 = db.query(self.__class__.main_module.ReportTemplate).filter_by(id=tpl_id_1).first()
+            row_2 = db.query(self.__class__.main_module.ReportTemplate).filter_by(id=tpl_id_2).first()
+            self.assertIsNotNone(row_1)
+            self.assertIsNotNone(row_2)
+            self.assertTrue(bool(row_1.is_default))
+            self.assertFalse(bool(row_2.is_default))
+        finally:
+            db.close()
+
+    def test_48_direct_delete_organization_requires_admin_review_path(self):
+        create_user_resp = self.client.post(
+            '/api/auth/users',
+            json={
+                'username': 'delete_req_eval_user',
+                'password': 'deleteReq123',
+                'role': 'evaluator',
+                'require_password_change': False,
+            },
+            headers=self.admin_headers,
+        )
+        self.assertIn(create_user_resp.status_code, [200, 409], create_user_resp.text)
+        login_resp = self.client.post('/api/auth/login', json={'username': 'delete_req_eval_user', 'password': 'deleteReq123'})
+        self.assertEqual(login_resp.status_code, 200, login_resp.text)
+        eval_headers = {'X-Auth-Token': login_resp.json()['token']}
+
+        create_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '直删限制单位',
+                'credit_code': '91350100M000100Y70',
+                'legal_representative': '测试人',
+                'address': '限制城',
+                'mobile_phone': '13100131014',
+                'email': 'org70@example.com',
+                'industry': '教育',
+                'organization_type': '企业',
+                'filing_region': '限制城',
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(create_resp.status_code, 200, create_resp.text)
+        org_id = create_resp.json()['data']['id']
+
+        delete_resp = self.client.delete(f'/api/organizations/{org_id}?actor=tester&is_admin=false', headers=eval_headers)
+        self.assertEqual(delete_resp.status_code, 403, delete_resp.text)
+        self.assertIn('删除申请', str(delete_resp.json().get('detail', '')))
+
+    def test_49_direct_delete_system_requires_admin_review_path(self):
+        create_user_resp = self.client.post(
+            '/api/auth/users',
+            json={
+                'username': 'delete_req_eval_user_sys',
+                'password': 'deleteReqSys123',
+                'role': 'evaluator',
+                'require_password_change': False,
+            },
+            headers=self.admin_headers,
+        )
+        self.assertIn(create_user_resp.status_code, [200, 409], create_user_resp.text)
+        login_resp = self.client.post('/api/auth/login', json={'username': 'delete_req_eval_user_sys', 'password': 'deleteReqSys123'})
+        self.assertEqual(login_resp.status_code, 200, login_resp.text)
+        eval_headers = {'X-Auth-Token': login_resp.json()['token']}
+
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '直删限制系统单位',
+                'credit_code': '91350100M000100Y71',
+                'legal_representative': '测试人',
+                'address': '限制城',
+                'mobile_phone': '13100131015',
+                'email': 'sys71@example.com',
+                'industry': '教育',
+                'organization_type': '企业',
+                'filing_region': '限制城',
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(org_resp.status_code, 200, org_resp.text)
+        org_id = org_resp.json()['data']['id']
+
+        sys_resp = self.client.post(
+            '/api/systems',
+            json={
+                'organization_id': org_id,
+                'system_name': '直删限制系统',
+                'proposed_level': 2,
+                'created_by': 'tester',
+            },
+        )
+        self.assertEqual(sys_resp.status_code, 200, sys_resp.text)
+        system_id = sys_resp.json()['data']['id']
+
+        delete_resp = self.client.delete(f'/api/systems/{system_id}?actor=tester&is_admin=false', headers=eval_headers)
+        self.assertEqual(delete_resp.status_code, 403, delete_resp.text)
+        self.assertIn('删除申请', str(delete_resp.json().get('detail', '')))
+
+    def test_50_knowledge_upload_should_create_missing_knowledge_dir(self):
+        original_upload_dir = self.__class__.main_module.UPLOAD_DIR
+        temp_upload_dir = Path(__file__).resolve().parent.parent / '.tmp_upload_dir_for_test'
+        if temp_upload_dir.exists():
+            import shutil
+            shutil.rmtree(temp_upload_dir, ignore_errors=True)
+
+        self.__class__.main_module.UPLOAD_DIR = temp_upload_dir
+        self.addCleanup(setattr, self.__class__.main_module, 'UPLOAD_DIR', original_upload_dir)
+        self.addCleanup(lambda: __import__('shutil').rmtree(temp_upload_dir, ignore_errors=True))
+
+        upload_resp = self.client.post(
+            '/api/knowledge/upload',
+            data={'title': '目录自愈测试', 'doc_type': '制度文档', 'actor': 'admin'},
+            files={'file': ('mkdir_knowledge.docx', b'content', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(upload_resp.status_code, 200, upload_resp.text)
+        doc_id = upload_resp.json()['data']['id']
+
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            row = db.query(self.__class__.main_module.KnowledgeDocument).filter_by(id=doc_id).first()
+            self.assertIsNotNone(row)
+            self.assertTrue(Path(row.file_path).exists(), '上传成功后文件应实际落盘')
+        finally:
+            db.close()
+
+    def test_51_workflow_rules_should_cleanup_duplicate_rows_and_keep_latest(self):
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            db.add(
+                self.__class__.main_module.WorkflowStepRule(
+                    config_name='default',
+                    step_name='信息收集',
+                    owner='dup_old_owner',
+                    time_limit_hours=24,
+                    enabled=True,
+                    updated_by='tester',
+                )
+            )
+            db.flush()
+            db.add(
+                self.__class__.main_module.WorkflowStepRule(
+                    config_name='default',
+                    step_name='信息收集',
+                    owner='dup_new_owner',
+                    time_limit_hours=12,
+                    enabled=False,
+                    updated_by='tester',
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        list_resp = self.client.get('/api/workflow/rules', headers=self.admin_headers)
+        self.assertEqual(list_resp.status_code, 200, list_resp.text)
+        rules = list_resp.json().get('rules') or []
+        target = next((r for r in rules if r.get('step_name') == '信息收集'), None)
+        self.assertIsNotNone(target, '未返回信息收集规则')
+        self.assertEqual(target.get('owner'), 'dup_new_owner')
+        self.assertFalse(target.get('enabled'))
+
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            count = (
+                db.query(self.__class__.main_module.WorkflowStepRule)
+                .filter_by(config_name='default', step_name='信息收集')
+                .count()
+            )
+            self.assertEqual(count, 1)
+        finally:
+            db.close()
 
 
 if __name__ == '__main__':
