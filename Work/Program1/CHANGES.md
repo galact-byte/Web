@@ -1,13 +1,182 @@
+# 修改记录 — 定级备案管理系统（安全加固与代码审查修复）
+
+> **修订记录**
+>
+> - v1.4.0: 安全加固 — 修复 5 个 CRITICAL 和 8 个 HIGH 级别安全漏洞，清理冗余文件。
+
+## 修改文件
+
+### `app/db.py` — 事务安全修复
+
+- **修改位置**：`get_db()` 函数
+- **修改内容**：添加 `db.rollback()` 异常处理，防止未提交事务悬挂导致脏数据。
+
+### `app/main.py` — 安全加固（多处修改）
+
+- **C1 默认密码**：移除硬编码密码，改为环境变量/随机生成 + 强制首次修改。
+- **C2 Token 泄露**：移除 URL query 参数传递 token，仅保留 Header 和 HttpOnly Cookie。
+- **C3 权限伪造**：`is_current_user_admin()` 不再信任客户端 `is_admin` 参数。
+- **H3 LIKE 注入**：添加 `escape_like()`，30 处 LIKE 查询已转义通配符。
+- **H5 Cookie 安全**：登录接口设置 `HttpOnly` + `SameSite=Lax` Cookie。
+- **H6 空文件名**：4 处导入接口添加 `file.filename` 空值检查。
+- **H7 路径遍历**：`ensure_file_exists()` 添加路径边界校验。
+- **H8 文件清理**：9 个导出接口添加 `BackgroundTask` 自动清理。
+- **H9 事务原子性**：11 处双重 `db.commit()` 改为 `flush()` + 单次 `commit()`。
+- **M9 Token 强度**：会话令牌改为 `secrets.token_hex(32)`（256位）。
+- **新增 .env 支持**：集成 `python-dotenv`。
+
+### `app/templates/knowledge.html` — XSS 修复
+
+- onclick 字符串拼接改为 `data-*` 属性 + 事件委托。
+
+### `tests/test_api.py` — 测试适配
+
+- 适配 HttpOnly Cookie 和 is_admin 安全修复，更新 4 个测试用例。
+
+## 新增文件
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **新增** | `.env.example` |
+| **修改** | `app/db.py`, `app/main.py`, `app/templates/knowledge.html` |
+| **修改** | `tests/test_api.py`, `requirements.txt`, `.gitignore` |
+
+## 清理文件
+
+- `.venv_clean/` (111MB), `delivery_release_*.zip` (2.1MB), `__pycache__/`
+
+## 测试方式
+
+- `pytest tests/test_api.py -v`，全部 51 个测试通过。
+
+---
+
 # 修改记录 — 定级备案管理系统（后端模型层优化）
 
 > **修订记录**
 >
+- v1.3.7: 简化 `start.bat` 自动开页链路（直接调用 `launcher.py`，去除中间 bat 包装层），修复单位删除弹窗后无反应的 Bug（缺少 try/catch + prompt 取消未中止），清理冗余文件。
+- v1.3.6: 去除 `start.bat` 对 PowerShell 的依赖，改为 Python 后台探测端口可用后再打开浏览器，修复自动开页弹窗异常（含 `\" \"\` 路径错误与安全软件拦截风险）。
+- v1.3.5: `start.bat` 新增自动打开浏览器能力，双击启动后默认自动打开访问地址，并提供开关 `AUTO_OPEN_BROWSER`。
 - v1.3.4: 修复高风险流程缺陷（删除流程绕过、布尔字符串误判、知识库目录缺失崩溃），并补充 6 个回归测试覆盖关键场景，同时为模板导出失败补充异常日志。
 - v1.3.3: 按《需求.docx》将单位统一社会信用代码校验从“校验位强校验”调整为“格式校验”，修复单位创建/导入链路批量失败问题，恢复核心业务闭环。
 > - v1.3.2: 扩展前端 UI 优化至全部模板页——reports、users、backup、workflow、knowledge、templates 六个页面统一使用 search-bar、table-wrapper、status-badge、btn-sm/btn-danger 等组件，补充空状态/错误提示、图标、下载修复（appendChild/removeChild）。
 > - v1.3.1: 完善 schemas Response 模型、validators 校验函数增强（系统编号/信用代码校验位/IP/URL）、reporting 服务健壮性提升（数据完整性检查、日志、容错）。
 > - v1.3.0: 前端 UI 全面优化——数据看板图表增强（趋势折线图、动画、悬停提示）、下钻表格分页、统计卡片同比增长指示、表格斑马纹与hover高亮、搜索工具栏交互改进、状态徽章、响应式布局完善。
 > - v1.2.47: 修复3个后端 Bug：FastAPI 路由顺序冲突（静态路径被参数路径拦截）、密码长度策略不一致、API 安全性缺陷。
+
+---
+
+## 修改文件（v1.3.7）
+
+### `start.bat` — 简化自动开页链路
+
+- **修改位置**：第 230 行 `AUTO_OPEN_BROWSER` 段。
+- **修改内容**：原先通过 `open_browser_when_ready.bat` 间接调用 Python 脚本，现改为 `"%VENV_PY%" "%~dp0launcher.py"` 直接调用，去掉中间包装层。
+
+### `launcher.py` — 新建（原 `open_browser_when_ready.py` 重命名）
+
+- **功能**：轮询本地端口，可连接后自动打开浏览器。
+- **实现原理**：socket 探测 + `webbrowser.open()`，与原逻辑完全一致。
+
+### `app/templates/organizations.html` — 修复单位删除弹窗后无反应
+
+- **修改位置**：`deleteOrg()` 函数（约 359 行）。
+- **修改内容**：
+  1. `prompt()` 返回 `null`（用户点取消）时直接 `return`，不再继续发请求。
+  2. 为 `fetch` 调用添加 `try/catch`，捕获网络异常或非 JSON 响应导致的静默失败，错误信息通过 `setOrgResult` 显示给用户。
+
+### 删除冗余文件
+
+- `open_browser_when_ready.bat` — 已被 `launcher.py` 直接调用替代
+- `open_browser_when_ready.cmd` — 与 `.bat` 内容完全重复
+- `open_browser_when_ready.py` — 已重命名为 `launcher.py`
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `start.bat` |
+| **新增** | `launcher.py` |
+| **修改** | `app/templates/organizations.html` |
+| **删除** | `open_browser_when_ready.bat` |
+| **删除** | `open_browser_when_ready.cmd` |
+| **删除** | `open_browser_when_ready.py` |
+
+## 测试方式
+
+- 双击 `start.bat` 启动服务，确认浏览器自动打开 `http://127.0.0.1:8011`。
+- 进入单位信息页面，导入 Word 创建单位后，点击删除按钮，弹窗输入原因后确认，应显示"删除申请已提交"。
+- 点击删除后选择"取消"，应无任何后续动作（不发请求）。
+
+---
+
+## 修改文件（v1.3.6）
+
+### `start.bat` — 自动开页改为非 PowerShell 方案
+
+- **修改位置**：环境变量默认值区、`LAUNCH` 段。
+- **修改内容**：
+  - 新增 `BROWSER_WAIT_SECONDS`（默认 `30` 秒）用于控制等待服务可用的最长时长。
+  - 自动开页逻辑改为调用 `open_browser_when_ready.bat`（内部再调用 Python 探测脚本），不再调用 PowerShell。
+  - 保留 `AUTO_OPEN_BROWSER` 开关与 `DRY_RUN=1` 的短路行为。
+  - 新增 `LAUNCH_ENTERED` 保护，避免 `LAUNCH` 段被重复执行。
+
+### `open_browser_when_ready.bat` — 轻量调度层
+
+- **修改内容**：
+  - 仅负责参数透传与环境校验，再调用 `open_browser_when_ready.py`。
+  - 无端口轮询逻辑，避免复杂 `cmd` 引号/管道实现引发弹窗。
+
+### `open_browser_when_ready.py` — 端口就绪后再打开浏览器
+
+- **修改内容**：
+  - 轮询 `127.0.0.1:APP_PORT` 端口是否可连接，可连接后打开 `http://127.0.0.1:APP_PORT`。
+  - 仅做一次打开，不输出干扰日志，失败时静默退出（不影响主服务启动）。
+
+---
+
+## 文件清单总览（v1.3.6）
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `start.bat` |
+| **新增** | `open_browser_when_ready.bat` |
+| **新增** | `open_browser_when_ready.py` |
+
+---
+
+## 测试方式（v1.3.6）
+
+1. `.\.venv\Scripts\python.exe open_browser_when_ready.py 65534 1`
+2. `cmd /d /c "set DRY_RUN=1&& set AUTO_OPEN_BROWSER=1&& call start.bat"`
+
+---
+
+## 修改文件（v1.3.5）
+
+### `start.bat` — 启动后自动打开网页
+
+- **修改位置**：环境变量默认值区、`LAUNCH` 段。
+- **修改内容**：
+  - 新增 `AUTO_OPEN_BROWSER` 环境变量（默认 `1`）。
+  - 在启动 uvicorn 前，延迟 2 秒自动打开 `http://127.0.0.1:%APP_PORT%`。
+  - 修复 `cmd start` 多层引号导致的 “The network path was not found.” 弹窗问题，改为稳定的 PowerShell 打开方式。
+  - `DRY_RUN=1` 时不启动服务也不打开浏览器。
+
+---
+
+## 文件清单总览（v1.3.5）
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `start.bat` |
+
+---
+
+## 测试方式（v1.3.5）
+
+1. `cmd /c "set DRY_RUN=1&& set AUTO_OPEN_BROWSER=0&& call start.bat"`
 
 ---
 

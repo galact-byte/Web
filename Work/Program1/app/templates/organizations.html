@@ -357,15 +357,20 @@ async function archiveOrg(id) {
 }
 
 async function deleteOrg(id) {
-  const reason = prompt('请输入删除原因（可空）', '') || '';
-  const res = await fetch(`/api/organizations/${id}/delete-request?actor=tester&reason=${encodeURIComponent(reason)}`, {method: 'POST', headers: authHeaders()});
-  const data = await res.json();
-  if (!res.ok) {
-    setOrgResult(`提交删除申请失败：${apiErrorText(data)}`);
-    return;
+  const reason = prompt('请输入删除原因（可空）', '');
+  if (reason === null) return;
+  try {
+    const res = await fetch(`/api/organizations/${id}/delete-request?actor=tester&reason=${encodeURIComponent(reason)}`, {method: 'POST', headers: authHeaders()});
+    const data = await res.json();
+    if (!res.ok) {
+      setOrgResult(`提交删除申请失败：${apiErrorText(data)}`);
+      return;
+    }
+    setOrgResult('删除申请已提交，等待管理员审核。');
+    loadOrgDeleteRequests();
+  } catch(e) {
+    setOrgResult(`提交删除申请失败：${e?.message || '网络异常，请稍后重试'}`);
   }
-  setOrgResult('删除申请已提交，等待管理员审核。');
-  loadOrgDeleteRequests();
 }
 
 async function loadRecycleOrgs() {

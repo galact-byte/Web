@@ -284,13 +284,13 @@ async function loadKnowledge() {
       <td>${docStatusBadge(i.status)}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap;">
-          <button class="btn-lite btn-sm" onclick="downloadDoc(${i.id}, '${(i.file_name || '').replace(/'/g, "\\'")}')"><i class="fas fa-download"></i></button>
-          <button class="btn-lite btn-sm" onclick="toggleDoc(${i.id}, ${i.status !== 'enabled'})">${i.status === 'enabled' ? '下架' : '启用'}</button>
-          <button class="btn-lite btn-sm" onclick="pinDoc(${i.id}, ${!i.pinned})">${i.pinned ? '取消置顶' : '置顶'}</button>
-          <button class="btn-lite btn-sm" onclick="editDoc(${i.id}, '${(i.title||'').replace(/'/g,"\\'")}', '${(i.doc_type||'').replace(/'/g,"\\'")}', '${(i.city||'').replace(/'/g,"\\'")}', '${(i.district||'').replace(/'/g,"\\'")}')">编辑</button>
-          <button class="btn-lite btn-sm" onclick="uploadNewVersion(${i.id})">新版本</button>
-          <button class="btn-lite btn-sm" onclick="showVersions(${i.id})">版本</button>
-          <button class="btn-lite btn-sm btn-danger" onclick="deleteDoc(${i.id})"><i class="fas fa-trash"></i></button>
+          <button class="btn-lite btn-sm" data-action="download" data-id="${i.id}" data-filename="${esc(i.file_name || '')}"><i class="fas fa-download"></i></button>
+          <button class="btn-lite btn-sm" data-action="toggle" data-id="${i.id}" data-disable="${i.status !== 'enabled'}">${i.status === 'enabled' ? '下架' : '启用'}</button>
+          <button class="btn-lite btn-sm" data-action="pin" data-id="${i.id}" data-pin="${!i.pinned}">${i.pinned ? '取消置顶' : '置顶'}</button>
+          <button class="btn-lite btn-sm" data-action="edit" data-id="${i.id}" data-title="${esc(i.title || '')}" data-doctype="${esc(i.doc_type || '')}" data-city="${esc(i.city || '')}" data-district="${esc(i.district || '')}">编辑</button>
+          <button class="btn-lite btn-sm" data-action="upload-version" data-id="${i.id}">新版本</button>
+          <button class="btn-lite btn-sm" data-action="show-versions" data-id="${i.id}">版本</button>
+          <button class="btn-lite btn-sm btn-danger" data-action="delete" data-id="${i.id}"><i class="fas fa-trash"></i></button>
         </div>
       </td>
     </tr>
@@ -298,5 +298,22 @@ async function loadKnowledge() {
 }
 
 loadKnowledge();
+
+// 事件委托：处理知识库表格按钮操作（避免 onclick 字符串拼接 XSS 风险）
+document.getElementById('knowledgeTable').addEventListener('click', function(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const id = Number(btn.dataset.id);
+  switch (action) {
+    case 'download': downloadDoc(id, btn.dataset.filename); break;
+    case 'toggle': toggleDoc(id, btn.dataset.disable === 'true'); break;
+    case 'pin': pinDoc(id, btn.dataset.pin === 'true'); break;
+    case 'edit': editDoc(id, btn.dataset.title, btn.dataset.doctype, btn.dataset.city, btn.dataset.district); break;
+    case 'upload-version': uploadNewVersion(id); break;
+    case 'show-versions': showVersions(id); break;
+    case 'delete': deleteDoc(id); break;
+  }
+});
 </script>
 {% endblock %}

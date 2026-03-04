@@ -32,6 +32,9 @@ uploads/
 .env.*
 !.env.example
 
+# 初始凭据文件
+initial_credentials.txt
+
 # 交付打包产物
 delivery_*/
 delivery_*.zip

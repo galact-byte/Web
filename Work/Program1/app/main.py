@@ -21,10 +21,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from docx import Document
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from openpyxl import Workbook, load_workbook
@@ -167,6 +171,20 @@ WORKFLOW_EMAIL_DEFAULT_TO = (os.getenv("WORKFLOW_EMAIL_DEFAULT_TO") or "").strip
 SCRIPT_TAG_RE = re.compile(r"<\s*/?\s*[a-zA-Z!]|on\w+\s*=|javascript\s*:", re.IGNORECASE)
 LOGIN_ATTEMPTS: dict[str, dict[str, Any]] = {}
 LOGIN_ATTEMPTS_LOCK = threading.Lock()
+
+
+def escape_like(value: str) -> str:
+    """转义 SQL LIKE 通配符，防止用户输入中的 % 和 _ 被当作通配符。"""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _cleanup_export_file(path: Path) -> None:
+    """后台任务：响应完成后删除导出的临时文件。"""
+    try:
+        if path.exists():
+            path.unlink()
+    except OSError:
+        pass
 
 
 @asynccontextmanager
@@ -394,25 +412,42 @@ def ensure_default_accounts() -> None:
     db = SessionLocal()
     try:
         defaults = [
-            ("admin", "admin123", "admin"),
-            ("tester", "tester123", "evaluator"),
-            ("leader", "leader123", "reviewer"),
+            ("admin", "DEFAULT_ADMIN_PASSWORD", "admin"),
+            ("tester", "DEFAULT_TESTER_PASSWORD", "evaluator"),
+            ("leader", "DEFAULT_LEADER_PASSWORD", "reviewer"),
         ]
-        for username, password, role in defaults:
+        generated: list[tuple[str, str, str]] = []
+        for username, env_key, role in defaults:
             exists = db.query(UserAccount).filter(UserAccount.username == username).first()
             if exists:
                 continue
+            password = os.getenv(env_key, "").strip()
+            if not password:
+                password = secrets.token_urlsafe(16)
+                generated.append((username, password, role))
             db.add(
                 UserAccount(
                     username=username,
                     password_hash=hash_password(password),
                     role=role,
                     enabled=True,
-                    must_change_password=False,
+                    must_change_password=True,
                     password_updated_at=datetime.now(),
                 )
             )
         db.commit()
+        if generated:
+            cred_file = Path(__file__).resolve().parent.parent / "initial_credentials.txt"
+            lines = [
+                "# 初始账号凭据（首次登录后必须修改密码）",
+                f"# 生成时间: {datetime.now():%Y-%m-%d %H:%M:%S}",
+                "# 请在修改密码后删除此文件",
+                "",
+            ]
+            for uname, pwd, r in generated:
+                lines.append(f"用户名: {uname}  密码: {pwd}  角色: {r}")
+            cred_file.write_text("\n".join(lines), encoding="utf-8")
+            logger.warning("已生成初始账号凭据，请查看文件: %s", cred_file)
     finally:
         db.close()
 
@@ -488,9 +523,7 @@ def get_auth_token_from_request(request: Request) -> str:
     if header_token:
         return header_token
     cookie_token = (request.cookies.get("auth_token") or "").strip()
-    if cookie_token:
-        return cookie_token
-    return (request.query_params.get("token") or "").strip()
+    return cookie_token
 
 
 def get_user_by_token(db: Session, token: str) -> UserAccount | None:
@@ -608,8 +641,7 @@ def is_current_user_admin(
     user = get_current_user_optional(request, db)
     if user:
         return bool(user.role == "admin")
-    if allow_legacy_flag and (APP_LITE_MODE or not API_AUTH_REQUIRED):
-        return bool(legacy_is_admin)
+    # Lite 模式下无认证时默认无管理员权限，不再信任客户端参数
     return False
 
 
@@ -1385,7 +1417,10 @@ def parse_optional_go_live_date(raw_value: Any) -> date | None:
 
 
 def ensure_file_exists(path_value: str | None, not_found_detail: str) -> Path:
-    path = Path(str(path_value or ""))
+    path = Path(str(path_value or "")).resolve()
+    allowed_bases = [UPLOAD_DIR.resolve(), EXPORT_DIR.resolve()]
+    if not any(str(path).startswith(str(b)) for b in allowed_bases):
+        raise HTTPException(status_code=403, detail="文件路径非法。")
     if not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail=not_found_detail)
     return path
@@ -1758,7 +1793,7 @@ def restore_backup(
 
 
 @app.post("/api/auth/login")
-def auth_login(payload: dict[str, Any], request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+def auth_login(payload: dict[str, Any], request: Request, response: Response, db: Session = Depends(get_db)) -> dict[str, Any]:
     username = str(payload.get("username") or "").strip()
     password = str(payload.get("password") or "")
     assert_safe_text(username, "用户名")
@@ -1774,12 +1809,20 @@ def auth_login(payload: dict[str, Any], request: Request, db: Session = Depends(
     clear_login_failure(attempt_key)
     if need_upgrade:
         user.password_hash = hash_password(password)
-    token = uuid.uuid4().hex
+    token = secrets.token_hex(32)
     expires_at = datetime.now() + timedelta(hours=max(1, AUTH_SESSION_HOURS))
     db.add(AuthSession(user_id=user.id, token=token, expires_at=expires_at))
     user.last_login_at = datetime.now()
     db.commit()
-    data = {
+    response.set_cookie(
+        key="auth_token",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=max(1, AUTH_SESSION_HOURS) * 3600,
+        path="/",
+    )
+    return {
         "message": "登录成功",
         "token": token,
         "expires_at": expires_at,
@@ -1790,7 +1833,6 @@ def auth_login(payload: dict[str, Any], request: Request, db: Session = Depends(
         },
         "must_change_password": bool(getattr(user, "must_change_password", False)),
     }
-    return data
 
 
 @app.post("/api/auth/register")
@@ -2122,11 +2164,11 @@ def list_report_templates(
     if report_type:
         query = query.filter(ReportTemplate.report_type == report_type)
     if category:
-        query = query.filter(ReportTemplate.category.like(f"%{category}%"))
+        query = query.filter(ReportTemplate.category.like(f"%{escape_like(category)}%"))
     if city:
-        query = query.filter(ReportTemplate.city.like(f"%{city}%"))
+        query = query.filter(ReportTemplate.city.like(f"%{escape_like(city)}%"))
     if protection_level:
-        query = query.filter(ReportTemplate.protection_level.like(f"%{protection_level}%"))
+        query = query.filter(ReportTemplate.protection_level.like(f"%{escape_like(protection_level)}%"))
     rows = query.order_by(ReportTemplate.is_default.desc(), ReportTemplate.updated_at.desc()).all()
     return {
         "total": len(rows),
@@ -2375,7 +2417,7 @@ def create_organization(payload: OrganizationCreate, db: Session = Depends(get_d
     assert_credit_code_available(db, data["credit_code"])
     org = Organization(**data)
     db.add(org)
-    db.commit()
+    db.flush()
     db.refresh(org)
     record_org_history(db, org.id, payload.created_by, "create", None, obj_to_dict(org, ORG_FIELDS))
     db.commit()
@@ -2396,15 +2438,15 @@ def list_organizations(
     if not include_deleted:
         query = query.filter(Organization.deleted_at.is_(None))
     if name:
-        query = query.filter(Organization.name.like(f"%{name}%"))
+        query = query.filter(Organization.name.like(f"%{escape_like(name)}%"))
     if credit_code:
-        query = query.filter(Organization.credit_code.like(f"%{credit_code}%"))
+        query = query.filter(Organization.credit_code.like(f"%{escape_like(credit_code)}%"))
     if industry:
-        query = query.filter(Organization.industry.like(f"%{industry}%"))
+        query = query.filter(Organization.industry.like(f"%{escape_like(industry)}%"))
     if filing_region:
-        query = query.filter(Organization.filing_region.like(f"%{filing_region}%"))
+        query = query.filter(Organization.filing_region.like(f"%{escape_like(filing_region)}%"))
     if created_by:
-        query = query.filter(Organization.created_by.like(f"%{created_by}%"))
+        query = query.filter(Organization.created_by.like(f"%{escape_like(created_by)}%"))
     items = query.order_by(Organization.created_at.desc()).all()
     return {"total": len(items), "items": [obj_to_dict(i, ORG_FIELDS) for i in items]}
 
@@ -2704,14 +2746,14 @@ def export_organizations_excel(db: Session = Depends(get_db)) -> FileResponse:
         )
     path = EXPORT_DIR / f"organizations_{datetime.now():%Y%m%d%H%M%S}.xlsx"
     wb.save(path)
-    return FileResponse(path=str(path), filename=path.name)
+    return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
 
 
 @app.post("/api/organizations/import/excel")
 async def import_organizations_excel(
     actor: str = Query("system"), file: UploadFile = File(...), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
-    if not file.filename.lower().endswith(".xlsx"):
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="仅支持xlsx格式。")
     content = await file.read()
     # 限制导入文件大小，防止恶意上传超大文件
@@ -2759,7 +2801,7 @@ async def import_organization_word(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    if not file.filename.lower().endswith(".docx"):
+    if not file.filename or not file.filename.lower().endswith(".docx"):
         raise HTTPException(status_code=400, detail="仅支持docx格式。")
     content = await file.read()
     kv = parse_docx_key_values(content)
@@ -2859,7 +2901,7 @@ def update_organization(
     before = obj_to_dict(org, ORG_FIELDS)
     for key, value in data.items():
         setattr(org, key, value)
-    db.commit()
+    db.flush()
     db.refresh(org)
     record_org_history(db, org.id, actor, "update", before, obj_to_dict(org, ORG_FIELDS))
     db.commit()
@@ -2896,7 +2938,7 @@ def archive_organization(org_id: int, actor: str = Query("system"), db: Session 
     before = obj_to_dict(org, ORG_FIELDS)
     org.archived = True
     org.locked = True
-    db.commit()
+    db.flush()
     db.refresh(org)
     record_org_history(db, org.id, actor, "archive", before, obj_to_dict(org, ORG_FIELDS))
     db.commit()
@@ -2914,7 +2956,7 @@ def unlock_organization(
     actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=is_admin)
     org = get_org_or_404(db, org_id)
     org.locked = False
-    db.commit()
+    db.flush()
     db.refresh(org)
     record_org_history(db, org.id, actor_name or actor, "unlock", None, {"locked": False})
     db.commit()
@@ -2938,7 +2980,7 @@ def delete_organization(
     before = obj_to_dict(org, ORG_FIELDS)
     org.deleted_at = datetime.now()
     org.deleted_by = actor_name
-    db.commit()
+    db.flush()
     db.refresh(org)
     record_org_history(db, org.id, actor_name, "delete", before, obj_to_dict(org, ORG_FIELDS))
     db.commit()
@@ -2956,7 +2998,7 @@ def restore_organization(org_id: int, actor: str = Query("system"), db: Session 
         raise HTTPException(status_code=400, detail="超出30天回收站恢复期。")
     org.deleted_at = None
     org.deleted_by = None
-    db.commit()
+    db.flush()
     db.refresh(org)
     record_org_history(db, org.id, actor, "restore", None, obj_to_dict(org, ORG_FIELDS))
     db.commit()
@@ -3016,7 +3058,7 @@ def export_organization_word(org_id: int, db: Session = Depends(get_db)) -> File
     ]:
         doc.add_paragraph(f"{key}: {value}")
     doc.save(path)
-    return FileResponse(path=str(path), filename=path.name)
+    return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
 
 
 @app.post("/api/systems")
@@ -3056,17 +3098,17 @@ def list_systems(
     if not include_deleted:
         query = query.filter(SystemInfo.deleted_at.is_(None))
     if system_name:
-        query = query.filter(SystemInfo.system_name.like(f"%{system_name}%"))
+        query = query.filter(SystemInfo.system_name.like(f"%{escape_like(system_name)}%"))
     if system_code:
-        query = query.filter(SystemInfo.system_code.like(f"%{system_code}%"))
+        query = query.filter(SystemInfo.system_code.like(f"%{escape_like(system_code)}%"))
     if organization_name:
-        query = query.filter(Organization.name.like(f"%{organization_name}%"))
+        query = query.filter(Organization.name.like(f"%{escape_like(organization_name)}%"))
     if proposed_level:
         query = query.filter(SystemInfo.proposed_level == proposed_level)
     if deployment_mode:
-        query = query.filter(SystemInfo.deployment_mode.like(f"%{deployment_mode}%"))
+        query = query.filter(SystemInfo.deployment_mode.like(f"%{escape_like(deployment_mode)}%"))
     if created_by:
-        query = query.filter(SystemInfo.created_by.like(f"%{created_by}%"))
+        query = query.filter(SystemInfo.created_by.like(f"%{escape_like(created_by)}%"))
     rows = query.order_by(SystemInfo.created_at.desc()).all()
     items = []
     for system, org_name in rows:
@@ -3144,14 +3186,14 @@ def export_systems_excel(db: Session = Depends(get_db)) -> FileResponse:
         )
     path = EXPORT_DIR / f"systems_{datetime.now():%Y%m%d%H%M%S}.xlsx"
     wb.save(path)
-    return FileResponse(path=str(path), filename=path.name)
+    return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
 
 
 @app.post("/api/systems/import/excel")
 async def import_systems_excel(
     actor: str = Query("system"), file: UploadFile = File(...), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
-    if not file.filename.lower().endswith(".xlsx"):
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="仅支持xlsx格式。")
     content = await file.read()
     # 限制导入文件大小，防止恶意上传超大文件
@@ -3200,7 +3242,7 @@ async def import_system_word(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    if not file.filename.lower().endswith(".docx"):
+    if not file.filename or not file.filename.lower().endswith(".docx"):
         raise HTTPException(status_code=400, detail="仅支持docx格式。")
     content = await file.read()
     kv = parse_docx_key_values(content)
@@ -3295,7 +3337,7 @@ def update_system(
     before = obj_to_dict(system, SYSTEM_FIELDS)
     for key, value in data.items():
         setattr(system, key, value)
-    db.commit()
+    db.flush()
     db.refresh(system)
     record_system_history(db, system.id, actor, "update", before, obj_to_dict(system, SYSTEM_FIELDS))
     db.commit()
@@ -3352,7 +3394,7 @@ def archive_system(system_id: int, actor: str = Query("system"), db: Session = D
     before = obj_to_dict(system, SYSTEM_FIELDS)
     system.archived = True
     system.locked = True
-    db.commit()
+    db.flush()
     db.refresh(system)
     record_system_history(db, system.id, actor, "archive", before, obj_to_dict(system, SYSTEM_FIELDS))
     db.commit()
@@ -3370,7 +3412,7 @@ def unlock_system(
     actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=is_admin)
     system = get_system_or_404(db, system_id)
     system.locked = False
-    db.commit()
+    db.flush()
     db.refresh(system)
     record_system_history(db, system.id, actor_name or actor, "unlock", None, {"locked": False})
     db.commit()
@@ -3394,7 +3436,7 @@ def delete_system(
     before = obj_to_dict(system, SYSTEM_FIELDS)
     system.deleted_at = datetime.now()
     system.deleted_by = actor_name
-    db.commit()
+    db.flush()
     db.refresh(system)
     record_system_history(db, system.id, actor_name, "delete", before, obj_to_dict(system, SYSTEM_FIELDS))
     db.commit()
@@ -3417,7 +3459,7 @@ def restore_system(system_id: int, actor: str = Query("system"), db: Session = D
         raise HTTPException(status_code=400, detail="所属单位已删除，请先恢复单位后再恢复系统。")
     system.deleted_at = None
     system.deleted_by = None
-    db.commit()
+    db.flush()
     db.refresh(system)
     record_system_history(db, system.id, actor, "restore", None, obj_to_dict(system, SYSTEM_FIELDS))
     db.commit()
@@ -3472,7 +3514,7 @@ def list_delete_requests(
     if status:
         q = q.filter(DeleteRequest.status == status.strip().lower())
     if requested_by:
-        q = q.filter(DeleteRequest.requested_by.like(f"%{requested_by}%"))
+        q = q.filter(DeleteRequest.requested_by.like(f"%{escape_like(requested_by)}%"))
     if current_user and current_user.role != "admin":
         q = q.filter(DeleteRequest.requested_by == current_user.username)
     rows = q.order_by(DeleteRequest.requested_at.desc()).all()
@@ -3567,7 +3609,7 @@ def export_system_word(system_id: int, db: Session = Depends(get_db)) -> FileRes
     ]:
         doc.add_paragraph(f"{key}: {value}")
     doc.save(path)
-    return FileResponse(path=str(path), filename=path.name)
+    return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
 
 
 @app.post("/api/attachments/{entity_type}/{entity_id}")
@@ -4293,11 +4335,11 @@ def export_report_word(report_id: int, db: Session = Depends(get_db)) -> FileRes
             field_map = build_report_template_field_map(report, export_content, db)
             try:
                 export_report_docx_with_template(Path(tpl.file_path), field_map, path)
-                return FileResponse(path=str(path), filename=path.name)
+                return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
             except Exception as exc:
                 logger.exception("模板导出失败，已回退普通导出。report_id=%s template_id=%s error=%s", report.id, template_id, exc)
     export_report_docx(report.title, export_content, path)
-    return FileResponse(path=str(path), filename=path.name)
+    return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
 
 
 @app.get("/api/reports/{report_id}/export/pdf")
@@ -4311,7 +4353,7 @@ def export_report_pdf_file(
         raise HTTPException(status_code=404, detail="报告不存在。")
     path = EXPORT_DIR / f"report_{report.id}_{datetime.now():%Y%m%d%H%M%S}.pdf"
     export_report_pdf(report.title, prepare_export_content(report.content), path, password=password)
-    return FileResponse(path=str(path), filename=path.name)
+    return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
 
 
 @app.get("/api/workflow/config")
@@ -4717,9 +4759,9 @@ def dashboard_summary(
     if industry:
         org_q = org_q.filter(Organization.industry == industry)
     if city:
-        org_q = org_q.filter(Organization.filing_region.like(f"%{city}%"))
+        org_q = org_q.filter(Organization.filing_region.like(f"%{escape_like(city)}%"))
     if evaluator:
-        org_q = org_q.filter(Organization.created_by.like(f"%{evaluator}%"))
+        org_q = org_q.filter(Organization.created_by.like(f"%{escape_like(evaluator)}%"))
     if role == "evaluator":
         org_q = org_q.filter(Organization.created_by == username)
 
@@ -4729,7 +4771,7 @@ def dashboard_summary(
     if industry:
         sys_q = sys_q.filter(Organization.industry == industry)
     if city:
-        sys_q = sys_q.filter(Organization.filing_region.like(f"%{city}%"))
+        sys_q = sys_q.filter(Organization.filing_region.like(f"%{escape_like(city)}%"))
     if start_date:
         sys_q = sys_q.filter(SystemInfo.created_at >= datetime.combine(start_date, datetime.min.time()))
     if end_date:
@@ -4737,7 +4779,7 @@ def dashboard_summary(
     if level:
         sys_q = sys_q.filter(SystemInfo.proposed_level == level)
     if evaluator:
-        sys_q = sys_q.filter(SystemInfo.created_by.like(f"%{evaluator}%"))
+        sys_q = sys_q.filter(SystemInfo.created_by.like(f"%{escape_like(evaluator)}%"))
     if role == "evaluator":
         sys_q = sys_q.filter(SystemInfo.created_by == username)
 
@@ -4798,11 +4840,11 @@ def dashboard_drilldown(
         SystemInfo.deleted_at.is_(None), Organization.deleted_at.is_(None)
     )
     if dimension == "region":
-        org_query = org_query.filter(Organization.filing_region.like(f"%{value}%"))
-        sys_query = sys_query.filter(Organization.filing_region.like(f"%{value}%"))
+        org_query = org_query.filter(Organization.filing_region.like(f"%{escape_like(value)}%"))
+        sys_query = sys_query.filter(Organization.filing_region.like(f"%{escape_like(value)}%"))
     elif dimension == "industry":
-        org_query = org_query.filter(Organization.industry.like(f"%{value}%"))
-        sys_query = sys_query.filter(Organization.industry.like(f"%{value}%"))
+        org_query = org_query.filter(Organization.industry.like(f"%{escape_like(value)}%"))
+        sys_query = sys_query.filter(Organization.industry.like(f"%{escape_like(value)}%"))
     else:
         try:
             level = int(value)
@@ -4877,7 +4919,7 @@ def dashboard_trend(
     if industry:
         org_q = org_q.filter(Organization.industry == industry)
     if city:
-        org_q = org_q.filter(Organization.filing_region.like(f"%{city}%"))
+        org_q = org_q.filter(Organization.filing_region.like(f"%{escape_like(city)}%"))
     if role == "evaluator":
         org_q = org_q.filter(Organization.created_by == username)
     org_q = org_q.group_by(org_year, org_month).order_by(org_year, org_month)
@@ -4896,7 +4938,7 @@ def dashboard_trend(
     if industry:
         sys_q = sys_q.filter(Organization.industry == industry)
     if city:
-        sys_q = sys_q.filter(Organization.filing_region.like(f"%{city}%"))
+        sys_q = sys_q.filter(Organization.filing_region.like(f"%{escape_like(city)}%"))
     if level:
         sys_q = sys_q.filter(SystemInfo.proposed_level == level)
     if role == "evaluator":
@@ -4975,7 +5017,7 @@ def export_dashboard_excel(
         ws4.append([row["name"], row["value"]])
     path = EXPORT_DIR / f"dashboard_{datetime.now():%Y%m%d%H%M%S}.xlsx"
     wb.save(path)
-    return FileResponse(path=str(path), filename=path.name)
+    return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
 
 
 @app.get("/api/dashboard/export/pdf")
@@ -5038,7 +5080,7 @@ def export_dashboard_pdf(
         c.drawString(50, y, f"{row['name']}: {row['value']}")
         y -= 16
     c.save()
-    return FileResponse(path=str(path), filename=path.name)
+    return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
 
 
 @app.post("/api/knowledge/upload")
@@ -5133,18 +5175,18 @@ def list_knowledge(
         else:
             q = q.filter(
                 or_(
-                    KnowledgeDocument.title.like(f"%{keyword}%"),
-                    KnowledgeDocument.keywords.like(f"%{keyword}%"),
+                    KnowledgeDocument.title.like(f"%{escape_like(keyword)}%"),
+                    KnowledgeDocument.keywords.like(f"%{escape_like(keyword)}%"),
                 )
             )
     if city:
-        q = q.filter(KnowledgeDocument.city.like(f"%{city}%"))
+        q = q.filter(KnowledgeDocument.city.like(f"%{escape_like(city)}%"))
     if district:
-        q = q.filter(KnowledgeDocument.district.like(f"%{district}%"))
+        q = q.filter(KnowledgeDocument.district.like(f"%{escape_like(district)}%"))
     if doc_type:
-        q = q.filter(KnowledgeDocument.doc_type.like(f"%{doc_type}%"))
+        q = q.filter(KnowledgeDocument.doc_type.like(f"%{escape_like(doc_type)}%"))
     if protection_level:
-        q = q.filter(KnowledgeDocument.protection_level.like(f"%{protection_level}%"))
+        q = q.filter(KnowledgeDocument.protection_level.like(f"%{escape_like(protection_level)}%"))
     if start_date:
         q = q.filter(KnowledgeDocument.uploaded_at >= datetime.combine(start_date, datetime.min.time()))
     if end_date:

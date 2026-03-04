@@ -13,6 +13,8 @@ echo.
 if "%STRICT_DEP_LOCK%"=="" set "STRICT_DEP_LOCK=0"
 if "%STRICT_PY312%"=="" set "STRICT_PY312=0"
 if "%PREFER_REQUIREMENTS_TXT%"=="" set "PREFER_REQUIREMENTS_TXT=0"
+if "%AUTO_OPEN_BROWSER%"=="" set "AUTO_OPEN_BROWSER=1"
+if "%BROWSER_WAIT_SECONDS%"=="" set "BROWSER_WAIT_SECONDS=30"
 set "VENV_PY=%CD%\.venv\Scripts\python.exe"
 
 if "%STRICT_DEP_LOCK%"=="1" if "%PREFER_REQUIREMENTS_TXT%"=="1" (
@@ -205,6 +207,8 @@ exit /b 0
 
 
 :LAUNCH
+if "%LAUNCH_ENTERED%"=="1" goto :eof
+set "LAUNCH_ENTERED=1"
 if "%DATABASE_URL%"=="" set "DATABASE_URL=sqlite:///./app.db"
 if "%API_AUTH_REQUIRED%"=="" set "API_AUTH_REQUIRED=1"
 if "%APP_PORT%"=="" set "APP_PORT=8011"
@@ -219,6 +223,11 @@ echo.
 if "%DRY_RUN%"=="1" (
     echo [INFO] DRY_RUN=1, skip launching uvicorn.
     exit /b 0
+)
+
+if "%AUTO_OPEN_BROWSER%"=="1" (
+    echo [INFO] Browser will open when service is ready: http://127.0.0.1:%APP_PORT%
+    start "" /b "%VENV_PY%" "%~dp0launcher.py" "%APP_PORT%" "%BROWSER_WAIT_SECONDS%" >nul 2>&1
 )
 
 "%VENV_PY%" -m uvicorn app.main:app --host 0.0.0.0 --port %APP_PORT% --reload
