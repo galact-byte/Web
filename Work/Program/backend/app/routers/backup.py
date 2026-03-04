@@ -44,7 +44,7 @@ def _row_to_dict(row, columns):
 
 
 @router.post("/export")
-async def export_backup(
+def export_backup(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_manager)
 ):
@@ -100,7 +100,7 @@ async def export_backup(
 
 
 @router.get("/download-db")
-async def download_db(
+def download_db(
     current_user: User = Depends(get_current_manager)
 ):
     """下载 SQLite 数据库文件（仅 SQLite 模式，仅经理）"""

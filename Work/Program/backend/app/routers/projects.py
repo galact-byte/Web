@@ -48,7 +48,7 @@ def get_quarter(d: date) -> tuple[int, int]:
 
 
 @router.get("/workload-stats")
-async def get_workload_stats(
+def get_workload_stats(
     year: int = Query(..., description="年份"),
     quarter: int = Query(..., ge=1, le=4, description="季度 1-4"),
     db: Session = Depends(get_db),
@@ -155,7 +155,7 @@ def _calc_submit_progress(assignments) -> dict:
 
 
 @router.get("/", response_model=List[ProjectListResponse])
-async def get_projects(
+def get_projects(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -202,7 +202,7 @@ async def get_projects(
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-async def get_project(
+def get_project(
     project_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -230,7 +230,7 @@ async def get_project(
 
 
 @router.post("/", response_model=ProjectResponse)
-async def create_project(
+def create_project(
     request: ProjectCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_manager)
@@ -276,7 +276,7 @@ async def create_project(
 
 
 @router.put("/{project_id}", response_model=ProjectResponse)
-async def update_project(
+def update_project(
     project_id: int,
     request: ProjectUpdate,
     db: Session = Depends(get_db),
@@ -330,7 +330,7 @@ async def update_project(
 
 
 @router.delete("/{project_id}")
-async def delete_project(
+def delete_project(
     project_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_manager)
@@ -347,7 +347,7 @@ async def delete_project(
 
 
 @router.patch("/{project_id}/status")
-async def update_project_status(
+def update_project_status(
     project_id: int,
     new_status: str = Query(..., description="目标状态: assigned / completed"),
     db: Session = Depends(get_db),
@@ -360,6 +360,19 @@ async def update_project_status(
 
     if new_status not in ("assigned", "completed"):
         raise HTTPException(status_code=400, detail="无效的目标状态")
+
+    # 状态转换校验
+    valid_transitions = {
+        "draft": {"assigned"},
+        "assigned": {"completed"},
+        "completed": {"assigned"},  # 重新开启
+    }
+    current = project.status.value if hasattr(project.status, 'value') else project.status
+    if new_status not in valid_transitions.get(current, set()):
+        raise HTTPException(
+            status_code=400,
+            detail=f"无法从「{current}」转换到「{new_status}」"
+        )
 
     # 标记完成时，检查所有分配是否已提交完结（按员工去重）
     warning = None
@@ -400,7 +413,7 @@ async def update_project_status(
 
 
 @router.post("/{project_id}/assign")
-async def assign_project(
+def assign_project(
     project_id: int,
     request: AssignRequest,
     db: Session = Depends(get_db),
@@ -447,7 +460,7 @@ async def assign_project(
 
 
 @router.get("/{project_id}/assignments", response_model=List[AssignmentResponse])
-async def get_assignments(
+def get_assignments(
     project_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -482,7 +495,7 @@ async def get_assignments(
 
 
 @router.put("/{project_id}/contribution")
-async def update_contribution(
+def update_contribution(
     project_id: int,
     request: ContributionUpdate,
     db: Session = Depends(get_db),
@@ -519,7 +532,7 @@ async def update_contribution(
 
 
 @router.put("/{project_id}/assignments/{assignment_id}")
-async def update_assignment(
+def update_assignment(
     project_id: int,
     assignment_id: int,
     request: AssignmentUpdate,
@@ -558,7 +571,7 @@ async def update_assignment(
 
 
 @router.delete("/{project_id}/assignments/{assignment_id}")
-async def delete_assignment(
+def delete_assignment(
     project_id: int,
     assignment_id: int,
     db: Session = Depends(get_db),
@@ -592,7 +605,7 @@ async def delete_assignment(
 
 
 @router.post("/{project_id}/contributions")
-async def add_contribution(
+def add_contribution(
     project_id: int,
     request: ContributionCreate,
     db: Session = Depends(get_db),
@@ -630,7 +643,7 @@ async def add_contribution(
 
 
 @router.patch("/{project_id}/submit-completion")
-async def submit_completion(
+def submit_completion(
     project_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -663,7 +676,7 @@ async def submit_completion(
 
 
 @router.patch("/{project_id}/retract-completion")
-async def retract_completion(
+def retract_completion(
     project_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

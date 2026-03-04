@@ -88,6 +88,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '../stores/user'
 import { projectsApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
+import { getCategoryShort, getStatusClass, getStatusText } from '../utils/project'
 
 const userStore = useUserStore()
 
@@ -98,16 +99,10 @@ const showDeleteModal = ref(false)
 const projectToDelete = ref(null)
 const deleting = ref(false)
 
-const categoryMap = { '等保测评': '等保', '密码评估': '密评', '风险评估': '风评', '安全评估': '安评', '数据评估': '数评', '软件测试': '软测', '安全服务': '安服', '其他': '其他' }
-
 const filteredProjects = computed(() => {
   if (!statusFilter.value) return projects.value
   return projects.value.filter(p => p.status === statusFilter.value)
 })
-
-function getCategoryShort(category) { return categoryMap[category] || category }
-function getStatusClass(status) { return { draft: 'badge-warning', assigned: 'badge-info', completed: 'badge-success' }[status] || 'badge-info' }
-function getStatusText(status) { return { draft: '待分发', assigned: '进行中', completed: '已完成' }[status] || status }
 
 function confirmDelete(project) { projectToDelete.value = project; showDeleteModal.value = true }
 

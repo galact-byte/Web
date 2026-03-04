@@ -1,7 +1,6 @@
 """
 认证路由
 """
-from collections import defaultdict
 from time import time
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
@@ -10,24 +9,39 @@ from app.database import get_db
 from app.models import User
 from app.schemas import LoginRequest, ChangePasswordRequest, TokenResponse, UserResponse
 from app.services.auth import (
-    hash_password, verify_password, create_access_token, get_current_user
+    hash_password, verify_password, create_access_token,
+    get_current_user_raw,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
 # 简易登录频率限制：每个 IP 60 秒内最多 5 次尝试
-_login_attempts: dict[str, list[float]] = defaultdict(list)
+# 使用有上限的字典，防止内存无限增长
+_login_attempts: dict[str, list[float]] = {}
 _MAX_ATTEMPTS = 5
 _WINDOW_SECONDS = 60
+_MAX_TRACKED_IPS = 10000
 
 
 def _check_rate_limit(client_ip: str):
     """检查登录频率，超限则抛出 429"""
     now = time()
-    attempts = _login_attempts[client_ip]
+
+    # 防止内存无限增长：超过上限时清理过期条目
+    if len(_login_attempts) > _MAX_TRACKED_IPS:
+        expired_ips = [
+            ip for ip, timestamps in _login_attempts.items()
+            if not timestamps or now - timestamps[-1] >= _WINDOW_SECONDS
+        ]
+        for ip in expired_ips:
+            del _login_attempts[ip]
+
+    attempts = _login_attempts.get(client_ip, [])
     # 清理过期记录
-    _login_attempts[client_ip] = [t for t in attempts if now - t < _WINDOW_SECONDS]
-    if len(_login_attempts[client_ip]) >= _MAX_ATTEMPTS:
+    attempts = [t for t in attempts if now - t < _WINDOW_SECONDS]
+    _login_attempts[client_ip] = attempts
+
+    if len(attempts) >= _MAX_ATTEMPTS:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="登录尝试过于频繁，请稍后再试"
@@ -36,7 +50,7 @@ def _check_rate_limit(client_ip: str):
 
 def _record_failed_attempt(client_ip: str):
     """记录一次失败登录"""
-    _login_attempts[client_ip].append(time())
+    _login_attempts.setdefault(client_ip, []).append(time())
 
 
 def _clear_attempts(client_ip: str):
@@ -45,7 +59,7 @@ def _clear_attempts(client_ip: str):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
+def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
     """用户登录"""
     client_ip = req.client.host if req.client else "unknown"
     _check_rate_limit(client_ip)
@@ -79,9 +93,9 @@ async def login(request: LoginRequest, req: Request, db: Session = Depends(get_d
 
 
 @router.post("/change-password")
-async def change_password(
+def change_password(
     request: ChangePasswordRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_raw),
     db: Session = Depends(get_db)
 ):
     """修改当前用户密码（首次登录或主动修改）"""
@@ -113,7 +127,7 @@ async def change_password(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
+def get_me(current_user: User = Depends(get_current_user_raw)):
     """获取当前用户信息"""
     return UserResponse(
         id=current_user.id,

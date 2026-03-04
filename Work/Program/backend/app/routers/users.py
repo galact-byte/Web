@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/users", tags=["用户"])
 
 
 @router.get("/", response_model=List[UserResponse])
-async def get_users(
+def get_users(
     role: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -42,7 +42,7 @@ async def get_users(
 
 
 @router.get("/employees", response_model=List[UserResponse])
-async def get_employees(
+def get_employees(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -63,7 +63,7 @@ async def get_employees(
 
 
 @router.get("/managers", response_model=List[UserResponse])
-async def get_managers(
+def get_managers(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -84,7 +84,7 @@ async def get_managers(
 
 
 @router.post("/", response_model=UserResponse)
-async def create_user(
+def create_user(
     request: UserCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_manager)
@@ -120,7 +120,7 @@ async def create_user(
 
 
 @router.put("/{user_id}", response_model=UserResponse)
-async def update_user(
+def update_user(
     user_id: int,
     request: UserUpdate,
     db: Session = Depends(get_db),
@@ -155,7 +155,7 @@ async def update_user(
 
 
 @router.post("/{user_id}/reset-password")
-async def reset_password(
+def reset_password(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_manager)
@@ -173,7 +173,7 @@ async def reset_password(
 
 
 @router.delete("/{user_id}")
-async def delete_user(
+def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_manager)
@@ -187,7 +187,10 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="用户不存在")
 
     # 清理该用户在项目表中的外键引用，避免级联错误
-    from app.models import Project
+    from app.models import Project, ProjectAssignment
+    db.query(ProjectAssignment).filter(ProjectAssignment.assignee_id == user_id).delete(
+        synchronize_session="fetch"
+    )
     db.query(Project).filter(Project.implementation_manager_id == user_id).update(
         {"implementation_manager_id": None}, synchronize_session="fetch"
     )
