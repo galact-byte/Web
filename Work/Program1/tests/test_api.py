@@ -671,8 +671,11 @@ class ApiFlowTests(unittest.TestCase):
         self.assertTrue(any(i['title'] == '精确检索文档' for i in list_exact.json()['items']))
 
     def test_10_permission_boundaries(self):
+        saved_cookies = dict(self.client.cookies)
+        self.client.cookies.clear()
         unauth_collection = self.client.get('/api/organizations/collection-links')
         self.assertEqual(unauth_collection.status_code, 401)
+        self.client.cookies.update(saved_cookies)
 
         create_user_resp = self.client.post(
             '/api/auth/users',
@@ -1012,7 +1015,7 @@ class ApiFlowTests(unittest.TestCase):
         archive_b = self.client.post(f'/api/systems/{sys_b_id}/archive?actor=tester')
         self.assertEqual(archive_b.status_code, 200)
 
-        summary_resp = self.client.get(f'/api/dashboard/summary?city={city_a}')
+        summary_resp = self.client.get(f'/api/dashboard/summary?city={city_a}', headers=self.admin_headers)
         self.assertEqual(summary_resp.status_code, 200)
         totals = summary_resp.json()['totals']
         self.assertEqual(totals['archived_system_count'], 0)
@@ -1056,8 +1059,9 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(submit_resp.status_code, 200)
 
         lite_edit_resp = self.client.put(
-            f'/api/reports/{report_id}?actor=demo_admin&is_admin=true',
+            f'/api/reports/{report_id}?actor=demo_admin',
             json={'content': {'标题': '无鉴权维护'}},
+            headers=self.admin_headers,
         )
         self.assertEqual(lite_edit_resp.status_code, 200)
 
@@ -1709,10 +1713,12 @@ class ApiFlowTests(unittest.TestCase):
 
         original_strict = self.__class__.main_module.STRICT_AUTH
         self.__class__.main_module.STRICT_AUTH = True
+        self.client.cookies.clear()
         try:
             resp = self.client.post(f'/api/organizations/{org_id}/unlock?actor=admin')
         finally:
             self.__class__.main_module.STRICT_AUTH = original_strict
+            self.client.post('/api/auth/login', json={'username': 'admin', 'password': 'admin123'})
 
         self.assertEqual(resp.status_code, 401, resp.text)
 
