@@ -35,6 +35,9 @@ uploads/
 # 初始凭据文件
 initial_credentials.txt
 
+# 敏感配置（含真实姓名等）
+config/template_replacements.json
+
 # 交付打包产物
 delivery_*/
 delivery_*.zip

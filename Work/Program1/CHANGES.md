@@ -2,9 +2,107 @@
 
 > **修订记录**
 >
+> - v1.5.2: 深度清理 — 修复 `delete_organization` 权限绕过漏洞（C3 遗漏），彻底清除全部遗留 actor/is_admin 参数（12 处），移除死代码。
+> - v1.5.1: 授权加固（第二轮）— 补充 5 个遗漏认证的端点，清理遗留 actor 参数。
+> - v1.5.0: 授权加固 — 修复 3 个 HIGH 级别问题：46 个端点添加角色认证、修复 actor 伪造、移除硬编码真实姓名。
 > - v1.4.0: 安全加固 — 修复 5 个 CRITICAL 和 8 个 HIGH 级别安全漏洞，清理冗余文件。
 
-## 修改文件
+---
+## v1.5.1 — 授权加固（第二轮遗漏修复）
+
+### `app/main.py` — 补充 5 个遗漏认证的端点
+
+- **`test_fill_template`**：POST 端点无认证，可泄露组织/系统数据 → 添加 `require_roles({"admin", "evaluator"})`
+- **`export_report_word`**：GET 导出无认证，任意用户可下载报告 → 添加 `require_roles({"admin", "evaluator"})`
+- **`export_report_pdf_file`**：GET 导出无认证 → 添加 `require_roles({"admin", "evaluator"})`
+- **`export_dashboard_excel`**：GET 导出无认证 → 添加 `require_roles({"admin", "evaluator"})`
+- **`export_dashboard_pdf`**：GET 导出无认证 → 添加 `require_roles({"admin", "evaluator"})`
+- **清理遗留参数**：`import_local_official_templates` 和 `cleanup_organization_recycle_bin` 移除未使用的 `actor: str = Query()` 参数
+
+---
+
+## v1.5.2 — 深度清理（第三四五轮审计）
+
+### `app/main.py` — 权限绕过修复 + 全面参数清理
+
+- **`delete_organization` 权限绕过（CRITICAL）**：仍使用 `is_current_user_admin(legacy_is_admin=is_admin)` 信任客户端 `is_admin` 参数 → 重构为 `require_roles({"admin", "evaluator"})` + `role != "admin"` 检查
+- **彻底清除遗留 actor/is_admin 参数**（12 处）：
+  - `create_org_collection_link`：移除 `actor` 参数
+  - `review_org_submission`：移除 `actor` 参数
+  - `delete_organization`：移除 `actor` 和 `is_admin` 参数
+  - `cleanup_system_recycle_bin`：移除 `actor` 参数
+  - `review_delete_request`：移除 `actor` 参数
+  - `reorder_report_section`：移除 `actor` 和 `is_admin` 参数
+  - `set_report_signature`：移除 `actor` 和 `is_admin` 参数
+  - `submit_report`：移除 `actor` 参数
+  - `workflow_extend_due`：移除 `actor` 参数
+  - `workflow_advance`：移除 `actor` 参数
+- **移除死代码**：`is_current_user_admin()` 函数已无调用方，安全删除
+
+---
+
+## v1.5.0 — 授权加固与 actor 伪造修复
+
+### `app/main.py` — 角色授权 + actor 伪造修复（46 处修改）
+
+- **H1 缺失授权**：为 22 个无认证的写入/导入/导出端点添加 `require_roles()` 角色检查：
+  - Admin 专属：`archive_organization/system`、`restore_organization/system`、`delete_attachment`、`restore_report_version`、`import_*/excel`、`import_*/word`
+  - Admin+Evaluator：`create_organization/system`、`update_organization/system`、`export_*`、`upload_attachment`、`generate_report`、`edit_report`、`add/delete_report_section`、`copy_system`、`create_*_delete_request`
+- **H2 actor 伪造**：所有端点的 `actor` 参数改为从认证会话中派生，不再信任客户端提交的 `?actor=` 查询参数：
+  - 15 个端点移除 `actor: str = Query(...)` 参数，改用 `require_roles()` 返回的用户名
+  - 10 个已保护端点移除 `actor` 参数，消除 `actor_name or actor` 回退逻辑
+  - 5 个端点移除 `is_admin: bool = Query(...)` 参数，改用 `role == "admin"` 判断
+  - 全局替换 `legacy_admin=(actor == "admin")` → `legacy_admin=True`（18 处）
+  - 全局替换 `actor_name or actor` → `actor_name`（37 处）
+
+### `app/services/reporting.py` — 移除硬编码真实姓名（H10）
+
+- **修改位置**：`OFFICIAL_TEMPLATE_TEXT_REPLACEMENTS` 常量
+- **修改内容**：硬编码的公司名/真实姓名移至外部配置文件 `config/template_replacements.json`，运行时动态加载，源码不再包含任何真实个人信息。
+- **新增函数**：`_load_template_replacements()` — 从 JSON 配置文件加载脱敏替换规则。
+
+### `tests/test_api.py` — 测试适配
+
+- 归档/导入等 admin-only 端点调用统一添加 `headers=self.admin_headers`
+- 移除测试中已废弃的 `?actor=`、`?is_admin=` 查询参数
+
+### `.gitignore` — 新增忽略项
+
+- `config/template_replacements.json`（含真实姓名，不入库）
+
+## 新增文件
+
+### `config/template_replacements.json` — 模板脱敏配置（gitignored）
+
+- **功能**：存储官方模板中需脱敏替换的真实姓名/公司名映射
+- **格式**：JSON 键值对，key 为原文，value 为占位符
+
+### `config/template_replacements.example.json` — 脱敏配置示例
+
+- **功能**：提供配置格式参考，不含真实数据，可安全提交
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `app/main.py` |
+| **修改** | `app/services/reporting.py` |
+| **修改** | `tests/test_api.py` |
+| **修改** | `.gitignore` |
+| **新增** | `config/template_replacements.json` |
+| **新增** | `config/template_replacements.example.json` |
+
+## 测试方式
+
+- 运行 `python -m pytest tests/test_api.py -q`，确认 51 个测试全部通过
+- 验证 evaluator 角色无法执行归档、导入、恢复等 admin-only 操作（返回 403）
+- 验证 `?actor=attacker` 参数不再影响审计日志中的操作者记录
+
+---
+
+## v1.4.0 — 安全加固
 
 ### `app/db.py` — 事务安全修复
 
@@ -2704,4 +2802,3 @@
 
 - 初版实现单位、系统、报告、流程、看板、知识库等模块。
 - 提供基础字段校验、导入导出、历史追溯与回收站机制。
-

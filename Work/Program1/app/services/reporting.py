@@ -242,16 +242,23 @@ def export_report_docx(title: str, content: dict[str, Any], output_path: Path) -
 # 官方模板脱敏处理
 # ──────────────────────────────────────────────────────────────────────────────
 
-OFFICIAL_TEMPLATE_TEXT_REPLACEMENTS = {
-    "山西晋深交易有限公司": "【单位名称】",
-    "山西省省属企业采购与供应链信息管理系统": "【系统名称】",
-    "张宇阳": "【联系人】",
-    "李沛林": "【负责人】",
-    "郭丽娟": "【负责人】",
-    "孔庆花、马丽娜、郭煜": "【专家组成员】",
-    "党委副书记、副董事长": "【职务】",
-    "信息技术部": "【责任部门】",
-}
+def _load_template_replacements() -> dict[str, str]:
+    """从外部配置文件加载模板脱敏替换规则。"""
+    config_path = Path(__file__).resolve().parents[2] / "config" / "template_replacements.json"
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return {str(k): str(v) for k, v in data.items()}
+        except (json.JSONDecodeError, OSError):
+            logger.warning("模板替换配置文件解析失败：%s", config_path)
+    else:
+        logger.warning("模板替换配置文件不存在：%s，脱敏替换将不生效", config_path)
+    return {}
+
+
+OFFICIAL_TEMPLATE_TEXT_REPLACEMENTS = _load_template_replacements()
 
 
 def _normalize_text_for_replace(text: str) -> str:
