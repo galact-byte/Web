@@ -256,7 +256,7 @@ class ApiFlowTests(unittest.TestCase):
         doc.save(bio)
         bio.seek(0)
         files = {'file': ('sys.docx', bio.getvalue(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')}
-        import_resp = self.client.post('/api/systems/import/word?actor=tester', files=files)
+        import_resp = self.client.post('/api/systems/import/word?actor=tester', files=files, headers=self.admin_headers)
         self.assertEqual(import_resp.status_code, 200)
         system_id = import_resp.json()['data']['id']
 
@@ -555,7 +555,7 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(sys_recycle.status_code, 200)
         self.assertTrue(any(i['id'] == system_id for i in sys_recycle.json()['items']))
 
-        restore_sys_ok = self.client.post(f'/api/systems/{system_id}/restore?actor=tester')
+        restore_sys_ok = self.client.post(f'/api/systems/{system_id}/restore?actor=tester', headers=self.admin_headers)
         self.assertEqual(restore_sys_ok.status_code, 200)
 
         report1_resp = self.client.post(
@@ -895,31 +895,31 @@ class ApiFlowTests(unittest.TestCase):
         )
         self.assertEqual(admin_edit_resp.status_code, 200)
 
-        archive_org_resp = self.client.post(f'/api/organizations/{org_id}/archive?actor=tester')
+        archive_org_resp = self.client.post(f'/api/organizations/{org_id}/archive', headers=self.admin_headers)
         self.assertEqual(archive_org_resp.status_code, 200)
         bypass_org_update_resp = self.client.put(
-            f'/api/organizations/{org_id}?actor=non_admin_editor&is_admin=true',
+            f'/api/organizations/{org_id}',
             json={'address': '被绕过地址'},
             headers=eval_headers,
         )
         self.assertEqual(bypass_org_update_resp.status_code, 403)
         admin_org_update_resp = self.client.put(
-            f'/api/organizations/{org_id}?actor=admin&is_admin=true',
+            f'/api/organizations/{org_id}',
             json={'address': '管理员地址'},
             headers=self.admin_headers,
         )
         self.assertEqual(admin_org_update_resp.status_code, 200)
 
-        archive_sys_resp = self.client.post(f'/api/systems/{system_id}/archive?actor=tester')
+        archive_sys_resp = self.client.post(f'/api/systems/{system_id}/archive', headers=self.admin_headers)
         self.assertEqual(archive_sys_resp.status_code, 200)
         bypass_sys_update_resp = self.client.put(
-            f'/api/systems/{system_id}?actor=non_admin_editor&is_admin=true',
+            f'/api/systems/{system_id}',
             json={'system_name': '绕过系统名'},
             headers=eval_headers,
         )
         self.assertEqual(bypass_sys_update_resp.status_code, 403)
         admin_sys_update_resp = self.client.put(
-            f'/api/systems/{system_id}?actor=admin&is_admin=true',
+            f'/api/systems/{system_id}',
             json={'system_name': '管理员系统名'},
             headers=self.admin_headers,
         )
@@ -1012,7 +1012,7 @@ class ApiFlowTests(unittest.TestCase):
         )
         self.assertEqual(submit_b.status_code, 200)
 
-        archive_b = self.client.post(f'/api/systems/{sys_b_id}/archive?actor=tester')
+        archive_b = self.client.post(f'/api/systems/{sys_b_id}/archive', headers=self.admin_headers)
         self.assertEqual(archive_b.status_code, 200)
 
         summary_resp = self.client.get(f'/api/dashboard/summary?city={city_a}', headers=self.admin_headers)
@@ -1079,8 +1079,9 @@ class ApiFlowTests(unittest.TestCase):
         self.__class__.main_module.assert_credit_code_available = lambda *args, **kwargs: None
         try:
             resp = self.client.post(
-                '/api/organizations/import/excel?actor=tester',
+                '/api/organizations/import/excel',
                 files={'file': ('orgs.xlsx', bio.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+                headers=self.admin_headers,
             )
         finally:
             self.__class__.main_module.assert_credit_code_available = original_checker
@@ -1169,7 +1170,7 @@ class ApiFlowTests(unittest.TestCase):
         )
         self.assertEqual(delete_org_resp.status_code, 200)
 
-        restore_sys_resp = self.client.post(f'/api/systems/{system_id}/restore?actor=tester')
+        restore_sys_resp = self.client.post(f'/api/systems/{system_id}/restore?actor=tester', headers=self.admin_headers)
         self.assertEqual(restore_sys_resp.status_code, 400)
         self.assertIn('先恢复单位', str(restore_sys_resp.json().get('detail', '')))
 
@@ -1201,8 +1202,9 @@ class ApiFlowTests(unittest.TestCase):
         bio.seek(0)
 
         resp = self.client.post(
-            '/api/systems/import/excel?actor=tester',
+            '/api/systems/import/excel',
             files={'file': ('systems_datetime.xlsx', bio.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+            headers=self.admin_headers,
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()['imported'], 1)
@@ -1242,8 +1244,9 @@ class ApiFlowTests(unittest.TestCase):
         bio.seek(0)
 
         excel_resp = self.client.post(
-            '/api/systems/import/excel?actor=tester',
+            '/api/systems/import/excel',
             files={'file': ('systems_invalid_level.xlsx', bio.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+            headers=self.admin_headers,
         )
         self.assertEqual(excel_resp.status_code, 200)
         self.assertEqual(excel_resp.json()['imported'], 0)
@@ -1257,8 +1260,9 @@ class ApiFlowTests(unittest.TestCase):
         doc.save(bio_doc)
         bio_doc.seek(0)
         word_resp = self.client.post(
-            '/api/systems/import/word?actor=tester',
+            '/api/systems/import/word',
             files={'file': ('sys_invalid_level.docx', bio_doc.getvalue(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
+            headers=self.admin_headers,
         )
         self.assertEqual(word_resp.status_code, 400)
         self.assertIn('1-5级范围', str(word_resp.json().get('detail', '')))
@@ -1515,8 +1519,9 @@ class ApiFlowTests(unittest.TestCase):
     def test_35_organization_word_import_invalid_docx_returns_400(self):
         bad_docx = b'not-a-valid-docx'
         resp = self.client.post(
-            '/api/organizations/import/word?actor=tester',
+            '/api/organizations/import/word',
             files={'file': ('bad.docx', bad_docx, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
+            headers=self.admin_headers,
         )
         self.assertEqual(resp.status_code, 400)
         self.assertIn('无法解析', str(resp.json().get('detail', '')))
@@ -1542,8 +1547,9 @@ class ApiFlowTests(unittest.TestCase):
         self.assertTrue(candidates, '测试资源缺失: 01-*.docx')
         src = candidates[0]
         resp = self.client.post(
-            '/api/organizations/import/word?actor=tester',
+            '/api/organizations/import/word',
             files={'file': (src.name, src.read_bytes(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
+            headers=self.admin_headers,
         )
         self.assertEqual(resp.status_code, 200, resp.text)
         body = resp.json()
@@ -1766,8 +1772,9 @@ class ApiFlowTests(unittest.TestCase):
         self.__class__.main_module.generate_system_code = lambda _db: 'DUP-SYSTEM-CODE-001'
         try:
             resp = self.client.post(
-                '/api/systems/import/excel?actor=tester',
+                '/api/systems/import/excel',
                 files={'file': ('systems_duplicate_code.xlsx', bio.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+                headers=self.admin_headers,
             )
         finally:
             self.__class__.main_module.generate_system_code = original_generate_code
