@@ -11,6 +11,7 @@ import shutil
 import smtplib
 import sqlite3
 import threading
+import time
 import uuid
 import zipfile
 import xml.etree.ElementTree as ET
@@ -96,6 +97,11 @@ MAX_ORG_ATTACHMENT = 100 * 1024 * 1024
 MAX_SYS_ATTACHMENT = 200 * 1024 * 1024
 MAX_KNOWLEDGE_FILE = 300 * 1024 * 1024
 MAX_BACKUP_FILE = 1024 * 1024 * 1024
+MAX_BACKUP_ZIP_ENTRIES = max(1, int(os.getenv("MAX_BACKUP_ZIP_ENTRIES", "5000")))
+MAX_BACKUP_UNCOMPRESSED = max(
+    MAX_BACKUP_FILE,
+    int(os.getenv("MAX_BACKUP_UNCOMPRESSED", str(MAX_BACKUP_FILE * 2))),
+)
 DEFAULT_WORKFLOW_STEPS = ["信息收集", "信息审核", "报告生成", "报告审核", "报告终稿", "归档"]
 VALID_REPORT_TYPES = {"filing_form", "grading_report", "expert_review_form"}
 LOCAL_OFFICIAL_TEMPLATE_RULES = [
@@ -180,11 +186,15 @@ def escape_like(value: str) -> str:
 
 def _cleanup_export_file(path: Path) -> None:
     """后台任务：响应完成后删除导出的临时文件。"""
-    try:
-        if path.exists():
+    # Windows 下文件句柄释放可能存在短暂延迟，重试可避免临时导出文件残留。
+    for _ in range(20):
+        try:
+            if not path.exists():
+                return
             path.unlink()
-    except OSError:
-        pass
+            return
+        except OSError:
+            time.sleep(0.1)
 
 
 @asynccontextmanager
@@ -263,10 +273,23 @@ def assert_safe_backup_file_name(file_name: str) -> str:
 
 
 def safe_extract_zip(zf: zipfile.ZipFile, target_dir: Path) -> None:
+    file_count = 0
+    total_uncompressed = 0
     for member in zf.infolist():
         member_path = Path(member.filename)
         if member_path.is_absolute() or ".." in member_path.parts:
             raise HTTPException(status_code=400, detail="备份压缩包包含非法路径。")
+        if member.is_dir():
+            continue
+        file_count += 1
+        if file_count > MAX_BACKUP_ZIP_ENTRIES:
+            raise HTTPException(status_code=400, detail="备份压缩包文件数量超限，拒绝解压。")
+        file_size = int(member.file_size or 0)
+        if file_size < 0:
+            raise HTTPException(status_code=400, detail="备份压缩包文件大小非法。")
+        total_uncompressed += file_size
+        if total_uncompressed > MAX_BACKUP_UNCOMPRESSED:
+            raise HTTPException(status_code=400, detail="备份压缩包解压后总大小超限，拒绝解压。")
     zf.extractall(target_dir)
 
 
@@ -1406,7 +1429,7 @@ def parse_optional_go_live_date(raw_value: Any) -> date | None:
 def ensure_file_exists(path_value: str | None, not_found_detail: str) -> Path:
     path = Path(str(path_value or "")).resolve()
     allowed_bases = [UPLOAD_DIR.resolve(), EXPORT_DIR.resolve()]
-    if not any(str(path).startswith(str(b)) for b in allowed_bases):
+    if not any(path == base or path.is_relative_to(base) for base in allowed_bases):
         raise HTTPException(status_code=403, detail="文件路径非法。")
     if not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail=not_found_detail)
@@ -2320,6 +2343,18 @@ def restore_template_version(
     ]:
         if key in snap:
             setattr(tpl, key, snap[key])
+    if bool(tpl.is_default):
+        others = (
+            db.query(ReportTemplate)
+            .filter(
+                ReportTemplate.report_type == tpl.report_type,
+                ReportTemplate.id != tpl.id,
+                ReportTemplate.is_default.is_(True),
+            )
+            .all()
+        )
+        for old in others:
+            old.is_default = False
     tpl.version_no = int(tpl.version_no or 0) + 1
     db.commit()
     return {"message": "模板版本恢复成功", "version_no": tpl.version_no}
@@ -5242,7 +5277,7 @@ def batch_download_knowledge(
                 zf.write(src, arcname=doc.file_name)
                 db.add(KnowledgeDownloadLog(document_id=doc.id, download_by=actor_name))
     db.commit()
-    return FileResponse(path=str(zip_path), filename=zip_path.name)
+    return FileResponse(path=str(zip_path), filename=zip_path.name, background=BackgroundTask(_cleanup_export_file, zip_path))
 
 
 @app.put("/api/knowledge/{doc_id}")

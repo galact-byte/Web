@@ -2057,6 +2057,165 @@ class ApiFlowTests(unittest.TestCase):
         finally:
             db.close()
 
+    def test_52_attachment_download_should_block_upload_dir_prefix_bypass(self):
+        base_dir = Path(__file__).resolve().parent.parent
+        bypass_dir = base_dir / 'uploads_shadow'
+        bypass_dir.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(lambda: __import__('shutil').rmtree(bypass_dir, ignore_errors=True))
+
+        bypass_file = bypass_dir / 'prefix_bypass.txt'
+        bypass_file.write_text('prefix-bypass-check', encoding='utf-8')
+
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            row = self.__class__.main_module.Attachment(
+                entity_type='organization',
+                entity_id=999999,
+                file_name='prefix_bypass.txt',
+                file_path=str(bypass_file),
+                file_ext='txt',
+                file_size=bypass_file.stat().st_size,
+                uploaded_by='tester',
+            )
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            attachment_id = row.id
+        finally:
+            db.close()
+
+        download_resp = self.client.get(f'/api/attachment-files/{attachment_id}/download')
+        self.assertEqual(download_resp.status_code, 403, download_resp.text)
+
+    def test_53_restore_template_default_should_keep_single_default(self):
+        upload_1 = self.client.post(
+            '/api/templates/upload',
+            data={
+                'template_name': '恢复默认冲突模板A',
+                'report_type': 'grading_report',
+                'is_default': 'true',
+            },
+            files={'file': ('restore_default_a.docx', b'a', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(upload_1.status_code, 200, upload_1.text)
+        tpl_id_1 = upload_1.json()['data']['id']
+
+        upload_2 = self.client.post(
+            '/api/templates/upload',
+            data={
+                'template_name': '恢复默认冲突模板B',
+                'report_type': 'grading_report',
+                'is_default': 'false',
+            },
+            files={'file': ('restore_default_b.docx', b'b', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(upload_2.status_code, 200, upload_2.text)
+        tpl_id_2 = upload_2.json()['data']['id']
+
+        set_tpl2_default_resp = self.client.put(
+            f'/api/templates/{tpl_id_2}',
+            json={'is_default': 'true'},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(set_tpl2_default_resp.status_code, 200, set_tpl2_default_resp.text)
+
+        new_version_resp = self.client.post(
+            f'/api/templates/{tpl_id_2}/new-version',
+            files={'file': ('restore_default_b_v2.docx', b'bb', 'application/octet-stream')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(new_version_resp.status_code, 200, new_version_resp.text)
+
+        versions_resp = self.client.get(f'/api/templates/{tpl_id_2}/versions')
+        self.assertEqual(versions_resp.status_code, 200, versions_resp.text)
+        versions = versions_resp.json().get('items') or []
+        default_snapshot = next((item for item in versions if bool((item.get('snapshot') or {}).get('is_default'))), None)
+        self.assertIsNotNone(default_snapshot, '未找到 is_default=True 的历史快照')
+        restore_version_id = default_snapshot['id']
+
+        set_tpl1_default_resp = self.client.post(
+            f'/api/templates/{tpl_id_1}/set-default',
+            headers=self.admin_headers,
+        )
+        self.assertEqual(set_tpl1_default_resp.status_code, 200, set_tpl1_default_resp.text)
+
+        restore_resp = self.client.post(
+            f'/api/templates/{tpl_id_2}/restore/{restore_version_id}',
+            headers=self.admin_headers,
+        )
+        self.assertEqual(restore_resp.status_code, 200, restore_resp.text)
+
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            row_1 = db.query(self.__class__.main_module.ReportTemplate).filter_by(id=tpl_id_1).first()
+            row_2 = db.query(self.__class__.main_module.ReportTemplate).filter_by(id=tpl_id_2).first()
+            self.assertIsNotNone(row_1)
+            self.assertIsNotNone(row_2)
+            self.assertFalse(bool(row_1.is_default))
+            self.assertTrue(bool(row_2.is_default))
+        finally:
+            db.close()
+
+    def test_54_safe_extract_zip_should_reject_too_many_entries(self):
+        main_module = self.__class__.main_module
+        original_limit = getattr(main_module, 'MAX_BACKUP_ZIP_ENTRIES', None)
+        main_module.MAX_BACKUP_ZIP_ENTRIES = 2
+        temp_root = Path(__file__).resolve().parent.parent / '.tmp_safe_extract_zip_limit'
+        if temp_root.exists():
+            import shutil
+            shutil.rmtree(temp_root, ignore_errors=True)
+        temp_root.mkdir(parents=True, exist_ok=True)
+
+        self.addCleanup(lambda: __import__('shutil').rmtree(temp_root, ignore_errors=True))
+        if original_limit is None:
+            self.addCleanup(lambda: delattr(main_module, 'MAX_BACKUP_ZIP_ENTRIES'))
+        else:
+            self.addCleanup(setattr, main_module, 'MAX_BACKUP_ZIP_ENTRIES', original_limit)
+
+        bio = io.BytesIO()
+        with zipfile.ZipFile(bio, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr('a.txt', 'a')
+            zf.writestr('b.txt', 'b')
+            zf.writestr('c.txt', 'c')
+        bio.seek(0)
+
+        with zipfile.ZipFile(bio, mode='r') as zf:
+            with self.assertRaises(main_module.HTTPException) as ctx:
+                main_module.safe_extract_zip(zf, temp_root)
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn('文件数量', str(ctx.exception.detail))
+
+    def test_55_safe_extract_zip_should_reject_oversized_uncompressed_content(self):
+        main_module = self.__class__.main_module
+        original_limit = getattr(main_module, 'MAX_BACKUP_UNCOMPRESSED', None)
+        main_module.MAX_BACKUP_UNCOMPRESSED = 2
+        temp_root = Path(__file__).resolve().parent.parent / '.tmp_safe_extract_zip_size'
+        if temp_root.exists():
+            import shutil
+            shutil.rmtree(temp_root, ignore_errors=True)
+        temp_root.mkdir(parents=True, exist_ok=True)
+
+        self.addCleanup(lambda: __import__('shutil').rmtree(temp_root, ignore_errors=True))
+        if original_limit is None:
+            self.addCleanup(lambda: delattr(main_module, 'MAX_BACKUP_UNCOMPRESSED'))
+        else:
+            self.addCleanup(setattr, main_module, 'MAX_BACKUP_UNCOMPRESSED', original_limit)
+
+        bio = io.BytesIO()
+        with zipfile.ZipFile(bio, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr('big.txt', 'abcd')
+        bio.seek(0)
+
+        with zipfile.ZipFile(bio, mode='r') as zf:
+            with self.assertRaises(main_module.HTTPException) as ctx:
+                main_module.safe_extract_zip(zf, temp_root)
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn('总大小', str(ctx.exception.detail))
+
 
 if __name__ == '__main__':
     unittest.main()

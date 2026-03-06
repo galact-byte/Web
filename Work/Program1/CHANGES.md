@@ -2,10 +2,61 @@
 
 > **修订记录**
 >
+> - v1.5.4: 审计修复（备份恢复防护增强）— 为备份解压增加文件数/总大小门禁，新增 2 个回归测试。
+> - v1.5.3: 审计修复（路径边界与模板恢复一致性）— 修复下载路径前缀绕过与模板恢复多默认冲突，新增 2 个回归测试。
 > - v1.5.2: 深度清理 — 修复 `delete_organization` 权限绕过漏洞（C3 遗漏），彻底清除全部遗留 actor/is_admin 参数（12 处），移除死代码。
 > - v1.5.1: 授权加固（第二轮）— 补充 5 个遗漏认证的端点，清理遗留 actor 参数。
 > - v1.5.0: 授权加固 — 修复 3 个 HIGH 级别问题：46 个端点添加角色认证、修复 actor 伪造、移除硬编码真实姓名。
 > - v1.4.0: 安全加固 — 修复 5 个 CRITICAL 和 8 个 HIGH 级别安全漏洞，清理冗余文件。
+
+---
+## v1.5.4 — 审计修复（备份恢复防护增强）
+
+### `app/main.py` — 备份解压门禁与导出清理鲁棒性
+
+- **备份恢复解压门禁（HIGH）**：
+  - 新增 `MAX_BACKUP_ZIP_ENTRIES`（默认 5000）与 `MAX_BACKUP_UNCOMPRESSED`（默认 2x 备份上限）两个阈值。
+  - `safe_extract_zip()` 增加文件数量与总解压大小校验，超限直接返回 400，避免恶意压缩包造成资源耗尽。
+- **临时导出清理重试**：
+  - `_cleanup_export_file()` 从单次删除改为短重试，降低 Windows 环境句柄释放延迟导致的残留风险。
+- **知识库批量下载清理挂载**：
+  - `/api/knowledge/batch-download` 返回增加后台清理任务，保持与其它导出接口一致。
+
+### `tests/test_api.py` — 新增回归测试（2 项）
+
+- `test_54_safe_extract_zip_should_reject_too_many_entries`
+  - 验证压缩包文件数量超限时拒绝解压（400）。
+- `test_55_safe_extract_zip_should_reject_oversized_uncompressed_content`
+  - 验证压缩包解压后总大小超限时拒绝解压（400）。
+
+### 验证结果
+
+- 运行 `.\.venv\Scripts\python -m unittest tests.test_api.ApiFlowTests.test_54_safe_extract_zip_should_reject_too_many_entries tests.test_api.ApiFlowTests.test_55_safe_extract_zip_should_reject_oversized_uncompressed_content -v`：通过。
+- 运行 `.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`：55/55 全通过。
+
+---
+## v1.5.3 — 审计修复（路径边界与模板恢复一致性）
+
+### `app/main.py` — 修复高风险路径与默认模板冲突
+
+- **下载路径边界校验修复（HIGH）**：
+  - `ensure_file_exists()` 原先使用字符串前缀匹配，`uploads_shadow/*` 可被误判为 `uploads/*` 子路径。
+  - 改为 `Path.is_relative_to()` 的真实路径父子关系校验，阻断目录前缀绕过。
+- **模板恢复默认唯一性修复（HIGH）**：
+  - `restore_template_version()` 恢复到 `is_default=true` 快照时，新增同类型模板去重逻辑。
+  - 确保同一 `report_type` 最终仅保留一个默认模板，避免导出/匹配行为不稳定。
+
+### `tests/test_api.py` — 新增回归测试（2 项）
+
+- `test_52_attachment_download_should_block_upload_dir_prefix_bypass`：
+  - 复现并验证附件下载路径前缀绕过被拦截（期望 403）。
+- `test_53_restore_template_default_should_keep_single_default`：
+  - 验证模板恢复后默认模板唯一性（避免出现多默认模板）。
+
+### 验证结果
+
+- 运行 `.\.venv\Scripts\python -m unittest tests.test_api.ApiFlowTests.test_52_attachment_download_should_block_upload_dir_prefix_bypass tests.test_api.ApiFlowTests.test_53_restore_template_default_should_keep_single_default -v`：通过。
+- 运行 `.\.venv\Scripts\python -m unittest discover -s tests -p "test_*.py" -v`：53/53 全通过。
 
 ---
 ## v1.5.1 — 授权加固（第二轮遗漏修复）
