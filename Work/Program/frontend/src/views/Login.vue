@@ -17,15 +17,21 @@
           <p>高效管理项目完结单，实现数据一键导出</p>
           <div class="features">
             <div class="feature">
-              <span class="feature-icon">📋</span>
+              <span class="feature-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+              </span>
               <span>项目录入与分发</span>
             </div>
             <div class="feature">
-              <span class="feature-icon">👥</span>
+              <span class="feature-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              </span>
               <span>多角色协作管理</span>
             </div>
             <div class="feature">
-              <span class="feature-icon">📊</span>
+              <span class="feature-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              </span>
               <span>Excel/Word 导出</span>
             </div>
           </div>
@@ -84,7 +90,7 @@
     <div v-if="showChangePassword" class="modal-overlay">
       <div class="modal change-password-modal">
         <div class="modal-header">
-          <h2>🔐 修改密码</h2>
+          <h2>修改密码</h2>
         </div>
         <div class="modal-body">
           <p class="change-password-hint">首次登录或密码已被重置，请设置新密码后继续使用。</p>
@@ -202,25 +208,23 @@ async function handleChangePassword() {
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  background: var(--bg-primary);
 }
 
 .login-container {
   display: flex;
   width: 100%;
-  max-width: 1000px;
-  background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
+  max-width: 960px;
   border-radius: var(--radius-xl);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
 }
 
-/* 左侧装饰 */
+/* 左侧品牌区 */
 .login-decoration {
   flex: 1;
-  background: var(--accent-gradient);
-  padding: 3rem;
+  background: #0c1c1c;
+  padding: 3rem 2.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -231,23 +235,25 @@ async function handleChangePassword() {
 .login-decoration::before {
   content: '';
   position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
-  animation: pulse 4s ease-in-out infinite;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 80%, rgba(0, 212, 170, 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 20%, rgba(255, 107, 157, 0.06) 0%, transparent 55%);
+  pointer-events: none;
 }
 
-@keyframes pulse {
-  0%, 100% { transform: scale(1); opacity: 0.5; }
-  50% { transform: scale(1.1); opacity: 0.8; }
+[data-theme="light"] .login-decoration {
+  background: #f0fdfb;
+}
+[data-theme="light"] .login-decoration::before {
+  background:
+    radial-gradient(ellipse at 20% 80%, rgba(8, 145, 178, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 20%, rgba(217, 119, 6, 0.05) 0%, transparent 55%);
 }
 
 .decoration-content {
   position: relative;
   z-index: 1;
-  color: white;
   text-align: center;
 }
 
@@ -255,28 +261,38 @@ async function handleChangePassword() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 80px;
-  height: 80px;
-  background: rgba(255, 255, 255, 0.2);
+  width: 72px;
+  height: 72px;
+  background: var(--accent-primary);
+  color: white;
   border-radius: var(--radius-lg);
   margin-bottom: 1.5rem;
 }
 
 .decoration-content h1 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.6rem;
+  font-weight: 400;
+  color: #e0f2f1;
+  margin-bottom: 0.375rem;
+}
+[data-theme="light"] .decoration-content h1 {
+  color: var(--text-primary);
 }
 
 .decoration-content p {
-  opacity: 0.9;
+  color: #80cbc4;
+  font-size: 0.9rem;
   margin-bottom: 2rem;
+}
+[data-theme="light"] .decoration-content p {
+  color: var(--text-secondary);
 }
 
 .features {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.625rem;
   text-align: left;
 }
 
@@ -284,89 +300,83 @@ async function handleChangePassword() {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 0.75rem 1rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid rgba(0, 212, 170, 0.2);
   border-radius: var(--radius-md);
-  backdrop-filter: blur(10px);
+  background: rgba(0, 212, 170, 0.05);
+  color: #b2dfdb;
+  font-size: 0.9rem;
+  transition: border-color var(--transition-normal);
 }
+.feature:hover { border-color: rgba(0, 212, 170, 0.4); }
+
+[data-theme="light"] .feature {
+  border-color: rgba(8, 145, 178, 0.15);
+  background: rgba(8, 145, 178, 0.04);
+  color: var(--text-primary);
+}
+[data-theme="light"] .feature:hover { border-color: rgba(8, 145, 178, 0.35); }
 
 .feature-icon {
-  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  color: var(--accent-primary);
 }
 
 /* 右侧表单 */
 .login-form-container {
   flex: 1;
-  padding: 3rem;
+  padding: 3rem 2.5rem;
+  background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 
-.form-header {
-  margin-bottom: 2rem;
-}
-
+.form-header { margin-bottom: 1.75rem; }
 .form-header h2 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.6rem;
+  font-weight: 400;
+  margin-bottom: 0.375rem;
 }
-
-.form-header p {
-  color: var(--text-secondary);
-}
+.form-header p { color: var(--text-secondary); font-size: 0.9rem; }
 
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.125rem;
 }
 
 .error-message {
-  padding: 0.75rem 1rem;
+  padding: 0.625rem 0.875rem;
   background: var(--error-bg);
   border: 1px solid var(--error);
   border-radius: var(--radius-md);
   color: var(--error);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .form-footer {
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
   text-align: center;
-  color: var(--text-secondary);
+  font-size: 0.85rem;
 }
 
 /* 修改密码弹窗 */
-.change-password-modal {
-  max-width: 420px;
-  width: 90%;
-}
-
+.change-password-modal { max-width: 400px; width: 90%; }
 .change-password-hint {
   color: var(--text-secondary);
   margin-bottom: 1rem;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   line-height: 1.5;
 }
 
 /* 响应式 */
 @media (max-width: 768px) {
-  .login-container {
-    flex-direction: column;
-  }
-
-  .login-decoration {
-    padding: 2rem;
-  }
-
-  .decoration-content h1 {
-    font-size: 1.5rem;
-  }
-
-  .features {
-    display: none;
-  }
+  .login-container { flex-direction: column; }
+  .login-decoration { padding: 2rem 1.5rem; }
+  .decoration-content h1 { font-size: 1.4rem; }
+  .features { display: none; }
 }
 </style>
