@@ -177,6 +177,11 @@ WORKFLOW_EMAIL_DEFAULT_TO = (os.getenv("WORKFLOW_EMAIL_DEFAULT_TO") or "").strip
 SCRIPT_TAG_RE = re.compile(r"<\s*/?\s*[a-zA-Z!]|on\w+\s*=|javascript\s*:", re.IGNORECASE)
 LOGIN_ATTEMPTS: dict[str, dict[str, Any]] = {}
 LOGIN_ATTEMPTS_LOCK = threading.Lock()
+DEFAULT_BOOTSTRAP_ACCOUNTS = (
+    ("admin", "DEFAULT_ADMIN_PASSWORD", "admin", "admin123"),
+    ("tester", "DEFAULT_TESTER_PASSWORD", "evaluator", "tester123"),
+    ("leader", "DEFAULT_LEADER_PASSWORD", "reviewer", "leader123"),
+)
 
 
 def escape_like(value: str) -> str:
@@ -434,24 +439,27 @@ def clear_login_failure(key: str) -> None:
 def ensure_default_accounts() -> None:
     db = SessionLocal()
     try:
-        defaults = [
-            ("admin", "DEFAULT_ADMIN_PASSWORD", "admin"),
-            ("tester", "DEFAULT_TESTER_PASSWORD", "evaluator"),
-            ("leader", "DEFAULT_LEADER_PASSWORD", "reviewer"),
-        ]
-        generated: list[tuple[str, str, str]] = []
-        for username, env_key, role in defaults:
+        realigned_users: list[str] = []
+        for username, env_key, role, fallback_password in DEFAULT_BOOTSTRAP_ACCOUNTS:
+            desired_password = (os.getenv(env_key, "") or "").strip() or fallback_password
             exists = db.query(UserAccount).filter(UserAccount.username == username).first()
             if exists:
+                password_updated_at = getattr(exists, "password_updated_at", None)
+                last_login_at = getattr(exists, "last_login_at", None)
+                should_realign = bool(getattr(exists, "must_change_password", False)) and (
+                    password_updated_at is not None or last_login_at is None
+                )
+                if should_realign:
+                    ok, _ = verify_password(desired_password, exists.password_hash)
+                    if not ok:
+                        exists.password_hash = hash_password(desired_password)
+                        exists.password_updated_at = datetime.now()
+                        realigned_users.append(username)
                 continue
-            password = os.getenv(env_key, "").strip()
-            if not password:
-                password = secrets.token_urlsafe(16)
-                generated.append((username, password, role))
             db.add(
                 UserAccount(
                     username=username,
-                    password_hash=hash_password(password),
+                    password_hash=hash_password(desired_password),
                     role=role,
                     enabled=True,
                     must_change_password=True,
@@ -459,18 +467,8 @@ def ensure_default_accounts() -> None:
                 )
             )
         db.commit()
-        if generated:
-            cred_file = Path(__file__).resolve().parent.parent / "initial_credentials.txt"
-            lines = [
-                "# 初始账号凭据（首次登录后必须修改密码）",
-                f"# 生成时间: {datetime.now():%Y-%m-%d %H:%M:%S}",
-                "# 请在修改密码后删除此文件",
-                "",
-            ]
-            for uname, pwd, r in generated:
-                lines.append(f"用户名: {uname}  密码: {pwd}  角色: {r}")
-            cred_file.write_text("\n".join(lines), encoding="utf-8")
-            logger.warning("已生成初始账号凭据，请查看文件: %s", cred_file)
+        if realigned_users:
+            logger.warning("默认账号密码已按当前配置自动对齐：%s", ", ".join(realigned_users))
     finally:
         db.close()
 
