@@ -33,19 +33,8 @@
 - **启动命令**: `npm run dev`
 - **构建命令**: `npm run build`
 
-### 4. DDDD/dddd/ - 网络安全扫描工具
-- **技术栈**: Go
-- **用途**: 综合性网络安全扫描与漏洞检测工具（基于 [dddd](https://github.com/SleepingBag945/dddd) 二次开发）
-- **特性**:
-  - 自动识别输入类型（IP / 网段 / URL）
-  - 主动/被动指纹识别，支持复杂逻辑运算
-  - Nuclei v3 漏洞扫描支持
-  - 子域名枚举/爆破，精准泛解析过滤
-  - Hunter / Fofa / Quake 空间测绘引擎集成
-  - HTML 漏洞报表输出 & 审计日志
-- **构建命令**: 运行 `build_windows.bat` 或见 `DDDD/dddd/README.md`
 
-### 5. Reduce/ - 短视频时间控制 App
+### 4. Reduce/ - 短视频时间控制 App
 - **技术栈**: Kotlin 1.9 + Jetpack Compose + Material 3
 - **用途**: 控制刷短视频时间，识别"刷短视频"行为（竖屏 + 连续滑动），超时后温和拦截
 - **特性**:
@@ -56,12 +45,12 @@
   - 预设目标：内置抖音、快手、小红书、B站、微博、YouTube、TikTok 等
 - **构建命令**: 双击 `build-release.bat` 或见 `Reduce/README.md`
 
-### 6. test/ - 测试代码
+### 5. test/ - 测试代码
 - **用途**: 各类测试和实验代码
 
-### 7. Work/ - 工作项目
+### 6. Work/ - 工作项目
 
-#### 7.1 Work/Program/ - 项目完结单管理平台
+#### 6.1 Work/Program/ - 项目完结单管理平台
 - **技术栈**: FastAPI + Vue 3 + Vite + SQLAlchemy
 - **用途**: 在线项目完结单管理系统
 - **特性**:
@@ -76,7 +65,7 @@
   - 后端: `cd backend && uvicorn app.main:app --reload --port 8000`
   - 前端: `cd frontend && npm run dev`
 
-#### 7.2 Work/Program1/ - 定级备案管理系统
+#### 6.2 Work/Program1/ - 定级备案管理系统
 - **技术栈**: FastAPI + SQLAlchemy + Jinja2 + Chart.js
 - **用途**: 网络安全定级备案管理
 - **特性**:
@@ -95,7 +84,7 @@
 ### 环境要求
 - Node.js 18+
 - Python 3.9+（Work 项目需要）
-- Go 1.20+（DDDD 构建需要）
+
 - Rust（ai-client 构建需要）
 - JDK 17 + Android SDK 34（Reduce 构建需要）
 
@@ -144,7 +133,6 @@ start.bat          # Windows
 |------|----------|-------|----------|
 | ai-client | Tauri + Vue 3 | Vanilla CSS | Vite |
 | docgen-electron | Electron + Vue 3 | Element Plus | electron-vite |
-| DDDD/dddd | Go | - | go build |
 | Reduce | Kotlin + Jetpack Compose | Material 3 | Gradle |
 | front | Vanilla JS/CSS | - | - |
 | Work/Program | FastAPI + Vue 3 | Vanilla CSS | Vite |
