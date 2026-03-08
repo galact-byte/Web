@@ -2,88 +2,260 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
+{% set path = request.url.path %}
+{% if path == '/' %}
+  {% set page_title = '数据看板' %}
+  {% set page_desc = '集中查看单位、系统、报告与流程的整体态势，快速进入各业务模块。' %}
+  {% set page_icon = 'fa-chart-line' %}
+{% elif path.startswith('/organizations') %}
+  {% set page_title = '单位管理' %}
+  {% set page_desc = '维护参评单位基础资料、采集链接与档案信息，保证口径一致。' %}
+  {% set page_icon = 'fa-building' %}
+{% elif path.startswith('/systems') %}
+  {% set page_title = '系统管理' %}
+  {% set page_desc = '按系统维度维护定级信息、附件材料与建设状态，便于持续跟踪。' %}
+  {% set page_icon = 'fa-server' %}
+{% elif path.startswith('/reports') %}
+  {% set page_title = '报告与审核' %}
+  {% set page_desc = '统一管理报告生成、评审流转与导出交付，减少重复沟通。' %}
+  {% set page_icon = 'fa-file-contract' %}
+{% elif path.startswith('/workflow') %}
+  {% set page_title = '流程管控' %}
+  {% set page_desc = '配置步骤规则、提醒节奏与推进动作，让审核链路更透明。' %}
+  {% set page_icon = 'fa-diagram-project' %}
+{% elif path.startswith('/templates') %}
+  {% set page_title = '模板管理' %}
+  {% set page_desc = '维护报告模板与版本快照，保证对外交付内容稳定可控。' %}
+  {% set page_icon = 'fa-layer-group' %}
+  {% set page_layout_variant = 'management-tight' %}
+{% elif path.startswith('/knowledge') %}
+  {% set page_title = '知识库' %}
+  {% set page_desc = '沉淀制度材料、模板说明与经验文档，方便团队复用。' %}
+  {% set page_icon = 'fa-book' %}
+  {% set page_layout_variant = 'management-tight' %}
+{% elif path.startswith('/users') %}
+  {% set page_title = '用户管理' %}
+  {% set page_desc = '创建账号、重置密码并维护角色权限，统一管理内部访问。' %}
+  {% set page_icon = 'fa-users-cog' %}
+  {% set page_layout_variant = 'management-tight' %}
+{% elif path.startswith('/backup') %}
+  {% set page_title = '备份恢复' %}
+  {% set page_desc = '执行系统备份、恢复与校验，确保关键资料可追溯、可回滚。' %}
+  {% set page_icon = 'fa-database' %}
+  {% set page_layout_variant = 'management-tight' %}
+{% elif path.startswith('/login') %}
+  {% set page_title = '登录认证' %}
+  {% set page_desc = '统一认证入口，用于登录、强制改密与安全状态确认。' %}
+  {% set page_icon = 'fa-user-circle' %}
+{% else %}
+  {% set page_title = '业务工作台' %}
+  {% set page_desc = '统一承载定级备案相关业务页面，保持一致的信息结构和操作体验。' %}
+  {% set page_icon = 'fa-shield-halved' %}
+{% endif %}
+{% set page_layout_variant = page_layout_variant|default('standard', true) %}
+{% set request_state = request|attr('state')|default(none, true) %}
+{% set server_user_name = request_state|attr('current_user')|default('', true) %}
+{% set server_user_role = request_state|attr('current_user_role')|default('', true) %}
+{% set server_user_force_change = request_state|attr('current_user_must_change_password')|default(false, true) %}
+{% if lite_mode %}
+  {% set initial_role_badge = '精简交付版' %}
+  {% set initial_user_name = '系统免登录' %}
+  {% set initial_user_hint = '当前页面跳过登录校验' %}
+  {% set initial_action_mode = 'lite' %}
+  {% set initial_action_text = '免登录模式' %}
+{% elif server_user_name %}
+  {% if server_user_role == 'admin' %}
+    {% set initial_role_badge = '系统管理员' %}
+  {% elif server_user_role == 'editor' %}
+    {% set initial_role_badge = '业务编辑' %}
+  {% elif server_user_role == 'auditor' %}
+    {% set initial_role_badge = '审核人员' %}
+  {% else %}
+    {% set initial_role_badge = '已登录' %}
+  {% endif %}
+  {% set initial_user_name = server_user_name %}
+  {% if server_user_force_change %}
+    {% set initial_user_hint = '当前账号需先修改密码后再继续操作' %}
+  {% else %}
+    {% set initial_user_hint = '账号状态正常，可进入当前业务页面' %}
+  {% endif %}
+  {% set initial_action_mode = 'logout' %}
+  {% set initial_action_text = '退出登录' %}
+{% else %}
+  {% set initial_role_badge = '待登录' %}
+  {% set initial_user_name = '未登录' %}
+  {% set initial_user_hint = '请使用管理员分发的账号登录' %}
+  {% set initial_action_mode = 'login' %}
+  {% set initial_action_text = '登录' %}
+{% endif %}
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>定级备案管理系统</title>
+  <meta name="color-scheme" content="light" />
+  <meta name="view-transition" content="same-origin" />
+  <title>{{ page_title }} - 定级备案管理系统</title>
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    (function () {
+      const transitionKey = 'app-route-transition';
+      const transitionTtl = 4000;
+      const resetScrollToTop = () => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      };
+      try {
+        const raw = sessionStorage.getItem(transitionKey);
+        if (!raw) return;
+        const payload = JSON.parse(raw);
+        const current = `${window.location.pathname}${window.location.search}`;
+        if (!payload || payload.target !== current || Date.now() - (payload.at || 0) > transitionTtl) {
+          sessionStorage.removeItem(transitionKey);
+          return;
+        }
+        document.documentElement.dataset.routeDirection = payload.direction === 'backward' ? 'backward' : 'forward';
+        resetScrollToTop();
+        window.requestAnimationFrame(resetScrollToTop);
+      } catch (_error) {
+        sessionStorage.removeItem(transitionKey);
+      }
+    })();
+  </script>
 </head>
-<body>
+<body class="page-layout-{{ page_layout_variant }}">
+  <div class="sidebar-scrim" onclick="closeSidebar()"></div>
   <div class="layout">
     <aside class="sidebar">
       <div class="sidebar-header">
-        <i class="fas fa-shield-halved logo-icon"></i>
-        <span>定级备案系统</span>
+        <div class="brand-mark" aria-hidden="true">
+          <i class="fas fa-shield-halved"></i>
+        </div>
+        <div class="brand-copy">
+          <strong>定级备案系统</strong>
+          <span>安全评测与备案协同工作台</span>
+        </div>
+        <button class="sidebar-close" type="button" onclick="closeSidebar()" aria-label="关闭导航">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
+
+      <div class="nav-caption">业务导航</div>
       <nav class="sidebar-nav">
-        <a href="/" class="{{ 'active' if request.url.path == '/' else '' }}">
-          <i class="fas fa-chart-line"></i> 数据看板
+        <a href="/" class="{{ 'active' if path == '/' else '' }}">
+          <i class="fas fa-chart-line"></i>
+          <span>数据看板</span>
         </a>
-        <a href="/organizations" class="{{ 'active' if request.url.path.startswith('/organizations') else '' }}">
-          <i class="fas fa-building"></i> 单位信息
+        <a href="/organizations" class="{{ 'active' if path.startswith('/organizations') else '' }}">
+          <i class="fas fa-building"></i>
+          <span>单位信息</span>
         </a>
-        <a href="/users" class="{{ 'active' if request.url.path.startswith('/users') else '' }}" data-role-only="admin">
-          <i class="fas fa-users-cog"></i> 用户管理
+        <a href="/systems" class="{{ 'active' if path.startswith('/systems') else '' }}">
+          <i class="fas fa-server"></i>
+          <span>系统信息</span>
         </a>
-        <a href="/backup" class="{{ 'active' if request.url.path.startswith('/backup') else '' }}" data-role-only="admin">
-          <i class="fas fa-database"></i> 备份恢复
+        <a href="/reports" class="{{ 'active' if path.startswith('/reports') else '' }}">
+          <i class="fas fa-file-contract"></i>
+          <span>报告与审核</span>
         </a>
-        <a href="/systems" class="{{ 'active' if request.url.path.startswith('/systems') else '' }}">
-          <i class="fas fa-server"></i> 系统信息
+        <a href="/workflow" class="{{ 'active' if path.startswith('/workflow') else '' }}" data-role-only="admin,reviewer">
+          <i class="fas fa-diagram-project"></i>
+          <span>流程管控</span>
         </a>
-        <a href="/reports" class="{{ 'active' if request.url.path.startswith('/reports') else '' }}">
-          <i class="fas fa-file-contract"></i> 报告与审核
+        <a href="/templates" class="{{ 'active' if path.startswith('/templates') else '' }}" data-role-only="admin">
+          <i class="fas fa-layer-group"></i>
+          <span>模板管理</span>
         </a>
-        {% if not lite_mode %}
-        <a href="/workflow" class="{{ 'active' if request.url.path.startswith('/workflow') else '' }}" data-role-only="admin,reviewer">
-          <i class="fas fa-diagram-project"></i> 流程管控
+        <a href="/knowledge" class="{{ 'active' if path.startswith('/knowledge') else '' }}">
+          <i class="fas fa-book"></i>
+          <span>知识库</span>
         </a>
-        <a href="/templates" class="{{ 'active' if request.url.path.startswith('/templates') else '' }}" data-role-only="admin">
-          <i class="fas fa-layer-group"></i> 模板管理
+        <a href="/users" class="{{ 'active' if path.startswith('/users') else '' }}" data-role-only="admin">
+          <i class="fas fa-users-cog"></i>
+          <span>用户管理</span>
         </a>
-        <a href="/knowledge" class="{{ 'active' if request.url.path.startswith('/knowledge') else '' }}">
-          <i class="fas fa-book"></i> 知识库
+        <a href="/backup" class="{{ 'active' if path.startswith('/backup') else '' }}" data-role-only="admin">
+          <i class="fas fa-database"></i>
+          <span>备份恢复</span>
         </a>
-        {% endif %}
       </nav>
+
       <div class="sidebar-footer">
+        <div class="sidebar-status">
+          <span>运行模式</span>
+          <strong>{% if lite_mode %}精简交付版{% else %}标准工作台{% endif %}</strong>
+        </div>
         {% if show_api_docs %}
-        <a href="#" onclick="openApiDocs(); return false;"><i class="fas fa-code"></i> API文档</a>
+        <a class="sidebar-docs" href="#" onclick="openApiDocs(); return false;">
+          <i class="fas fa-code"></i>
+          <span>打开 API 文档</span>
+        </a>
         {% endif %}
       </div>
     </aside>
+
     <main class="main-wrapper">
       <header class="top-header">
-        <button class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('sidebar-open')">
-          <i class="fas fa-bars"></i>
-        </button>
-        <div class="breadcrumb">
-          <i class="fas fa-home"></i> / 
-          <span>{{ '数据看板' if request.url.path == '/' else
-                 '登录与用户' if request.url.path.startswith('/login') else
-                 '用户管理' if request.url.path.startswith('/users') else
-                 '备份恢复' if request.url.path.startswith('/backup') else
-                 '单位管理' if request.url.path.startswith('/organizations') else
-                 '系统管理' if request.url.path.startswith('/systems') else
-                 '报告审核' if request.url.path.startswith('/reports') else
-                 '精简交付版' if lite_mode else
-                 '流程管控' if request.url.path.startswith('/workflow') else
-                 '模板管理' if request.url.path.startswith('/templates') else
-                 '知识库' if request.url.path.startswith('/knowledge') else '首页' }}</span>
+        <div class="top-header-main">
+          <button class="sidebar-toggle" type="button" onclick="openSidebar()" aria-label="打开导航">
+            <i class="fas fa-bars"></i>
+          </button>
+          <div class="breadcrumb">
+            <span class="breadcrumb-label">当前模块</span>
+            <strong>{{ page_title }}</strong>
+          </div>
         </div>
+
         <div class="user-info">
-          <span class="badge" id="currentRoleBadge">{% if lite_mode %}当前模式: 精简交付版{% else %}当前角色: 未登录{% endif %}</span>
-          <i class="fas fa-user-circle avatar"></i>
-          <a id="authEntryBtn" href="/login" class="btn-lite" style="margin-left:10px;">登录</a>
+          <div class="user-chip">
+            <span class="badge" id="currentRoleBadge">{{ initial_role_badge }}</span>
+            <div class="user-meta">
+              <strong id="currentUserName">{{ initial_user_name }}</strong>
+              <span id="currentUserHint">{{ initial_user_hint }}</span>
+            </div>
+          </div>
+          <a id="authEntryBtn" href="/login" class="header-action" data-mode="{{ initial_action_mode }}">{{ initial_action_text }}</a>
         </div>
       </header>
+
       <div class="content">
-        {% block content %}{% endblock %}
+        {% if page_layout_variant != 'management-tight' %}
+        <section class="page-hero">
+          <div class="page-hero-copy">
+            <span class="page-eyebrow">安全评测与备案协同平台</span>
+            <h1>
+              <i class="fas {{ page_icon }}"></i>
+              <span>{{ page_title }}</span>
+            </h1>
+            <p>{{ page_desc }}</p>
+          </div>
+          <div class="page-hero-side">
+            <div class="hero-chip">
+              <span>平台状态</span>
+              <strong>{% if lite_mode %}精简交付版{% else %}标准工作台{% endif %}</strong>
+            </div>
+            <div class="hero-chip">
+              <span>模块视图</span>
+              <strong>业务工作区</strong>
+            </div>
+          </div>
+        </section>
+        {% endif %}
+
+        <section class="workspace">
+          {% block content %}{% endblock %}
+        </section>
       </div>
     </main>
   </div>
 </body>
 <script>
+const roleLabels = {
+  guest: '待登录',
+  admin: '管理员',
+  reviewer: '审核员',
+  evaluator: '测评师',
+};
+
 function applyRoleUI(role) {
   const currentRole = role || 'guest';
   window.__currentUserRole = currentRole;
@@ -91,69 +263,281 @@ function applyRoleUI(role) {
   roleEls.forEach((el) => {
     const allow = (el.getAttribute('data-role-only') || '')
       .split(',')
-      .map(s => s.trim())
+      .map(item => item.trim())
       .filter(Boolean);
     const visible = allow.length === 0 || allow.includes(currentRole);
     el.style.display = visible ? '' : 'none';
   });
-  const event = new CustomEvent('app-role-changed', {detail: {role: currentRole}});
-  window.dispatchEvent(event);
+  window.dispatchEvent(new CustomEvent('app-role-changed', {detail: {role: currentRole}}));
+}
+
+function setGuestState() {
+  const badge = document.getElementById('currentRoleBadge');
+  const userName = document.getElementById('currentUserName');
+  const userHint = document.getElementById('currentUserHint');
+  const authBtn = document.getElementById('authEntryBtn');
+  if (badge) badge.textContent = '待登录';
+  if (userName) userName.textContent = '未登录';
+  if (userHint) userHint.textContent = '请先登录后再进入业务页面';
+  if (authBtn) {
+    authBtn.textContent = '登录';
+    authBtn.href = '/login';
+    authBtn.dataset.mode = 'login';
+    authBtn.onclick = null;
+  }
+  applyRoleUI('guest');
+}
+
+function openSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const scrim = document.querySelector('.sidebar-scrim');
+  if (!sidebar || !scrim) return;
+  sidebar.classList.add('sidebar-open');
+  scrim.classList.add('visible');
+}
+
+function closeSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const scrim = document.querySelector('.sidebar-scrim');
+  if (!sidebar || !scrim) return;
+  sidebar.classList.remove('sidebar-open');
+  scrim.classList.remove('visible');
+}
+
+const ROUTE_TRANSITION_KEY = 'app-route-transition';
+const ROUTE_TRANSITION_CLEAR_DELAY = 460;
+const NAV_ROUTE_ORDER = ['/', '/organizations', '/systems', '/reports', '/workflow', '/templates', '/knowledge', '/users', '/backup'];
+let routeNavigationLocked = false;
+const prefetchedRoutes = new Set();
+
+if ('scrollRestoration' in window.history) {
+  window.history.scrollRestoration = 'manual';
+}
+
+function supportsRouteViewTransition() {
+  return typeof CSS !== 'undefined' && CSS.supports('view-transition-name: none');
+}
+
+function resolveRouteIndex(pathname) {
+  const normalizedPath = pathname || '/';
+  const index = NAV_ROUTE_ORDER.findIndex((route) => {
+    if (route === '/') return normalizedPath === '/';
+    return normalizedPath === route || normalizedPath.startsWith(`${route}/`);
+  });
+  return index === -1 ? NAV_ROUTE_ORDER.length : index;
+}
+
+function resolveRouteDirection(targetUrl) {
+  const currentIndex = resolveRouteIndex(window.location.pathname);
+  const targetIndex = resolveRouteIndex(targetUrl.pathname);
+  return targetIndex < currentIndex ? 'backward' : 'forward';
+}
+
+function stashRouteTransition(targetUrl, direction) {
+  try {
+    sessionStorage.setItem(ROUTE_TRANSITION_KEY, JSON.stringify({
+      target: `${targetUrl.pathname}${targetUrl.search}`,
+      direction,
+      at: Date.now(),
+    }));
+  } catch (_error) {}
+}
+
+function clearRouteTransitionState() {
+  try {
+    sessionStorage.removeItem(ROUTE_TRANSITION_KEY);
+  } catch (_error) {}
+  document.documentElement.removeAttribute('data-route-direction');
+  routeNavigationLocked = false;
+}
+
+function syncRouteScrollPosition() {
+  if (!document.documentElement.dataset.routeDirection) return;
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+}
+
+function navigateWithTransition(url) {
+  if (!url || routeNavigationLocked) return;
+
+  let targetUrl;
+  try {
+    targetUrl = new URL(url, window.location.href);
+  } catch (_error) {
+    window.location.href = url;
+    return;
+  }
+
+  if (targetUrl.origin !== window.location.origin) {
+    window.location.href = targetUrl.href;
+    return;
+  }
+
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const nextUrl = `${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}`;
+  if (nextUrl === currentUrl) {
+    closeSidebar();
+    return;
+  }
+
+  const direction = resolveRouteDirection(targetUrl);
+  document.documentElement.dataset.routeDirection = direction;
+  stashRouteTransition(targetUrl, direction);
+  closeSidebar();
+  routeNavigationLocked = true;
+
+  if (!supportsRouteViewTransition()) {
+    window.location.assign(targetUrl.href);
+    return;
+  }
+
+  window.location.assign(targetUrl.href);
+}
+
+function prefetchRoute(url) {
+  if (!url) return;
+
+  let targetUrl;
+  try {
+    targetUrl = new URL(url, window.location.href);
+  } catch (_error) {
+    return;
+  }
+
+  if (targetUrl.origin !== window.location.origin) return;
+
+  const cacheKey = `${targetUrl.pathname}${targetUrl.search}`;
+  if (!cacheKey || cacheKey === `${window.location.pathname}${window.location.search}` || prefetchedRoutes.has(cacheKey)) {
+    return;
+  }
+
+  const hint = document.createElement('link');
+  hint.rel = 'prefetch';
+  hint.as = 'document';
+  hint.href = targetUrl.href;
+  hint.dataset.prefetchRoute = cacheKey;
+  document.head.appendChild(hint);
+  prefetchedRoutes.add(cacheKey);
+}
+
+function scheduleRoutePrefetch() {
+  const links = Array.from(document.querySelectorAll('.sidebar-nav a'));
+  const kickoff = () => {
+    links.forEach((link, index) => {
+      window.setTimeout(() => prefetchRoute(link.href), index * 120);
+    });
+  };
+
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(kickoff, { timeout: 1200 });
+    return;
+  }
+
+  window.setTimeout(kickoff, 280);
+}
+
+function bindNavigationTransitions() {
+  document.querySelectorAll('.sidebar-nav a, #authEntryBtn').forEach((link) => {
+    if (!link || link.dataset.transitionBound === '1') return;
+    link.dataset.transitionBound = '1';
+
+    const warmRoute = () => prefetchRoute(link.href);
+    link.addEventListener('pointerenter', warmRoute, { passive: true, once: true });
+    link.addEventListener('focus', warmRoute, { once: true });
+    link.addEventListener('touchstart', warmRoute, { passive: true, once: true });
+    link.addEventListener('click', (event) => {
+      if (event.defaultPrevented) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const href = link.getAttribute('href') || '';
+      if (!href || href.startsWith('#')) return;
+      event.preventDefault();
+      navigateWithTransition(link.href);
+    });
+  });
 }
 
 async function refreshCurrentRole() {
-  const authBtn = document.getElementById('authEntryBtn');
-  if ({{ 'true' if lite_mode else 'false' }}) return;
-  const token = localStorage.getItem('auth_token') || '';
-  if (!token) {
-    applyRoleUI('guest');
-    if (authBtn) {
-      authBtn.textContent = '登录';
-      authBtn.href = '/login';
-      authBtn.onclick = null;
-    }
+  if ({{ 'true' if lite_mode else 'false' }}) {
+    applyRoleUI('admin');
     return;
   }
+
+  const token = localStorage.getItem('auth_token') || '';
+  if (!token) {
+    setGuestState();
+    return;
+  }
+
   try {
     const res = await fetch('/api/auth/me', {headers: {'X-Auth-Token': token}});
     if (!res.ok) {
-      applyRoleUI('guest');
-      if (authBtn) {
-        authBtn.textContent = '登录';
-        authBtn.href = '/login';
-        authBtn.onclick = null;
-      }
+      setGuestState();
       return;
     }
+
     const data = await res.json();
     const badge = document.getElementById('currentRoleBadge');
-    if (badge) badge.textContent = `当前角色: ${data.role} (${data.username})`;
+    const userName = document.getElementById('currentUserName');
+    const userHint = document.getElementById('currentUserHint');
+    const authBtn = document.getElementById('authEntryBtn');
+
+    if (badge) badge.textContent = roleLabels[data.role] || data.role || '已登录';
+    if (userName) userName.textContent = data.username || '已登录';
+    if (userHint) {
+      userHint.textContent = data.must_change_password
+        ? '当前账号需先修改密码后再继续操作'
+        : '账号状态正常，可进入当前业务页面';
+    }
+
     applyRoleUI(data.role || 'guest');
     if (authBtn) {
-      authBtn.textContent = '退出';
+      authBtn.textContent = '退出登录';
       authBtn.href = '#';
-      authBtn.onclick = (e) => {
-        e.preventDefault();
+      authBtn.dataset.mode = 'logout';
+      authBtn.onclick = (event) => {
+        event.preventDefault();
         logoutFromLayout();
       };
     }
-  } catch (e) {
-    applyRoleUI('guest');
-    if (authBtn) {
-      authBtn.textContent = '登录';
-      authBtn.href = '/login';
-      authBtn.onclick = null;
-    }
+  } catch (_error) {
+    setGuestState();
   }
 }
+
 refreshCurrentRole();
+bindNavigationTransitions();
+scheduleRoutePrefetch();
+syncRouteScrollPosition();
+
+window.addEventListener('pageshow', () => {
+  syncRouteScrollPosition();
+  window.setTimeout(() => {
+    clearRouteTransitionState();
+  }, ROUTE_TRANSITION_CLEAR_DELAY);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeSidebar();
+});
+
+document.querySelectorAll('.sidebar-nav a').forEach((link) => {
+  link.addEventListener('click', () => {
+    if (window.innerWidth <= 1024) closeSidebar();
+  });
+});
+
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 1024) closeSidebar();
+});
 
 async function logoutFromLayout() {
   const token = localStorage.getItem('auth_token') || '';
   try {
     await fetch('/api/auth/logout', {method: 'POST', headers: token ? {'X-Auth-Token': token} : {}});
-  } catch (e) {}
+  } catch (_error) {}
   localStorage.removeItem('auth_token');
-  document.cookie = 'auth_token=; Path=/; Max-Age=0; SameSite=Lax';
+  routeNavigationLocked = false;
   window.location.href = '/login';
 }
 

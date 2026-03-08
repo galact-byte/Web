@@ -1,53 +1,80 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 
-<!-- 模板上传面板 -->
-<div class="panel">
-  <h2><i class="fas fa-layer-group"></i> 模板上传</h2>
-  <div class="grid grid-3">
-    <div><label>模板名称 <span style="color:var(--danger)">*</span></label><input id="tplName" /></div>
+<div class="panel" data-role-only="admin">
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-layer-group"></i> 模板上传与导入</h2>
+      <p>统一维护模板名称、分类和默认版本，保证报告交付口径稳定一致。</p>
+    </div>
+    <span class="section-flag">管理员专属</span>
+  </div>
+
+  <div class="search-bar search-bar-flat">
     <div>
-      <label>报告类型 <span style="color:var(--danger)">*</span></label>
+      <label>模板名称 <span class="field-required">*</span></label>
+      <input id="tplName" placeholder="例如：三级备案报告模板" />
+    </div>
+    <div>
+      <label>报告类型</label>
       <select id="tplType">
-        <option value="grading_report">定级报告</option>
-        <option value="filing_form">备案表</option>
-        <option value="expert_review_form">专家评审表</option>
+        <option value="定级备案">定级备案</option>
+        <option value="整改报告">整改报告</option>
+        <option value="自查记录">自查记录</option>
       </select>
     </div>
-    <div><label>分类</label><input id="tplCategory" placeholder="如：二级模板/三级模板" /></div>
-    <div><label>地市</label><input id="tplCity" placeholder="如：福州" /></div>
-    <div><label>适用级别</label><input id="tplLevel" placeholder="如：2/3/4" /></div>
-    <div><label>描述</label><input id="tplDesc" /></div>
-    <div style="display:flex;align-items:flex-end;gap:8px;">
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:0;font-weight:500;">
-        <input id="tplDefault" type="checkbox" style="width:auto;padding:0;" />
-        设为默认模板
+    <div>
+      <label>分类</label>
+      <input id="tplCategory" placeholder="如：标准模板" />
+    </div>
+    <div>
+      <label>地市</label>
+      <input id="tplCity" placeholder="可为空" />
+    </div>
+    <div>
+      <label>等保级别</label>
+      <input id="tplLevel" placeholder="如：3" />
+    </div>
+    <div>
+      <label>模板文件 <span class="field-required">*</span></label>
+      <input id="tplFile" type="file" class="input-file-plain" />
+    </div>
+    <div class="grid-span-full">
+      <label>模板说明</label>
+      <textarea id="tplDesc" rows="3" placeholder="用于说明模板适用范围、内容差异和维护人"></textarea>
+    </div>
+    <div class="grid-span-full">
+      <label>配置 JSON</label>
+      <textarea id="tplConfig" rows="3" placeholder="可为空，用于保存填充规则"></textarea>
+    </div>
+    <div class="grid-span-full inline-check-row">
+      <label class="inline-check" for="tplDefault">
+        <input id="tplDefault" type="checkbox" />
+        <span>上传后设为默认模板</span>
       </label>
     </div>
-    <div style="grid-column: span 2;">
-      <label>配置JSON（可选）</label>
-      <input id="tplConfig" placeholder='{"title":"模板标题","sections":[...]}' />
-    </div>
-    <div>
-      <label>模板文件 <span style="color:var(--danger)">*</span></label>
-      <input id="tplFile" type="file" style="padding:6px;" />
+    <div class="grid-span-full action-strip">
+      <button class="btn-lite" onclick="importLocalOfficialTemplates()"><i class="fas fa-file-import"></i> 导入本地官方模板</button>
+      <button onclick="uploadTemplate()"><i class="fas fa-upload"></i> 上传模板</button>
     </div>
   </div>
-  <br />
-  <div style="display:flex;gap:10px;flex-wrap:wrap;">
-    <button class="btn-lite" onclick="importLocalOfficialTemplates()"><i class="fas fa-file-import"></i> 导入本地官方模板</button>
-    <button onclick="uploadTemplate()"><i class="fas fa-upload"></i> 上传模板</button>
-  </div>
-  <div class="result" id="tplResult" style="margin-top:12px;">可在此查看操作结果。</div>
+
+  <div class="result table-top-gap" id="tplResult">仅管理员可维护模板。</div>
 </div>
 
-<!-- 模板管理面板 -->
-<div class="panel">
-  <h2><i class="fas fa-list"></i> 模板管理</h2>
-  <div class="search-bar">
+<div class="panel" data-role-only="admin">
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-table-list"></i> 模板列表</h2>
+      <p>按类型、分类和地区筛选模板，快速切换默认版本并维护历史版本。</p>
+    </div>
+    <span class="section-flag">版本管理</span>
+  </div>
+
+  <div class="search-bar search-bar-flat">
     <div>
-      <label>类型</label>
-      <input id="qType" placeholder="grading_report…" onkeydown="if(event.key==='Enter')loadTemplates()" />
+      <label>报告类型</label>
+      <input id="qType" onkeydown="if(event.key==='Enter')loadTemplates()" />
     </div>
     <div>
       <label>分类</label>
@@ -57,17 +84,13 @@
       <label>地市</label>
       <input id="qCity" onkeydown="if(event.key==='Enter')loadTemplates()" />
     </div>
-    <div>
-      <label>&nbsp;</label>
+    <div class="grid-span-full action-strip">
       <button onclick="loadTemplates()"><i class="fas fa-search"></i> 查询</button>
-    </div>
-    <div>
-      <label>&nbsp;</label>
       <button class="btn-lite" onclick="clearTplSearch()"><i class="fas fa-times"></i> 清空</button>
     </div>
   </div>
 
-  <div class="table-wrapper">
+  <div class="table-wrapper table-top-gap">
     <table class="table-sticky">
       <thead>
         <tr>
@@ -118,16 +141,15 @@ function setTplResult(text) {
   setTimeout(() => { el.style.borderColor = ''; }, 1200);
 }
 
-/* 模板状态徽章 */
 function tplStatusBadge(status, isDefault) {
   let badge = '';
   if (isDefault) {
     badge += '<span class="status-badge" style="background:#eff6ff;color:#2563eb;">默认</span> ';
   }
   const map = {
-    active:    ['status-active', '启用'],
-    inactive:  ['status-archived', '停用'],
-    draft:     ['status-pending', '草稿']
+    active: ['status-active', '启用'],
+    inactive: ['status-archived', '停用'],
+    draft: ['status-pending', '草稿']
   };
   const [cls, label] = map[status] || ['', status];
   badge += `<span class="status-badge ${cls}">${esc(label || status)}</span>`;
@@ -183,43 +205,41 @@ async function uploadTemplate() {
     setTplResult(`上传失败：${messageFrom(data)}`);
     return;
   }
-  setTplResult(`上传成功：模板ID=${data?.data?.id || '-'}，名称=${data?.data?.template_name || name}`);
+  setTplResult(`上传成功：${data.template_name || name}`);
   loadTemplates();
 }
 
 async function loadTemplates() {
   const params = new URLSearchParams();
-  const type = document.getElementById('qType').value.trim();
-  const category = document.getElementById('qCategory').value.trim();
-  const city = document.getElementById('qCity').value.trim();
-  if (type) params.set('report_type', type);
-  if (category) params.set('category', category);
-  if (city) params.set('city', city);
+  const qType = document.getElementById('qType').value.trim();
+  const qCategory = document.getElementById('qCategory').value.trim();
+  const qCity = document.getElementById('qCity').value.trim();
+  if (qType) params.append('report_type', qType);
+  if (qCategory) params.append('category', qCategory);
+  if (qCity) params.append('city', qCity);
   const res = await fetch('/api/templates?' + params.toString(), {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
-    setTplResult(`查询失败：${messageFrom(data)}`);
+    setTplResult(`读取模板失败：${messageFrom(data)}`);
     document.getElementById('tplTable').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:24px;">加载失败</td></tr>';
     return;
   }
   const items = data.items || [];
-  setTplResult(`已加载 ${data.total || items.length} 个模板。`);
   if (!items.length) {
     document.getElementById('tplTable').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px;">暂无模板</td></tr>';
     return;
   }
   document.getElementById('tplTable').innerHTML = items.map(i => `
     <tr>
-      <td style="color:var(--text-muted);font-size:0.82rem;">${esc(i.id)}</td>
-      <td><strong>${esc(i.template_name)}</strong></td>
-      <td style="font-size:0.85rem;">${esc(i.report_type)}</td>
+      <td>${i.id}</td>
+      <td style="font-weight:600;">${esc(i.template_name)}</td>
+      <td>${esc(i.report_type || '-')}</td>
       <td>${esc(i.city || '-')}</td>
       <td>${esc(i.protection_level || '-')}</td>
-      <td><span style="font-family:monospace;">V${esc(i.version_no)}</span></td>
+      <td>${esc(i.version_no || '-')}</td>
       <td>${tplStatusBadge(i.status, i.is_default)}</td>
       <td>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;">
-          <a class="btn-lite btn-sm" href="/api/templates/${i.id}/download${authToken() ? `?token=${encodeURIComponent(authToken())}` : ''}" target="_blank" style="text-decoration:none;"><i class="fas fa-download"></i></a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn-lite btn-sm" onclick="setDefault(${i.id})">设默认</button>
           <button class="btn-lite btn-sm" onclick="editTemplate(${i.id})">编辑</button>
           <button class="btn-lite btn-sm" onclick="newVersion(${i.id})">新版本</button>
@@ -235,56 +255,58 @@ async function loadTemplates() {
 async function setDefault(id) {
   const res = await fetch(`/api/templates/${id}/set-default`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
-  setTplResult(res.ok ? (data.message || '默认模板已更新') : `设置失败：${messageFrom(data)}`);
+  if (!res.ok) {
+    setTplResult(`设置默认失败：${messageFrom(data)}`);
+    return;
+  }
+  setTplResult('默认模板已更新。');
   loadTemplates();
 }
 
 async function editTemplate(id) {
-  const name = prompt('模板名称（可空跳过）', '');
-  const city = prompt('地市（可空）', '');
-  const level = prompt('级别（可空）', '');
-  const payload = {};
-  if (name !== null && name.trim()) payload.template_name = name.trim();
-  if (city !== null) payload.city = city.trim();
-  if (level !== null) payload.protection_level = level.trim();
+  const name = prompt('请输入新的模板名称');
+  if (!name) return;
   const res = await fetch(`/api/templates/${id}`, {
     method: 'PUT',
-    headers: {'Content-Type': 'application/json', ...authHeaders()},
-    body: JSON.stringify(payload)
+    headers: {...authHeaders(), 'Content-Type': 'application/json'},
+    body: JSON.stringify({template_name: name}),
   });
   const data = await res.json();
-  setTplResult(res.ok ? (data.message || '模板已更新') : `更新失败：${messageFrom(data)}`);
+  if (!res.ok) {
+    setTplResult(`编辑失败：${messageFrom(data)}`);
+    return;
+  }
+  setTplResult('模板信息已更新。');
   loadTemplates();
 }
 
 async function newVersion(id) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.onchange = async () => {
-    if (!input.files || !input.files[0]) return;
-    const fd = new FormData();
-    fd.append('file', input.files[0]);
-    const res = await fetch(`/api/templates/${id}/new-version`, {method: 'POST', headers: authHeaders(), body: fd});
-    const data = await res.json();
-    setTplResult(res.ok ? (data.message || '新版本上传成功') : `上传失败：${messageFrom(data)}`);
-    loadTemplates();
-  };
-  input.click();
+  const file = document.getElementById('tplFile').files[0];
+  if (!file) {
+    setTplResult('请先选择文件，再创建新版本。');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`/api/templates/${id}/new-version`, {method: 'POST', headers: authHeaders(), body: fd});
+  const data = await res.json();
+  if (!res.ok) {
+    setTplResult(`创建新版本失败：${messageFrom(data)}`);
+    return;
+  }
+  setTplResult('新版本已创建。');
+  loadTemplates();
 }
 
 async function testFill(id) {
-  const systemId = prompt('可选：输入系统ID用于测试填充', '');
-  const suffix = systemId ? `?system_id=${encodeURIComponent(systemId)}` : '';
+  const suffix = authToken() ? `?token=${encodeURIComponent(authToken())}` : '';
   const res = await fetch(`/api/templates/${id}/test-fill${suffix}`, {headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     setTplResult(`测试填充失败：${messageFrom(data)}`);
     return;
   }
-  const preview = data.preview || {};
-  const title = preview['标题'] || preview.title || '无标题';
-  const sectionCount = Array.isArray(preview['章节']) ? preview['章节'].length : 0;
-  setTplResult(`测试填充成功：标题=${title}，章节数=${sectionCount}。`);
+  setTplResult(`测试填充成功：${data.message || '已生成测试结果'}`);
 }
 
 async function showVersions(id) {
@@ -294,24 +316,33 @@ async function showVersions(id) {
     setTplResult(`读取版本失败：${messageFrom(data)}`);
     return;
   }
-  if (!data.items || !data.items.length) {
-    setTplResult('当前模板暂无历史版本。');
+  const items = data.items || [];
+  const pick = prompt(`当前模板共有 ${items.length} 个版本。输入要恢复的版本ID（留空仅查看）`, '');
+  if (!pick) {
+    setTplResult(items.length ? `共 ${items.length} 个版本，可按提示输入版本ID恢复。` : '暂无历史版本。');
     return;
   }
-  const versionText = data.items.map(v => `ID=${v.id} | 动作=${v.action || '-'} | 时间=${v.changed_at || '-'}`).join('\n');
-  const versionId = prompt(`版本列表：\n${versionText}\n\n输入要恢复的版本ID（取消则不恢复）`, '');
+  const versionId = Number(pick);
   if (!versionId) return;
   const rb = await fetch(`/api/templates/${id}/restore/${versionId}`, {method: 'POST', headers: authHeaders()});
-  const rbData = await rb.json();
-  setTplResult(rb.ok ? (rbData.message || '版本恢复成功') : `恢复失败：${messageFrom(rbData)}`);
+  const restoreData = await rb.json();
+  if (!rb.ok) {
+    setTplResult(`恢复版本失败：${messageFrom(restoreData)}`);
+    return;
+  }
+  setTplResult('模板版本已恢复。');
   loadTemplates();
 }
 
 async function deleteTemplate(id) {
-  if (!confirm('确认删除模板？')) return;
+  if (!confirm('确认删除该模板？')) return;
   const res = await fetch(`/api/templates/${id}`, {method: 'DELETE', headers: authHeaders()});
   const data = await res.json();
-  setTplResult(res.ok ? (data.message || '模板已删除') : `删除失败：${messageFrom(data)}`);
+  if (!res.ok) {
+    setTplResult(`删除失败：${messageFrom(data)}`);
+    return;
+  }
+  setTplResult('模板已删除。');
   loadTemplates();
 }
 

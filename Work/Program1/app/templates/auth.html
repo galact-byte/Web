@@ -3,215 +3,599 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta name="view-transition" content="same-origin" />
   <title>登录 - 定级备案管理系统</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <style>
     :root {
-      --bg: #f3f7ff;
-      --card: #ffffff;
-      --line: #d9e3f5;
-      --text: #1e2a3d;
-      --muted: #66758f;
-      --primary: #2165d6;
-      --primary-hover: #1a53b1;
-      --danger: #d64545;
-      --ok: #1f9d5f;
+      color-scheme: light;
+      --bg-canvas: #edf4fb;
+      --bg-panel: rgba(255, 255, 255, 0.9);
+      --bg-panel-strong: rgba(255, 255, 255, 0.96);
+      --text-main: #102033;
+      --text-body: #334155;
+      --text-muted: #64748b;
+      --line: rgba(148, 163, 184, 0.28);
+      --line-strong: rgba(148, 163, 184, 0.42);
+      --primary: #1d4ed8;
+      --primary-hover: #1e40af;
+      --success: #15803d;
+      --danger: #dc2626;
+      --shadow: 0 30px 70px rgba(15, 23, 42, 0.16);
+      --radius-xl: 32px;
+      --radius-lg: 26px;
+      --radius-md: 18px;
+      --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
     }
+
     * { box-sizing: border-box; }
+
+    html,
+    body {
+      min-height: 100%;
+    }
+
     body {
       margin: 0;
-      min-height: 100vh;
-      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-      background: radial-gradient(circle at 15% 20%, #dbe9ff 0%, var(--bg) 35%, #eef3ff 100%);
-      color: var(--text);
-      display: grid;
-      place-items: center;
-      padding: 20px;
+      font-family: var(--font-sans);
+      color: var(--text-main);
+      background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 28%),
+        radial-gradient(circle at 82% 18%, rgba(14, 165, 233, 0.12), transparent 24%),
+        linear-gradient(180deg, #f8fbff 0%, var(--bg-canvas) 54%, #e4edf7 100%);
     }
-    .auth-wrap {
-      width: 100%;
-      max-width: 460px;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      box-shadow: 0 10px 30px rgba(31, 71, 145, 0.14);
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.26) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.26) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.1), transparent 72%);
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .auth-shell {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(420px, 520px);
+      gap: 26px;
+      align-items: stretch;
+      padding: 24px;
+    }
+
+    .auth-visual,
+    .auth-panel {
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
       overflow: hidden;
     }
-    .head { padding: 22px 24px 12px; }
-    .head h1 { margin: 0; font-size: 22px; font-weight: 700; }
-    .head p { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
-    .panel { padding: 20px 24px 24px; }
-    .field { margin-bottom: 14px; }
-    .field label {
-      display: block;
-      font-size: 13px;
-      margin-bottom: 6px;
-      color: #405168;
-      font-weight: 600;
+
+    .auth-visual {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 720px;
+      padding: 42px;
+      color: #edf5ff;
+      background:
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.32), transparent 28%),
+        linear-gradient(145deg, #0b1424 0%, #11213c 52%, #17305b 100%);
+      border: 1px solid rgba(191, 219, 254, 0.12);
     }
+
+    .auth-visual::after {
+      content: "";
+      position: absolute;
+      inset: auto -90px -120px auto;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(96, 165, 250, 0.28), transparent 64%);
+      pointer-events: none;
+    }
+
+    .brand-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      align-self: flex-start;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(191, 219, 254, 0.16);
+      backdrop-filter: blur(10px);
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, rgba(96, 165, 250, 0.35), rgba(37, 99, 235, 0.18));
+      border: 1px solid rgba(191, 219, 254, 0.16);
+    }
+
+    .visual-copy {
+      max-width: 640px;
+      margin-top: 26px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(219, 234, 254, 0.8);
+    }
+
+    .auth-visual h1 {
+      margin: 0;
+      font-size: clamp(2rem, 3.6vw, 3.5rem);
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+    }
+
+    .auth-visual p {
+      margin: 16px 0 0;
+      max-width: 600px;
+      color: rgba(226, 232, 240, 0.86);
+      font-size: 1rem;
+      line-height: 1.78;
+    }
+
+    .security-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 28px;
+    }
+
+    .security-item {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: 6px;
+      padding: 18px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(191, 219, 254, 0.14);
+      backdrop-filter: blur(12px);
+    }
+
+    .security-item span {
+      font-size: 0.8rem;
+      color: rgba(191, 219, 254, 0.74);
+    }
+
+    .security-item strong {
+      font-size: 1rem;
+      line-height: 1.45;
+    }
+
+    .auth-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      padding: 34px;
+      background: linear-gradient(180deg, var(--bg-panel-strong), var(--bg-panel));
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      backdrop-filter: blur(18px);
+    }
+
+    .auth-panel-head {
+      display: grid;
+      gap: 10px;
+    }
+
+    .auth-panel-head h2 {
+      margin: 0;
+      font-size: 1.8rem;
+      line-height: 1.15;
+    }
+
+    .auth-panel-head p {
+      margin: 0;
+      color: var(--text-body);
+      line-height: 1.75;
+    }
+
+    .panel-section {
+      padding: 22px;
+      border-radius: var(--radius-lg);
+      background: rgba(248, 250, 252, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .section-head {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 18px;
+    }
+
+    .section-head h3 {
+      margin: 0;
+      font-size: 1.08rem;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      line-height: 1.7;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field label {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text-body);
+    }
+
     .field input {
       width: 100%;
+      min-height: 50px;
+      padding: 12px 14px;
+      color: var(--text-main);
+      background: #ffffff;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px 12px;
-      font-size: 14px;
+      border-radius: 16px;
       outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
     }
+
+    .field input::placeholder {
+      color: #97a6b9;
+    }
+
     .field input:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(33, 101, 214, 0.14);
+      border-color: rgba(29, 78, 216, 0.55);
+      box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.12);
     }
-    .actions { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
     .btn {
-      border: none;
-      border-radius: 8px;
-      padding: 10px 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 48px;
+      padding: 0 18px;
+      border-radius: 14px;
+      font-weight: 800;
       cursor: pointer;
-      font-weight: 600;
-      font-size: 14px;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+      border: none;
     }
-    .btn-primary { background: var(--primary); color: #fff; }
-    .btn-primary:hover { background: var(--primary-hover); }
-    .btn-ghost { background: #eef3ff; color: #335791; }
-    .hint { margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+    .btn-primary {
+      color: #ffffff;
+      background: linear-gradient(135deg, var(--primary), #153ea8);
+      box-shadow: 0 14px 28px rgba(29, 78, 216, 0.24);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      background: linear-gradient(135deg, var(--primary-hover), #133a9c);
+    }
+
+    .btn-secondary {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line-strong);
+    }
+
+    .btn-secondary:hover {
+      transform: translateY(-1px);
+      background: #ffffff;
+      border-color: rgba(29, 78, 216, 0.24);
+    }
+
+    .hint {
+      margin-top: 14px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      line-height: 1.72;
+    }
+
     .status {
-      margin-top: 12px;
-      font-size: 13px;
-      padding: 9px 10px;
-      border-radius: 8px;
-      border: 1px solid var(--line);
-      background: #f8fbff;
+      margin-top: 16px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(255, 255, 255, 0.86);
+      color: var(--text-body);
       white-space: pre-wrap;
       word-break: break-word;
+      line-height: 1.7;
     }
-    .status.ok { color: var(--ok); border-color: #bce8d1; background: #f2fbf6; }
-    .status.err { color: var(--danger); border-color: #f0cccc; background: #fff5f5; }
-    .footer {
-      padding: 0 24px 20px;
+
+    .status.ok {
+      color: var(--success);
+      border-color: rgba(21, 128, 61, 0.18);
+      background: rgba(240, 253, 244, 0.94);
+    }
+
+    .status.err {
+      color: var(--danger);
+      border-color: rgba(220, 38, 38, 0.18);
+      background: rgba(254, 242, 242, 0.94);
+    }
+
+    .link-row {
       display: flex;
-      justify-content: space-between;
-      gap: 10px;
       align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 4px;
     }
-    .footer a {
-      color: #4568a5;
+
+    .link-row a {
+      color: var(--primary-hover);
+      font-size: 0.92rem;
+      font-weight: 700;
       text-decoration: none;
-      font-size: 13px;
     }
+
     .hidden { display: none !important; }
+
+    @media (max-width: 1180px) {
+      .auth-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .auth-visual {
+        min-height: 0;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .auth-shell {
+        padding: 14px;
+      }
+
+      .auth-visual,
+      .auth-panel {
+        border-radius: 24px;
+        padding: 22px;
+      }
+
+      .panel-section {
+        padding: 18px;
+      }
+
+      .security-list {
+        grid-template-columns: 1fr;
+      }
+
+      .actions,
+      .link-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="auth-wrap">
-    <div class="head">
-      <h1>账号登录</h1>
-      <p>账号由管理员统一创建和分发，忘记密码请联系管理员重置。</p>
-    </div>
+  <main class="auth-shell">
+    <section class="auth-visual" aria-label="系统说明">
+      <div>
+        <div class="brand-pill">
+          <span class="brand-mark"><i class="fas fa-shield-halved"></i></span>
+          <span>定级备案管理系统</span>
+        </div>
+        <div class="visual-copy">
+          <p class="eyebrow">统一认证入口</p>
+          <h1>安全登录到定级备案管理系统</h1>
+        </div>
+      </div>
 
-    <div class="panel">
-      <div class="field">
-        <label for="login-username">用户名</label>
-        <input id="login-username" autocomplete="username" />
+      <div class="security-list">
+        <article class="security-item">
+          <span>账号发放</span>
+          <strong>仅由管理员创建并下发</strong>
+        </article>
+        <article class="security-item">
+          <span>首次登录</span>
+          <strong>强制完成密码更新</strong>
+        </article>
+        <article class="security-item">
+          <span>会话控制</span>
+          <strong>由服务端签发并自动过期</strong>
+        </article>
       </div>
-      <div class="field">
-        <label for="login-password">密码</label>
-        <input id="login-password" type="password" autocomplete="current-password" />
-      </div>
-      <div class="actions">
-        <button class="btn btn-primary" onclick="login()">登录</button>
-        <button class="btn btn-ghost" onclick="logout()">退出登录</button>
-      </div>
-      <div class="hint">默认管理员账号：admin / admin123</div>
-      <div id="status-login" class="status">请输入账号密码。</div>
-    </div>
+    </section>
 
-    <div id="change-pwd-panel" class="panel hidden">
-      <div class="field">
-        <label for="current-password">当前密码</label>
-        <input id="current-password" type="password" autocomplete="current-password" />
+    <section class="auth-panel" aria-label="登录面板">
+      <div class="auth-panel-head">
+        <p class="eyebrow" style="color:#1e40af;">登录 / 改密</p>
+        <h2>账号登录</h2>
+        <p>请使用管理员分发的账号登录；首次登录如需改密，按页面提示完成即可。</p>
       </div>
-      <div class="field">
-        <label for="new-password">新密码（至少8位）</label>
-        <input id="new-password" type="password" autocomplete="new-password" />
-      </div>
-      <div class="field">
-        <label for="new-password2">确认新密码</label>
-        <input id="new-password2" type="password" autocomplete="new-password" />
-      </div>
-      <div class="actions">
-        <button class="btn btn-primary" onclick="changePassword()">确认修改</button>
-      </div>
-      <div id="status-pwd" class="status">首次登录或管理员重置密码后，请先修改密码。</div>
-    </div>
 
-    <div id="logged-box" class="footer hidden">
-      <a href="#" onclick="goNext(); return false;">进入系统</a>
-      <a href="#" onclick="logout(); return false;">退出</a>
-    </div>
-  </div>
+      <div class="panel-section">
+        <div class="section-head">
+          <h3>登录信息</h3>
+          <p>登录成功后自动进入目标页面。</p>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="login-username">用户名</label>
+            <input id="login-username" autocomplete="username" placeholder="请输入管理员分发的用户名" />
+          </div>
+          <div class="field">
+            <label for="login-password">密码</label>
+            <input id="login-password" type="password" autocomplete="current-password" placeholder="请输入密码" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" type="button" onclick="login()">
+            <i class="fas fa-arrow-right"></i>
+            <span>登录并进入系统</span>
+          </button>
+          <button class="btn btn-secondary" type="button" onclick="logout()">
+            <i class="fas fa-power-off"></i>
+            <span>清除当前登录</span>
+          </button>
+        </div>
+
+        <div class="hint">如需改密，系统会自动提示。</div>
+        <div id="status-login" class="status">请输入账号和密码。</div>
+      </div>
+
+      <div id="change-pwd-panel" class="panel-section hidden">
+        <div class="section-head">
+          <h3>修改密码</h3>
+          <p>当前账号需先修改密码后再继续。新密码至少 8 位。</p>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="current-password">当前密码</label>
+            <input id="current-password" type="password" autocomplete="current-password" placeholder="请输入当前密码" />
+          </div>
+          <div class="field">
+            <label for="new-password">新密码</label>
+            <input id="new-password" type="password" autocomplete="new-password" placeholder="请输入新密码（至少 8 位）" />
+          </div>
+          <div class="field">
+            <label for="new-password2">确认新密码</label>
+            <input id="new-password2" type="password" autocomplete="new-password" placeholder="请再次输入新密码" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" type="button" onclick="changePassword()">
+            <i class="fas fa-key"></i>
+            <span>确认修改密码</span>
+          </button>
+        </div>
+
+        <div id="status-pwd" class="status">如提示需改密，请在此完成。</div>
+      </div>
+
+      <div id="logged-box" class="link-row hidden">
+        <a href="#" onclick="goNext(); return false;">进入系统</a>
+        <a href="#" onclick="logout(); return false;">退出当前账号</a>
+      </div>
+    </section>
+  </main>
 
   <script>
     const nextPathRaw = "{{ next_path }}";
 
     function safeNextPath() {
-      if (!nextPathRaw || !nextPathRaw.startsWith("/")) return "/";
+      if (!nextPathRaw || !nextPathRaw.startsWith('/')) return '/';
       return nextPathRaw;
     }
 
     function authHeaders() {
-      const token = localStorage.getItem("auth_token") || "";
-      return token ? {"X-Auth-Token": token} : {};
+      const token = localStorage.getItem('auth_token') || '';
+      return token ? {'X-Auth-Token': token} : {};
     }
 
     function setStatus(text, kind) {
-      const el = document.getElementById("status-login");
-      el.textContent = text;
-      el.classList.remove("ok", "err");
-      if (kind === "ok") el.classList.add("ok");
-      if (kind === "err") el.classList.add("err");
+      const element = document.getElementById('status-login');
+      element.textContent = text;
+      element.classList.remove('ok', 'err');
+      if (kind === 'ok') element.classList.add('ok');
+      if (kind === 'err') element.classList.add('err');
     }
 
     function setPwdStatus(text, kind) {
-      const el = document.getElementById("status-pwd");
-      el.textContent = text;
-      el.classList.remove("ok", "err");
-      if (kind === "ok") el.classList.add("ok");
-      if (kind === "err") el.classList.add("err");
+      const element = document.getElementById('status-pwd');
+      element.textContent = text;
+      element.classList.remove('ok', 'err');
+      if (kind === 'ok') element.classList.add('ok');
+      if (kind === 'err') element.classList.add('err');
     }
 
     async function login() {
-      const username = document.getElementById("login-username").value.trim();
-      const password = document.getElementById("login-password").value;
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({username, password}),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setStatus(`登录失败：${data.detail || "用户名或密码错误"}`, "err");
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+
+      if (!username || !password) {
+        setStatus('用户名和密码不能为空。', 'err');
         return;
       }
-      localStorage.setItem("auth_token", data.token);
-      document.cookie = `auth_token=${encodeURIComponent(data.token)}; Path=/; Max-Age=${12 * 3600}; SameSite=Lax`;
-      setStatus(`登录成功：${data.user?.username || username}`, "ok");
-      document.getElementById("logged-box").classList.remove("hidden");
-      if (data.must_change_password) {
-        document.getElementById("change-pwd-panel").classList.remove("hidden");
-        setPwdStatus("当前账号必须先修改密码后才能进入系统。", "err");
-        return;
+
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({username, password}),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setStatus(`登录失败：${data.detail || '用户名或密码错误'}`, 'err');
+          return;
+        }
+
+        localStorage.setItem('auth_token', data.token);
+        setStatus(`登录成功：${data.user?.username || username}`, 'ok');
+        document.getElementById('logged-box').classList.remove('hidden');
+
+        if (data.must_change_password) {
+          document.getElementById('change-pwd-panel').classList.remove('hidden');
+          setPwdStatus('当前账号必须先修改密码后才能进入系统。', 'err');
+          return;
+        }
+
+        window.location.href = safeNextPath();
+      } catch (_error) {
+        setStatus('登录请求失败，请检查网络或稍后重试。', 'err');
       }
-      window.location.href = safeNextPath();
     }
 
-    async function logout() {
+    async function logout(showMessage = true) {
+      const token = localStorage.getItem('auth_token') || '';
       try {
-        await fetch("/api/auth/logout", {method: "POST", headers: authHeaders()});
-      } catch (e) {}
-      localStorage.removeItem("auth_token");
-      document.cookie = "auth_token=; Path=/; Max-Age=0; SameSite=Lax";
-      setStatus("已退出登录。", "ok");
-      document.getElementById("logged-box").classList.add("hidden");
-      document.getElementById("change-pwd-panel").classList.add("hidden");
+        await fetch('/api/auth/logout', {method: 'POST', headers: token ? {'X-Auth-Token': token} : {}});
+      } catch (_error) {}
+
+      localStorage.removeItem('auth_token');
+      document.getElementById('logged-box').classList.add('hidden');
+      document.getElementById('change-pwd-panel').classList.add('hidden');
+      if (showMessage) {
+        setStatus('当前登录状态已清除。', 'ok');
+      }
     }
 
     function goNext() {
@@ -219,46 +603,73 @@
     }
 
     async function changePassword() {
-      const currentPassword = document.getElementById("current-password").value;
-      const newPassword = document.getElementById("new-password").value;
-      const newPassword2 = document.getElementById("new-password2").value;
+      const currentPassword = document.getElementById('current-password').value;
+      const newPassword = document.getElementById('new-password').value;
+      const newPassword2 = document.getElementById('new-password2').value;
+
       if (!currentPassword || !newPassword || !newPassword2) {
-        setPwdStatus("请完整填写当前密码、新密码和确认密码。", "err");
+        setPwdStatus('请完整填写当前密码、新密码和确认密码。', 'err');
+        return;
+      }
+      if (newPassword.length < 8) {
+        setPwdStatus('新密码至少需要 8 位。', 'err');
         return;
       }
       if (newPassword !== newPassword2) {
-        setPwdStatus("两次新密码输入不一致。", "err");
+        setPwdStatus('两次新密码输入不一致。', 'err');
         return;
       }
-      const res = await fetch("/api/auth/change-password", {
-        method: "POST",
-        headers: {"Content-Type": "application/json", ...authHeaders()},
-        body: JSON.stringify({current_password: currentPassword, new_password: newPassword}),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setPwdStatus(`修改失败：${data.detail || "请重试"}`, "err");
-        return;
+
+      try {
+        const response = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', ...authHeaders()},
+          body: JSON.stringify({current_password: currentPassword, new_password: newPassword}),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setPwdStatus(`修改失败：${data.detail || '请稍后重试'}`, 'err');
+          return;
+        }
+
+        await logout(false);
+        setStatus('密码修改成功，请使用新密码重新登录。', 'ok');
+        setPwdStatus(data.message || '密码已更新，请重新登录。', 'ok');
+      } catch (_error) {
+        setPwdStatus('修改密码失败，请稍后重试。', 'err');
       }
-      setPwdStatus(data.message || "密码修改成功，请重新登录。", "ok");
-      document.getElementById("change-pwd-panel").classList.add("hidden");
-      await logout();
     }
 
     async function initAuthState() {
-      const token = localStorage.getItem("auth_token") || "";
+      const token = localStorage.getItem('auth_token') || '';
       if (!token) return;
-      const res = await fetch("/api/auth/me", {headers: authHeaders()});
-      if (!res.ok) return;
-      const me = await res.json();
-      setStatus(`当前已登录：${me.username}（${me.role}）`, "ok");
-      document.getElementById("logged-box").classList.remove("hidden");
-      if (me.must_change_password) {
-        document.getElementById("change-pwd-panel").classList.remove("hidden");
-        setPwdStatus("当前账号必须先修改密码后才能进入系统。", "err");
-      }
+
+      try {
+        const response = await fetch('/api/auth/me', {headers: authHeaders()});
+        if (!response.ok) return;
+
+        const me = await response.json();
+        setStatus(`当前已登录：${me.username}（${me.role}）`, 'ok');
+        document.getElementById('logged-box').classList.remove('hidden');
+        if (me.must_change_password) {
+          document.getElementById('change-pwd-panel').classList.remove('hidden');
+          setPwdStatus('当前账号必须先修改密码后才能进入系统。', 'err');
+        }
+      } catch (_error) {}
     }
 
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      const changePanelVisible = !document.getElementById('change-pwd-panel').classList.contains('hidden');
+      if (changePanelVisible && document.activeElement && document.activeElement.id !== 'login-username' && document.activeElement.id !== 'login-password') {
+        changePassword();
+        return;
+      }
+      login();
+    });
+
+    document.getElementById('login-username').focus();
     initAuthState();
   </script>
 </body>
