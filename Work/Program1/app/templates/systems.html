@@ -3,12 +3,18 @@
 
 <!-- 系统信息录入面板 -->
 <div class="panel">
-  <h2><i class="fas fa-server"></i> 系统信息录入</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-server"></i> 系统信息录入</h2>
+      <p>围绕系统基础资料、业务描述和定级依据做集中录入，适合作为后续报告生成的主数据入口。</p>
+    </div>
+    <span class="section-flag">系统主数据</span>
+  </div>
   <div class="grid grid-3">
-    <div><label>关联单位ID <span style="color:var(--danger)">*</span></label><input id="organizationId" type="number" placeholder="单位数字ID" /></div>
-    <div><label>系统名称 <span style="color:var(--danger)">*</span></label><input id="systemName" /></div>
+    <div><label>关联单位ID <span class="field-required">*</span></label><input id="organizationId" type="number" placeholder="单位数字ID" /></div>
+    <div><label>系统名称 <span class="field-required">*</span></label><input id="systemName" /></div>
     <div>
-      <label>拟定等级 <span style="color:var(--danger)">*</span></label>
+      <label>拟定等级 <span class="field-required">*</span></label>
       <select id="proposedLevel">
         <option value="1">1级</option>
         <option value="2">2级</option>
@@ -21,17 +27,16 @@
     <div><label>部署方式</label><input id="deploymentMode" placeholder="本地部署/云平台部署/混合部署" /></div>
     <div><label>录入人</label><input id="createdBy" value="tester" /></div>
     <!-- 文本域跨列 -->
-    <div style="grid-column: 1 / -1; display:grid; grid-template-columns: repeat(3,1fr); gap:16px;">
+    <div class="grid-span-full grid grid-3">
       <div><label>业务描述</label><textarea id="businessDescription" placeholder="系统承载的业务说明"></textarea></div>
       <div><label>定级依据</label><textarea id="levelBasis" placeholder="定级依据说明"></textarea></div>
       <div><label>定级理由</label><textarea id="levelReason" placeholder="定级理由说明"></textarea></div>
     </div>
   </div>
-  <br />
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+  <div class="action-strip">
     <button onclick="createSystem()"><i class="fas fa-save"></i> 保存系统</button>
-    <label style="margin:0;display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
-      <input id="sysWordFile" type="file" accept=".docx" style="width:auto;padding:4px;" />
+    <label class="file-inline">
+      <input id="sysWordFile" type="file" accept=".docx" />
     </label>
     <button class="btn-lite" onclick="importSystemWord()"><i class="fas fa-file-word"></i> Word导入</button>
   </div>
@@ -40,7 +45,13 @@
 
 <!-- 系统列表面板 -->
 <div class="panel">
-  <h2><i class="fas fa-list"></i> 系统列表</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-list"></i> 系统列表</h2>
+      <p>按系统名称、系统编号和所属单位筛选后，可继续执行复制、归档、删除申请等维护动作。</p>
+    </div>
+    <span class="section-flag">列表维护</span>
+  </div>
   <!-- 搜索工具栏 -->
   <div class="search-bar">
     <div>
@@ -89,7 +100,7 @@
 <!-- 系统回收站面板 -->
 <div class="panel">
   <h2><i class="fas fa-trash-restore"></i> 系统回收站（30天）</h2>
-  <div style="display:flex;gap:8px;margin-bottom:16px;">
+  <div class="panel-actions">
     <button class="btn-lite" onclick="loadRecycleSystems()"><i class="fas fa-sync-alt"></i> 刷新回收站</button>
     <button class="btn-lite btn-danger" onclick="cleanupRecycleSystems()"><i class="fas fa-broom"></i> 清理已过期</button>
   </div>
@@ -110,7 +121,7 @@
 <!-- 系统删除申请面板 -->
 <div class="panel">
   <h2><i class="fas fa-clipboard-list"></i> 系统删除申请</h2>
-  <div style="margin-bottom:16px;">
+  <div class="panel-actions">
     <button class="btn-lite" onclick="loadSystemDeleteRequests()"><i class="fas fa-sync-alt"></i> 刷新申请列表</button>
   </div>
   <div class="table-wrapper">

@@ -210,12 +210,16 @@ exit /b 0
 if "%LAUNCH_ENTERED%"=="1" goto :eof
 set "LAUNCH_ENTERED=1"
 if "%DATABASE_URL%"=="" set "DATABASE_URL=sqlite:///./app.db"
-if "%API_AUTH_REQUIRED%"=="" set "API_AUTH_REQUIRED=1"
+set "APP_LITE_MODE=0"
+set "API_AUTH_REQUIRED=1"
 if "%APP_PORT%"=="" set "APP_PORT=8011"
-if "%PUBLIC_BASE_URL%"=="" set "PUBLIC_BASE_URL=http://127.0.0.1:%APP_PORT%"
+set "PUBLIC_BASE_URL=http://127.0.0.1:%APP_PORT%"
 
 echo.
 echo [INFO] Starting service...
+echo [INFO] Launch mode: full
+echo [INFO] APP_LITE_MODE=%APP_LITE_MODE%
+echo [INFO] API_AUTH_REQUIRED=%API_AUTH_REQUIRED%
 echo ==================================================
 echo   Access URL: http://127.0.0.1:%APP_PORT%
 echo ==================================================
