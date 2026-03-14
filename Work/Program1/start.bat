@@ -164,15 +164,10 @@ goto LAUNCH
 if not errorlevel 1 goto :eof
 
 echo [WARN] pip not found in virtual environment, bootstrapping...
-"%SYS_PY%" -m pip --version >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] System Python pip is unavailable. Please install pip first.
-    exit /b 1
-)
 
-"%SYS_PY%" -m pip --python "%VENV_PY%" install -i https://pypi.org/simple --timeout 20 --retries 1 --disable-pip-version-check pip setuptools wheel
+"%VENV_PY%" -m ensurepip --upgrade
 if errorlevel 1 (
-    echo [ERROR] Failed to bootstrap pip into virtual environment.
+    echo [ERROR] Failed to bootstrap pip into virtual environment using ensurepip.
     exit /b 1
 )
 
