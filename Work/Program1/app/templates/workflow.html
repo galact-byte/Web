@@ -3,14 +3,19 @@
 
 <!-- 流程节点规则面板 -->
 <div class="panel">
-  <h2><i class="fas fa-diagram-project"></i> 流程节点规则</h2>
-  <p class="hint">可设置每个流程节点负责人与办理时限（小时）。点击输入框可直接编辑，保存后立即生效。</p>
-  <div style="display:flex;gap:8px;margin-bottom:16px;">
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-diagram-project"></i> 流程节点规则</h2>
+      <p>维护各节点负责人、办理时限和启用状态。保存后立即生效，适合流程管理员按阶段统一调整。</p>
+    </div>
+    <span class="section-flag">规则配置</span>
+  </div>
+  <div class="panel-actions">
     <button class="btn-lite" onclick="loadRules()"><i class="fas fa-sync-alt"></i> 加载规则</button>
     <button onclick="saveRules()"><i class="fas fa-save"></i> 保存规则</button>
   </div>
   <div class="result" id="rulesResult">点击"加载规则"后即可编辑。</div>
-  <div class="table-wrapper" style="margin-top:12px;">
+  <div class="table-wrapper table-top-gap">
     <table>
       <thead>
         <tr>
@@ -29,7 +34,13 @@
 
 <!-- 流程实例推进面板 -->
 <div class="panel">
-  <h2><i class="fas fa-play-circle"></i> 流程实例推进</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-play-circle"></i> 流程实例推进</h2>
+      <p>按系统查看当前节点、责任人和到期时间，再执行推进、驳回、异常标记或时限延长。</p>
+    </div>
+    <span class="section-flag">实例操作</span>
+  </div>
   <div class="search-bar">
     <div>
       <label>系统ID</label>
@@ -58,10 +69,10 @@
       <button onclick="advanceWorkflow()"><i class="fas fa-arrow-right"></i> 推进</button>
     </div>
   </div>
-  <div class="search-bar" style="margin-top:0;">
+  <div class="search-bar search-bar-flat">
     <div>
       <label>延时小时</label>
-      <input id="extendHours" type="number" value="24" min="1" style="max-width:120px;" />
+      <input id="extendHours" class="input-xs" type="number" value="24" min="1" />
     </div>
     <div>
       <label>&nbsp;</label>
@@ -73,7 +84,13 @@
 
 <!-- 超时/临期提醒面板 -->
 <div class="panel">
-  <h2><i class="fas fa-bell"></i> 超时/临期提醒</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-bell"></i> 超时与临期提醒</h2>
+      <p>按提醒模式与阈值筛选待提醒实例，既能先查看结果，也能直接批量发送提醒。</p>
+    </div>
+    <span class="section-flag">提醒任务</span>
+  </div>
   <div class="search-bar">
     <div>
       <label>模式</label>
@@ -104,7 +121,7 @@
       <button onclick="loadReminders(true)"><i class="fas fa-paper-plane"></i> 发送提醒</button>
     </div>
   </div>
-  <div class="table-wrapper" style="margin-top:12px;">
+  <div class="table-wrapper table-top-gap">
     <table>
       <thead>
         <tr>

@@ -206,7 +206,7 @@ async function doRestore() {
 
 <style scoped>
 .page-header { margin-bottom: 2rem; }
-.page-header h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+.page-header h1 { font-family: 'DM Serif Display', serif; font-size: 1.5rem; font-weight: 400; margin-bottom: 0.25rem; }
 
 .card h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
 .section-desc { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.25rem; }
@@ -214,9 +214,9 @@ async function doRestore() {
 
 .backup-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
 .backup-card { display: flex; align-items: center; gap: 1rem; padding: 1.25rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; transition: all var(--transition-fast); }
-.backup-card:hover { border-color: var(--accent-primary); box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15); }
+.backup-card:hover { border-color: var(--accent-primary); box-shadow: var(--shadow-card-hover); }
 .backup-icon { width: 56px; height: 56px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.json-icon { background: rgba(99, 102, 241, 0.15); color: var(--accent-primary); }
+.json-icon { background: var(--accent-glow); color: var(--accent-primary); }
 .db-icon { background: rgba(16, 185, 129, 0.15); color: #10b981; }
 .backup-info { flex: 1; }
 .backup-info h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem; }
@@ -225,7 +225,7 @@ async function doRestore() {
 
 .restore-section { margin-top: 1.5rem; }
 .restore-area { border: 2px dashed var(--border-color); border-radius: var(--radius-md); padding: 2rem; text-align: center; transition: all var(--transition-fast); }
-.restore-area.drag-over { border-color: var(--accent-primary); background: rgba(99, 102, 241, 0.05); }
+.restore-area.drag-over { border-color: var(--accent-primary); background: var(--accent-glow); }
 .upload-prompt { cursor: pointer; color: var(--text-secondary); }
 .upload-prompt svg { margin: 0 auto 1rem; display: block; color: var(--text-muted); }
 .upload-prompt h3 { font-size: 1rem; margin-bottom: 0.5rem; color: var(--text-primary); }

@@ -134,7 +134,7 @@ onMounted(fetchProjects)
 
 <style scoped>
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
-.page-header h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+.page-header h1 { font-family: 'DM Serif Display', serif; font-size: 1.5rem; font-weight: 400; margin-bottom: 0.25rem; }
 .header-actions { display: flex; gap: 1rem; align-items: center; }
 .filter-group { display: flex; gap: 0.5rem; }
 .loading-container { display: flex; justify-content: center; padding: 4rem; }

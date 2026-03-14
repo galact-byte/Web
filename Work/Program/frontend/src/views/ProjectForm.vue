@@ -169,7 +169,7 @@ onMounted(fetchData)
 
 <style scoped>
 .page-header { margin-bottom: 2rem; }
-.page-header h1 { font-size: 1.75rem; font-weight: 700; }
+.page-header h1 { font-family: 'DM Serif Display', serif; font-size: 1.5rem; font-weight: 400; }
 .back-link { color: var(--text-secondary); font-size: 0.9rem; display: inline-block; margin-bottom: 0.5rem; }
 .back-link:hover { color: var(--accent-primary); }
 .loading-container { display: flex; justify-content: center; padding: 4rem; }

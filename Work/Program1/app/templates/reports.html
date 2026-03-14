@@ -3,14 +3,20 @@
 
 <!-- 自动报告生成面板 -->
 <div class="panel">
-  <h2><i class="fas fa-magic"></i> 自动报告生成</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-magic"></i> 自动报告生成</h2>
+      <p>从系统资料快速生成定级报告、备案表和专家评审意见表。生成参数与字段 ID 保持原样，仅优化页面层次和操作感受。</p>
+    </div>
+    <span class="section-flag">生成</span>
+  </div>
   <div class="search-bar">
     <div>
-      <label>系统ID <span style="color:var(--danger)">*</span></label>
+      <label>系统ID <span class="field-required">*</span></label>
       <input id="systemId" type="number" placeholder="关联系统数字ID" />
     </div>
     <div>
-      <label>报告类型 <span style="color:var(--danger)">*</span></label>
+      <label>报告类型 <span class="field-required">*</span></label>
       <select id="reportType">
         <option value="grading_report">定级报告</option>
         <option value="filing_form">定级备案表</option>
@@ -35,7 +41,13 @@
 
 <!-- 报告章节管理面板 -->
 <div class="panel">
-  <h2><i class="fas fa-list-ol"></i> 报告章节管理</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-list-ol"></i> 报告章节管理</h2>
+      <p>围绕单份报告进行章节新增、删除、重排和预览，适合在自动生成后做精修。</p>
+    </div>
+    <span class="section-flag">章节维护</span>
+  </div>
   <div class="search-bar">
     <div>
       <label>报告ID</label>
@@ -54,7 +66,7 @@
       <button class="btn-lite" onclick="addSection()"><i class="fas fa-plus"></i> 新增章节</button>
     </div>
   </div>
-  <div class="search-bar" style="margin-top:0;">
+  <div class="search-bar search-bar-flat">
     <div>
       <label>删除章节索引</label>
       <input id="deleteSectionIndex" type="number" min="0" placeholder="从0开始" />
@@ -85,7 +97,13 @@
 
 <!-- 报告审核流转面板 -->
 <div class="panel">
-  <h2><i class="fas fa-check-double"></i> 报告审核流转</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-check-double"></i> 报告审核流转</h2>
+      <p>提交审核和执行审核拆成独立动作，减少误操作，也方便在评审会议中快速推进。</p>
+    </div>
+    <span class="section-flag">流转</span>
+  </div>
   <div class="search-bar">
     <div>
       <label>审核人</label>
@@ -112,7 +130,13 @@
 
 <!-- 签章设置面板 -->
 <div class="panel">
-  <h2><i class="fas fa-stamp"></i> 签章设置</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-stamp"></i> 签章设置</h2>
+      <p>集中设置企业签章、测评师签章和落章位置，避免导出前来回检查。</p>
+    </div>
+    <span class="section-flag">签章</span>
+  </div>
   <div class="search-bar">
     <div>
       <label>公司签章</label>
@@ -136,11 +160,17 @@
 
 <!-- 报告列表面板 -->
 <div class="panel">
-  <h2><i class="fas fa-file-alt"></i> 报告列表</h2>
-  <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;">
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-file-alt"></i> 报告列表</h2>
+      <p>在一个列表里完成刷新、导出和流转操作，PDF 密码单独收口，避免和主体操作混在一起。</p>
+    </div>
+    <span class="section-flag">列表与导出</span>
+  </div>
+  <div class="panel-actions panel-actions-wide">
     <div>
       <label>PDF密码（可选）</label>
-      <input id="pdfPassword" placeholder="导出PDF时加密" style="width:200px;" />
+      <input id="pdfPassword" class="input-compact" placeholder="导出PDF时加密" />
     </div>
     <button class="btn-lite" onclick="loadReports()"><i class="fas fa-sync-alt"></i> 刷新列表</button>
   </div>
@@ -166,7 +196,13 @@
 
 <!-- 版本差异对比面板 -->
 <div class="panel">
-  <h2><i class="fas fa-code-branch"></i> 版本差异对比</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-code-branch"></i> 版本差异对比</h2>
+      <p>对比不同版本报告的结构和内容变化，适合在修改章节或替换模板后快速检查。</p>
+    </div>
+    <span class="section-flag">对比</span>
+  </div>
   <div class="search-bar">
     <div>
       <label>左侧报告ID</label>

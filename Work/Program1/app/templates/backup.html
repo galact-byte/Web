@@ -1,33 +1,47 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 
-<!-- 备份与恢复操作面板 -->
 <div class="panel" data-role-only="admin">
-  <h2><i class="fas fa-database"></i> 数据备份与恢复</h2>
-  <p class="hint">建议至少每日备份一次。恢复会覆盖当前数据库与上传文件，请仅在确认需要回滚时执行。</p>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-database"></i> 数据备份与恢复</h2>
+      <p>建议在关键操作前后保留快照；恢复会覆盖当前数据库和上传文件，请谨慎执行。</p>
+    </div>
+    <span class="section-flag">高风险操作</span>
+  </div>
 
-  <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;">
+  <div class="search-bar search-bar-flat compact-row-grid">
     <div>
+      <label>快速备份</label>
       <button onclick="createBackup()"><i class="fas fa-download"></i> 创建备份并下载</button>
     </div>
     <div>
-      <label style="margin-bottom:6px;">恢复文件（.zip）</label>
-      <input id="restoreFile" type="file" accept=".zip" style="width:auto;padding:6px;" />
+      <label>恢复文件（.zip）</label>
+      <input id="restoreFile" type="file" accept=".zip" class="input-file-plain" />
     </div>
     <div>
+      <label>恢复操作</label>
       <button class="btn-lite btn-danger" onclick="restoreBackup()"><i class="fas fa-upload"></i> 上传并恢复</button>
     </div>
   </div>
 
-  <pre class="result" id="backupResult" style="min-height:48px;">仅管理员可执行备份与恢复操作。</pre>
+  <pre class="result table-top-gap" id="backupResult" style="min-height:48px;">仅管理员可执行备份与恢复操作。</pre>
 </div>
 
-<!-- 备份文件列表面板 -->
 <div class="panel" data-role-only="admin">
-  <h2><i class="fas fa-archive"></i> 备份文件列表</h2>
-  <div style="margin-bottom:16px;">
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-archive"></i> 备份文件列表</h2>
+      <p>集中查看备份文件体积与时间点，必要时可直接下载留档。</p>
+    </div>
+    <span class="section-flag">可下载</span>
+  </div>
+
+  <div class="panel-actions panel-actions-wide">
+    <span class="table-meta">恢复前建议先再做一次最新快照。</span>
     <button class="btn-lite" onclick="loadBackups()"><i class="fas fa-sync-alt"></i> 刷新列表</button>
   </div>
+
   <div class="table-wrapper">
     <table class="table-sticky">
       <thead>

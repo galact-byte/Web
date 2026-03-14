@@ -2,8 +2,116 @@
 
 > **修订记录**
 >
+> - v3.0: UI 重构 — 去除"AI 味"，对齐前端设计规范（Void Space 暗色主题）
 > - v2.0: 代码审查修复 — 15 项安全/质量/性能问题修复
 > - v1.9: 后端 API 修复 — 路由顺序修正、新增趋势API、导入大小限制、错误处理加固
+
+## v3.0 — UI 重构：去除"AI 味"，对齐前端设计规范
+
+### 背景
+
+功能型后台管理系统应遵循克制、可预测、信息优先的设计态度。原 UI 存在紫蓝渐变、毛玻璃特效、发光阴影、Emoji 图标、hover 位移动画等典型"AI 味"设计问题，违反 `frontend-design-integrated.md` 多项规范。
+
+### 设计方案
+
+- **配色**：Void Space 暗色（`#0d1117` / `#161b22` / `#58a6ff` / `#f78166`）
+- **浅色主题**：GitHub Light 风格（`#f6f8fa` / `#ffffff` / `#0969da`）
+- **字体**：标题 DM Serif Display，正文 DM Sans，代码 JetBrains Mono
+- **风格**：functional — 紧凑、中性、信息优先、零装饰
+
+---
+
+### 修改文件
+
+#### `frontend/index.html` — 引入 Google Fonts
+
+- **修改位置**：`<head>` 区域
+- **修改内容**：添加 `color-scheme` meta、Google Fonts CDN（DM Sans + DM Serif Display + JetBrains Mono）
+
+#### `frontend/src/style.css` — 全局设计系统重构
+
+- **修改内容**：
+  - CSS 变量全量替换为 Void Space 配色，浅色主题同步更新为 GitHub Light 风格
+  - 字体从 `Inter / Segoe UI / Roboto` 改为 `DM Sans`
+  - 移除 `body::before` 紫色渐变装饰背景
+  - 移除 `--accent-gradient`、`--shadow-glow` 变量
+  - 圆角收紧：`--radius-sm: 6px`、`--radius-md: 8px`、`--radius-lg: 10px`、`--radius-xl: 12px`
+  - `.card`：移除 `backdrop-filter`，hover 移除 `translateY` 和 `shadow-glow`
+  - `.btn-primary`：渐变改实色，hover 改 `opacity: 0.85`
+  - `.btn-danger:hover`：移除发光阴影
+  - `.toast`：移除 `backdrop-filter`，`slideIn` 动画改为纯 `fadeIn`
+  - `.modal`：圆角降至 `--radius-lg`，`scaleIn` 动画改为 `fadeIn`
+  - `.badge-primary`：硬编码 `rgba(99, 102, 241, ...)` 改为 `var(--accent-glow)`
+  - `.pagination button.active`：渐变改实色
+  - `.checkbox.checked`：渐变改实色
+  - `.loading-overlay`：背景色改为 Void Space 色值
+  - `code` 元素统一使用 `JetBrains Mono`
+  - 新增 `prefers-reduced-motion` 无障碍支持
+
+#### `frontend/src/views/Login.vue` — 登录页重构
+
+- **模板修改**：
+  - Emoji 图标（`📋📊👥`）替换为 SVG 图标
+  - 修改密码弹窗标题移除 `🔐`
+- **样式修改**：
+  - 左侧装饰区：渐变背景改为 `var(--bg-tertiary)` + `border-right`
+  - 移除 `pulse` 脉冲动画和 `::before` 伪元素
+  - logo 背景改为 `var(--accent-glow)`
+  - feature 卡片移除 `backdrop-filter`，改为 `border: 1px solid var(--border-color)`
+  - 登录容器移除 `backdrop-filter`，圆角降至 `--radius-lg`
+  - 标题使用 `DM Serif Display` 字体
+
+#### `frontend/src/components/AppLayout.vue` — 侧边栏优化
+
+- **样式修改**：
+  - `.logo`：背景从 `var(--accent-gradient)` 改为实色 `var(--accent-primary)`
+  - `.nav-item.active`：硬编码 `rgba(99, 102, 241, 0.15)` 改为 `var(--accent-glow)`
+  - `.avatar`：背景从渐变改为实色 `var(--accent-primary)`
+  - `.btn-theme:hover`：硬编码色值改为 `var(--accent-glow)`
+  - `transition: all` 改为具体属性以提升性能
+
+#### `frontend/src/views/Dashboard.vue` — 仪表盘优化
+
+- **模板修改**：`.stat-icon` 硬编码 `rgba(99, 102, 241, 0.2)` 改为 `var(--accent-glow)`
+- **样式修改**：
+  - `.page-header h1`：使用 `DM Serif Display` 标题字体
+  - `.stat-card`：移除 `backdrop-filter`，hover 移除 `translateY` 和 `box-shadow`
+  - `.recent-section`：移除 `backdrop-filter`
+  - `.project-card:hover`：移除 `translateY(-2px)` 和发光阴影
+  - `.project-code`：使用 `JetBrains Mono` 字体
+  - `.notice-item:hover`：移除 `translateX(4px)` 和发光阴影，改为 border-color 变化
+  - 硬编码 `#f59e0b` / `#10b981` 改为 `var(--warning)` / `var(--success)`
+
+#### `frontend/src/views/Projects.vue` — 标题字体
+
+- **样式修改**：`.page-header h1` 使用 `DM Serif Display` 标题字体
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `frontend/index.html` |
+| **修改** | `frontend/src/style.css` |
+| **修改** | `frontend/src/views/Login.vue` |
+| **修改** | `frontend/src/components/AppLayout.vue` |
+| **修改** | `frontend/src/views/Dashboard.vue` |
+| **修改** | `frontend/src/views/Projects.vue` |
+
+---
+
+## 测试方式
+
+1. `cd frontend && npm run build` — 确认无编译错误（已通过）
+2. 人工检查：
+   - 登录页：无 Emoji、无脉冲动画、无紫色渐变
+   - 侧边栏：实色 logo/头像、正确的 active 高亮色
+   - 仪表盘：卡片无 hover 位移、无发光阴影
+   - 主题切换：深色/浅色均正常
+3. 响应式：768px 断点下布局正常
+
+---
 
 ## v2.0 — 代码审查修复（15 项问题）
 

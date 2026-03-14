@@ -1,7 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="panel" id="dashboardCapture">
-  <h2><i class="fas fa-filter"></i> 筛选过滤</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-filter"></i> 看板筛选</h2>
+      <p>按地区、行业、等级、测评师和项目状态组合筛选，适合在晨会或周报前快速切换视角。</p>
+    </div>
+    <span class="section-flag">筛选控制</span>
+  </div>
   <div class="row">
     <div>
       <label>地区</label>
@@ -51,6 +57,13 @@
 </div>
 
 <div class="panel">
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-crosshairs"></i> 快捷操作</h2>
+      <p>围绕当前看板一键导出、截图和全屏展示，方便会议演示和留档。</p>
+    </div>
+    <span class="section-flag">导出与展示</span>
+  </div>
   <div class="row dashboard-actions">
     <div><button class="btn-lite" onclick="exportDashboardExcel()"><i class="fas fa-file-excel"></i> 导出Excel</button></div>
     <div><button class="btn-lite" onclick="exportDashboardPdf()"><i class="fas fa-file-pdf"></i> 导出PDF</button></div>
@@ -62,29 +75,33 @@
 <!-- 统计卡片：包含同比增长指示 -->
 <div class="cards">
   <div class="card card-blue">
-    <div class="hint">
-      单位总数 <i class="fas fa-building" style="float:right;opacity:0.5"></i>
+    <div class="card-head">
+      <div class="hint">单位总数</div>
+      <i class="fas fa-building"></i>
     </div>
     <b id="orgCount">0</b>
     <div class="card-trend" id="orgTrend"></div>
   </div>
   <div class="card card-green">
-    <div class="hint">
-      系统总数 <i class="fas fa-server" style="float:right;opacity:0.5"></i>
+    <div class="card-head">
+      <div class="hint">系统总数</div>
+      <i class="fas fa-server"></i>
     </div>
     <b id="sysCount">0</b>
     <div class="card-trend" id="sysTrend"></div>
   </div>
   <div class="card card-orange">
-    <div class="hint">
-      待审核报告 <i class="fas fa-clipboard-check" style="float:right;opacity:0.5"></i>
+    <div class="card-head">
+      <div class="hint">待审核报告</div>
+      <i class="fas fa-clipboard-check"></i>
     </div>
     <b id="pendingReports">0</b>
     <div class="card-trend" id="reportTrend"></div>
   </div>
   <div class="card card-purple">
-    <div class="hint">
-      进行中项目 <i class="fas fa-spinner" style="float:right;opacity:0.5"></i>
+    <div class="card-head">
+      <div class="hint">进行中项目</div>
+      <i class="fas fa-spinner"></i>
     </div>
     <b id="inProgressProjects">0</b>
     <div class="card-trend" id="projectTrend"></div>
@@ -93,32 +110,56 @@
 
 <!-- 分布图表区域 -->
 <div class="panel">
-  <h2><i class="fas fa-chart-pie"></i> 分布统计（点击柱子可下钻）</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-chart-pie"></i> 分布统计</h2>
+      <p>按地区、行业和等级查看分布情况；点击柱状图后可直接联动下钻明细。</p>
+    </div>
+    <span class="section-flag">分布分析</span>
+  </div>
   <div class="charts">
-    <div style="height:300px"><canvas id="regionChart"></canvas><span class="empty-hint">暂无数据</span></div>
-    <div style="height:300px"><canvas id="industryChart"></canvas><span class="empty-hint">暂无数据</span></div>
-    <div style="height:300px"><canvas id="levelChart"></canvas><span class="empty-hint">暂无数据</span></div>
+    <div class="chart-slot"><canvas id="regionChart"></canvas><span class="empty-hint">暂无数据</span></div>
+    <div class="chart-slot"><canvas id="industryChart"></canvas><span class="empty-hint">暂无数据</span></div>
+    <div class="chart-slot"><canvas id="levelChart"></canvas><span class="empty-hint">暂无数据</span></div>
   </div>
 </div>
 
 <!-- 趋势折线图区域 -->
 <div class="panel">
-  <h2><i class="fas fa-chart-line"></i> 备案数量趋势（按月）</h2>
-  <div style="height:280px;position:relative;">
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-chart-line"></i> 备案数量趋势</h2>
+      <p>按月观察新增走势，适合判断周期性峰值和项目推进节奏。</p>
+    </div>
+    <span class="section-flag">趋势观察</span>
+  </div>
+  <div class="chart-slot chart-slot-md chart-slot-relative">
     <canvas id="trendChart"></canvas>
-    <span class="empty-hint" id="trendEmptyHint" style="display:none;padding-top:100px;">暂无趋势数据</span>
+    <span class="empty-hint chart-empty-offset" id="trendEmptyHint" style="display:none;">暂无趋势数据</span>
   </div>
 </div>
 
 <!-- 地图热力图 -->
 <div class="panel">
-  <h2><i class="fas fa-map"></i> 地图热力图（点击省份下钻）</h2>
-  <div style="height:420px" id="heatMap"></div>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-map"></i> 地图热力图</h2>
+      <p>按省份观察项目热度分布，支持点选后继续查看更细的明细。</p>
+    </div>
+    <span class="section-flag">地域热度</span>
+  </div>
+  <div class="chart-slot chart-slot-tall" id="heatMap"></div>
 </div>
 
 <!-- 下钻明细表格（含分页） -->
 <div class="panel">
-  <h2><i class="fas fa-list"></i> 下钻明细</h2>
+  <div class="section-intro">
+    <div class="section-copy">
+      <h2><i class="fas fa-list"></i> 下钻明细</h2>
+      <p>承接上方图表点击结果，用于快速定位样本和核查异常点。</p>
+    </div>
+    <span class="section-flag">明细联动</span>
+  </div>
   <p class="hint" id="drillHint">点击上方图表柱子查看明细</p>
   <div class="table-wrapper">
     <table>
