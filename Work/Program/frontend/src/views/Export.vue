@@ -1,7 +1,7 @@
 <template>
   <AppLayout>
     <header class="page-header">
-      <div><h1>导出完结单</h1><p class="text-muted">选择项目导出 Excel 格式的季度完结单</p></div>
+      <div><h1>导出完结单</h1><p class="text-muted">选择项目导出 Excel 或 Word 格式的完结单</p></div>
     </header>
 
     <!-- 导出配置 -->
@@ -69,6 +69,10 @@
         <svg v-if="!exporting" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
         {{ exporting ? '导出中...' : '导出 Excel' }}
       </button>
+      <button class="btn btn-secondary btn-lg" @click="exportWord" :disabled="selectedProjects.length === 0 || exportingWord">
+        <svg v-if="!exportingWord" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+        {{ exportingWord ? '导出中...' : '导出 Word' }}
+      </button>
     </div>
   </AppLayout>
 </template>
@@ -84,6 +88,7 @@ const userStore = useUserStore()
 
 const loading = ref(true)
 const exporting = ref(false)
+const exportingWord = ref(false)
 const projects = ref([])
 const selectedProjects = ref([])
 
@@ -127,6 +132,32 @@ async function exportExcel() {
   finally { exporting.value = false }
 }
 
+async function exportWord() {
+  exportingWord.value = true
+  try {
+    const response = await exportsApi.wordBatch({
+      project_ids: selectedProjects.value
+    })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    // 单个项目返回 docx，多个返回 zip
+    const isSingle = selectedProjects.value.length === 1
+    const contentType = response.headers['content-type'] || ''
+    if (isSingle && contentType.includes('wordprocessingml')) {
+      const proj = projects.value.find(p => p.id === selectedProjects.value[0])
+      link.download = `${proj?.project_code || '项目'}完结单.docx`
+    } else {
+      link.download = '项目完结单.zip'
+    }
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => window.URL.revokeObjectURL(url), 100)
+  } catch (err) { console.error(err); alert('导出失败') }
+  finally { exportingWord.value = false }
+}
+
 async function fetchProjects() {
   loading.value = true
   try {
@@ -163,5 +194,5 @@ onMounted(fetchProjects)
 .project-name { font-weight: 500; }
 .project-meta { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
 
-.export-actions { margin-top: 2rem; display: flex; justify-content: center; }
+.export-actions { margin-top: 2rem; display: flex; justify-content: center; gap: 1rem; }
 </style>

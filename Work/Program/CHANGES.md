@@ -2,9 +2,93 @@
 
 > **修订记录**
 >
+> - v4.0: 流程优化 — 移除审批完成时间、创建项目自动分发、批量Word模板导出
 > - v3.0: UI 重构 — 去除"AI 味"，对齐前端设计规范（Void Space 暗色主题）
 > - v2.0: 代码审查修复 — 15 项安全/质量/性能问题修复
 > - v1.9: 后端 API 修复 — 路由顺序修正、新增趋势API、导入大小限制、错误处理加固
+
+## v4.0 — 流程优化：自动分发 + 批量Word模板导出
+
+### 功能1：移除审批完成时间 + 创建项目时自动分发
+
+- **移除审批完成时间**：新建/编辑项目表单不再显示「审批完成时间」字段
+- **自动分发**：选择「实施负责人」后创建项目时，自动为该员工创建分配记录并将项目状态设为「已分发」，无需再手动点击「分发项目」
+- **移除分发按钮**：项目详情页右上角不再显示「分发项目」按钮及分发模态框
+
+### 功能2：Word导出移到导出完结单页面
+
+- **移除单个导出**：项目详情页右上角不再显示「导出Word」按钮
+- **批量Word导出**：导出完结单页面新增「导出Word」按钮，支持批量选择项目导出
+- **模板填充**：基于 6 套官方完结单模板（等保/风评/软测/安服/配合检查/值守），按业务类别自动匹配模板并填充项目数据
+- **智能打包**：单个项目直接返回 .docx 文件，多个项目自动打包为 .zip
+
+---
+
+### 修改文件
+
+#### `frontend/src/views/ProjectForm.vue` — 移除审批完成时间字段
+
+- **修改位置**：基本信息表单区域、form reactive 对象
+- **修改内容**：移除 `approval_date` 输入框和表单字段
+
+#### `backend/app/routers/projects.py` — 创建时自动分发
+
+- **修改位置**：`create_project()` 函数（约 L258-268）
+- **修改内容**：创建项目后若设置了 `implementation_manager_id`，自动创建 `ProjectAssignment` 并将状态设为 `assigned`
+
+#### `frontend/src/views/ProjectDetail.vue` — 移除分发按钮和Word导出
+
+- **修改位置**：header-actions 区域、script 逻辑
+- **修改内容**：移除「分发项目」按钮、分发模态框、「导出Word」按钮及相关 JS 代码（toggleEmployee, assignProject, exportWord, employees 数据获取）
+
+#### `backend/app/routers/exports.py` — 新增批量Word模板导出
+
+- **修改位置**：新增函数和端点
+- **修改内容**：新增 `CATEGORY_TEMPLATE` 映射、`_fill_word_template()` 模板填充函数、`POST /api/exports/word-batch` 批量导出端点
+
+#### `backend/app/schemas/schemas.py` — 新增 WordExportRequest
+
+- **修改位置**：导出模式区域末尾
+- **修改内容**：新增 `WordExportRequest(project_ids)` 模式
+
+#### `frontend/src/views/Export.vue` — 新增Word导出按钮
+
+- **修改位置**：导出按钮区域、script 逻辑
+- **修改内容**：新增「导出Word」按钮和 `exportWord()` 函数
+
+#### `frontend/src/api/index.js` — 新增批量Word API
+
+- **修改位置**：exportsApi 对象
+- **修改内容**：新增 `wordBatch` 方法调用 `/api/exports/word-batch`
+
+### 新增文件
+
+#### `backend/templates/` — 完结单Word模板（6个）
+
+- 等保完结单.docx、风评完结单.docx、软测完结单.docx、安服完结单.docx、配合检查完结单.docx、值守完结单.docx
+
+---
+
+## 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `frontend/src/views/ProjectForm.vue` |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
+| **修改** | `frontend/src/views/Export.vue` |
+| **修改** | `frontend/src/api/index.js` |
+| **修改** | `backend/app/routers/projects.py` |
+| **修改** | `backend/app/routers/exports.py` |
+| **修改** | `backend/app/schemas/schemas.py` |
+| **新增** | `backend/templates/`（6个模板文件） |
+
+## 测试方式
+
+1. 启动后端和前端服务
+2. **功能1验证**：以经理身份新建项目，确认表单无「审批完成时间」字段；选择实施负责人后提交，确认项目状态直接为「已分发」，进入项目详情确认该员工已出现在人员分配列表中
+3. **功能2验证**：进入「导出完结单」页面，选择项目后点击「导出Word」，确认单个项目下载 .docx、多个项目下载 .zip；打开生成的Word文件确认模板正确填充了项目数据
+
+---
 
 ## v3.0 — UI 重构：去除"AI 味"，对齐前端设计规范
 
