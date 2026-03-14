@@ -82,7 +82,8 @@ export const projectsApi = {
 // ============ 导出 API ============
 export const exportsApi = {
   excel: (data) => api.post('/api/exports/excel', data, { responseType: 'blob' }),
-  word: (projectId) => api.post(`/api/exports/word/${projectId}`, {}, { responseType: 'blob' })
+  word: (projectId) => api.post(`/api/exports/word/${projectId}`, {}, { responseType: 'blob' }),
+  wordBatch: (data) => api.post('/api/exports/word-batch', data, { responseType: 'blob' })
 }
 
 // ============ 备份恢复 API ============

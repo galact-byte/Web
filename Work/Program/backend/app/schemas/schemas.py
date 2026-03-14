@@ -158,3 +158,7 @@ class ExcelExportRequest(BaseModel):
     year: int
     quarter: int = Field(..., ge=1, le=4)
     department: str = "软测部"
+
+
+class WordExportRequest(BaseModel):
+    project_ids: List[int] = Field(..., min_length=1)

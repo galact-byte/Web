@@ -269,6 +269,17 @@ def create_project(
         )
         db.add(system)
 
+    # 选择实施负责人时自动分发给该员工
+    if request.implementation_manager_id:
+        user = db.query(User).filter(User.id == request.implementation_manager_id).first()
+        if user:
+            assignment = ProjectAssignment(
+                project_id=project.id,
+                assignee_id=request.implementation_manager_id
+            )
+            db.add(assignment)
+            project.status = ProjectStatus.assigned
+
     db.commit()
     db.refresh(project)
 

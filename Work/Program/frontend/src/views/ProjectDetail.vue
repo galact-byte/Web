@@ -10,10 +10,6 @@
           <p class="project-code">{{ project.project_code }}</p>
         </div>
         <div class="header-actions">
-          <button v-if="userStore.isManager && project.status === 'draft'" class="btn btn-primary" @click="showAssignModal = true">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-            分发项目
-          </button>
           <span v-if="userStore.isManager && project.status === 'assigned' && totalEmployeeCount > 0" class="submit-progress">
             {{ submittedEmployeeCount }}/{{ totalEmployeeCount }} 人已提交
           </span>
@@ -30,7 +26,7 @@
           <button v-if="!userStore.isManager && project.status === 'assigned' && mySubmitted" class="btn btn-warning" @click="retractCompletion">
             撤回完结申请
           </button>
-          <button class="btn btn-secondary" @click="exportWord">导出Word</button>
+          <router-link v-if="userStore.isManager" :to="`/projects/${project.id}/edit`" class="btn btn-secondary">编辑项目</router-link>
         </div>
       </header>
 
@@ -125,27 +121,6 @@
         </div>
       </div>
 
-      <!-- 分发模态框 -->
-      <div v-if="showAssignModal" class="modal-overlay" @click.self="showAssignModal = false">
-        <div class="modal">
-          <div class="modal-header"><h2>分发项目</h2><button class="btn btn-ghost" @click="showAssignModal = false">✕</button></div>
-          <div class="modal-body">
-            <p class="mb-2">选择要分配的员工：</p>
-            <div class="employee-list">
-              <label v-for="emp in employees" :key="emp.id" class="checkbox-wrapper">
-                <div class="checkbox" :class="{ checked: selectedEmployees.includes(emp.id) }" @click="toggleEmployee(emp.id)">
-                  <svg v-if="selectedEmployees.includes(emp.id)" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                </div>
-                <span>{{ emp.display_name }}</span>
-              </label>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showAssignModal = false">取消</button>
-            <button class="btn btn-primary" @click="assignProject" :disabled="assigning || selectedEmployees.length === 0">{{ assigning ? '分发中...' : '确认分发' }}</button>
-          </div>
-        </div>
-      </div>
     </template>
   </AppLayout>
 </template>
@@ -154,7 +129,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { projectsApi, usersApi, exportsApi } from '../api'
+import { projectsApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
 import { getCategoryShort, getStatusClass, getStatusText } from '../utils/project'
 
@@ -165,10 +140,6 @@ const userStore = useUserStore()
 const loading = ref(true)
 const project = ref(null)
 const assignments = ref([])
-const employees = ref([])
-const showAssignModal = ref(false)
-const selectedEmployees = ref([])
-const assigning = ref(false)
 const changingStatus = ref(false)
 
 // 编辑分配弹窗状态
@@ -243,22 +214,6 @@ async function submitAddContribution() {
   finally { addingContribution.value = false }
 }
 
-function toggleEmployee(id) {
-  const idx = selectedEmployees.value.indexOf(id)
-  if (idx >= 0) selectedEmployees.value.splice(idx, 1)
-  else selectedEmployees.value.push(id)
-}
-
-async function assignProject() {
-  assigning.value = true
-  try {
-    await projectsApi.assign(route.params.id, { assignee_ids: selectedEmployees.value })
-    showAssignModal.value = false
-    await fetchData()
-  } catch (err) { console.error(err) }
-  finally { assigning.value = false }
-}
-
 async function completeProject() {
   // 按员工去重检查提交状态
   const byEmployee = {}
@@ -307,20 +262,6 @@ async function reopenProject() {
   finally { changingStatus.value = false }
 }
 
-async function exportWord() {
-  try {
-    const response = await exportsApi.word(route.params.id)
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${project.value.project_code}完结单.docx`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    setTimeout(() => window.URL.revokeObjectURL(url), 100)
-  } catch (err) { console.error(err); alert('导出失败') }
-}
-
 async function fetchData() {
   loading.value = true
   try {
@@ -330,10 +271,6 @@ async function fetchData() {
     ])
     project.value = projRes.data
     assignments.value = assRes.data
-    if (userStore.isManager) {
-      const empRes = await usersApi.getEmployees()
-      employees.value = empRes.data
-    }
   } catch (err) { console.error(err) }
   finally { loading.value = false }
 }
