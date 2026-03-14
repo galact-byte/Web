@@ -141,7 +141,7 @@ onMounted(fetchProjects)
 
 <style scoped>
 .page-header { margin-bottom: 2rem; }
-.page-header h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+.page-header h1 { font-family: 'DM Serif Display', serif; font-size: 1.5rem; font-weight: 400; margin-bottom: 0.25rem; }
 .loading-container { display: flex; justify-content: center; padding: 3rem; }
 
 .export-config { margin-bottom: 1.5rem; }
@@ -156,7 +156,7 @@ onMounted(fetchProjects)
 .projects-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 400px; overflow-y: auto; }
 .project-select-item { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; transition: all var(--transition-fast); }
 .project-select-item:hover { border-color: var(--border-color-hover); }
-.project-select-item.selected { border-color: var(--accent-primary); background: rgba(99, 102, 241, 0.1); }
+.project-select-item.selected { border-color: var(--accent-primary); background: var(--accent-glow); }
 .project-info { flex: 1; }
 .project-main { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
 .project-code { font-family: monospace; color: var(--text-muted); font-size: 0.85rem; }

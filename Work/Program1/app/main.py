@@ -33,10 +33,28 @@ from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from openpyxl import Workbook, load_workbook
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-from reportlab.pdfgen import canvas
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.pdfgen import canvas
+
+    _reportlab_canvas_cls = getattr(canvas, "Canvas", None)
+    _reportlab_canvas_methods = ("setFont", "drawString", "showPage", "save")
+    if A4 is None or UnicodeCIDFont is None:
+        raise RuntimeError("reportlab API incomplete")
+    if not callable(getattr(pdfmetrics, "registerFont", None)):
+        raise RuntimeError("reportlab pdfmetrics incomplete")
+    if _reportlab_canvas_cls is None or any(not hasattr(_reportlab_canvas_cls, name) for name in _reportlab_canvas_methods):
+        raise RuntimeError("reportlab canvas incomplete")
+
+    HAS_REPORTLAB = True
+except Exception:
+    A4 = None
+    pdfmetrics = None
+    UnicodeCIDFont = None
+    canvas = None
+    HAS_REPORTLAB = False
 from sqlalchemy import extract, func, inspect, or_, text
 from sqlalchemy.orm import Session
 
@@ -177,6 +195,11 @@ WORKFLOW_EMAIL_DEFAULT_TO = (os.getenv("WORKFLOW_EMAIL_DEFAULT_TO") or "").strip
 SCRIPT_TAG_RE = re.compile(r"<\s*/?\s*[a-zA-Z!]|on\w+\s*=|javascript\s*:", re.IGNORECASE)
 LOGIN_ATTEMPTS: dict[str, dict[str, Any]] = {}
 LOGIN_ATTEMPTS_LOCK = threading.Lock()
+DEFAULT_BOOTSTRAP_ACCOUNTS = (
+    ("admin", "DEFAULT_ADMIN_PASSWORD", "admin", "admin123"),
+    ("tester", "DEFAULT_TESTER_PASSWORD", "evaluator", "tester123"),
+    ("leader", "DEFAULT_LEADER_PASSWORD", "reviewer", "leader123"),
+)
 
 
 def escape_like(value: str) -> str:
@@ -434,24 +457,27 @@ def clear_login_failure(key: str) -> None:
 def ensure_default_accounts() -> None:
     db = SessionLocal()
     try:
-        defaults = [
-            ("admin", "DEFAULT_ADMIN_PASSWORD", "admin"),
-            ("tester", "DEFAULT_TESTER_PASSWORD", "evaluator"),
-            ("leader", "DEFAULT_LEADER_PASSWORD", "reviewer"),
-        ]
-        generated: list[tuple[str, str, str]] = []
-        for username, env_key, role in defaults:
+        realigned_users: list[str] = []
+        for username, env_key, role, fallback_password in DEFAULT_BOOTSTRAP_ACCOUNTS:
+            desired_password = (os.getenv(env_key, "") or "").strip() or fallback_password
             exists = db.query(UserAccount).filter(UserAccount.username == username).first()
             if exists:
+                password_updated_at = getattr(exists, "password_updated_at", None)
+                last_login_at = getattr(exists, "last_login_at", None)
+                should_realign = bool(getattr(exists, "must_change_password", False)) and (
+                    password_updated_at is not None or last_login_at is None
+                )
+                if should_realign:
+                    ok, _ = verify_password(desired_password, exists.password_hash)
+                    if not ok:
+                        exists.password_hash = hash_password(desired_password)
+                        exists.password_updated_at = datetime.now()
+                        realigned_users.append(username)
                 continue
-            password = os.getenv(env_key, "").strip()
-            if not password:
-                password = secrets.token_urlsafe(16)
-                generated.append((username, password, role))
             db.add(
                 UserAccount(
                     username=username,
-                    password_hash=hash_password(password),
+                    password_hash=hash_password(desired_password),
                     role=role,
                     enabled=True,
                     must_change_password=True,
@@ -459,18 +485,8 @@ def ensure_default_accounts() -> None:
                 )
             )
         db.commit()
-        if generated:
-            cred_file = Path(__file__).resolve().parent.parent / "initial_credentials.txt"
-            lines = [
-                "# 初始账号凭据（首次登录后必须修改密码）",
-                f"# 生成时间: {datetime.now():%Y-%m-%d %H:%M:%S}",
-                "# 请在修改密码后删除此文件",
-                "",
-            ]
-            for uname, pwd, r in generated:
-                lines.append(f"用户名: {uname}  密码: {pwd}  角色: {r}")
-            cred_file.write_text("\n".join(lines), encoding="utf-8")
-            logger.warning("已生成初始账号凭据，请查看文件: %s", cred_file)
+        if realigned_users:
+            logger.warning("默认账号密码已按当前配置自动对齐：%s", ", ".join(realigned_users))
     finally:
         db.close()
 
@@ -614,9 +630,11 @@ async def security_middleware(request: Request, call_next):  # type: ignore[over
                 if bool(getattr(user, "must_change_password", False)) and not _is_password_change_exempt(path):
                     return JSONResponse(status_code=403, content={"detail": "当前账号需先修改密码后再继续操作。"})
                 request.state.current_user = user.username
+                request.state.current_user_role = getattr(user, "role", "")
+                request.state.current_user_must_change_password = bool(getattr(user, "must_change_password", False))
             finally:
                 db.close()
-        elif not _is_web_auth_exempt(path):
+        if not _is_web_auth_exempt(path):
             token = get_auth_token_from_request(request)
             if not token:
                 return RedirectResponse(url=f"/login?next={quote(path)}", status_code=307)
@@ -626,6 +644,8 @@ async def security_middleware(request: Request, call_next):  # type: ignore[over
                 if not user:
                     return RedirectResponse(url=f"/login?next={quote(path)}", status_code=307)
                 request.state.current_user = user.username
+                request.state.current_user_role = getattr(user, "role", "")
+                request.state.current_user_must_change_password = bool(getattr(user, "must_change_password", False))
             finally:
                 db.close()
 
@@ -1434,6 +1454,18 @@ def ensure_file_exists(path_value: str | None, not_found_detail: str) -> Path:
     if not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail=not_found_detail)
     return path
+
+
+def safe_delete_uploaded_file(path_value: str | None) -> None:
+    """删除已上传的文件，仅允许删除 UPLOAD_DIR / EXPORT_DIR 下的文件。"""
+    if not path_value:
+        return
+    path = Path(path_value).resolve()
+    allowed_bases = [UPLOAD_DIR.resolve(), EXPORT_DIR.resolve()]
+    if not any(path == base or path.is_relative_to(base) for base in allowed_bases):
+        return
+    if path.exists() and path.is_file():
+        path.unlink()
 
 
 def get_or_create_workflow_step_rules(db: Session, config: WorkflowConfig) -> dict[str, WorkflowStepRule]:
@@ -2324,9 +2356,7 @@ def restore_template_version(
     snap = dict(row.snapshot or {})
     if not snap:
         raise HTTPException(status_code=400, detail="版本快照为空。")
-    target_file = Path(str(snap.get("file_path") or ""))
-    if not target_file.exists():
-        raise HTTPException(status_code=400, detail="版本文件不存在，无法回滚。")
+    target_file = ensure_file_exists(snap.get("file_path"), "版本文件不存在，无法回滚。")
     log_template_version(db, tpl, "restore_before", actor)
     for key in [
         "template_name",
@@ -2423,9 +2453,7 @@ def delete_template(request: Request, template_id: int, db: Session = Depends(ge
     if not tpl:
         raise HTTPException(status_code=404, detail="模板不存在。")
     log_template_version(db, tpl, "delete_before", actor)
-    path = Path(tpl.file_path)
-    if path.exists():
-        path.unlink()
+    safe_delete_uploaded_file(tpl.file_path)
     db.delete(tpl)
     db.commit()
     return {"message": "模板已删除"}
@@ -2786,17 +2814,20 @@ async def import_organizations_excel(
     for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         if not row or not row[0]:
             continue
+        if len(row) < 10:
+            skipped.append(f"第{idx}行：列数不足（需要至少10列）")
+            continue
         data = {
-            "name": str(row[0]).strip(),
-            "credit_code": str(row[1]).strip().upper(),
-            "legal_representative": str(row[2]).strip(),
-            "address": str(row[3]).strip(),
+            "name": str(row[0] or "").strip(),
+            "credit_code": str(row[1] or "").strip().upper(),
+            "legal_representative": str(row[2] or "").strip(),
+            "address": str(row[3] or "").strip(),
             "office_phone": str(row[4]).strip() if row[4] else None,
-            "mobile_phone": str(row[5]).strip(),
-            "email": str(row[6]).strip(),
-            "industry": str(row[7]).strip(),
-            "organization_type": str(row[8]).strip(),
-            "filing_region": str(row[9]).strip(),
+            "mobile_phone": str(row[5] or "").strip(),
+            "email": str(row[6] or "").strip(),
+            "industry": str(row[7] or "").strip(),
+            "organization_type": str(row[8] or "").strip(),
+            "filing_region": str(row[9] or "").strip(),
             "created_by": actor,
         }
         try:
@@ -3226,6 +3257,9 @@ async def import_systems_excel(
     for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         if not row or not row[0]:
             continue
+        if len(row) < 7:
+            skipped.append(f"第{idx}行：列数不足（需要至少7列）")
+            continue
         try:
             with db.begin_nested():
                 org_id = int(row[2])
@@ -3235,7 +3269,7 @@ async def import_systems_excel(
                     continue
                 sys = SystemInfo(
                     organization_id=org_id,
-                    system_name=str(row[0]).strip(),
+                    system_name=str(row[0] or "").strip(),
                     system_code=generate_system_code(db),
                     proposed_level=parse_proposed_level(row[3]),
                     deployment_mode=str(row[4]).strip() if row[4] else None,
@@ -3768,9 +3802,7 @@ def delete_attachment(request: Request, attachment_id: int, db: Session = Depend
     row = db.query(Attachment).filter(Attachment.id == attachment_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="附件不存在。")
-    path = Path(row.file_path)
-    if path.exists():
-        path.unlink()
+    safe_delete_uploaded_file(row.file_path)
     db.delete(row)
     db.commit()
     return {"message": "附件已删除。"}
@@ -3902,8 +3934,6 @@ def edit_report(
     report.content = payload.content
     if payload.title:
         report.title = payload.title
-    db.commit()
-    db.refresh(report)
     db.add(
         ReviewRecord(
             report_id=report.id,
@@ -3913,6 +3943,7 @@ def edit_report(
         )
     )
     db.commit()
+    db.refresh(report)
     return {"message": "保存成功", "data": {"id": report.id, "status": report.status}}
 
 
@@ -4486,7 +4517,8 @@ def workflow_extend_due(
         raise HTTPException(status_code=400, detail="仅进行中流程可延时。")
     base = instance.due_at or datetime.now()
     instance.due_at = base + timedelta(hours=hours)
-    current_step = get_workflow_config(db).steps_json[instance.current_step_index]
+    steps = get_workflow_config(db).steps_json
+    current_step = steps[instance.current_step_index] if instance.current_step_index < len(steps) else "未知节点"
     db.add(
         WorkflowAction(
             instance_id=instance.id,
@@ -5051,6 +5083,8 @@ def export_dashboard_pdf(
         project_status=project_status,
         db=db,
     )
+    if not HAS_REPORTLAB:
+        raise HTTPException(status_code=503, detail="当前环境未安装 reportlab，暂不支持导出 PDF。")
     path = EXPORT_DIR / f"dashboard_{datetime.now():%Y%m%d%H%M%S}.pdf"
     pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
     c = canvas.Canvas(str(path), pagesize=A4)
@@ -5388,9 +5422,7 @@ def rollback_knowledge(
     snap = dict(version.snapshot or {})
     if not snap:
         raise HTTPException(status_code=400, detail="版本快照为空。")
-    target_file = Path(str(snap.get("file_path") or ""))
-    if not target_file.exists():
-        raise HTTPException(status_code=400, detail="版本文件不存在，无法回滚。")
+    target_file = ensure_file_exists(snap.get("file_path"), "版本文件不存在，无法回滚。")
     log_knowledge_version(db, doc, "rollback_before", actor_name)
     for key in ["title", "keywords", "city", "district", "doc_type", "protection_level", "status", "file_name", "file_path", "file_size"]:
         if key in snap:
@@ -5460,9 +5492,7 @@ def delete_knowledge(request: Request, doc_id: int, db: Session = Depends(get_db
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在。")
     log_knowledge_version(db, doc, "delete_before", actor_name)
-    path = Path(doc.file_path)
-    if path.exists():
-        path.unlink()
+    safe_delete_uploaded_file(doc.file_path)
     pin = db.query(KnowledgePin).filter(KnowledgePin.document_id == doc_id).first()
     if pin:
         db.delete(pin)

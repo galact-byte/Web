@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MD → SSTM 转换器</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f13;
+    --panel: #16161d;
+    --border: #2a2a38;
+    --accent: #7c6af7;
+    --accent2: #f76a8f;
+    --text: #e0dff5;
+    --muted: #6b6a8a;
+    --success: #4ade80;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--border);
+    color: var(--muted);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 0;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+  }
+  .panel:last-child { border-right: none; }
+
+  .panel-header {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .panel-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .panel-title span { color: var(--accent); }
+
+  textarea {
+    flex: 1;
+    background: var(--bg);
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    padding: 18px;
+    resize: none;
+    width: 100%;
+    min-height: 400px;
+  }
+  textarea::placeholder { color: var(--muted); }
+
+  /* 预览区 */
+  #preview {
+    flex: 1;
+    background: #fff;
+    color: #222;
+    padding: 20px 24px;
+    overflow-y: auto;
+    min-height: 400px;
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 16px;
+    line-height: 1.8;
+    cursor: text;
+  }
+
+  #preview h1 { font-size: 22px; font-weight: 700; margin: 4px 0; }
+  #preview h2 { font-size: 19px; font-weight: 700; margin: 4px 0; }
+  #preview h3 { font-size: 17px; font-weight: 700; margin: 4px 0; }
+  #preview h4, #preview h5, #preview h6 { font-size: 16px; font-weight: 700; margin: 4px 0; }
+  #preview p { margin: 4px 0; font-size: 16px; }
+
+  #preview ul, #preview ol { margin: 4px 0 4px 22px; }
+  #preview li { margin: 2px 0; font-size: 16px; }
+
+  /* 代码：行内 */
+  #preview code {
+    background: #f0f0f0;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;  /* 英文代码字号调大 */
+    line-height: 1.6;
+  }
+
+  /* 代码块：去掉行间额外空隙 */
+  #preview pre {
+    background: #f5f5f5;
+    padding: 10px 14px;
+    border-radius: 5px;
+    overflow-x: auto;
+    margin: 6px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    line-height: 1.5;  /* 紧凑行距 */
+    white-space: pre;  /* 保留原样，不额外加行高 */
+  }
+  #preview pre code {
+    background: none;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  #preview blockquote {
+    border-left: 3px solid #ccc;
+    padding-left: 12px;
+    color: #555;
+    margin: 6px 0;
+    font-size: 16px;
+  }
+  #preview hr { border: none; border-top: 1px solid #ddd; margin: 10px 0; }
+  #preview a { color: #7c6af7; }
+  #preview strong { font-weight: 700; }
+  #preview em { font-style: italic; }
+  #preview del { text-decoration: line-through; }
+
+  /* 图片占位符 */
+  #preview .img-placeholder {
+    display: inline-block;
+    background: #f0f0f0;
+    border: 1.5px dashed #bbb;
+    border-radius: 5px;
+    color: #888;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 10px 18px;
+    margin: 4px 0;
+    max-width: 100%;
+    word-break: break-all;
+  }
+  #preview .img-placeholder::before {
+    content: "🖼 图片：";
+    color: #aaa;
+  }
+
+  .toolbar {
+    padding: 10px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    border: none;
+    cursor: pointer;
+    padding: 7px 16px;
+    border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .btn-convert {
+    background: linear-gradient(135deg, var(--accent), #5a4fd4);
+    color: white; font-weight: 700;
+  }
+  .btn-convert:hover { opacity: 0.85; }
+  .btn-clear { background: var(--border); color: var(--muted); }
+  .btn-clear:hover { color: var(--text); }
+  .btn-copy-preview {
+    background: linear-gradient(135deg, #f76a8f, #c84b6e);
+    color: white; font-weight: 700; margin-left: auto;
+  }
+  .btn-copy-preview:hover { opacity: 0.85; }
+  .btn-copy-preview.copied { background: #1a3a2a; color: var(--success); }
+
+  .hint { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .count { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">MD → SSTM 转换器</div>
+  <div class="badge">预览直接复制</div>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title"><span>#</span> Markdown 输入</div>
+      <span class="count" id="inCount">0 字符</span>
+    </div>
+    <textarea id="input" placeholder="粘贴你的 Markdown，点「转换」或按 Ctrl+Enter..."></textarea>
+    <div class="toolbar">
+      <button class="btn-convert" onclick="convert()">▶ 转换</button>
+      <button class="btn-clear" onclick="clearAll()">清空</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title"><span>👁</span> 预览（从这里复制）</div>
+    </div>
+    <div id="preview">
+      <span style="color:#aaa;font-size:13px;">转换后从这里 Ctrl+A 全选 → Ctrl+C 复制 → 粘贴到 SSTM 编辑器</span>
+    </div>
+    <div class="toolbar">
+      <span class="hint">① 转换 → ② 全选复制 → ③ 粘贴到SSTM</span>
+      <button class="btn-copy-preview" id="copyBtn" onclick="copyPreview()">全选并复制</button>
+    </div>
+  </div>
+</main>
+
+<script>
+  const input = document.getElementById('input');
+  const preview = document.getElementById('preview');
+
+  input.addEventListener('input', () => {
+    document.getElementById('inCount').textContent = input.value.length + ' 字符';
+  });
+
+  function convert() {
+    preview.innerHTML = mdToHTML(input.value);
+  }
+
+  function clearAll() {
+    input.value = '';
+    preview.innerHTML = '<span style="color:#aaa;font-size:13px;">转换后从这里复制</span>';
+    document.getElementById('inCount').textContent = '0 字符';
+  }
+
+  function copyPreview() {
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(preview);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    document.execCommand('copy');
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '✓ 已复制！去SSTM粘贴';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '全选并复制'; btn.classList.remove('copied'); }, 3000);
+  }
+
+  function mdToHTML(md) {
+    md = md.replace(/\n{3,}/g, '\n\n');
+    let lines = md.split('\n');
+    let result = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      let line = lines[i];
+
+      // 代码块
+      if (line.trim().startsWith('```')) {
+        let codeLines = [];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) {
+          codeLines.push(escapeHTML(lines[i]));
+          i++;
+        }
+        result.push('<pre><code>' + codeLines.join('\n') + '</code></pre>');
+        i++; continue;
+      }
+
+      // 无序列表
+      if (/^\s*[-*+]\s+/.test(line)) {
+        let items = [];
+        while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+          items.push('<li>' + inlineHTML(lines[i].replace(/^\s*[-*+]\s+/, '')) + '</li>');
+          i++;
+        }
+        result.push('<ul>' + items.join('') + '</ul>');
+        continue;
+      }
+
+      // 有序列表
+      if (/^\d+\.\s+/.test(line)) {
+        let items = [];
+        while (i < lines.length && /^\d+\.\s+/.test(lines[i])) {
+          items.push('<li>' + inlineHTML(lines[i].replace(/^\d+\.\s+/, '')) + '</li>');
+          i++;
+        }
+        result.push('<ol>' + items.join('') + '</ol>');
+        continue;
+      }
+
+      // 引用
+      if (line.startsWith('> ')) {
+        let qLines = [];
+        while (i < lines.length && lines[i].startsWith('> ')) {
+          qLines.push(inlineHTML(lines[i].slice(2)));
+          i++;
+        }
+        result.push('<blockquote>' + qLines.join('<br>') + '</blockquote>');
+        continue;
+      }
+
+      // 分割线
+      if (/^(\s*[-*_]){3,}\s*$/.test(line)) { result.push('<hr>'); i++; continue; }
+
+      // 标题
+      const hm = line.match(/^(#{1,6})\s+(.+)/);
+      if (hm) {
+        const lvl = hm[1].length;
+        result.push('<h' + lvl + '>' + inlineHTML(hm[2]) + '</h' + lvl + '>');
+        i++; continue;
+      }
+
+      // 空行
+      if (line.trim() === '') { i++; continue; }
+
+      // 段落
+      result.push('<p>' + inlineHTML(line) + '</p>');
+      i++;
+    }
+    return result.join('');
+  }
+
+  function escapeHTML(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function inlineHTML(text) {
+    // 图片：本地路径或加载失败时显示占位符
+    text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+      const isLocal = !src.startsWith('http://') && !src.startsWith('https://') && !src.startsWith('//');
+      if (isLocal) {
+        const name = src.split('/').pop().split('\\').pop();
+        return '<span class="img-placeholder">' + escapeHTML(name) + '</span>';
+      }
+      return '<img src="' + src + '" alt="' + escapeHTML(alt) + '" style="max-width:100%">';
+    });
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    text = text.replace(/_(.+?)_/g, '<em>$1</em>');
+    text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
+    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    return text;
+  }
+
+  input.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') convert();
+  });
+</script>
+</body>
+</html>

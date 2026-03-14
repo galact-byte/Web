@@ -343,7 +343,7 @@ onMounted(fetchData)
 
 <style scoped>
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
-.page-header h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+.page-header h1 { font-family: 'DM Serif Display', serif; font-size: 1.5rem; font-weight: 400; margin-bottom: 0.25rem; }
 .back-link { color: var(--text-secondary); font-size: 0.9rem; display: inline-block; margin-bottom: 0.5rem; }
 .back-link:hover { color: var(--accent-primary); }
 .project-code { color: var(--text-muted); font-family: monospace; }
@@ -364,7 +364,7 @@ onMounted(fetchData)
 .assignments-list { display: flex; flex-direction: column; gap: 1rem; }
 .assignment-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: var(--radius-md); }
 .assignee-info { display: flex; align-items: center; gap: 0.75rem; }
-.avatar-sm { width: 32px; height: 32px; background: var(--accent-gradient); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem; font-weight: 600; }
+.avatar-sm { width: 32px; height: 32px; background: var(--accent-primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem; font-weight: 600; }
 .assignee-name { font-weight: 500; }
 .assignee-dept { font-size: 0.85rem; }
 .assignment-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; flex: 1; }

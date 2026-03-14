@@ -134,7 +134,7 @@ onMounted(fetchStats)
 
 <style scoped>
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
-.page-header h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+.page-header h1 { font-family: 'DM Serif Display', serif; font-size: 1.5rem; font-weight: 400; margin-bottom: 0.25rem; }
 .loading-container { display: flex; justify-content: center; padding: 4rem; }
 
 .filter-bar { display: flex; gap: 1.5rem; align-items: flex-end; margin-bottom: 1.5rem; }
@@ -146,11 +146,11 @@ onMounted(fetchStats)
 .stats-section .section-header h2 { font-size: 1.15rem; font-weight: 600; }
 
 .person-info { display: flex; align-items: center; gap: 0.75rem; }
-.avatar-sm { width: 32px; height: 32px; background: var(--accent-gradient); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem; font-weight: 600; flex-shrink: 0; }
+.avatar-sm { width: 32px; height: 32px; background: var(--accent-primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem; font-weight: 600; flex-shrink: 0; }
 .person-name { font-weight: 500; }
 
 .contribution-bar-wrapper { display: flex; align-items: center; gap: 0.75rem; }
-.contribution-bar { height: 8px; background: var(--accent-gradient); border-radius: 4px; min-width: 4px; transition: width 0.5s ease; }
+.contribution-bar { height: 8px; background: var(--accent-primary); border-radius: 4px; min-width: 4px; transition: width 0.5s ease; }
 .contribution-value { font-weight: 600; font-size: 0.95rem; white-space: nowrap; }
 
 .person-row { cursor: pointer; }
