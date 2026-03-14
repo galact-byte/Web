@@ -1,12 +1,12 @@
 @chcp 65001 >nul 2>&1
 @echo off
-title Program1 Launcher v1.1
+title Program1 Launcher v1.2
 setlocal
 
 cd /d "%~dp0"
 
 echo ==================================================
-echo   Program1 Launcher v1.1
+echo   Program1 Launcher v1.2
 echo ==================================================
 echo.
 
@@ -87,8 +87,18 @@ if not exist "%DEP_FILE%" (
 )
 echo [INFO] Using dependency file: %DEP_FILE%
 
-:: Check if virtual environment exists
+:: Check if virtual environment exists and is valid
 if not exist "%VENV_PY%" goto SETUP_VENV
+
+:: Validate that venv python actually works (detect broken venv from different machine)
+"%VENV_PY%" --version >nul 2>&1
+if errorlevel 1 (
+    echo [WARN] Virtual environment exists but interpreter is broken.
+    echo [WARN] This usually happens when .venv was copied from another machine.
+    echo [INFO] Rebuilding virtual environment...
+    rmdir /s /q .venv 2>nul
+    goto SETUP_VENV
+)
 
 :CHECK_DEPS
 if not exist "%VENV_PY%" (
@@ -128,9 +138,13 @@ echo [INFO] Creating virtual environment...
 
 python -m venv .venv
 if errorlevel 1 (
-    echo [ERROR] Failed to create virtual environment
-    pause
-    exit /b 1
+    echo [WARN] "python -m venv" failed, trying with --without-pip...
+    python -m venv --without-pip .venv
+    if errorlevel 1 (
+        echo [ERROR] Failed to create virtual environment
+        pause
+        exit /b 1
+    )
 )
 set "VENV_PY=%CD%\.venv\Scripts\python.exe"
 if not exist "%VENV_PY%" (
@@ -165,19 +179,51 @@ if not errorlevel 1 goto :eof
 
 echo [WARN] pip not found in virtual environment, bootstrapping...
 
-"%VENV_PY%" -m ensurepip --upgrade
-if errorlevel 1 (
-    echo [ERROR] Failed to bootstrap pip into virtual environment using ensurepip.
-    exit /b 1
+:: Method 1: ensurepip
+echo [INFO] Trying ensurepip...
+"%VENV_PY%" -m ensurepip --upgrade >nul 2>&1
+"%VENV_PY%" -m pip --version >nul 2>&1
+if not errorlevel 1 (
+    echo [INFO] pip bootstrap completed via ensurepip.
+    goto :eof
 )
 
-"%VENV_PY%" -m pip --version >nul 2>&1
+:: Method 2: get-pip.py
+echo [WARN] ensurepip failed, trying get-pip.py...
+set "GET_PIP=%TEMP%\get-pip.py"
+
+:: Try curl first, then certutil, then python urllib
+curl -sS -o "%GET_PIP%" https://bootstrap.pypa.io/get-pip.py >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] pip is still unavailable in virtual environment.
-    exit /b 1
+    certutil -urlcache -split -f "https://bootstrap.pypa.io/get-pip.py" "%GET_PIP%" >nul 2>&1
 )
-echo [INFO] pip bootstrap completed.
-goto :eof
+if errorlevel 1 (
+    "%VENV_PY%" -c "import urllib.request; urllib.request.urlretrieve('https://bootstrap.pypa.io/get-pip.py', r'%GET_PIP%')" >nul 2>&1
+)
+
+if exist "%GET_PIP%" (
+    "%VENV_PY%" "%GET_PIP%" >nul 2>&1
+    del /f "%GET_PIP%" 2>nul
+    "%VENV_PY%" -m pip --version >nul 2>&1
+    if not errorlevel 1 (
+        echo [INFO] pip bootstrap completed via get-pip.py.
+        goto :eof
+    )
+)
+
+:: Method 3: System pip to install into venv
+echo [WARN] get-pip.py failed, trying system pip...
+python -m pip install --target "%CD%\.venv\Lib\site-packages" pip >nul 2>&1
+"%VENV_PY%" -m pip --version >nul 2>&1
+if not errorlevel 1 (
+    echo [INFO] pip bootstrap completed via system pip.
+    goto :eof
+)
+
+echo [ERROR] Failed to bootstrap pip into virtual environment.
+echo [ERROR] All methods exhausted: ensurepip, get-pip.py, system pip.
+echo [ERROR] Please ensure your Python installation is complete and has network access.
+exit /b 1
 
 :INSTALL_DEPS
 echo [INFO] Installing dependencies from %DEP_FILE%...
