@@ -9,7 +9,26 @@
 </template>
 
 <script setup>
-// 全局应用组件
+import { onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useUserStore } from './stores/user'
+
+const router = useRouter()
+const userStore = useUserStore()
+
+// 应用启动时校验缓存的 token 是否仍然有效
+onMounted(async () => {
+  if (userStore.token) {
+    const user = await userStore.fetchCurrentUser()
+    if (!user) {
+      // token 已失效，跳转登录
+      router.replace('/login')
+    } else if (user.must_change_password) {
+      // 同步最新的 must_change_password 状态到本地
+      router.replace('/login')
+    }
+  }
+})
 </script>
 
 <style>

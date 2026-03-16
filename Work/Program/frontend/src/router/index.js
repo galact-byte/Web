@@ -73,15 +73,25 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
 
+  // 1. 强制改密优先级最高：已登录但需改密 → 只能留在登录页
+  if (userStore.isLoggedIn && userStore.mustChangePassword) {
+    if (to.name === 'Login') {
+      next()  // 允许停留在登录页（显示改密弹窗）
+    } else {
+      next('/login')
+    }
+    return
+  }
+
+  // 2. 未登录 → 需认证页面跳转到登录
   if (to.meta.requiresAuth && !userStore.isLoggedIn) {
     next('/login')
+  // 3. 已登录 → 不允许访问登录页
   } else if (to.meta.requiresGuest && userStore.isLoggedIn) {
     next('/')
+  // 4. 权限不足 → 非经理不能访问经理页面
   } else if (to.meta.requiresManager && !userStore.isManager) {
     next('/')
-  } else if (to.meta.requiresAuth && userStore.mustChangePassword && to.name !== 'Login') {
-    // 强制改密用户只能访问登录页（登录页会显示改密弹窗）
-    next('/login')
   } else {
     next()
   }
