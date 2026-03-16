@@ -1,5 +1,6 @@
 ﻿<!doctype html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -29,7 +30,9 @@
       --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     html,
     body {
@@ -371,7 +374,76 @@
       text-decoration: none;
     }
 
-    .hidden { display: none !important; }
+    .hidden {
+      display: none !important;
+    }
+
+    .pwd-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(4px);
+      justify-content: center;
+      align-items: center;
+    }
+
+    .pwd-modal-overlay.visible {
+      display: flex;
+    }
+
+    .pwd-modal-box {
+      position: relative;
+      width: 92%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      background: var(--bg-panel-strong);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+      animation: pwdModalIn 0.28s ease;
+    }
+
+    @keyframes pwdModalIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.97);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .pwd-modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      box-shadow: none;
+    }
+
+    .pwd-modal-close:hover {
+      background: rgba(0, 0, 0, 0.06);
+      color: var(--text-main);
+      transform: none;
+      box-shadow: none;
+    }
 
     @media (max-width: 1180px) {
       .auth-shell {
@@ -410,6 +482,7 @@
     }
   </style>
 </head>
+
 <body>
   <main class="auth-shell">
     <section class="auth-visual" aria-label="系统说明">
@@ -479,36 +552,6 @@
         <div id="status-login" class="status">请输入账号和密码。</div>
       </div>
 
-      <div id="change-pwd-panel" class="panel-section hidden">
-        <div class="section-head">
-          <h3>修改密码</h3>
-          <p>当前账号需先修改密码后再继续。新密码至少 8 位。</p>
-        </div>
-
-        <div class="form-grid">
-          <div class="field">
-            <label for="current-password">当前密码</label>
-            <input id="current-password" type="password" autocomplete="current-password" placeholder="请输入当前密码" />
-          </div>
-          <div class="field">
-            <label for="new-password">新密码</label>
-            <input id="new-password" type="password" autocomplete="new-password" placeholder="请输入新密码（至少 8 位）" />
-          </div>
-          <div class="field">
-            <label for="new-password2">确认新密码</label>
-            <input id="new-password2" type="password" autocomplete="new-password" placeholder="请再次输入新密码" />
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="btn btn-primary" type="button" onclick="changePassword()">
-            <i class="fas fa-key"></i>
-            <span>确认修改密码</span>
-          </button>
-        </div>
-
-        <div id="status-pwd" class="status">如提示需改密，请在此完成。</div>
-      </div>
 
       <div id="logged-box" class="link-row hidden">
         <a href="#" onclick="goNext(); return false;">进入系统</a>
@@ -516,6 +559,40 @@
       </div>
     </section>
   </main>
+
+  <div class="pwd-modal-overlay" id="pwd-modal-overlay">
+    <div class="pwd-modal-box">
+      <button class="pwd-modal-close" onclick="hidePwdModal()" title="关闭">&times;</button>
+      <div class="section-head">
+        <h3>修改密码</h3>
+        <p>当前账号需先修改密码后再继续。新密码至少 8 位。</p>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="current-password">当前密码</label>
+          <input id="current-password" type="password" autocomplete="current-password" placeholder="请输入当前密码" />
+        </div>
+        <div class="field">
+          <label for="new-password">新密码</label>
+          <input id="new-password" type="password" autocomplete="new-password" placeholder="请输入新密码（至少 8 位）" />
+        </div>
+        <div class="field">
+          <label for="new-password2">确认新密码</label>
+          <input id="new-password2" type="password" autocomplete="new-password" placeholder="请再次输入新密码" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" type="button" onclick="changePassword()">
+          <i class="fas fa-key"></i>
+          <span>确认修改密码</span>
+        </button>
+      </div>
+
+      <div id="status-pwd" class="status">如提示需改密，请在此完成。</div>
+    </div>
+  </div>
 
   <script>
     const nextPathRaw = "{{ next_path }}";
@@ -527,7 +604,7 @@
 
     function authHeaders() {
       const token = localStorage.getItem('auth_token') || '';
-      return token ? {'X-Auth-Token': token} : {};
+      return token ? { 'X-Auth-Token': token } : {};
     }
 
     function setStatus(text, kind) {
@@ -558,8 +635,8 @@
       try {
         const response = await fetch('/api/auth/login', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({username, password}),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
         });
         const data = await response.json();
 
@@ -573,7 +650,7 @@
         document.getElementById('logged-box').classList.remove('hidden');
 
         if (data.must_change_password) {
-          document.getElementById('change-pwd-panel').classList.remove('hidden');
+          showPwdModal();
           setPwdStatus('当前账号必须先修改密码后才能进入系统。', 'err');
           return;
         }
@@ -587,12 +664,12 @@
     async function logout(showMessage = true) {
       const token = localStorage.getItem('auth_token') || '';
       try {
-        await fetch('/api/auth/logout', {method: 'POST', headers: token ? {'X-Auth-Token': token} : {}});
-      } catch (_error) {}
+        await fetch('/api/auth/logout', { method: 'POST', headers: token ? { 'X-Auth-Token': token } : {} });
+      } catch (_error) { }
 
       localStorage.removeItem('auth_token');
       document.getElementById('logged-box').classList.add('hidden');
-      document.getElementById('change-pwd-panel').classList.add('hidden');
+      hidePwdModal();
       if (showMessage) {
         setStatus('当前登录状态已清除。', 'ok');
       }
@@ -623,8 +700,8 @@
       try {
         const response = await fetch('/api/auth/change-password', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json', ...authHeaders()},
-          body: JSON.stringify({current_password: currentPassword, new_password: newPassword}),
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
         });
         const data = await response.json();
 
@@ -646,22 +723,30 @@
       if (!token) return;
 
       try {
-        const response = await fetch('/api/auth/me', {headers: authHeaders()});
+        const response = await fetch('/api/auth/me', { headers: authHeaders() });
         if (!response.ok) return;
 
         const me = await response.json();
         setStatus(`当前已登录：${me.username}（${me.role}）`, 'ok');
         document.getElementById('logged-box').classList.remove('hidden');
         if (me.must_change_password) {
-          document.getElementById('change-pwd-panel').classList.remove('hidden');
+          showPwdModal();
           setPwdStatus('当前账号必须先修改密码后才能进入系统。', 'err');
         }
-      } catch (_error) {}
+      } catch (_error) { }
+    }
+
+    function showPwdModal() {
+      document.getElementById('pwd-modal-overlay').classList.add('visible');
+    }
+
+    function hidePwdModal() {
+      document.getElementById('pwd-modal-overlay').classList.remove('visible');
     }
 
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter') return;
-      const changePanelVisible = !document.getElementById('change-pwd-panel').classList.contains('hidden');
+      const changePanelVisible = document.getElementById('pwd-modal-overlay').classList.contains('visible');
       if (changePanelVisible && document.activeElement && document.activeElement.id !== 'login-username' && document.activeElement.id !== 'login-password') {
         changePassword();
         return;
@@ -673,4 +758,5 @@
     initAuthState();
   </script>
 </body>
+
 </html>

@@ -13,15 +13,18 @@
   <div class="result" id="loginResult">请输入账号密码后登录。</div>
 </div>
 
-<div class="panel" id="selfPwdPanel">
-  <h2>修改密码</h2>
-  <div class="row">
-    <div><label>当前密码</label><input id="currentPassword" type="password" /></div>
-    <div><label>新密码</label><input id="newPasswordSelf" type="password" /></div>
-    <div><label>确认新密码</label><input id="newPasswordSelf2" type="password" /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="changePassword()">修改密码</button></div>
+<div class="modal-overlay" id="pwdModalOverlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="hidePwdModal()" title="关闭">&times;</button>
+    <h2>修改密码</h2>
+    <div class="grid">
+      <div><label>当前密码</label><input id="currentPassword" type="password" /></div>
+      <div><label>新密码</label><input id="newPasswordSelf" type="password" /></div>
+      <div><label>确认新密码</label><input id="newPasswordSelf2" type="password" /></div>
+      <div><label>&nbsp;</label><button class="btn-lite" onclick="changePassword()">修改密码</button></div>
+    </div>
+    <div class="result" id="pwdResult">请完成密码修改。</div>
   </div>
-  <div class="result" id="pwdResult">登录后可在此修改密码。</div>
 </div>
 
 <div class="panel" data-role-only="admin" id="adminUserPanel">
@@ -71,6 +74,15 @@ function setPwdResult(text) {
   document.getElementById('pwdResult').textContent = text;
 }
 
+function showPwdModal(msg) {
+  if (msg) setPwdResult(msg);
+  document.getElementById('pwdModalOverlay').classList.add('visible');
+}
+
+function hidePwdModal() {
+  document.getElementById('pwdModalOverlay').classList.remove('visible');
+}
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => (
     {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch] || ch
@@ -102,7 +114,7 @@ async function syncCurrentUser() {
   if (typeof applyRoleUI === 'function') applyRoleUI(currentRole);
   if (currentRole === 'admin') loadUsers();
   if (data.must_change_password) {
-    setPwdResult('当前账号被标记为首次登录/重置后登录，请先修改密码。');
+    showPwdModal('当前账号被标记为首次登录/重置后登录，请先修改密码。');
   }
 }
 
@@ -123,7 +135,7 @@ async function login() {
     let msg = `登录成功：${data.user?.username || username}（${currentRole}）`;
     if (data.must_change_password) {
       msg += '；请先修改初始密码。';
-      setPwdResult('当前账号被标记为首次登录/重置后登录，请先修改密码。');
+      showPwdModal('当前账号被标记为首次登录/重置后登录，请先修改密码。');
     }
     setLoginResult(msg);
     if (currentRole === 'admin') {
@@ -144,7 +156,7 @@ async function logout() {
   if (typeof applyRoleUI === 'function') applyRoleUI('guest');
   document.getElementById('userTable').innerHTML = '';
   setLoginResult('已退出');
-  setPwdResult('登录后可在此修改密码。');
+  hidePwdModal();
 }
 
 async function loadUsers() {
@@ -260,6 +272,7 @@ async function changePassword() {
   document.getElementById('currentPassword').value = '';
   document.getElementById('newPasswordSelf').value = '';
   document.getElementById('newPasswordSelf2').value = '';
+  hidePwdModal();
   await syncCurrentUser();
 }
 
