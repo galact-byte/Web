@@ -1,0 +1,471 @@
+{% extends "base.html" %}
+{% block title %}分析 - {{ audit.title }}{% endblock %}
+
+{% block content %}
+<style>
+.main-content {
+  padding: 0 !important;
+  max-width: none !important;
+  height: 100vh;
+  overflow: hidden;
+}
+.analysis-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  height: 44px;
+  flex-shrink: 0;
+}
+.analysis-header a.back-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+.analysis-header a.back-link:hover { color: var(--color-primary); }
+.analysis-header h2 {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--color-text-heading);
+  margin: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.analysis-header .tag {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+.analysis-layout {
+  display: flex;
+  height: calc(100vh - 44px);
+}
+
+/* File tree */
+.file-tree-panel {
+  width: 250px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg-subtle);
+}
+.panel-hd {
+  padding: 7px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.file-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-item:hover { background: var(--color-surface-hover); color: var(--color-text); }
+.tree-item.active { background: var(--color-primary-muted); color: var(--color-primary); }
+.tree-item.folder { color: var(--color-text); font-weight: 500; }
+.tree-item .ico { width: 16px; text-align: center; flex-shrink: 0; font-size: 0.7rem; }
+
+/* Main panel */
+.main-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Vuln table */
+.vuln-panel {
+  height: 34%;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--color-border);
+}
+.vuln-scroll {
+  flex: 1;
+  overflow: auto;
+}
+.vtable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.vtable thead { position: sticky; top: 0; z-index: 1; }
+.vtable th {
+  padding: 5px 10px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.vtable td {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+.vtable tbody tr { cursor: pointer; }
+.vtable tbody tr:hover { background: var(--color-surface-hover); }
+.vtable tbody tr.active { background: var(--color-primary-muted); }
+.sev {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.sev-c { background: rgba(255,77,106,0.15); color: #ff4d6a; }
+.sev-h { background: rgba(255,140,66,0.15); color: #ff8c42; }
+.sev-m { background: rgba(251,191,36,0.15); color: #fbbf24; }
+.sev-l { background: rgba(0,212,170,0.15); color: #00d4aa; }
+.sev-i { background: rgba(139,148,158,0.15); color: #8b949e; }
+
+/* Code viewer */
+.code-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.code-scroll {
+  flex: 1;
+  overflow: auto;
+  background: var(--color-bg);
+}
+.ctable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.ctable td { padding: 0; vertical-align: top; }
+.ctable .ln {
+  width: 48px;
+  min-width: 48px;
+  padding: 0 8px;
+  text-align: right;
+  color: var(--color-text-muted);
+  opacity: 0.4;
+  user-select: none;
+  border-right: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-subtle);
+}
+.ctable .lc {
+  padding: 0 12px;
+  white-space: pre;
+}
+.ctable tr.hl { background: rgba(251,191,36,0.12); }
+.ctable tr.hl .ln { color: var(--color-warning); opacity: 1; background: rgba(251,191,36,0.08); }
+.ctable tr.search-hl { background: rgba(0,212,170,0.1); }
+.empty-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 60px;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+/* Detail panel */
+.detail-panel {
+  height: 24%;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+}
+.detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  font-size: 0.83rem;
+  line-height: 1.6;
+}
+.detail-body .fd { margin-bottom: 8px; }
+.detail-body .fl {
+  font-weight: 600;
+  color: var(--color-text-heading);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+}
+.detail-body .fv { color: var(--color-text); white-space: pre-wrap; }
+.code-search input {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  width: 150px;
+}
+.code-search input:focus { outline: none; border-color: var(--color-primary); }
+</style>
+
+<div class="analysis-header">
+  <a href="/audit/{{ audit.id }}" class="back-link">&larr; 返回报告</a>
+  <h2>{{ audit.title }}</h2>
+  <span class="tag">{{ audit.language }}</span>
+  <span class="tag">{{ audit.model_used }}</span>
+</div>
+
+<div class="analysis-layout">
+  <div class="file-tree-panel">
+    <div class="panel-hd"><span>文件 (<span id="fc">0</span>)</span></div>
+    <div class="file-tree" id="file-tree"><div class="empty-hint">加载中...</div></div>
+  </div>
+
+  <div class="main-panel">
+    <div class="vuln-panel">
+      <div class="panel-hd"><span>漏洞 (<span id="vc">0</span>)</span></div>
+      <div class="vuln-scroll">
+        <table class="vtable">
+          <thead><tr><th style="width:36px">ID</th><th>漏洞名称</th><th style="width:68px">风险等级</th><th>位置</th></tr></thead>
+          <tbody id="vbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="code-panel">
+      <div class="panel-hd">
+        <span id="cfn">选择文件查看代码</span>
+        <div class="code-search"><input type="text" id="csearch" placeholder="搜索代码..."></div>
+      </div>
+      <div class="code-scroll" id="cview"><div class="empty-hint">点击左侧文件或上方漏洞查看代码</div></div>
+    </div>
+
+    <div class="detail-panel">
+      <div class="panel-hd">漏洞详情</div>
+      <div class="detail-body" id="detail"><div class="empty-hint">点击漏洞查看详情</div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var files = [], vulns = [], curFile = null;
+
+  fetch('/api/audit/{{ audit.id }}/analysis')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      files = d.files; vulns = d.vulnerabilities;
+      document.getElementById('fc').textContent = files.length;
+      document.getElementById('vc').textContent = vulns.length;
+      buildTree();
+      buildVulns();
+      if (files.length === 1) pickFile(0);
+    });
+
+  /* ---------- File tree ---------- */
+  function buildTree() {
+    var el = document.getElementById('file-tree');
+    el.innerHTML = '';
+    var root = {};
+    files.forEach(function(f, i) {
+      var ps = f.path.split('/'), n = root;
+      for (var j = 0; j < ps.length - 1; j++) {
+        if (!n[ps[j]]) n[ps[j]] = { _c: {} };
+        n = n[ps[j]]._c;
+      }
+      n[ps[ps.length - 1]] = { _i: i };
+    });
+    renderNode(root, el, 0);
+  }
+
+  function renderNode(node, parent, depth) {
+    var keys = Object.keys(node).sort(function(a, b) {
+      var ad = node[a]._c !== undefined, bd = node[b]._c !== undefined;
+      if (ad !== bd) return ad ? -1 : 1;
+      return a.localeCompare(b);
+    });
+    keys.forEach(function(k) {
+      if (k === '_c' || k === '_i') return;
+      var item = node[k], div = document.createElement('div');
+      div.className = 'tree-item';
+      div.style.paddingLeft = (8 + depth * 14) + 'px';
+      if (item._c !== undefined) {
+        div.className += ' folder';
+        div.innerHTML = '<span class="ico">\u25BE</span>' + esc(k);
+        parent.appendChild(div);
+        var box = document.createElement('div');
+        parent.appendChild(box);
+        renderNode(item._c, box, depth + 1);
+        div.addEventListener('click', function() {
+          var open = box.style.display !== 'none';
+          box.style.display = open ? 'none' : '';
+          this.querySelector('.ico').textContent = open ? '\u25B8' : '\u25BE';
+        });
+      } else {
+        div.innerHTML = '<span class="ico">\u00B7</span>' + esc(k);
+        div.dataset.idx = item._i;
+        div.addEventListener('click', function() { pickFile(+this.dataset.idx); });
+        parent.appendChild(div);
+      }
+    });
+  }
+
+  function pickFile(i) {
+    curFile = i;
+    document.querySelectorAll('.file-tree .tree-item').forEach(function(e) {
+      e.classList.toggle('active', e.dataset && e.dataset.idx == i);
+    });
+    showCode(files[i]);
+  }
+
+  /* ---------- Code viewer ---------- */
+  function showCode(f) {
+    var v = document.getElementById('cview');
+    var lines = f.content.split('\n'), h = '<table class="ctable"><tbody>';
+    for (var i = 0; i < lines.length; i++) {
+      h += '<tr id="L' + (i+1) + '"><td class="ln">' + (i+1) + '</td><td class="lc">' + esc(lines[i]) + '</td></tr>';
+    }
+    h += '</tbody></table>';
+    v.innerHTML = h;
+    document.getElementById('cfn').textContent = f.path + ' (' + f.lines + ' lines)';
+  }
+
+  function hlLine(n) {
+    document.querySelectorAll('.ctable tr.hl').forEach(function(r) { r.classList.remove('hl'); });
+    var row = document.getElementById('L' + n);
+    if (row) { row.classList.add('hl'); row.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  }
+
+  /* ---------- Vulnerability table ---------- */
+  function buildVulns() {
+    var tb = document.getElementById('vbody');
+    if (!vulns.length) {
+      tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--color-text-muted);padding:16px">未发现安全漏洞</td></tr>';
+      return;
+    }
+    tb.innerHTML = '';
+    vulns.forEach(function(v, i) {
+      var tr = document.createElement('tr');
+      tr.dataset.idx = i;
+      tr.innerHTML =
+        '<td>' + v.id + '</td>' +
+        '<td title="' + escA(v.title) + '">' + esc(v.title) + '</td>' +
+        '<td><span class="sev ' + sevCls(v.severity) + '">' + esc(v.severity || '-') + '</span></td>' +
+        '<td title="' + escA(v.location || '') + '">' + esc(v.location || '-') + '</td>';
+      tr.addEventListener('click', function() { pickVuln(+this.dataset.idx); });
+      tb.appendChild(tr);
+    });
+  }
+
+  function pickVuln(i) {
+    var v = vulns[i];
+    document.querySelectorAll('.vtable tbody tr').forEach(function(r) {
+      r.classList.toggle('active', r.dataset.idx == i);
+    });
+    showDetail(v);
+    var loc = parseLoc(v.location || '');
+    if (loc.fi !== null) {
+      pickFile(loc.fi);
+      if (loc.ln) setTimeout(function() { hlLine(loc.ln); }, 60);
+    } else if (loc.ln && curFile !== null) {
+      hlLine(loc.ln);
+    }
+  }
+
+  function showDetail(v) {
+    var el = document.getElementById('detail');
+    var pairs = [
+      ['漏洞分类', v.category], ['风险等级', v.severity], ['问题位置', v.location],
+      ['问题描述', v.description], ['详细分析', v.analysis], ['修复建议', v.recommendation]
+    ];
+    var h = '<div style="margin-bottom:6px;font-weight:600;color:var(--color-text-heading)">' + esc(v.title) + '</div>';
+    pairs.forEach(function(p) {
+      if (!p[1]) return;
+      h += '<div class="fd"><div class="fl">' + p[0] + '</div><div class="fv">' + esc(p[1]) + '</div></div>';
+    });
+    el.innerHTML = h;
+  }
+
+  function parseLoc(loc) {
+    var r = { fi: null, ln: null };
+    if (!loc) return r;
+    for (var i = 0; i < files.length; i++) {
+      var p = files[i].path, bn = p.split('/').pop();
+      if (loc.indexOf(p) !== -1 || loc.indexOf(bn) !== -1) { r.fi = i; break; }
+    }
+    var m = loc.match(/第\s*(\d+)\s*行|[Ll]ine\s*(\d+)|[:：](\d+)/);
+    if (m) r.ln = parseInt(m[1] || m[2] || m[3]);
+    return r;
+  }
+
+  function sevCls(s) {
+    if (!s) return 'sev-i';
+    if (s.indexOf('严重') !== -1) return 'sev-c';
+    if (s.indexOf('高') !== -1) return 'sev-h';
+    if (s.indexOf('中') !== -1) return 'sev-m';
+    if (s.indexOf('低') !== -1) return 'sev-l';
+    return 'sev-i';
+  }
+
+  /* ---------- Search ---------- */
+  var si = document.getElementById('csearch'), st = null;
+  si.addEventListener('input', function() {
+    clearTimeout(st);
+    var q = this.value.trim();
+    st = setTimeout(function() {
+      document.querySelectorAll('.ctable tr.hl, .ctable tr.search-hl').forEach(function(r) {
+        r.classList.remove('hl'); r.classList.remove('search-hl');
+      });
+      if (!q) return;
+      var rows = document.querySelectorAll('.ctable tr'), first = true;
+      for (var i = 0; i < rows.length; i++) {
+        var c = rows[i].querySelector('.lc');
+        if (c && c.textContent.indexOf(q) !== -1) {
+          rows[i].classList.add('search-hl');
+          if (first) { rows[i].scrollIntoView({ block: 'center', behavior: 'smooth' }); first = false; }
+        }
+      }
+    }, 250);
+  });
+
+  /* ---------- Utils ---------- */
+  function esc(s) { return s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+  function escA(s) { return esc(s).replace(/'/g,'&#39;'); }
+})();
+</script>
+{% endblock %}

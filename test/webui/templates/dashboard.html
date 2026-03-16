@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}审计记录 - CodeAudit{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>审计记录</h1>
+</div>
+
+<div class="filter-tabs">
+  <a href="/" class="filter-tab{% if not current_filter %} active{% endif %}">全部</a>
+  <a href="/?status=running" class="filter-tab{% if current_filter == 'running' %} active{% endif %}">进行中</a>
+  <a href="/?status=completed" class="filter-tab{% if current_filter == 'completed' %} active{% endif %}">已完成</a>
+  <a href="/?status=failed" class="filter-tab{% if current_filter == 'failed' %} active{% endif %}">失败</a>
+</div>
+
+{% if audits %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>标题</th>
+      <th>语言</th>
+      <th>模型</th>
+      <th>状态</th>
+      <th>风险</th>
+      <th>时间</th>
+      <th class="col-actions">操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for audit in audits %}
+    <tr data-id="{{ audit.id }}" data-status="{{ audit.status }}">
+      <td><a href="/audit/{{ audit.id }}">{{ audit.title }}</a></td>
+      <td>{{ audit.language }}</td>
+      <td class="text-muted">{{ audit.model_used or '-' }}</td>
+      <td>
+        <span class="badge badge-{{ audit.status }}">
+          {% if audit.status == 'pending' %}等待中
+          {% elif audit.status == 'running' %}审计中
+          {% elif audit.status == 'completed' %}已完成
+          {% elif audit.status == 'failed' %}失败
+          {% endif %}
+        </span>
+      </td>
+      <td>
+        {% if audit.status == 'completed' %}
+        <span class="badge badge-{{ audit.severity }}">
+          {% if audit.severity == 'critical' %}严重
+          {% elif audit.severity == 'high' %}高风险
+          {% elif audit.severity == 'medium' %}中风险
+          {% elif audit.severity == 'low' %}低风险
+          {% else %}安全
+          {% endif %}
+        </span>
+        {% else %}-{% endif %}
+      </td>
+      <td class="text-muted">{{ audit.created_at.strftime('%m-%d %H:%M') }}</td>
+      <td class="col-actions">
+        <div class="btn-group">
+          <a href="/audit/{{ audit.id }}" class="btn btn-outline btn-sm">查看</a>
+          <button class="btn btn-danger btn-sm" onclick="deleteAudit({{ audit.id }})">删除</button>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
+  <p>还没有审计记录</p>
+  <a href="/audit/new" class="btn btn-primary">开始第一次审计</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 轮询进行中的审计状态
+(function() {
+  const rows = document.querySelectorAll('tr[data-status="running"]');
+  if (!rows.length) return;
+
+  const timer = setInterval(function() {
+    let pending = 0;
+    rows.forEach(function(row) {
+      if (row.dataset.status !== 'running') return;
+      pending++;
+      fetch('/api/audit/' + row.dataset.id + '/status')
+        .then(r => r.json())
+        .then(function(d) {
+          if (d.status !== 'running') {
+            row.dataset.status = d.status;
+            location.reload();
+          }
+        });
+    });
+    if (!pending) clearInterval(timer);
+  }, 2000);
+})();
+</script>
+{% endblock %}
