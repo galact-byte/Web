@@ -30,10 +30,21 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    const detail = error.response?.data?.detail
+
+    if (status === 401) {
       // Token 过期或无效
       localStorage.removeItem('token')
       localStorage.removeItem('user')
+      router.push('/login')
+    } else if (status === 403 && detail === '请先修改密码') {
+      // 后端强制改密 —— 更新本地缓存并跳转登录页（显示改密弹窗）
+      try {
+        const cached = JSON.parse(localStorage.getItem('user') || '{}')
+        cached.must_change_password = true
+        localStorage.setItem('user', JSON.stringify(cached))
+      } catch { /* ignore */ }
       router.push('/login')
     }
     return Promise.reject(error)
