@@ -26,6 +26,7 @@ def check_dependencies():
         "pymysql": "pymysql cryptography",
         "markdown": "markdown",
         "requests": "requests",
+        "bleach": "bleach",
         "docx": "python-docx",
         "openpyxl": "openpyxl",
     }

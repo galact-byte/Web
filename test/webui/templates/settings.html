@@ -26,6 +26,9 @@
     <div class="form-group">
       <label for="api_key">API 密钥</label>
       <input type="password" id="api_key" class="form-control" value="{{ api_key }}" placeholder="sk-...">
+      {% if has_key %}
+      <p class="form-hint">已配置密钥。留空或不修改则保留原密钥，输入新值将覆盖。</p>
+      {% endif %}
     </div>
 
     <div class="form-group">
