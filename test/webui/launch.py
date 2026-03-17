@@ -51,6 +51,11 @@ def check_mysql():
     try:
         from config import Config
         import pymysql
+        if not Config.DB_PASSWORD:
+            print("  [!] 未配置数据库密码，请在 .env 文件中设置 DB_PASSWORD")
+            print("  参考 .env.example 文件")
+            input("按回车键仍然尝试启动，按 Ctrl+C 退出...")
+            return
         pymysql.connect(
             host=Config.DB_HOST,
             port=Config.DB_PORT,
@@ -62,7 +67,7 @@ def check_mysql():
         print(f"  [!] MySQL 连接失败: {e}")
         print("  请确认:")
         print("    1. MySQL 服务已启动")
-        print("    2. config.py 中的数据库配置正确")
+        print("    2. .env 文件中的数据库配置正确")
         print()
         input("按回车键仍然尝试启动，按 Ctrl+C 退出...")
 
