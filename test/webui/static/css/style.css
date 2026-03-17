@@ -690,6 +690,12 @@ textarea.form-control {
 }
 
 /* Progress bar */
+.progress-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 120px;
+}
 .progress-bar-wrap {
   width: 100%;
   max-width: 400px;

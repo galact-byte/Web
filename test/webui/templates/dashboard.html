@@ -40,6 +40,14 @@
           {% elif audit.status == 'failed' %}失败
           {% endif %}
         </span>
+        {% if audit.status == 'running' %}
+        <div class="progress-inline" style="margin-top:6px;">
+          <div class="progress-bar-track" style="height:4px;">
+            <div class="progress-bar-fill" style="width:0%;"></div>
+          </div>
+          <span class="progress-bar-label"></span>
+        </div>
+        {% endif %}
       </td>
       <td>
         {% if audit.status == 'completed' %}
@@ -75,22 +83,40 @@
 
 {% block scripts %}
 <script>
-// 轮询进行中的审计状态
+// 轮询进行中的审计状态并更新进度条
 (function() {
-  const rows = document.querySelectorAll('tr[data-status="running"]');
+  var rows = document.querySelectorAll('tr[data-status="running"]');
   if (!rows.length) return;
 
-  const timer = setInterval(function() {
-    let pending = 0;
+  var timer = setInterval(function() {
+    var pending = 0;
     rows.forEach(function(row) {
       if (row.dataset.status !== 'running') return;
       pending++;
       fetch('/api/audit/' + row.dataset.id + '/status')
-        .then(r => r.json())
+        .then(function(r) { return r.json(); })
         .then(function(d) {
           if (d.status !== 'running') {
             row.dataset.status = d.status;
             location.reload();
+            return;
+          }
+          var wrap = row.querySelector('.progress-inline');
+          if (!wrap) return;
+          var fill = wrap.querySelector('.progress-bar-fill');
+          var label = wrap.querySelector('.progress-bar-label');
+          if (d.progress_total > 0) {
+            var pct = d.progress_total === 1
+              ? 50
+              : Math.round((d.progress_current / d.progress_total) * 100);
+            if (d.progress && d.progress.indexOf('汇总') !== -1) pct = 95;
+            fill.style.width = pct + '%';
+            label.textContent = d.progress_total === 1
+              ? '审计中...'
+              : d.progress_current + '/' + d.progress_total;
+          } else {
+            fill.style.width = '0%';
+            label.textContent = '等待中...';
           }
         });
     });

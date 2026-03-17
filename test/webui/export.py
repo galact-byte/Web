@@ -6,11 +6,31 @@ import json
 import re
 from datetime import datetime
 
+import bleach
 import markdown
 
 SEVERITY_MAP = {
     "critical": "严重", "high": "高风险", "medium": "中风险",
     "low": "低风险", "info": "安全",
+}
+
+# HTML 净化白名单
+_ALLOWED_TAGS = [
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "p", "br", "hr",
+    "ul", "ol", "li",
+    "pre", "code",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "strong", "em", "b", "i", "del",
+    "a", "blockquote",
+    "div", "span",
+]
+_ALLOWED_ATTRS = {
+    "a": ["href", "title"],
+    "code": ["class"],
+    "pre": ["class"],
+    "td": ["align"],
+    "th": ["align"],
 }
 
 
@@ -142,8 +162,11 @@ def export_html(audit) -> str:
         audit.severity, ("未知", "#8b949e", "rgba(139,148,158,0.12)")
     )
 
-    result_body = markdown.markdown(
-        audit.result or "", extensions=["fenced_code", "tables"]
+    result_body = bleach.clean(
+        markdown.markdown(
+            audit.result or "", extensions=["fenced_code", "tables"]
+        ),
+        tags=_ALLOWED_TAGS, attributes=_ALLOWED_ATTRS, strip=True,
     )
 
     return f"""<!DOCTYPE html>

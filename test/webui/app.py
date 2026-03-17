@@ -2,14 +2,41 @@ import html
 import re
 import threading
 
+import bleach
 import markdown
 import pymysql
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 
 from config import Config
 from export import export_html, export_json, export_markdown, export_docx, export_xlsx, parse_vulnerabilities
 from llm import LLMClient
 from models import Audit, Setting, db
+
+# -- HTML 净化白名单（防止 LLM 输出中的 XSS） ----------------------------
+
+ALLOWED_TAGS = [
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "p", "br", "hr",
+    "ul", "ol", "li",
+    "pre", "code",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "strong", "em", "b", "i", "del",
+    "a", "blockquote",
+    "div", "span", "img",
+]
+ALLOWED_ATTRS = {
+    "a": ["href", "title"],
+    "code": ["class"],
+    "pre": ["class"],
+    "td": ["align"],
+    "th": ["align"],
+    "img": ["src", "alt", "width", "height"],
+}
+
+
+def sanitize_html(raw_html: str) -> str:
+    """对 Markdown 转换后的 HTML 进行白名单过滤，移除潜在的 XSS 载荷。"""
+    return bleach.clean(raw_html, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS, strip=True)
 
 
 def ensure_database():
@@ -49,6 +76,32 @@ def create_app() -> Flask:
         except Exception as e:
             print(f"[警告] 数据库初始化: {e}")
             print("[警告] 请确认 MySQL 已启动且 config.py 配置正确")
+
+    # -- 登录验证 ---------------------------------------------------------------
+
+    @app.before_request
+    def check_auth():
+        if not app.config.get("AUTH_PASSWORD"):
+            return  # 未设置密码，跳过验证
+        if request.endpoint in ("login", "static"):
+            return
+        if not session.get("authenticated"):
+            return redirect(url_for("login"))
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if request.method == "POST":
+            password = request.form.get("password", "")
+            if password == app.config["AUTH_PASSWORD"]:
+                session["authenticated"] = True
+                return redirect("/")
+            return render_template("login.html", error="密码错误")
+        return render_template("login.html")
+
+    @app.route("/logout")
+    def logout():
+        session.clear()
+        return redirect(url_for("login"))
 
     # -- 工具函数 ---------------------------------------------------------------
 
@@ -116,9 +169,10 @@ def create_app() -> Flask:
         audit = Audit.query.get_or_404(audit_id)
         result_html = ""
         if audit.result:
-            result_html = markdown.markdown(
+            raw_html = markdown.markdown(
                 audit.result, extensions=["fenced_code", "tables", "nl2br"]
             )
+            result_html = sanitize_html(raw_html)
         return render_template("report.html", audit=audit, result_html=result_html)
 
     @app.route("/audit/<int:audit_id>/analysis")
@@ -150,10 +204,18 @@ def create_app() -> Flask:
 
     @app.route("/settings")
     def settings_page():
+        raw_key = get_setting("api_key", "")
+        masked_key = ""
+        if raw_key:
+            if len(raw_key) > 8:
+                masked_key = raw_key[:3] + "*" * (len(raw_key) - 7) + raw_key[-4:]
+            else:
+                masked_key = "****"
         return render_template(
             "settings.html",
             provider=get_setting("provider", "openai"),
-            api_key=get_setting("api_key", ""),
+            api_key=masked_key,
+            has_key=bool(raw_key),
             base_url=get_setting("base_url", "https://api.openai.com/v1"),
             model=get_setting("model", "gpt-4"),
             chunk_size=get_setting("chunk_size", "300"),
@@ -202,18 +264,27 @@ def create_app() -> Flask:
                 chunk_size = int(get_setting("chunk_size", "300")) * 1024
 
                 def on_progress(current, total, merging=False):
-                    if merging:
-                        audit.result = f"[进度] 正在汇总 {total} 个批次的审计结果..."
-                    elif total == 1:
-                        audit.result = "[进度] 正在审计..."
-                    else:
-                        audit.result = f"[进度] 已完成 {current}/{total} 批（{client.max_workers} 路并发）"
                     try:
+                        # 每次回调重新获取对象，避免 detached 状态
+                        a = Audit.query.get(audit_id)
+                        if not a:
+                            return
+                        if merging:
+                            a.result = f"[进度] 正在汇总 {total} 个批次的审计结果..."
+                        elif total == 1:
+                            a.result = "[进度] 正在审计..."
+                        else:
+                            a.result = f"[进度] 已完成 {current}/{total} 批（{client.max_workers} 路并发）"
                         db.session.commit()
                     except Exception:
                         db.session.rollback()
 
                 result = client.audit_code(audit.code_content, audit.language, on_progress=on_progress, chunk_size=chunk_size)
+
+                # 长时间操作后重新获取，确保对象有效
+                audit = Audit.query.get(audit_id)
+                if not audit:
+                    return
                 audit.result = result
                 audit.status = "completed"
                 audit.severity = extract_severity(result)
@@ -292,6 +363,9 @@ def create_app() -> Flask:
         data = request.json or {}
         for key in ("provider", "api_key", "base_url", "model", "chunk_size", "max_workers"):
             if key in data:
+                # 跳过掩码化的 API 密钥或空值，避免覆盖真实密钥
+                if key == "api_key" and ("*" in data[key] or not data[key].strip()):
+                    continue
                 set_setting(key, data[key])
         return jsonify({"ok": True})
 
@@ -310,4 +384,4 @@ def create_app() -> Flask:
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=False, host="127.0.0.1", port=5000)
