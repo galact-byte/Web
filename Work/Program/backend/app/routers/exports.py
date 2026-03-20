@@ -43,7 +43,7 @@ LEVEL_NUM = {
 NO_LEVEL_CATEGORIES = ["风险评估", "安全评估", "数据评估", "软件测试", "安全服务"]
 
 # 模板目录
-TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
+TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 
 # 业务类别 → 模板文件映射
 CATEGORY_TEMPLATE = {
@@ -427,7 +427,8 @@ def export_word_batch(
         doc.save(output)
         output.seek(0)
         safe_code = _sanitize_filename(project.project_code)
-        filename = f"{safe_code}完结单.docx"
+        category_short = CATEGORY_SHORT.get(project.business_category, project.business_category)
+        filename = f"{safe_code}{category_short}完结单.docx"
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -443,7 +444,8 @@ def export_word_batch(
             doc_buffer = io.BytesIO()
             doc.save(doc_buffer)
             safe_code = _sanitize_filename(project.project_code)
-            zf.writestr(f"{safe_code}完结单.docx", doc_buffer.getvalue())
+            category_short = CATEGORY_SHORT.get(project.business_category, project.business_category)
+            zf.writestr(f"{safe_code}{category_short}完结单.docx", doc_buffer.getvalue())
 
     zip_buffer.seek(0)
     filename = _sanitize_filename("项目完结单.zip")

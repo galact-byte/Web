@@ -146,7 +146,9 @@ async function exportWord() {
     const contentType = response.headers['content-type'] || ''
     if (isSingle && contentType.includes('wordprocessingml')) {
       const proj = projects.value.find(p => p.id === selectedProjects.value[0])
-      link.download = `${proj?.project_code || '项目'}完结单.docx`
+      const catShort = { '等保测评':'等保','密码评估':'密评','风险评估':'风评','安全评估':'安评','数据评估':'数评','软件测试':'软测','安全服务':'安服','其他':'其他' }
+      const cat = catShort[proj?.business_category] || proj?.business_category || ''
+      link.download = `${proj?.project_code || '项目'}${cat}完结单.docx`
     } else {
       link.download = '项目完结单.zip'
     }
