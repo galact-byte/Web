@@ -1,0 +1,29 @@
+﻿# 环境配置（含敏感信息）
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# AI 配置
+CLAUDE.md
+GEMINI.md
+AGENTS.md
+.omc/
+
+# OS
+Thumbs.db
+.DS_Store
+需求.md

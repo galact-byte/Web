@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}设置 - CodeAudit{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>设置</h1>
+  <p class="subtitle">配置 LLM API 连接信息</p>
+</div>
+
+<div class="settings-card">
+  <form id="settings-form">
+    <div class="form-group">
+      <label for="provider">API 提供商</label>
+      <select id="provider" class="form-control">
+        <option value="openai" {% if provider == 'openai' %}selected{% endif %}>OpenAI 兼容（OpenAI / DeepSeek / 通义千问等）</option>
+        <option value="anthropic" {% if provider == 'anthropic' %}selected{% endif %}>Anthropic (Claude)</option>
+      </select>
+    </div>
+
+    <div class="form-group" id="base-url-group">
+      <label for="base_url">API 地址</label>
+      <input type="text" id="base_url" class="form-control" value="{{ base_url }}" placeholder="https://api.openai.com/v1">
+      <p class="form-hint">OpenAI 兼容接口的 Base URL，例如 DeepSeek: https://api.deepseek.com/v1</p>
+    </div>
+
+    <div class="form-group">
+      <label for="api_key">API 密钥</label>
+      <input type="password" id="api_key" class="form-control" value="{{ api_key }}" placeholder="sk-...">
+      {% if has_key %}
+      <p class="form-hint">已配置密钥。留空或不修改则保留原密钥，输入新值将覆盖。</p>
+      {% endif %}
+    </div>
+
+    <div class="form-group">
+      <label for="model">模型名称</label>
+      <input type="text" id="model" class="form-control" value="{{ model }}" placeholder="gpt-4">
+      <p class="form-hint">例如 gpt-4、deepseek-chat、claude-sonnet-4-20250514</p>
+    </div>
+
+    <hr style="border:none;border-top:1px solid var(--color-border);margin:var(--space-lg) 0">
+    <h3 style="margin:0 0 var(--space-md);font-size:1rem;color:var(--color-text-muted)">审计性能</h3>
+
+    <div class="form-row" style="display:flex;gap:var(--space-md)">
+      <div class="form-group" style="flex:1">
+        <label for="chunk_size">分批大小 (KB)</label>
+        <input type="number" id="chunk_size" class="form-control" value="{{ chunk_size }}" min="50" max="2000" step="50">
+        <p class="form-hint">代码超过此大小自动分批。推荐：128K 模型填 300，200K 模型可填 500</p>
+      </div>
+      <div class="form-group" style="flex:1">
+        <label for="max_workers">并发数</label>
+        <input type="number" id="max_workers" class="form-control" value="{{ max_workers }}" min="1" max="10" step="1">
+        <p class="form-hint">同时发送的审计请求数。过高可能触发 API 限速，建议 2-5</p>
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button type="submit" class="btn btn-primary" id="save-btn">保存设置</button>
+      <button type="button" class="btn btn-outline" id="test-btn">测试连接</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var providerEl = document.getElementById('provider');
+  var baseUrlGroup = document.getElementById('base-url-group');
+
+  function toggleBaseUrl() {
+    baseUrlGroup.style.display = providerEl.value === 'anthropic' ? 'none' : '';
+  }
+  providerEl.addEventListener('change', toggleBaseUrl);
+  toggleBaseUrl();
+
+  function getFormData() {
+    return {
+      provider: providerEl.value,
+      api_key: document.getElementById('api_key').value,
+      base_url: document.getElementById('base_url').value,
+      model: document.getElementById('model').value,
+      chunk_size: document.getElementById('chunk_size').value,
+      max_workers: document.getElementById('max_workers').value
+    };
+  }
+
+  // 保存
+  document.getElementById('settings-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var btn = document.getElementById('save-btn');
+    btn.disabled = true;
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(getFormData())
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      showToast('设置已保存', 'success');
+      btn.disabled = false;
+    })
+    .catch(function(err) {
+      showToast('保存失败: ' + err.message, 'error');
+      btn.disabled = false;
+    });
+  });
+
+  // 测试连接
+  document.getElementById('test-btn').addEventListener('click', function() {
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = '测试中...';
+
+    // 先保存再测试
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(getFormData())
+    })
+    .then(function() {
+      return fetch('/api/settings/test', { method: 'POST' });
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        showToast('连接成功', 'success');
+      } else {
+        showToast('连接失败: ' + d.error, 'error');
+      }
+      btn.disabled = false;
+      btn.textContent = '测试连接';
+    })
+    .catch(function(err) {
+      showToast('请求失败: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = '测试连接';
+    });
+  });
+})();
+</script>
+{% endblock %}
