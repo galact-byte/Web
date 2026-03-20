@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}{{ audit.title }} - CodeAudit{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ audit.title }}</h1>
+</div>
+
+<div class="report-meta">
+  <span class="meta-item">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    {{ audit.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+  </span>
+  <span class="meta-item">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+    {{ audit.model_used or '-' }}
+  </span>
+  <span class="meta-item">{{ audit.language }}</span>
+  <span class="badge badge-{{ audit.status }}">
+    {% if audit.status == 'pending' %}等待中
+    {% elif audit.status == 'running' %}审计中
+    {% elif audit.status == 'completed' %}已完成
+    {% elif audit.status == 'failed' %}失败
+    {% endif %}
+  </span>
+  {% if audit.status == 'completed' %}
+  <span class="badge badge-{{ audit.severity }}">
+    {% if audit.severity == 'critical' %}严重
+    {% elif audit.severity == 'high' %}高风险
+    {% elif audit.severity == 'medium' %}中风险
+    {% elif audit.severity == 'low' %}低风险
+    {% else %}安全
+    {% endif %}
+  </span>
+  <a href="/audit/{{ audit.id }}/analysis" class="btn btn-sm btn-outline" style="margin-left:auto">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+    分析视图
+  </a>
+  {% endif %}
+</div>
+
+<div class="code-preview">
+  <div class="code-preview-header">
+    <span>审计代码</span>
+    <span>{{ audit.language }}</span>
+  </div>
+  <pre><code>{{ audit.code_content }}</code></pre>
+</div>
+
+{% if audit.status == 'running' %}
+<div class="empty-state" id="running-state">
+  <svg class="spinner" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+  <p id="progress-text">正在审计中，请稍候...</p>
+  <div class="progress-bar-wrap" id="progress-bar-wrap" style="display:none">
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progress-bar-fill"></div>
+    </div>
+    <span class="progress-bar-label" id="progress-bar-label">0%</span>
+  </div>
+</div>
+{% elif audit.status == 'completed' or audit.status == 'failed' %}
+<div class="report-body">
+  {{ result_html|safe }}
+</div>
+
+<div class="export-section">
+  <h3>导出报告</h3>
+  <div class="export-grid">
+    <a href="/api/audit/{{ audit.id }}/export?format=docx" class="export-card" download>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Word 报告
+      <span class="ext">.docx</span>
+    </a>
+    <a href="/api/audit/{{ audit.id }}/export?format=xlsx" class="export-card" download>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Excel 清单
+      <span class="ext">.xlsx</span>
+    </a>
+    <a href="/api/audit/{{ audit.id }}/export?format=html" class="export-card" download>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      HTML 报告
+      <span class="ext">.html</span>
+    </a>
+    <a href="/api/audit/{{ audit.id }}/export?format=markdown" class="export-card" download>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Markdown
+      <span class="ext">.md</span>
+    </a>
+    <a href="/api/audit/{{ audit.id }}/export?format=json" class="export-card" download>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      JSON 数据
+      <span class="ext">.json</span>
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if audit.status == 'running' %}
+<script>
+(function() {
+  var progressWrap = document.getElementById('progress-bar-wrap');
+  var progressFill = document.getElementById('progress-bar-fill');
+  var progressLabel = document.getElementById('progress-bar-label');
+  var progressText = document.getElementById('progress-text');
+  var timer = setInterval(function() {
+    fetch('/api/audit/{{ audit.id }}/status')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.status !== 'running') {
+          clearInterval(timer);
+          location.reload();
+          return;
+        }
+        if (d.progress) {
+          progressText.textContent = d.progress;
+        }
+        if (d.progress_total > 1) {
+          progressWrap.style.display = '';
+          var pct = Math.round((d.progress_current / (d.progress_total + 1)) * 100);
+          if (d.progress === '' || d.progress.indexOf('汇总') !== -1) {
+            pct = Math.round((d.progress_total / (d.progress_total + 1)) * 100);
+          }
+          progressFill.style.width = pct + '%';
+          progressLabel.textContent = d.progress_current + '/' + d.progress_total + ' 批';
+        }
+      });
+  }, 2000);
+})();
+</script>
+{% endif %}
+<script>hljs.highlightAll();</script>
+{% endblock %}

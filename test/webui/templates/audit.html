@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+{% block title %}新建审计 - CodeAudit{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>新建审计</h1>
+</div>
+
+{% if not has_key %}
+<div class="alert alert-warning">
+  尚未配置 API 密钥，请先前往 <a href="/settings">设置</a> 页面完成配置。
+</div>
+{% endif %}
+
+<form id="audit-form">
+  <div class="form-row">
+    <div class="form-group">
+      <label for="title">审计标题</label>
+      <input type="text" id="title" class="form-control" placeholder="例如：用户登录模块安全审计">
+    </div>
+    <div class="form-group">
+      <label for="language">代码语言</label>
+      <select id="language" class="form-control">
+        <option value="auto">自动检测</option>
+        <option value="Python">Python</option>
+        <option value="JavaScript">JavaScript</option>
+        <option value="TypeScript">TypeScript</option>
+        <option value="Java">Java</option>
+        <option value="C/C++">C/C++</option>
+        <option value="Go">Go</option>
+        <option value="Rust">Rust</option>
+        <option value="PHP">PHP</option>
+        <option value="Ruby">Ruby</option>
+        <option value="C#">C#</option>
+        <option value="SQL">SQL</option>
+        <option value="Shell">Shell/Bash</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 输入模式切换 -->
+  <div class="form-group">
+    <label>代码内容</label>
+    <div class="input-tabs">
+      <button type="button" class="input-tab active" data-tab="paste">粘贴代码</button>
+      <button type="button" class="input-tab" data-tab="upload">上传文件 / 压缩包</button>
+    </div>
+
+    <!-- 粘贴代码 -->
+    <div class="tab-panel active" id="panel-paste">
+      <textarea id="code" class="form-control" placeholder="在此粘贴需要审计的代码..."></textarea>
+    </div>
+
+    <!-- 上传文件 -->
+    <div class="tab-panel" id="panel-upload">
+      <div class="drop-zone" id="drop-zone">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p>拖拽文件到此处，或点击选择</p>
+        <p class="text-muted" style="font-size:0.82rem">支持 .zip 压缩包、多个代码文件</p>
+        <input type="file" id="file-input" multiple accept=".py,.js,.ts,.jsx,.tsx,.java,.c,.cpp,.h,.hpp,.go,.rs,.php,.rb,.cs,.sql,.sh,.vue,.html,.css,.xml,.yaml,.yml,.json,.toml,.zip,.tar.gz">
+      </div>
+
+      <!-- 文件列表 -->
+      <div class="file-list-container" id="file-list-container" style="display:none">
+        <div class="file-list-header">
+          <span id="file-summary"></span>
+          <div style="display:flex;gap:6px">
+            <button type="button" class="btn btn-sm btn-outline" id="select-all">全选</button>
+            <button type="button" class="btn btn-sm btn-outline" id="select-none">全不选</button>
+            <button type="button" class="btn btn-sm btn-outline" id="clear-files">清除</button>
+          </div>
+        </div>
+        <div class="file-list" id="file-list"></div>
+        <div class="file-size-warning" id="size-warning" style="display:none">
+          代码总量较大，将自动分批审计。批次越多耗时越长，建议取消勾选非核心文件。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-group">
+    <button type="submit" class="btn btn-primary" id="submit-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/></svg>
+      开始审计
+    </button>
+  </div>
+</form>
+
+<style>
+.input-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.input-tab {
+  padding: var(--space-sm) var(--space-md);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  cursor: pointer;
+  font-family: var(--font-body);
+  margin-bottom: -1px;
+  transition: color var(--transition), border-color var(--transition);
+}
+.input-tab:hover { color: var(--color-text); }
+.input-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.tab-panel textarea { border-top-left-radius: 0; border-top-right-radius: 0; border-top: none; }
+
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-2xl) var(--space-lg);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+  margin-top: var(--space-md);
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+}
+.drop-zone input { display: none; }
+.drop-zone p { margin: 0; font-size: 0.93rem; }
+
+.file-list-container {
+  margin-top: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.file-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-subtle);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+.file-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 6px var(--space-md);
+  font-size: 0.88rem;
+  font-family: var(--font-mono);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.file-item:last-child { border-bottom: none; }
+.file-item input[type="checkbox"] { accent-color: var(--color-primary); }
+.file-item .file-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item .file-size { color: var(--color-text-muted); font-size: 0.78rem; flex-shrink: 0; }
+.file-size-warning {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.82rem;
+  color: var(--color-warning);
+  background: var(--color-warning-muted);
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(function() {
+  var codeEl = document.getElementById('code');
+  var submitBtn = document.getElementById('submit-btn');
+  var dropZone = document.getElementById('drop-zone');
+  var fileInput = document.getElementById('file-input');
+  var fileListContainer = document.getElementById('file-list-container');
+  var fileListEl = document.getElementById('file-list');
+  var fileSummary = document.getElementById('file-summary');
+  var sizeWarning = document.getElementById('size-warning');
+  var clearBtn = document.getElementById('clear-files');
+  var selectAllBtn = document.getElementById('select-all');
+  var selectNoneBtn = document.getElementById('select-none');
+
+  // 已解析的文件 [{path, content, size, checked}]
+  var parsedFiles = [];
+
+  var CODE_EXTS = /\.(py|js|ts|jsx|tsx|java|c|cpp|h|hpp|go|rs|php|rb|cs|sql|sh|vue|html|css|xml|yaml|yml|json|toml|ini|cfg|conf|env|md|txt)$/i;
+  var SKIP_DIRS = /^(node_modules|__pycache__|\.git|\.venv|venv|dist|build|\.idea|\.vscode)\//;
+  var MAX_FILE_SIZE = 500 * 1024; // 500KB per file
+  var WARN_TOTAL = 2 * 1024 * 1024; // 2MB total warning
+
+  // Tab switching
+  document.querySelectorAll('.input-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.input-tab').forEach(function(t) { t.classList.remove('active'); });
+      document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+      this.classList.add('active');
+      document.getElementById('panel-' + this.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Tab key in textarea
+  codeEl.addEventListener('keydown', function(e) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      var s = this.selectionStart, end = this.selectionEnd;
+      this.value = this.value.substring(0, s) + '    ' + this.value.substring(end);
+      this.selectionStart = this.selectionEnd = s + 4;
+    }
+  });
+
+  // Drop zone
+  dropZone.addEventListener('click', function() { fileInput.click(); });
+  dropZone.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', function() { this.classList.remove('dragover'); });
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', function() { handleFiles(this.files); });
+  clearBtn.addEventListener('click', function() {
+    parsedFiles = [];
+    fileInput.value = '';
+    renderFileList();
+    fileListContainer.style.display = 'none';
+  });
+  selectAllBtn.addEventListener('click', function() {
+    parsedFiles.forEach(function(f) { f.checked = true; });
+    fileListEl.querySelectorAll('input[type="checkbox"]').forEach(function(cb) { cb.checked = true; });
+    updateSummary();
+  });
+  selectNoneBtn.addEventListener('click', function() {
+    parsedFiles.forEach(function(f) { f.checked = false; });
+    fileListEl.querySelectorAll('input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
+    updateSummary();
+  });
+
+  function handleFiles(fileList) {
+    parsedFiles = [];
+    var promises = [];
+
+    for (var i = 0; i < fileList.length; i++) {
+      var file = fileList[i];
+      if (file.name.endsWith('.zip')) {
+        promises.push(handleZip(file));
+      } else {
+        promises.push(handleSingleFile(file, file.name));
+      }
+    }
+
+    Promise.all(promises).then(function() {
+      renderFileList();
+    });
+  }
+
+  function handleZip(file) {
+    return JSZip.loadAsync(file).then(function(zip) {
+      var filePromises = [];
+      zip.forEach(function(path, entry) {
+        if (entry.dir) return;
+        if (SKIP_DIRS.test(path)) return;
+        if (!CODE_EXTS.test(path)) return;
+
+        filePromises.push(
+          entry.async('string').then(function(content) {
+            if (content.length <= MAX_FILE_SIZE) {
+              parsedFiles.push({ path: path, content: content, size: content.length, checked: true });
+            }
+          }).catch(function() {})
+        );
+      });
+      return Promise.all(filePromises);
+    });
+  }
+
+  function handleSingleFile(file, path) {
+    return new Promise(function(resolve) {
+      if (!CODE_EXTS.test(path) && !file.name.endsWith('.zip')) {
+        resolve();
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var content = e.target.result;
+        if (content.length <= MAX_FILE_SIZE) {
+          parsedFiles.push({ path: path, content: content, size: content.length, checked: true });
+        }
+        resolve();
+      };
+      reader.onerror = function() { resolve(); };
+      reader.readAsText(file);
+    });
+  }
+
+  function renderFileList() {
+    if (!parsedFiles.length) {
+      fileListContainer.style.display = 'none';
+      return;
+    }
+
+    // Sort by path
+    parsedFiles.sort(function(a, b) { return a.path.localeCompare(b.path); });
+
+    fileListContainer.style.display = '';
+    fileListEl.innerHTML = '';
+    parsedFiles.forEach(function(f, idx) {
+      var div = document.createElement('div');
+      div.className = 'file-item';
+      div.innerHTML =
+        '<input type="checkbox" ' + (f.checked ? 'checked' : '') + ' data-idx="' + idx + '">' +
+        '<span class="file-path" title="' + f.path + '">' + f.path + '</span>' +
+        '<span class="file-size">' + formatSize(f.size) + '</span>';
+      div.querySelector('input').addEventListener('change', function() {
+        parsedFiles[this.dataset.idx].checked = this.checked;
+        updateSummary();
+      });
+      fileListEl.appendChild(div);
+    });
+
+    updateSummary();
+  }
+
+  function updateSummary() {
+    var checked = parsedFiles.filter(function(f) { return f.checked; });
+    var total = checked.reduce(function(s, f) { return s + f.size; }, 0);
+    fileSummary.textContent = checked.length + ' / ' + parsedFiles.length + ' files (' + formatSize(total) + ')';
+    sizeWarning.style.display = total > WARN_TOTAL ? '' : 'none';
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    return (bytes / 1024).toFixed(1) + ' KB';
+  }
+
+  function getCode() {
+    // Check which tab is active
+    var isPaste = document.querySelector('.input-tab.active').dataset.tab === 'paste';
+    if (isPaste) return codeEl.value.trim();
+
+    // Concatenate checked files
+    var checked = parsedFiles.filter(function(f) { return f.checked; });
+    if (!checked.length) return '';
+
+    return checked.map(function(f) {
+      return '// ===== ' + f.path + ' =====\n' + f.content;
+    }).join('\n\n');
+  }
+
+  // Submit
+  document.getElementById('audit-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var code = getCode();
+    if (!code) { showToast('请输入代码或上传文件', 'error'); return; }
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;display:inline-block;border:2px solid transparent;border-top-color:currentColor;border-radius:50%;animation:spin .8s linear infinite"></span> 提交中...';
+
+    fetch('/api/audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: document.getElementById('title').value || '未命名审计',
+        language: document.getElementById('language').value,
+        code: code
+      })
+    })
+    .then(function(r) {
+      if (!r.ok) {
+        return r.json().then(
+          function(d) { throw new Error(d.error || '请求失败'); },
+          function() { throw new Error('服务器错误 (' + r.status + ')'); }
+        );
+      }
+      return r.json();
+    })
+    .then(function(data) {
+      if (data.error) {
+        showToast(data.error, 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '开始审计';
+        return;
+      }
+      window.location.href = '/audit/' + data.id;
+    })
+    .catch(function(err) {
+      showToast('请求失败: ' + err.message, 'error');
+      submitBtn.disabled = false;
+      submitBtn.textContent = '开始审计';
+    });
+  });
+})();
+</script>
+{% endblock %}
