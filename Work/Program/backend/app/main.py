@@ -67,7 +67,7 @@ def _seed_admin():
                 password_hash=hash_password(initial_password),
                 display_name="系统管理员",
                 role=UserRole.manager,
-                department="管理部",
+                department="软测部",
                 must_change_password=True,
             )
             db.add(admin)
