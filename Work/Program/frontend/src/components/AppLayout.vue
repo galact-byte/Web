@@ -28,6 +28,37 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           <span>导出完结单</span>
         </router-link>
+        <!-- 项目进度下拉菜单 -->
+        <div class="nav-group">
+          <button class="nav-group-toggle" :class="{ active: $route.path.startsWith('/progress') }" @click="progressOpen = !progressOpen">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            <span>项目进度</span>
+            <svg class="group-chevron" :class="{ open: progressOpen }" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div v-show="progressOpen" class="nav-group-items">
+            <router-link to="/progress/dengbao" class="nav-sub-item" :class="{ active: $route.path === '/progress/dengbao' }">
+              <span class="dot"></span>等保测评
+            </router-link>
+            <router-link to="/progress/password" class="nav-sub-item" :class="{ active: $route.path === '/progress/password' }">
+              <span class="dot"></span>密码评估
+            </router-link>
+            <router-link to="/progress/security" class="nav-sub-item" :class="{ active: $route.path === '/progress/security' }">
+              <span class="dot"></span>安全评估
+            </router-link>
+            <router-link to="/progress/risk" class="nav-sub-item" :class="{ active: $route.path === '/progress/risk' }">
+              <span class="dot"></span>风险评估
+            </router-link>
+            <router-link to="/progress/testing" class="nav-sub-item" :class="{ active: $route.path === '/progress/testing' }">
+              <span class="dot"></span>软件测试
+            </router-link>
+            <router-link to="/progress/service" class="nav-sub-item" :class="{ active: $route.path === '/progress/service' }">
+              <span class="dot"></span>安全服务
+            </router-link>
+            <router-link to="/progress/comprehensive" class="nav-sub-item" :class="{ active: $route.path === '/progress/comprehensive' }">
+              <span class="dot"></span>综合服务
+            </router-link>
+          </div>
+        </div>
         <router-link v-if="userStore.isManager" to="/users" class="nav-item" :class="{ active: $route.path === '/users' }">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
           <span>用户管理</span>
@@ -65,6 +96,7 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { useTheme } from '../composables/useTheme'
@@ -72,6 +104,7 @@ import { useTheme } from '../composables/useTheme'
 const router = useRouter()
 const userStore = useUserStore()
 const { isDark, toggleTheme } = useTheme()
+const progressOpen = ref(true)
 
 function handleLogout() {
   userStore.logout()
@@ -108,6 +141,7 @@ function handleLogout() {
   flex: 1;
   padding: 0.75rem 0.625rem;
   display: flex; flex-direction: column; gap: 2px;
+  overflow-y: auto;
 }
 .nav-item {
   display: flex; align-items: center; gap: 0.625rem;
@@ -141,6 +175,79 @@ function handleLogout() {
   border-radius: 0 2px 2px 0;
 }
 
+/* Nav group (dropdown menu) */
+.nav-group { margin: 2px 0; }
+.nav-group-toggle {
+  display: flex; align-items: center; gap: 0.625rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: none; border: none;
+  text-align: left;
+  position: relative;
+}
+.nav-group-toggle:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.nav-group-toggle.active {
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+.nav-group-toggle.active::before {
+  content: '';
+  position: absolute;
+  left: -0.625rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background: var(--accent-primary);
+  border-radius: 0 2px 2px 0;
+}
+.nav-group-toggle .group-chevron {
+  margin-left: auto;
+  transition: transform 0.2s ease;
+  opacity: 0.5;
+}
+.nav-group-toggle .group-chevron.open { transform: rotate(180deg); }
+.nav-group-items {
+  padding: 2px 0 2px 0.5rem;
+}
+.nav-sub-item {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+  text-decoration: none;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.nav-sub-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.nav-sub-item.active {
+  background: var(--accent-glow);
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+.nav-sub-item .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  flex-shrink: 0;
+}
+.nav-sub-item.active .dot {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
 .sidebar-footer {
   padding: 0.75rem;
   border-top: 1px solid var(--border-color);
@@ -169,7 +276,7 @@ function handleLogout() {
 .btn-theme:hover { background: var(--accent-glow); color: var(--accent-primary); }
 .btn-logout:hover { background: var(--error-bg); color: var(--error); }
 
-.main-content { flex: 1; margin-left: 240px; padding: 1.5rem 2rem; }
+.main-content { flex: 1; margin-left: 240px; padding: 1.5rem 2rem; min-width: 0; }
 
 @media (max-width: 768px) {
   .sidebar { width: 100%; height: auto; position: relative; }

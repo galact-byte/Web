@@ -1,0 +1,9 @@
+{
+  "base_url": "https://your-server/XYivUozEqQ.php",
+  "pfx_path": "C:\\path\\to\\your.pfx",
+  "pfx_password": null,
+  "username": "your_username",
+  "password": "your_password",
+  "cookie": "",
+  "page_size": 50
+}

@@ -110,4 +110,14 @@ export const backupApi = {
   }
 }
 
+// ============ 项目进度 API ============
+export const progressApi = {
+  scrape: (type) => api.post(`/api/progress/${type}/scrape`, null, { timeout: 120000 }),
+  getRecords: (type, params) => api.get(`/api/progress/${type}/records`, { params }),
+  exportExcel: (type, params) => api.get(`/api/progress/${type}/records/export`, { params, responseType: 'blob' }),
+  getLogs: (type, limit) => api.get(`/api/progress/${type}/logs`, { params: { limit } }),
+  getConfig: () => api.get('/api/progress/config'),
+  updateConfig: (data) => api.put('/api/progress/config', data),
+}
+
 export default api

@@ -63,6 +63,7 @@ npm run dev
 | Excel 导出 | 批量导出季度完结单表格 |
 | Word 导出 | 单个项目完结单文档 |
 | 工作量统计 | 按季度汇总各人员的贡献率，支持展开项目明细 |
+| 项目进度 | 从内部项目管理系统爬取进度数据，支持 7 种项目类型（等保测评、密码评估、安全评估、风险评估、软件测试、安全服务、综合服务），自动登录（OCR 验证码）、分页爬取、Excel 导出 |
 | 主题切换 | 支持深色/浅色主题，设置自动保存 |
 
 ---
@@ -82,7 +83,7 @@ Program/
 │       ├── models/           # 数据模型
 │       ├── schemas/          # 请求/响应模式
 │       ├── routers/          # API 路由
-│       └── services/         # 业务逻辑（含 JWT 认证）
+│       └── services/         # 业务逻辑（含 JWT 认证、进度爬虫）
 │
 ├── frontend/                 # 前端（Vue 3 + Vite）
 │   └── src/
@@ -94,6 +95,7 @@ Program/
 │           ├── Projects       # 项目管理
 │           ├── Workload       # 工作量统计
 │           ├── Export         # 导出完结单
+│           ├── Progress       # 项目进度（爬取/查询/导出）
 │           └── Users          # 用户管理
 │
 └── Request/                  # 原始需求文档
@@ -171,6 +173,37 @@ SECRET_KEY=生成的密钥
 ```
 
 > ⚠️ **生产环境未设置 `SECRET_KEY` 时，服务器将拒绝启动。**
+
+### 项目进度爬虫
+
+复制 `backend/progress_config.example.json` 为 `backend/progress_config.json`，填入实际配置：
+
+```bash
+cp backend/progress_config.example.json backend/progress_config.json
+```
+
+```json
+{
+  "base_url": "https://your-server/XYivUozEqQ.php",
+  "pfx_path": "C:\\path\\to\\your.pfx",
+  "pfx_password": null,
+  "username": "your_username",
+  "password": "your_password",
+  "cookie": "",
+  "page_size": 50
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `base_url` | 项目管理系统地址 |
+| `pfx_path` | 客户端 PFX 证书路径（用于 HTTPS 双向认证） |
+| `pfx_password` | PFX 密码，无密码填 `null` |
+| `username` / `password` | 系统登录账号密码 |
+| `cookie` | PHPSESSID，留空则自动登录（OCR 验证码） |
+| `page_size` | 每页爬取数量 |
+
+> 此文件包含敏感凭据，已在 `.gitignore` 中忽略。
 
 ### CORS 跨域
 
