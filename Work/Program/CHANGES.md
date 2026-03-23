@@ -2,11 +2,111 @@
 
 > **修订记录**
 >
+> - v5.0: 新功能 — 项目进度模块（7 种项目类型数据爬取、查看、导出）
 > - v4.1: Bug修复 — Word模板导出路径错误
 > - v4.0: 流程优化 — 移除审批完成时间、创建项目自动分发、批量Word模板导出
 > - v3.0: UI 重构 — 去除"AI 味"，对齐前端设计规范（Void Space 暗色主题）
 > - v2.0: 代码审查修复 — 15 项安全/质量/性能问题修复
 > - v1.9: 后端 API 修复 — 路由顺序修正、新增趋势API、导入大小限制、错误处理加固
+
+## v5.0 — 项目进度模块：多类型数据爬取与管理
+
+从内部项目管理系统爬取项目进度数据，支持 7 种项目类型（等保测评、密码评估、安全评估、风险评估、软件测试、安全服务、综合服务），在 Web 端查看、搜索、导出 Excel。
+
+### 新增文件
+
+#### `backend/app/models/progress.py` — 数据模型
+
+- **功能**：定义 `ProgressRecord`（24 个业务字段 + 项目类型 + 批次号）和 `ProgressScrapeLog`（爬取日志）两个数据库模型
+- **`PROJECT_TYPE_NAMES`**：7 种项目类型的中英文映射
+
+#### `backend/app/schemas/progress.py` — Pydantic Schema
+
+- **功能**：请求/响应数据验证，包含 `ProgressRecordResponse`、`ProgressListResponse`、`ProgressScrapeRequest`、`ProgressScrapeLogResponse`、`ProgressConfigResponse`、`ProgressConfigUpdate`
+
+#### `backend/app/services/progress_scraper.py` — 爬虫服务
+
+- **功能**：封装 `ProgressScraper` 类，实现 PFX 证书处理、OCR 验证码自动登录、分页数据爬取
+- **实现原理**：通过 `PROJECT_TYPE_PATHS` 映射不同项目类型到不同 API 路径，复用同一套登录和数据获取逻辑
+- **配置文件**：`backend/progress_config.json`（运行时自动创建）
+
+#### `backend/app/routers/progress.py` — API 路由
+
+- **6 个端点**：
+  - `POST /api/progress/{type}/scrape` — 触发爬取（经理权限）
+  - `GET /api/progress/{type}/records` — 分页查询（支持搜索）
+  - `GET /api/progress/{type}/records/export` — 导出 Excel
+  - `GET /api/progress/{type}/logs` — 爬取日志
+  - `GET /api/progress/config` — 获取配置
+  - `PUT /api/progress/config` — 更新配置（经理权限）
+
+#### `frontend/src/views/ProjectProgress.vue` — 前端页面
+
+- **功能**：数据表格（11 列关键字段）、搜索、分页、手动爬取、导出 Excel、爬取日志折叠面板
+- **路由切换**：通过 `watch(projectType)` 监听路由参数变化，自动重新加载数据
+
+---
+
+### 修改文件
+
+#### `backend/app/models/__init__.py` — 导入新模型
+
+- **修改内容**：新增 `from app.models.progress import ProgressRecord, ProgressScrapeLog, ProjectType, PROJECT_TYPE_NAMES`
+
+#### `backend/app/routers/__init__.py` — 导出新路由
+
+- **修改内容**：新增 `from app.routers.progress import router as progress_router`
+
+#### `backend/app/main.py` — 注册路由
+
+- **修改内容**：导入并注册 `progress_router`
+
+#### `backend/requirements.txt` — 添加依赖
+
+- **修改内容**：新增 `requests==2.31.0`、`ddddocr>=1.4.11`
+
+#### `frontend/src/api/index.js` — 添加 API
+
+- **修改内容**：新增 `progressApi` 组（scrape, getRecords, exportExcel, getLogs, getConfig, updateConfig）
+
+#### `frontend/src/router/index.js` — 添加路由
+
+- **修改内容**：新增 `/progress/:type` 路由，懒加载 `ProjectProgress.vue`
+
+#### `frontend/src/components/AppLayout.vue` — 侧边栏下拉菜单
+
+- **修改内容**：在「导出完结单」和「用户管理」之间插入「项目进度」可展开菜单组，包含 7 个子项，带圆点指示器和展开/收起动画
+
+---
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **新增** | `backend/app/models/progress.py` |
+| **新增** | `backend/app/schemas/progress.py` |
+| **新增** | `backend/app/services/progress_scraper.py` |
+| **新增** | `backend/app/routers/progress.py` |
+| **新增** | `frontend/src/views/ProjectProgress.vue` |
+| **修改** | `backend/app/models/__init__.py` |
+| **修改** | `backend/app/routers/__init__.py` |
+| **修改** | `backend/app/main.py` |
+| **修改** | `backend/requirements.txt` |
+| **修改** | `frontend/src/api/index.js` |
+| **修改** | `frontend/src/router/index.js` |
+| **修改** | `frontend/src/components/AppLayout.vue` |
+
+---
+
+### 测试方式
+
+1. 启动后端 `python -m uvicorn app.main:app --reload`，访问 `/docs` 确认 6 条 progress 路由注册成功
+2. 前端访问 `/progress/dengbao`，确认页面正常渲染
+3. 点击侧边栏「项目进度」下拉菜单，切换不同类型，确认数据独立加载
+4. 点击「手动爬取」，确认数据写入数据库并显示在表格中
+5. 点击「导出 Excel」，确认下载的文件格式正确
+
+---
 
 ## v4.0 — 流程优化：自动分发 + 批量Word模板导出
 

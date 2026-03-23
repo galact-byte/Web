@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.database import engine, Base, SessionLocal
-from app.routers import auth_router, users_router, projects_router, exports_router, backup_router
+from app.routers import auth_router, users_router, projects_router, exports_router, backup_router, progress_router
 from app.models import User, UserRole
 from app.services.auth import hash_password
 from sqlalchemy import inspect as sa_inspect, text as sa_text
@@ -126,6 +126,7 @@ app.include_router(users_router)
 app.include_router(projects_router)
 app.include_router(exports_router)
 app.include_router(backup_router)
+app.include_router(progress_router)
 
 
 @app.get("/")

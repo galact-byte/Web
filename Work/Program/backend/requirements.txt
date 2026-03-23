@@ -12,6 +12,10 @@ openpyxl==3.1.2
 python-multipart==0.0.9
 python-dotenv==1.0.0
 
+# === 项目进度爬虫依赖 ===
+requests==2.31.0
+ddddocr>=1.4.11
+
 # === PostgreSQL 驱动（默认安装，支持切换 DATABASE_URL 到 PostgreSQL） ===
 asyncpg==0.29.0
 psycopg2-binary==2.9.9

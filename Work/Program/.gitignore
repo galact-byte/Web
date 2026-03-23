@@ -33,6 +33,9 @@ uploads/
 .env.*
 !.env.example
 
+# 爬虫配置（含凭据）
+progress_config.json
+
 # 依赖安装标记
 .deps_installed
 
