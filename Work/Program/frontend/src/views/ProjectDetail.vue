@@ -26,7 +26,6 @@
           <button v-if="!userStore.isManager && project.status === 'assigned' && mySubmitted" class="btn btn-warning" @click="retractCompletion">
             撤回完结申请
           </button>
-          <router-link v-if="userStore.isManager" :to="`/projects/${project.id}/edit`" class="btn btn-secondary">编辑项目</router-link>
         </div>
       </header>
 
@@ -38,8 +37,7 @@
             <div class="info-item"><label>项目地点</label><span>{{ project.project_location || '/' }}</span></div>
             <div class="info-item"><label>业务类别</label><span class="badge badge-primary">{{ getCategoryShort(project.business_category) }}</span></div>
             <div class="info-item"><label>合同状态</label><span>{{ project.contract_status }}</span></div>
-            <div class="info-item"><label>定级备案</label><span>{{ project.filing_status }}</span></div>
-            <div class="info-item"><label>审批时间</label><span>{{ project.approval_date || '/' }}</span></div>
+            <div class="info-item"><label>备案情况</label><span>{{ project.filing_status }}</span></div>
             <div class="info-item"><label>业务负责人</label><span>{{ project.business_manager_name || '/' }}</span></div>
             <div class="info-item"><label>实施负责人</label><span>{{ project.implementation_manager_name || '/' }}</span></div>
             <div class="info-item"><label>项目状态</label><span class="badge" :class="getStatusClass(project.status)">{{ getStatusText(project.status) }}</span></div>

@@ -50,6 +50,40 @@ def _migrate_db():
                     )
                     conn.commit()
                 logger.info("已为 project_assignments 表添加 status 列")
+        if inspector.has_table("projects"):
+            columns = [c["name"] for c in inspector.get_columns("projects")]
+            if "completed_at" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(
+                        sa_text("ALTER TABLE projects ADD COLUMN completed_at DATETIME")
+                    )
+                    # 回填已完成项目：用 updated_at 或 created_at 作为完成时间
+                    conn.execute(
+                        sa_text(
+                            "UPDATE projects SET completed_at = COALESCE(updated_at, created_at) "
+                            "WHERE status = 'completed' AND completed_at IS NULL"
+                        )
+                    )
+                    conn.commit()
+                logger.info("已为 projects 表添加 completed_at 列并回填已完成项目")
+        if inspector.has_table("projects"):
+            columns = [c["name"] for c in inspector.get_columns("projects")]
+            if "priority" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(
+                        sa_text("ALTER TABLE projects ADD COLUMN priority VARCHAR(10) DEFAULT '/'")
+                    )
+                    conn.commit()
+                logger.info("已为 projects 表添加 priority 列")
+        if inspector.has_table("systems"):
+            columns = [c["name"] for c in inspector.get_columns("systems")]
+            if "archive_status" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(
+                        sa_text("ALTER TABLE systems ADD COLUMN archive_status VARCHAR(10) DEFAULT '否'")
+                    )
+                    conn.commit()
+                logger.info("已为 systems 表添加 archive_status 列")
     except OperationalError as e:
         logger.warning(f"数据库迁移检查失败（非致命）: {e}")
     except Exception as e:

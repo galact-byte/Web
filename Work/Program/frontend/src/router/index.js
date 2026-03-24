@@ -66,7 +66,7 @@ const routes = [
     path: '/progress/:type',
     name: 'ProjectProgress',
     component: () => import('../views/ProjectProgress.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, requiresManager: true }
   }
 ]
 

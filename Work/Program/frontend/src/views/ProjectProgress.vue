@@ -58,6 +58,7 @@
           <thead>
             <tr>
               <th v-for="col in shownColumns" :key="col.key">{{ col.label }}</th>
+              <th v-if="userStore.isManager" class="th-action">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -70,6 +71,10 @@
                   <span class="badge" :class="finishClass(r.is_finished)">{{ r.is_finished || '-' }}</span>
                 </template>
                 <template v-else>{{ r[col.key] }}</template>
+              </td>
+              <td v-if="userStore.isManager" class="td-action">
+                <button v-if="!isFinishedRecord(r)" class="btn btn-sm btn-distribute" @click="openDistribute(r)">分发</button>
+                <span v-else class="text-muted">{{ r.project_status || '-' }}</span>
               </td>
             </tr>
           </tbody>
@@ -105,6 +110,35 @@
         </div>
       </div>
     </div>
+
+    <!-- 分发弹窗 -->
+    <div v-if="showDistributeModal" class="modal-overlay" @click.self="showDistributeModal = false">
+      <div class="modal-content">
+        <h3>分发项目</h3>
+        <div class="modal-info">
+          <p><strong>系统名称：</strong>{{ distributeRecord?.system_name || '-' }}</p>
+          <p><strong>项目名称：</strong>{{ distributeRecord?.project_name || '-' }}</p>
+          <p><strong>客户名称：</strong>{{ distributeRecord?.customer_name || '-' }}</p>
+        </div>
+        <div class="modal-field">
+          <label>选择分发员工：</label>
+          <div class="employee-list">
+            <label v-for="emp in employees" :key="emp.id" class="employee-item">
+              <input type="checkbox" :value="emp.id" v-model="selectedEmployees" />
+              <span>{{ emp.display_name }}</span>
+              <span class="emp-dept" v-if="emp.department">{{ emp.department }}</span>
+            </label>
+            <p v-if="employees.length === 0" class="no-employees">暂无可分配员工</p>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="showDistributeModal = false">取消</button>
+          <button class="btn btn-primary" @click="handleDistribute" :disabled="selectedEmployees.length === 0 || distributing">
+            {{ distributing ? '分发中...' : '确认分发' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </AppLayout>
 </template>
 
@@ -113,7 +147,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import { useUserStore } from '../stores/user'
-import { progressApi } from '../api/index'
+import { progressApi, usersApi } from '../api/index'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -158,7 +192,7 @@ const ALL_COLUMNS = [
   { key: 'remark', label: '备注' },
 ]
 
-const DEFAULT_VISIBLE = ['system_id', 'system_name', 'customer_name', 'system_level', 'project_name', 'project_location', 'project_manager', 'sale_contact', 'project_status', 'is_finished', 'register_status', 'contract_status']
+const DEFAULT_VISIBLE = ['system_id', 'system_name', 'customer_name', 'system_level', 'project_name', 'project_location', 'project_manager', 'sale_contact', 'project_status', 'plan_printed', 'report_printed', 'register_status', 'contract_status', 'remark']
 const visibleCols = ref(new Set(DEFAULT_VISIBLE))
 const showColToggle = ref(false)
 
@@ -180,6 +214,13 @@ const pageSize = 50
 const searchText = ref('')
 const logs = ref([])
 const showLogs = ref(false)
+
+// 分发相关
+const employees = ref([])
+const showDistributeModal = ref(false)
+const distributeRecord = ref(null)
+const selectedEmployees = ref([])
+const distributing = ref(false)
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
 const jumpPage = ref(1)
@@ -285,6 +326,50 @@ function goPage(page) {
   fetchRecords()
 }
 
+// 分发功能
+async function fetchEmployees() {
+  try {
+    const res = await usersApi.getEmployees()
+    employees.value = res.data
+  } catch (err) {
+    console.error('获取员工列表失败:', err)
+  }
+}
+
+function openDistribute(record) {
+  distributeRecord.value = record
+  selectedEmployees.value = []
+  showDistributeModal.value = true
+}
+
+function isFinishedRecord(r) {
+  const s = r.project_status || ''
+  const remark = r.remark || ''
+  // 备注含"注销"不可分发
+  if (remark.includes('注销')) return true
+  // 只有"未开始"才可能分发
+  if (s && s !== '未开始') return true
+  // 方案和报告都已打印，说明实际已完成
+  if ((r.plan_printed || '').includes('已打印') && (r.report_printed || '').includes('已打印')) return true
+  return false
+}
+
+async function handleDistribute() {
+  if (selectedEmployees.value.length === 0) return
+  distributing.value = true
+  try {
+    const res = await progressApi.distribute(distributeRecord.value.id, {
+      assignee_ids: selectedEmployees.value,
+    })
+    alert(res.data.message)
+    showDistributeModal.value = false
+  } catch (err) {
+    alert(err.response?.data?.detail || '分发失败')
+  } finally {
+    distributing.value = false
+  }
+}
+
 // 路由切换时重新加载数据
 watch(projectType, () => {
   searchText.value = ''
@@ -296,6 +381,7 @@ watch(projectType, () => {
 onMounted(() => {
   fetchRecords()
   fetchLogs()
+  if (userStore.isManager) fetchEmployees()
 })
 </script>
 
@@ -558,5 +644,112 @@ tbody tr:hover { background: var(--bg-tertiary); }
 @media (max-width: 768px) {
   .header-actions { width: 100%; }
   .search-box input { width: 120px; }
+}
+
+/* 操作列 */
+.th-action, .td-action {
+  position: sticky;
+  right: 0;
+  background: var(--bg-primary);
+  z-index: 2;
+  text-align: center;
+  min-width: 70px;
+}
+thead .th-action { background: var(--bg-tertiary); }
+tbody tr:hover .td-action { background: var(--bg-tertiary); }
+.btn-sm {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+}
+.btn-distribute {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+}
+.btn-distribute:hover { opacity: 0.85; }
+.text-muted { font-size: 0.78rem; color: var(--text-muted); }
+
+/* 分发弹窗 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-content {
+  background: var(--bg-card, var(--bg-primary));
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  padding: 1.5rem;
+  width: 420px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal-content h3 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+}
+.modal-info {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.85rem;
+}
+.modal-info p {
+  margin: 0.25rem 0;
+  color: var(--text-secondary);
+}
+.modal-field {
+  margin-bottom: 1rem;
+}
+.modal-field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+.employee-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0.25rem 0;
+}
+.employee-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 400;
+}
+.employee-item:hover { background: var(--bg-tertiary); }
+.employee-item input[type="checkbox"] { accent-color: var(--accent-primary); }
+.emp-dept {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.no-employees {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 1rem;
+  font-size: 0.85rem;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 </style>

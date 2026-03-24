@@ -15,6 +15,7 @@ from sqlalchemy import desc
 
 from app.database import get_db
 from app.models.progress import ProgressRecord, ProgressScrapeLog, PROJECT_TYPE_NAMES
+from app.models import User, UserRole, Project, ProjectAssignment, ProjectStatus, System
 from app.schemas.progress import (
     ProgressRecordResponse,
     ProgressListResponse,
@@ -22,6 +23,7 @@ from app.schemas.progress import (
     ProgressScrapeLogResponse,
     ProgressConfigResponse,
     ProgressConfigUpdate,
+    ProgressDistributeRequest,
 )
 from app.services.progress_scraper import (
     ProgressScraper,
@@ -142,6 +144,12 @@ def get_records(
         ProgressRecord.project_type == project_type
     )
 
+    # 经理只看到自己作为项目经理的记录
+    if current_user.role == UserRole.manager:
+        query = query.filter(
+            ProgressRecord.project_manager == current_user.display_name
+        )
+
     if batch_id:
         query = query.filter(ProgressRecord.batch_id == batch_id)
 
@@ -178,6 +186,13 @@ def export_records(
     query = db.query(ProgressRecord).filter(
         ProgressRecord.project_type == project_type
     )
+
+    # 经理只导出自己作为项目经理的记录
+    if current_user.role == UserRole.manager:
+        query = query.filter(
+            ProgressRecord.project_manager == current_user.display_name
+        )
+
     if batch_id:
         query = query.filter(ProgressRecord.batch_id == batch_id)
     if search:
@@ -298,3 +313,88 @@ def update_config(
         has_cookie=bool(config.get("cookie")),
         page_size=config.get("page_size", 50),
     )
+
+
+@router.post("/records/{record_id}/distribute")
+def distribute_record(
+    record_id: int,
+    request: ProgressDistributeRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_manager),
+):
+    """从爬取记录快速创建项目并分发给员工（需要经理权限）"""
+    record = db.query(ProgressRecord).filter(ProgressRecord.id == record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="记录不存在")
+
+    # 校验员工ID
+    employees = db.query(User).filter(
+        User.id.in_(request.assignee_ids),
+        User.role == UserRole.employee,
+    ).all()
+    if len(employees) != len(request.assignee_ids):
+        raise HTTPException(status_code=400, detail="部分员工ID无效或不是员工角色")
+
+    # 业务类别映射
+    type_name = PROJECT_TYPE_NAMES.get(record.project_type, "等保测评")
+
+    # 项目编号：去掉系统编号末尾的子系统序号（如 QZXGC-202602007-03 → QZXGC-202602007）
+    raw_code = record.system_id or f"AUTO_{record.id}"
+    parts = raw_code.rsplit("-", 1)
+    if len(parts) == 2 and parts[1].isdigit() and len(parts[1]) <= 2:
+        project_code = parts[0]
+    else:
+        project_code = raw_code
+
+    # 检查是否已用该编号创建过项目（避免重复）
+    existing = db.query(Project).filter(
+        Project.project_code == project_code
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"项目编号 {project_code} 已存在，请勿重复分发",
+        )
+
+    # 从爬取数据创建项目
+    project = Project(
+        project_code=project_code,
+        project_name=record.project_name or record.system_name or "未命名项目",
+        client_name=record.customer_name,
+        business_category=type_name,
+        project_location=record.project_location,
+        contract_status=record.contract_status or "未签订",
+        filing_status=record.register_status or "未备案",
+        business_manager_name=record.sale_contact,
+        implementation_manager_id=employees[0].id,
+        creator_id=current_user.id,
+        status=ProjectStatus.assigned,
+    )
+    db.add(project)
+    db.flush()
+
+    # 创建系统信息
+    if record.system_name:
+        system = System(
+            project_id=project.id,
+            system_code=record.system_id,
+            system_name=record.system_name,
+            system_level=record.system_level or "第二级",
+        )
+        db.add(system)
+
+    # 分配给选中的员工
+    for emp in employees:
+        assignment = ProjectAssignment(
+            project_id=project.id,
+            assignee_id=emp.id,
+        )
+        db.add(assignment)
+
+    db.commit()
+
+    return {
+        "message": f"已创建项目并分发给 {len(employees)} 名员工",
+        "project_id": project.id,
+        "project_code": project.project_code,
+    }

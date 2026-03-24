@@ -80,3 +80,8 @@ class ProgressConfigUpdate(BaseModel):
     password: Optional[str] = None
     cookie: Optional[str] = None
     page_size: Optional[int] = Field(None, ge=10, le=200)
+
+
+class ProgressDistributeRequest(BaseModel):
+    """从爬取数据快速分发项目"""
+    assignee_ids: List[int] = Field(..., min_length=1, description="分配的员工ID列表")

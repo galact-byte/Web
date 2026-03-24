@@ -56,6 +56,7 @@ class SystemBase(BaseModel):
     system_name: str = Field(..., min_length=1)
     system_level: str = "第二级"
     system_type: str = "传统系统"
+    archive_status: str = "否"
 
 
 class SystemCreate(SystemBase):
@@ -78,7 +79,7 @@ class ProjectBase(BaseModel):
     project_location: Optional[str] = None
     contract_status: str = "未签订"
     filing_status: str = "未备案"
-    approval_date: Optional[str] = None
+    priority: str = "/"
     business_manager_name: Optional[str] = None
     implementation_manager_id: Optional[int] = None
 

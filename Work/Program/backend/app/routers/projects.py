@@ -2,7 +2,7 @@
 项目路由
 """
 import re
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, selectinload
@@ -56,25 +56,25 @@ def get_workload_stats(
 ):
     """
     获取季度工作量统计。
-    按 approval_date（审批完成时间）归属季度。
+    按 completed_at（项目完结时间）归属季度。
     解析每个项目分配的 contribution 文本，汇总每个人员的总贡献率。
     """
-    # 计算季度的起止日期（字符串比较，兼容 SQLite/PostgreSQL/达梦等）
-    start_date = f"{year}-{(quarter - 1) * 3 + 1:02d}-01"
+    # 计算季度的起止日期
+    start_month = (quarter - 1) * 3 + 1
+    start_dt = datetime(year, start_month, 1, tzinfo=timezone.utc)
     if quarter == 4:
-        end_date = f"{year + 1}-01-01"
+        end_dt = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
     else:
-        end_date = f"{year}-{quarter * 3 + 1:02d}-01"
+        end_dt = datetime(year, quarter * 3 + 1, 1, tzinfo=timezone.utc)
 
-    # 查询该季度内有 approval_date 的项目的所有分配
+    # 查询该季度内已完成的项目的所有分配
     assignments = db.query(ProjectAssignment).join(Project).options(
         selectinload(ProjectAssignment.project),
         selectinload(ProjectAssignment.assignee)
     ).filter(
-        Project.approval_date.isnot(None),
-        Project.approval_date != "",
-        Project.approval_date >= start_date,
-        Project.approval_date < end_date
+        Project.completed_at.isnot(None),
+        Project.completed_at >= start_dt,
+        Project.completed_at < end_dt
     ).all()
 
     # 按人员汇总
@@ -118,7 +118,7 @@ def project_to_response(project: Project, db: Session) -> ProjectResponse:
         project_location=project.project_location,
         contract_status=project.contract_status,
         filing_status=project.filing_status,
-        approval_date=project.approval_date,
+        priority=project.priority,
         business_manager_name=project.business_manager_name,
         implementation_manager_id=project.implementation_manager_id,
         status=project.status.value,
@@ -189,7 +189,7 @@ def get_projects(
             project_location=p.project_location,
             contract_status=p.contract_status,
             filing_status=p.filing_status,
-            approval_date=p.approval_date,
+            priority=p.priority,
             business_manager_name=p.business_manager_name,
             implementation_manager_id=p.implementation_manager_id,
             status=p.status.value,
@@ -249,7 +249,7 @@ def create_project(
         project_location=request.project_location,
         contract_status=request.contract_status,
         filing_status=request.filing_status,
-        approval_date=request.approval_date,
+        priority=request.priority,
         business_manager_name=request.business_manager_name,
         implementation_manager_id=request.implementation_manager_id,
         creator_id=current_user.id,
@@ -315,7 +315,7 @@ def update_project(
     project.project_location = request.project_location
     project.contract_status = request.contract_status
     project.filing_status = request.filing_status
-    project.approval_date = request.approval_date
+    project.priority = request.priority
     project.business_manager_name = request.business_manager_name
     project.implementation_manager_id = request.implementation_manager_id
 
@@ -415,6 +415,10 @@ def update_project_status(
             }
 
     project.status = ProjectStatus(new_status)
+    if new_status == "completed":
+        project.completed_at = datetime.now(timezone.utc)
+    else:
+        project.completed_at = None
     db.commit()
 
     result = {"message": "状态更新成功", "status": new_status}

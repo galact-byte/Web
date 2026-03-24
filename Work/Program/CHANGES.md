@@ -2,12 +2,233 @@
 
 > **修订记录**
 >
+> - v5.5: 对齐模板 — 备案情况选项修正、新增优先级和资料归档字段、移除审批时间
+> - v5.4: 优化 — 工作量统计改用项目完结时间归属季度 + 项目列表加搜索 + 移除审批时间
+> - v5.3: 优化 — 分发逻辑完善（编号去后缀、精细化判断可分发状态、默认显示列调整、编辑取消返回上一页）
+> - v5.2: Bug修复 — 分发补全实施负责人和系统信息、去重编辑按钮、隐藏已完结分发
+> - v5.1: 新功能 — 进度数据按经理过滤 + 快速分发到员工
 > - v5.0: 新功能 — 项目进度模块（7 种项目类型数据爬取、查看、导出）
 > - v4.1: Bug修复 — Word模板导出路径错误
 > - v4.0: 流程优化 — 移除审批完成时间、创建项目自动分发、批量Word模板导出
 > - v3.0: UI 重构 — 去除"AI 味"，对齐前端设计规范（Void Space 暗色主题）
 > - v2.0: 代码审查修复 — 15 项安全/质量/性能问题修复
 > - v1.9: 后端 API 修复 — 路由顺序修正、新增趋势API、导入大小限制、错误处理加固
+
+## v5.5 — 对齐完结单模板字段
+
+根据 Word 完结单模板的注释，修正字段选项值并新增缺失字段。
+
+### 修改文件
+
+#### `backend/app/models/models.py` — 新增字段 + 修正默认值
+
+- **Project**：新增 `priority`（优先级：/、高、中、低），`filing_status` 默认值改为 `/`
+- **System**：新增 `archive_status`（资料归档：/、是、否）
+
+#### `backend/app/main.py` — 数据库迁移
+
+- 自动为 `projects` 表添加 `priority` 列
+- 自动为 `systems` 表添加 `archive_status` 列
+
+#### `backend/app/schemas/schemas.py` — Schema 同步
+
+- `ProjectBase`：`filing_status` 默认改 `/`，新增 `priority`，移除 `approval_date`
+- `SystemBase`：新增 `archive_status`
+
+#### `backend/app/routers/projects.py` — 路由同步
+
+- 创建/更新/响应均包含 `priority` 字段，移除 `approval_date` 引用
+
+#### `backend/app/routers/progress.py` — 分发默认值修正
+
+- 分发时 `filing_status` 默认为 `/`（不再从爬取数据的备案状态映射）
+
+#### `frontend/src/views/ProjectForm.vue` — 表单字段更新
+
+- **备案情况**：选项改为 /、已填报、已审核、已完成
+- **新增优先级**：/、高、中、低
+- **系统信息**：新增"资料归档"列（/、是、否），网格改为 5 列
+
+#### `frontend/src/views/ProjectDetail.vue` — 详情页更新
+
+- 基本信息新增"优先级"显示，"定级备案"改为"备案情况"
+- 系统表格新增"资料归档"列
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `backend/app/models/models.py` |
+| **修改** | `backend/app/main.py` |
+| **修改** | `backend/app/schemas/schemas.py` |
+| **修改** | `backend/app/routers/projects.py` |
+| **修改** | `backend/app/routers/progress.py` |
+| **修改** | `frontend/src/views/ProjectForm.vue` |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
+
+### 测试方式
+
+1. 新建项目确认"备案情况"选项为 /、已填报、已审核、已完成
+2. 新建项目确认有"优先级"下拉框（/、高、中、低）
+3. 添加系统时确认有"资料归档"下拉框（/、是、否）
+4. 项目详情页确认显示优先级和资料归档信息
+
+---
+
+## v5.4 — 工作量统计修复 + 项目搜索 + 移除审批时间
+
+### 修改文件
+
+#### `backend/app/models/models.py` — 新增 completed_at 字段
+
+- **修改内容**：Project 模型新增 `completed_at` 字段（DateTime），记录项目标记完成的时间
+
+#### `backend/app/routers/projects.py` — 工作量统计改用完结时间
+
+- **状态变更**：标记完成时设置 `completed_at`，重新开启时清除
+- **工作量统计**：`get_workload_stats()` 改用 `completed_at` 归属季度（原 `approval_date` 已废弃）
+
+#### `frontend/src/views/Projects.vue` — 项目列表加搜索框
+
+- **修改内容**：新增搜索输入框，支持按项目编号、项目名称、客户单位模糊搜索
+
+#### `frontend/src/views/ProjectDetail.vue` — 移除审批时间显示
+
+- **修改内容**：详情页移除"审批时间"字段，与表单保持一致
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `backend/app/models/models.py` |
+| **修改** | `backend/app/routers/projects.py` |
+| **修改** | `frontend/src/views/Projects.vue` |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
+
+### 测试方式
+
+1. 将一个项目标记为已完成，检查工作量统计页面该季度能查到数据
+2. 重新开启该项目，确认工作量统计不再包含它
+3. 项目列表页输入关键字搜索，确认按编号/名称/客户过滤正常
+4. 项目详情页确认不再显示"审批时间"
+
+---
+
+## v5.3 — 分发逻辑完善 + UI 优化
+
+### 修改文件
+
+#### `backend/app/routers/progress.py` — 项目编号去子系统后缀
+
+- **修改位置**：`distribute_record()` 函数
+- **修改内容**：分发时将系统编号 `QZXGC-202602007-03` 去掉末尾子系统序号，项目编号存为 `QZXGC-202602007`；移除旧的按原始 system_id 查重，改为按转换后编号查重
+
+#### `frontend/src/views/ProjectProgress.vue` — 分发状态精细化 + 默认列调整
+
+- **分发判断**：白名单模式，仅"未开始"状态可分发；备注含"注销"不可分发；方案和报告都已打印视为实际完成
+- **状态显示**：不可分发记录显示实际项目状态（如"现场测评"、"建设整改"），而非笼统的"已完结"
+- **默认显示列**：移除"是否完结"，新增"方案打印"、"报告打印"、"备注"
+
+#### `frontend/src/views/ProjectForm.vue` — 取消按钮返回上一页
+
+- **修改内容**：编辑项目页面的"取消"按钮从固定跳转项目列表改为 `router.back()` 返回上一页
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `backend/app/routers/progress.py` |
+| **修改** | `frontend/src/views/ProjectProgress.vue` |
+| **修改** | `frontend/src/views/ProjectForm.vue` |
+
+### 测试方式
+
+1. 分发系统编号为 `XXX-03` 格式的记录，确认创建的项目编号为 `XXX`（无 `-03` 后缀）
+2. 进度表格中"现场测评"、"建设整改"等状态的记录显示实际状态文字，不显示分发按钮
+3. 备注含"注销"的记录不可分发
+4. 默认显示列包含"方案打印"、"报告打印"、"备注"，不含"是否完结"
+5. 编辑项目页点击"取消"返回项目详情页而非项目列表
+
+---
+
+## v5.2 — Bug修复：分发功能完善 + UI 修复
+
+### 修改文件
+
+#### `backend/app/routers/progress.py` — 分发接口补全
+
+- **实施负责人**：分发时自动将第一个选中的员工设为 `implementation_manager_id`
+- **系统信息**：分发时自动从爬取数据创建 `System` 记录（系统编号、名称、等级）
+
+#### `frontend/src/views/ProjectDetail.vue` — 去重编辑按钮
+
+- **修改位置**：第 29 行
+- **修改内容**：删除重复的「编辑项目」按钮，保留第 22 行的
+
+#### `frontend/src/views/ProjectProgress.vue` — 已完结隐藏分发
+
+- **修改内容**：已完结的记录操作列显示"已完结"文字，不再显示分发按钮
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `backend/app/routers/progress.py` |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
+| **修改** | `frontend/src/views/ProjectProgress.vue` |
+
+### 测试方式
+
+1. 分发一条记录给员工，进入项目详情确认"实施负责人"显示该员工名称
+2. 确认分发后的项目包含系统信息（系统名称、系统等级）
+3. 进入任意项目详情页，确认右上角只有一个「编辑项目」按钮
+4. 进度表格中已完结的记录，操作列显示"已完结"而非分发按钮
+
+---
+
+## v5.1 — 进度数据按经理过滤 + 快速分发
+
+经理登录后只看到自己作为项目经理的爬取数据，并可直接从进度表格选择员工分发项目。
+
+### 修改文件
+
+#### `backend/app/routers/progress.py` — 数据过滤 + 分发接口
+
+- **修改位置**：`get_records()` 和 `export_records()` 函数
+- **修改内容**：新增按 `current_user.display_name == project_manager` 过滤逻辑，经理只能查看和导出自己负责的项目数据
+- **新增接口**：`POST /api/progress/records/{record_id}/distribute`，从爬取记录自动创建项目并分配给选中员工，含重复分发校验
+
+#### `backend/app/schemas/progress.py` — 新增分发 Schema
+
+- **新增**：`ProgressDistributeRequest`（`assignee_ids: List[int]`）
+
+#### `frontend/src/api/index.js` — 新增分发 API 调用
+
+- **新增**：`progressApi.distribute(recordId, data)`
+
+#### `frontend/src/views/ProjectProgress.vue` — 分发操作列 + 弹窗
+
+- **表格**：经理视角新增「操作」列（sticky 定位），每行显示「分发」按钮
+- **弹窗**：点击分发后弹出员工多选弹窗，展示系统名称/项目名称/客户名称，勾选员工后确认分发
+- **数据**：页面挂载时自动加载员工列表
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `backend/app/routers/progress.py` |
+| **修改** | `backend/app/schemas/progress.py` |
+| **修改** | `frontend/src/api/index.js` |
+| **修改** | `frontend/src/views/ProjectProgress.vue` |
+
+### 测试方式
+
+1. 以经理身份登录，进入任意项目进度页面，确认只显示 `project_manager` 与自己 `display_name` 一致的记录
+2. 导出 Excel，确认同样只包含自己负责的记录
+3. 点击任意记录的「分发」按钮，在弹窗中勾选员工并确认，验证项目管理中出现新建的项目且已分配
+4. 对同一条记录再次点击分发，确认提示"项目编号已存在"
+
+---
 
 ## v5.0 — 项目进度模块：多类型数据爬取与管理
 

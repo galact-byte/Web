@@ -29,7 +29,7 @@
             <select id="contract_status" v-model="form.contract_status" class="select"><option value="已签订">已签订</option><option value="未签订">未签订</option></select>
           </div>
           <div class="input-group">
-            <label for="filing_status">定级备案状态</label>
+            <label for="filing_status">备案情况</label>
             <select id="filing_status" v-model="form.filing_status" class="select"><option value="已备案">已备案</option><option value="未备案">未备案</option></select>
           </div>
           <div class="input-group">
@@ -60,13 +60,13 @@
               <div class="input-group">
                 <label>系统级别</label>
                 <select v-model="sys.system_level" class="select">
-                  <option value="/">/ (不适用)</option><option value="第一级">第一级</option><option value="第二级">第二级</option><option value="第三级">第三级</option><option value="第四级">第四级</option><option value="第五级">第五级</option>
+                  <option value="第一级">第一级</option><option value="第二级">第二级</option><option value="第三级">第三级</option><option value="第四级">第四级</option><option value="第五级">第五级</option>
                 </select>
               </div>
               <div class="input-group">
                 <label>系统类型</label>
                 <select v-model="sys.system_type" class="select">
-                  <option value="/">/</option><option value="传统系统">传统系统</option><option value="云计算（租户）">云计算（租户）</option><option value="云计算（平台）">云计算（平台）</option><option value="工控系统">工控系统</option><option value="物联网">物联网</option><option value="移动互联">移动互联</option><option value="大数据">大数据</option>
+                  <option value="传统系统">传统系统</option><option value="云计算（租户）">云计算（租户）</option><option value="云计算（平台）">云计算（平台）</option><option value="工控系统">工控系统</option><option value="物联网">物联网</option><option value="移动互联">移动互联</option><option value="大数据">大数据</option>
                 </select>
               </div>
             </div>
@@ -78,7 +78,7 @@
       </section>
 
       <div class="form-actions">
-        <router-link to="/projects" class="btn btn-secondary">取消</router-link>
+        <button type="button" class="btn btn-secondary" @click="router.back()">取消</button>
         <button type="submit" class="btn btn-primary" :disabled="submitting">{{ submitting ? '保存中...' : (isEdit ? '保存修改' : '创建项目') }}</button>
       </div>
     </form>
@@ -111,11 +111,11 @@ const categories = [
 const form = reactive({
   project_code: '', project_name: '', client_name: '', business_category: '等保测评',
   project_location: '', contract_status: '未签订', filing_status: '未备案',
-  business_manager_name: '', implementation_manager_id: null, systems: []
+  priority: '/', business_manager_name: '', implementation_manager_id: null, systems: []
 })
 
 function addSystem() {
-  form.systems.push({ system_code: '', system_name: '', system_level: '第二级', system_type: '传统系统' })
+  form.systems.push({ system_code: '', system_name: '', system_level: '第二级', system_type: '传统系统', archive_status: '否' })
 }
 
 function removeSystem(index) { form.systems.splice(index, 1) }
@@ -154,8 +154,9 @@ async function fetchData() {
         project_code: p.project_code, project_name: p.project_name, client_name: p.client_name,
         business_category: p.business_category, project_location: p.project_location,
         contract_status: p.contract_status, filing_status: p.filing_status,
+        priority: p.priority || '/',
         business_manager_name: p.business_manager_name || '', implementation_manager_id: p.implementation_manager_id,
-        systems: p.systems.map(s => ({ system_code: s.system_code, system_name: s.system_name, system_level: s.system_level, system_type: s.system_type }))
+        systems: p.systems.map(s => ({ system_code: s.system_code, system_name: s.system_name, system_level: s.system_level, system_type: s.system_type, archive_status: s.archive_status || '否' }))
       })
     }
   } catch (err) { console.error('Fetch failed:', err) }
