@@ -344,6 +344,7 @@ def _fill_word_template(project, contribution_text: str):
     _set_cell_text(table.cell(0, 1), project.project_code)
     _set_cell_text(table.cell(0, name_col), project.project_name)
     _set_cell_text(table.cell(1, 1), project.client_name or '')
+    _set_cell_text(table.cell(3, 1), '')
     _set_cell_text(table.cell(3, name_col), project.project_location or '')
 
     # 更新编号段落
@@ -384,7 +385,7 @@ def _fill_word_template(project, contribution_text: str):
         _set_cell_text(row.cells[2], '/')
         _set_cell_text(row.cells[3], project.filing_status or '/')
         _set_cell_text(row.cells[4], '/')
-        _set_cell_text(row.cells[5], '/')
+        _set_cell_text(row.cells[5], '是')
         if contribution_text:
             _set_cell_text(row.cells[contribution_col], contribution_text)
 

@@ -56,7 +56,8 @@ class Project(Base):
     business_category = Column(String(50), nullable=False, default="等保测评")  # 业务类别
     project_location = Column(String(100), nullable=True)  # 项目地点
     contract_status = Column(String(20), default="未签订")  # 合同状态
-    filing_status = Column(String(20), default="未备案")  # 定级备案状态
+    filing_status = Column(String(20), default="未备案")  # 备案情况
+    priority = Column(String(10), default="/")  # 优先级：/、高、中、低
     approval_date = Column(String(20), nullable=True)  # 审批完成时间
     status = Column(Enum(ProjectStatus), default=ProjectStatus.draft)
     
@@ -67,6 +68,7 @@ class Project(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)  # 标记完成的时间
 
     # 关系
     creator = relationship("User", back_populates="created_projects", foreign_keys=[creator_id])
@@ -85,6 +87,7 @@ class System(Base):
     system_name = Column(String(200), nullable=False)  # 系统名称
     system_level = Column(String(20), default="第二级")  # 系统级别
     system_type = Column(String(50), default="传统系统")  # 系统类型
+    archive_status = Column(String(10), default="否")  # 资料归档情况：是、否
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

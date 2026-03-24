@@ -118,6 +118,7 @@ export const progressApi = {
   getLogs: (type, limit) => api.get(`/api/progress/${type}/logs`, { params: { limit } }),
   getConfig: () => api.get('/api/progress/config'),
   updateConfig: (data) => api.put('/api/progress/config', data),
+  distribute: (recordId, data) => api.post(`/api/progress/records/${recordId}/distribute`, data),
 }
 
 export default api

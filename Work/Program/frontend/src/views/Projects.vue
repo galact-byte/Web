@@ -7,6 +7,7 @@
       </div>
       <div class="header-actions">
         <div class="filter-group">
+          <input v-model="searchQuery" class="input" placeholder="搜索项目编号、名称、客户..." style="width: 220px;" />
           <select v-model="statusFilter" class="select" style="width: 140px;">
             <option value="">全部状态</option>
             <option value="draft">待分发</option>
@@ -95,13 +96,25 @@ const userStore = useUserStore()
 const loading = ref(true)
 const projects = ref([])
 const statusFilter = ref('')
+const searchQuery = ref('')
 const showDeleteModal = ref(false)
 const projectToDelete = ref(null)
 const deleting = ref(false)
 
 const filteredProjects = computed(() => {
-  if (!statusFilter.value) return projects.value
-  return projects.value.filter(p => p.status === statusFilter.value)
+  let list = projects.value
+  if (statusFilter.value) {
+    list = list.filter(p => p.status === statusFilter.value)
+  }
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase()
+    list = list.filter(p =>
+      (p.project_code || '').toLowerCase().includes(q) ||
+      (p.project_name || '').toLowerCase().includes(q) ||
+      (p.client_name || '').toLowerCase().includes(q)
+    )
+  }
+  return list
 })
 
 function confirmDelete(project) { projectToDelete.value = project; showDeleteModal.value = true }
