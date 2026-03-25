@@ -4,3 +4,4 @@ from app.routers.projects import router as projects_router
 from app.routers.exports import router as exports_router
 from app.routers.backup import router as backup_router
 from app.routers.progress import router as progress_router
+from app.routers.system_progress import router as system_progress_router

@@ -65,6 +65,7 @@ class SystemCreate(SystemBase):
 
 class SystemResponse(SystemBase):
     id: int
+    current_phase: Optional[str] = "not_started"
 
     class Config:
         from_attributes = True
@@ -163,3 +164,50 @@ class ExcelExportRequest(BaseModel):
 
 class WordExportRequest(BaseModel):
     project_ids: List[int] = Field(..., min_length=1)
+
+
+# ============ 进度汇报 ============
+class ProgressReportCreate(BaseModel):
+    """单个系统的进度汇报"""
+    system_id: int
+    phase: str  # SystemProgressPhase 枚举值
+    remark: Optional[str] = None
+
+
+class ProgressReportBatchCreate(BaseModel):
+    """批量进度汇报（一个项目下多个系统一次提交）"""
+    reports: List[ProgressReportCreate] = Field(..., min_length=1)
+
+
+class ProgressReportResponse(BaseModel):
+    """进度汇报记录响应"""
+    id: int
+    system_id: int
+    system_name: str = ""
+    phase: str
+    phase_label: str = ""
+    remark: Optional[str] = None
+    reporter_name: str = ""
+    report_week: str
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SystemProgressResponse(BaseModel):
+    """单个系统的当前进度摘要"""
+    system_id: int
+    system_name: str
+    current_phase: str
+    current_phase_label: str = ""
+    latest_remark: Optional[str] = None
+    latest_reporter_name: Optional[str] = None
+    latest_report_time: Optional[datetime] = None
+    report_count: int = 0
+
+
+class SyncProgressRequest(BaseModel):
+    """一键同步所有系统进度"""
+    phase: str
+    remark: Optional[str] = None

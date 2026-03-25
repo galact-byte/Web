@@ -73,7 +73,8 @@
                 <template v-else>{{ r[col.key] }}</template>
               </td>
               <td v-if="userStore.isManager" class="td-action">
-                <button v-if="!isFinishedRecord(r)" class="btn btn-sm btn-distribute" @click="openDistribute(r)">分发</button>
+                <span v-if="r.distributed" class="badge badge-distributed">已分发</span>
+                <button v-else-if="!isFinishedRecord(r)" class="btn btn-sm btn-distribute" @click="openDistribute(r)">分发</button>
                 <span v-else class="text-muted">{{ r.project_status || '-' }}</span>
               </td>
             </tr>
@@ -363,6 +364,7 @@ async function handleDistribute() {
     })
     alert(res.data.message)
     showDistributeModal.value = false
+    fetchRecords()  // 刷新分发状态
   } catch (err) {
     alert(err.response?.data?.detail || '分发失败')
   } finally {
@@ -669,6 +671,7 @@ tbody tr:hover .td-action { background: var(--bg-tertiary); }
   cursor: pointer;
 }
 .btn-distribute:hover { opacity: 0.85; }
+.badge-distributed { background: rgba(16, 185, 129, 0.15); color: #10b981; font-size: 0.78rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
 .text-muted { font-size: 0.78rem; color: var(--text-muted); }
 
 /* 分发弹窗 */

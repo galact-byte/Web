@@ -2,6 +2,8 @@
 
 > **修订记录**
 >
+> - v6.1: 优化 — 多系统合并分发 + 分发状态显示
+> - v6.0: 新功能 — 系统进度汇报（按系统汇报阶段进度，一键同步，汇报历史）
 > - v5.5: 对齐模板 — 备案情况选项修正、新增优先级和资料归档字段、移除审批时间
 > - v5.4: 优化 — 工作量统计改用项目完结时间归属季度 + 项目列表加搜索 + 移除审批时间
 > - v5.3: 优化 — 分发逻辑完善（编号去后缀、精细化判断可分发状态、默认显示列调整、编辑取消返回上一页）
@@ -13,6 +15,121 @@
 > - v3.0: UI 重构 — 去除"AI 味"，对齐前端设计规范（Void Space 暗色主题）
 > - v2.0: 代码审查修复 — 15 项安全/质量/性能问题修复
 > - v1.9: 后端 API 修复 — 路由顺序修正、新增趋势API、导入大小限制、错误处理加固
+
+## v6.1 — 多系统合并分发 + 分发状态显示
+
+解决同一项目编号（去后缀后相同）的多条爬取记录无法分发的问题，改为追加系统到已有项目。进度表格新增分发状态标记。
+
+### 修改文件
+
+#### `backend/app/routers/progress.py` — 分发逻辑重构 + 分发状态
+
+- **distribute_record**：项目编号已存在时，不再拒绝，改为追加系统到已有项目 + 补充分配未分配的员工；仅当该系统编号已在项目中时才报错
+- **get_records**：批量查询 systems 表，为每条记录计算 `distributed` 布尔标记
+- 提取 `_parse_project_code()` 公共函数
+
+#### `backend/app/schemas/progress.py` — 新增 distributed 字段
+
+- **修改内容**：`ProgressRecordResponse` 新增 `distributed: bool = False`
+
+#### `frontend/src/views/ProjectProgress.vue` — 分发状态 UI
+
+- **操作列**：已分发记录显示绿色"已分发" badge，未分发且可分发的显示"分发"按钮
+- **分发后**：自动刷新当前页数据，分发状态立即更新
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `backend/app/routers/progress.py` |
+| **修改** | `backend/app/schemas/progress.py` |
+| **修改** | `frontend/src/views/ProjectProgress.vue` |
+
+### 测试方式
+
+1. 分发一条记录（如 QZXGC-202602007-01），确认创建项目成功，操作列变为"已分发"
+2. 分发同项目编号的第二条记录（如 QZXGC-202602007-02），确认系统追加到已有项目
+3. 再次分发 -01，确认提示"该系统已分发"
+4. 进入项目详情，确认两个系统都正确显示
+
+---
+
+## v6.0 — 系统进度汇报功能
+
+员工可按项目下的每个系统汇报当前进度阶段（未开始→测评准备→方案编制→现场测评→报告编制→完结归档），附带文字备注，每周提交一次。汇报仅对项目创建者可见。多系统项目支持一键同步进度。
+
+### 新增文件
+
+#### `backend/app/routers/system_progress.py` — 进度汇报 API
+
+- **功能**：4 个端点 — 提交汇报（POST）、进度总览（GET）、汇报历史（GET /history）、一键同步（POST /sync）
+- **权限**：汇报/同步仅被分配员工可操作，查看权限限项目创建者和被分配员工
+- **周号机制**：同周内重复提交为覆盖更新，不重复创建记录
+
+#### `frontend/src/components/ProgressStepper.vue` — 进度步骤条组件
+
+- **功能**：可复用的 6 阶段步骤条，支持只读/可编辑模式
+- **实现**：接收 `modelValue` 和 `editable` props，已完成阶段显示勾号
+
+### 修改文件
+
+#### `backend/app/models/models.py` — 新增进度模型
+
+- **新增**：`SystemProgressPhase` 枚举（6 个阶段）、`PHASE_LABELS` 中文映射、`SystemProgressReport` 汇报记录模型
+- **修改**：`System` 模型新增 `current_phase` 字段和 `progress_reports` 关系
+
+#### `backend/app/models/__init__.py` — 导出新模型
+
+- **修改内容**：新增 `SystemProgressPhase, SystemProgressReport, PHASE_LABELS` 导出
+
+#### `backend/app/schemas/schemas.py` — 新增进度 Schema
+
+- **新增**：`ProgressReportCreate, ProgressReportBatchCreate, ProgressReportResponse, SystemProgressResponse, SyncProgressRequest`
+- **修改**：`SystemResponse` 新增 `current_phase` 可选字段
+
+#### `backend/app/routers/__init__.py` — 注册新路由
+
+- **修改内容**：新增 `system_progress_router` 导入
+
+#### `backend/app/main.py` — 路由注册 + 数据库迁移
+
+- **修改内容**：注册 `system_progress_router`；`_migrate_db()` 新增 `systems.current_phase` 列自动迁移
+
+#### `frontend/src/api/index.js` — 新增进度 API
+
+- **修改内容**：`projectsApi` 新增 `getProgressOverview, getProgressHistory, submitProgress, syncProgress` 方法
+
+#### `frontend/src/views/ProjectDetail.vue` — 集成进度汇报 UI
+
+- **修改内容**：
+  - 系统信息与人员分配之间新增"系统进度"区域
+  - 员工视角：步骤条可编辑 + 备注输入 + 提交本周汇报 + 一键同步弹窗
+  - 创建者视角：只读步骤条 + 最近汇报信息 + 汇报历史弹窗
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **新增** | `backend/app/routers/system_progress.py` |
+| **新增** | `frontend/src/components/ProgressStepper.vue` |
+| **修改** | `backend/app/models/models.py` |
+| **修改** | `backend/app/models/__init__.py` |
+| **修改** | `backend/app/schemas/schemas.py` |
+| **修改** | `backend/app/routers/__init__.py` |
+| **修改** | `backend/app/main.py` |
+| **修改** | `frontend/src/api/index.js` |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
+
+### 测试方式
+
+1. 启动后端，确认 `system_progress_reports` 表和 `systems.current_phase` 列自动创建
+2. 用员工账号登录，进入已分配项目详情，对各系统选择阶段并填写备注，提交汇报
+3. 测试同周重复提交为覆盖更新（不新增记录）
+4. 测试多系统项目的"一键同步进度"功能
+5. 用项目创建者账号登录，确认能看到进度总览和汇报历史
+6. 用非创建者的管理员账号确认看不到其他人项目的进度
+
+---
 
 ## v5.5 — 对齐完结单模板字段
 
