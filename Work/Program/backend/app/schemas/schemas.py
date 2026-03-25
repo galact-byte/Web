@@ -103,6 +103,9 @@ class ProjectResponse(ProjectBase):
     systems_count: int = 0
     systems: List[SystemResponse] = []
     created_at: Optional[datetime] = None
+    remark: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -33,6 +33,7 @@ from app.services.progress_scraper import (
     DB_FIELD_NAMES,
 )
 from app.services.auth import get_current_user, get_current_manager
+from app.services.scrape_scheduler import scheduler
 
 router = APIRouter(prefix="/api/progress", tags=["项目进度"])
 
@@ -333,6 +334,61 @@ def update_config(
     )
 
 
+# ============ 定时爬取 ============
+@router.get("/schedule/status")
+def get_schedule_status(current_user=Depends(get_current_manager)):
+    """获取定时爬取状态"""
+    return scheduler.get_status()
+
+
+@router.post("/schedule/start")
+def start_schedule(
+    interval_minutes: int = Query(60, ge=10, le=1440, description="间隔分钟数（10-1440）"),
+    current_user=Depends(get_current_manager),
+):
+    """开启定时爬取"""
+    scheduler.start(interval_minutes)
+    return {"message": f"定时爬取已开启，间隔 {interval_minutes} 分钟", **scheduler.get_status()}
+
+
+@router.post("/schedule/stop")
+def stop_schedule(current_user=Depends(get_current_manager)):
+    """关闭定时爬取"""
+    scheduler.stop()
+    return {"message": "定时爬取已关闭", **scheduler.get_status()}
+
+
+@router.post("/backfill-contacts")
+def backfill_contacts(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_manager),
+):
+    """为已有项目回填联系人信息（从爬取数据匹配）"""
+    # 查所有缺联系人的项目
+    projects = db.query(Project).filter(
+        (Project.contact_name.is_(None)) | (Project.contact_name == "")
+    ).all()
+    if not projects:
+        return {"message": "所有项目已有联系人信息", "updated": 0}
+
+    updated = 0
+    for proj in projects:
+        # 用项目编号匹配爬取数据（取第一条有联系人的）
+        record = db.query(ProgressRecord).filter(
+            ProgressRecord.system_id.like(f"{proj.project_code}%"),
+            ProgressRecord.contact_name.isnot(None),
+            ProgressRecord.contact_name != "",
+        ).first()
+        if record:
+            proj.contact_name = record.contact_name
+            proj.contact_phone = record.contact_phone
+            updated += 1
+
+    if updated:
+        db.commit()
+    return {"message": f"已为 {updated} 个项目回填联系人信息", "updated": updated}
+
+
 def _parse_project_code(raw_code: str) -> str:
     """项目编号：去掉系统编号末尾的子系统序号（如 QZXGC-202602007-03 → QZXGC-202602007）"""
     parts = raw_code.rsplit("-", 1)
@@ -432,6 +488,9 @@ def distribute_record(
         implementation_manager_id=employees[0].id,
         creator_id=current_user.id,
         status=ProjectStatus.assigned,
+        remark=request.remark,
+        contact_name=record.contact_name,
+        contact_phone=record.contact_phone,
     )
     db.add(project)
     db.flush()

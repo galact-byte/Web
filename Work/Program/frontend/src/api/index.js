@@ -125,6 +125,10 @@ export const progressApi = {
   getConfig: () => api.get('/api/progress/config'),
   updateConfig: (data) => api.put('/api/progress/config', data),
   distribute: (recordId, data) => api.post(`/api/progress/records/${recordId}/distribute`, data),
+  getScheduleStatus: () => api.get('/api/progress/schedule/status'),
+  startSchedule: (interval) => api.post('/api/progress/schedule/start', null, { params: { interval_minutes: interval } }),
+  stopSchedule: () => api.post('/api/progress/schedule/stop'),
+  backfillContacts: () => api.post('/api/progress/backfill-contacts'),
 }
 
 export default api

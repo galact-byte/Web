@@ -66,6 +66,8 @@ class ProgressRecord(Base):
     register_status = Column(String(50), nullable=True)   # 备案状态
     contract_status = Column(String(50), nullable=True)   # 合同状态
     remark = Column(Text, nullable=True)                  # 备注
+    contact_name = Column(String(100), nullable=True)     # 客户联系人
+    contact_phone = Column(String(50), nullable=True)     # 联系电话
 
     scraped_at = Column(DateTime(timezone=True), server_default=func.now())
 

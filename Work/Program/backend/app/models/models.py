@@ -79,6 +79,9 @@ class Project(Base):
     contract_status = Column(String(20), default="未签订")  # 合同状态
     filing_status = Column(String(20), default="未备案")  # 备案情况
     priority = Column(String(10), default="/")  # 优先级：/、高、中、低
+    remark = Column(Text, nullable=True)  # 分发备注（紧急度等）
+    contact_name = Column(String(100), nullable=True)  # 客户联系人
+    contact_phone = Column(String(50), nullable=True)  # 联系电话
     approval_date = Column(String(20), nullable=True)  # 审批完成时间
     status = Column(Enum(ProjectStatus), default=ProjectStatus.draft)
     
