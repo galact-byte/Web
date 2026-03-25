@@ -36,13 +36,16 @@ onMounted(async () => {
   min-height: 100vh;
 }
 
-/* 路由页面过渡：交叉淡入淡出，无空白闪烁 */
-.page-enter-active,
+/* 路由页面过渡 */
+.page-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
 .page-leave-active {
   transition: opacity 0.15s ease;
 }
 .page-enter-from {
   opacity: 0;
+  transform: translateY(8px);
 }
 .page-leave-active {
   position: absolute;

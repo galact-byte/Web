@@ -1,5 +1,5 @@
 """
-项目完结单管理平台 - 后端入口
+慎微项目管理平台 - 后端入口
 """
 import os
 import logging
@@ -91,6 +91,34 @@ def _migrate_db():
                     )
                     conn.commit()
                 logger.info("已为 systems 表添加 current_phase 列")
+        if inspector.has_table("projects"):
+            columns = [c["name"] for c in inspector.get_columns("projects")]
+            if "remark" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(sa_text("ALTER TABLE projects ADD COLUMN remark TEXT"))
+                    conn.commit()
+                logger.info("已为 projects 表添加 remark 列")
+            if "contact_name" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(sa_text("ALTER TABLE projects ADD COLUMN contact_name VARCHAR(100)"))
+                    conn.commit()
+                logger.info("已为 projects 表添加 contact_name 列")
+            if "contact_phone" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(sa_text("ALTER TABLE projects ADD COLUMN contact_phone VARCHAR(50)"))
+                    conn.commit()
+                logger.info("已为 projects 表添加 contact_phone 列")
+        if inspector.has_table("progress_records"):
+            columns = [c["name"] for c in inspector.get_columns("progress_records")]
+            with engine.connect() as conn:
+                if "contact_name" not in columns:
+                    conn.execute(sa_text("ALTER TABLE progress_records ADD COLUMN contact_name VARCHAR(100)"))
+                    logger.info("已为 progress_records 表添加 contact_name 列")
+                if "contact_phone" not in columns:
+                    conn.execute(sa_text("ALTER TABLE progress_records ADD COLUMN contact_phone VARCHAR(50)"))
+                    logger.info("已为 progress_records 表添加 contact_phone 列")
+                if "contact_name" not in columns or "contact_phone" not in columns:
+                    conn.commit()
     except OperationalError as e:
         logger.warning(f"数据库迁移检查失败（非致命）: {e}")
     except Exception as e:
@@ -132,13 +160,19 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     _migrate_db()
     _seed_admin()
+    # 恢复定时爬取
+    try:
+        from app.services.scrape_scheduler import scheduler
+        scheduler.restore_from_config()
+    except Exception as e:
+        logger.warning(f"恢复定时爬取失败（非致命）: {e}")
     yield
 
 
 # 创建应用 —— 生产环境禁用 Swagger 文档，防止 API 信息泄露
 app = FastAPI(
-    title="项目完结单管理平台",
-    description="在线项目完结单管理系统 API",
+    title="慎微项目管理平台",
+    description="慎微 · 项目管理系统 API",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs" if IS_DEV else None,

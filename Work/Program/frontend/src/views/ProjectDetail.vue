@@ -42,6 +42,8 @@
             <div class="info-item"><label>实施负责人</label><span>{{ project.implementation_manager_name || '/' }}</span></div>
             <div class="info-item"><label>项目状态</label><span class="badge" :class="getStatusClass(project.status)">{{ getStatusText(project.status) }}</span></div>
             <div class="info-item"><label>创建人</label><span>{{ project.creator_name || '/' }}</span></div>
+            <div class="info-item"><label>客户联系人</label><span>{{ project.contact_name || '/' }}</span></div>
+            <div class="info-item"><label>联系电话</label><span>{{ project.contact_phone || '/' }}</span></div>
           </div>
         </section>
 
@@ -214,16 +216,18 @@
       </div>
 
     </template>
+    <Toast :message="toastMsg" :type="toastType" @done="toastMsg = ''" />
   </AppLayout>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { projectsApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
 import ProgressStepper from '../components/ProgressStepper.vue'
+import Toast from '../components/Toast.vue'
 import { getCategoryShort, getStatusClass, getStatusText } from '../utils/project'
 
 const route = useRoute()
@@ -245,6 +249,14 @@ const savingAssignment = ref(false)
 const showAddModal = ref(false)
 const addForm = reactive({ department: '', contribution: '' })
 const addingContribution = ref(false)
+
+// toast 通知
+const toastMsg = ref('')
+const toastType = ref('success')
+function showToast(msg, type = 'success') {
+  toastMsg.value = ''
+  nextTick(() => { toastMsg.value = msg; toastType.value = type })
+}
 
 // 进度汇报状态
 const systemProgressList = ref([])
@@ -301,7 +313,7 @@ async function saveAssignment() {
     await projectsApi.updateAssignment(route.params.id, editingAssignment.value.id, editForm)
     showEditModal.value = false
     await fetchData()
-  } catch (err) { console.error(err); alert(err.response?.data?.detail || '保存失败') }
+  } catch (err) { console.error(err); showToast(err.response?.data?.detail || '保存失败', 'error') }
   finally { savingAssignment.value = false }
 }
 
@@ -310,7 +322,7 @@ async function deleteAssignment(a) {
   try {
     await projectsApi.deleteAssignment(route.params.id, a.id)
     await fetchData()
-  } catch (err) { console.error(err); alert(err.response?.data?.detail || '删除失败') }
+  } catch (err) { console.error(err); showToast(err.response?.data?.detail || '删除失败', 'error') }
 }
 
 function openAddContribution() {
@@ -325,7 +337,7 @@ async function submitAddContribution() {
     await projectsApi.addContribution(route.params.id, addForm)
     showAddModal.value = false
     await fetchData()
-  } catch (err) { console.error(err); alert(err.response?.data?.detail || '添加失败') }
+  } catch (err) { console.error(err); showToast(err.response?.data?.detail || '添加失败', 'error') }
   finally { addingContribution.value = false }
 }
 
@@ -347,7 +359,7 @@ async function completeProject() {
   try {
     await projectsApi.updateStatus(route.params.id, 'completed')
     await fetchData()
-  } catch (err) { console.error(err); alert(err.response?.data?.detail || '操作失败') }
+  } catch (err) { console.error(err); showToast(err.response?.data?.detail || '操作失败', 'error') }
   finally { changingStatus.value = false }
 }
 
@@ -356,7 +368,7 @@ async function submitCompletion() {
   try {
     await projectsApi.submitCompletion(route.params.id)
     await fetchData()
-  } catch (err) { console.error(err); alert(err.response?.data?.detail || '提交失败') }
+  } catch (err) { console.error(err); showToast(err.response?.data?.detail || '提交失败', 'error') }
 }
 
 async function retractCompletion() {
@@ -364,7 +376,7 @@ async function retractCompletion() {
   try {
     await projectsApi.retractCompletion(route.params.id)
     await fetchData()
-  } catch (err) { console.error(err); alert(err.response?.data?.detail || '撤回失败') }
+  } catch (err) { console.error(err); showToast(err.response?.data?.detail || '撤回失败', 'error') }
 }
 
 async function reopenProject() {
@@ -373,7 +385,7 @@ async function reopenProject() {
   try {
     await projectsApi.updateStatus(route.params.id, 'assigned')
     await fetchData()
-  } catch (err) { console.error(err); alert(err.response?.data?.detail || '操作失败') }
+  } catch (err) { console.error(err); showToast(err.response?.data?.detail || '操作失败', 'error') }
   finally { changingStatus.value = false }
 }
 
@@ -414,9 +426,9 @@ async function submitProgressReport() {
       remark: progressForm[sys.system_id]?.remark || null,
     }))
     await projectsApi.submitProgress(route.params.id, { reports })
-    alert('汇报提交成功')
+    showToast('汇报提交成功')
     await fetchProgressOverview()
-  } catch (err) { console.error(err); alert(err.response?.data?.detail || '提交失败') }
+  } catch (err) { console.error(err); showToast(err.response?.data?.detail || '提交失败', 'error') }
   finally { submittingProgress.value = false }
 }
 
@@ -432,13 +444,13 @@ async function confirmSync() {
   try {
     await projectsApi.syncProgress(route.params.id, syncForm)
     showSyncModal.value = false
-    alert('进度同步成功')
+    showToast('进度同步成功')
     // 更新本地表单
     for (const sys of systemProgressList.value) {
       progressForm[sys.system_id] = { phase: syncForm.phase, remark: syncForm.remark || '' }
     }
     await fetchProgressOverview()
-  } catch (err) { console.error(err); alert(err.response?.data?.detail || '同步失败') }
+  } catch (err) { console.error(err); showToast(err.response?.data?.detail || '同步失败', 'error') }
   finally { syncingProgress.value = false }
 }
 

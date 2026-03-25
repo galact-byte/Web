@@ -84,6 +84,13 @@ const currentIndex = computed(() => {
   border-color: var(--accent-primary);
   background: var(--accent-primary);
   color: white;
+  animation: dotPulse 0.4s ease;
+}
+
+@keyframes dotPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
 }
 
 .step.completed .step-dot {
@@ -126,6 +133,12 @@ const currentIndex = computed(() => {
 
 .step-line.filled {
   background: var(--accent-primary);
+  animation: lineFill 0.3s ease;
+  transform-origin: left;
+}
+@keyframes lineFill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }
 
 .step.clickable {

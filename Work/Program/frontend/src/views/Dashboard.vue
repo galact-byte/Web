@@ -23,7 +23,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
         </div>
         <div class="stat-content">
-          <div class="stat-value">{{ stats.total }}</div>
+          <div class="stat-value">{{ animTotal }}</div>
           <div class="stat-label">{{ userStore.isManager ? '全部项目' : '我的项目' }}</div>
         </div>
       </div>
@@ -33,7 +33,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         </div>
         <div class="stat-content">
-          <div class="stat-value">{{ stats.draft }}</div>
+          <div class="stat-value">{{ animDraft }}</div>
           <div class="stat-label">待分发</div>
         </div>
       </div>
@@ -43,7 +43,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
         </div>
         <div class="stat-content">
-          <div class="stat-value">{{ stats.assigned }}</div>
+          <div class="stat-value">{{ animAssigned }}</div>
           <div class="stat-label">进行中</div>
         </div>
       </div>
@@ -53,7 +53,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
         </div>
         <div class="stat-content">
-          <div class="stat-value">{{ stats.completed }}</div>
+          <div class="stat-value">{{ animCompleted }}</div>
           <div class="stat-label">已完成</div>
         </div>
       </div>
@@ -128,7 +128,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useUserStore } from '../stores/user'
 import { projectsApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
@@ -140,6 +140,26 @@ const loading = ref(true)
 const allProjects = ref([])
 const recentProjects = ref([])
 const stats = reactive({ total: 0, draft: 0, assigned: 0, completed: 0 })
+
+// 数字滚动动画
+function useCountUp(getter, duration = 500) {
+  const display = ref(0)
+  watch(getter, (end) => {
+    const start = display.value
+    if (start === end) return
+    const t0 = performance.now()
+    ;(function step(now) {
+      const p = Math.min((now - t0) / duration, 1)
+      display.value = Math.round(start + (end - start) * (1 - Math.pow(1 - p, 3)))
+      if (p < 1) requestAnimationFrame(step)
+    })(t0)
+  }, { immediate: true })
+  return display
+}
+const animTotal = useCountUp(() => stats.total)
+const animDraft = useCountUp(() => stats.draft)
+const animAssigned = useCountUp(() => stats.assigned)
+const animCompleted = useCountUp(() => stats.completed)
 
 // 有员工提交完结申请的进行中项目（仅经理用）
 const pendingSubmissions = computed(() =>

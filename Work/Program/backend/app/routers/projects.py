@@ -133,7 +133,10 @@ def project_to_response(project: Project, db: Session) -> ProjectResponse:
             "system_level": s.system_level,
             "system_type": s.system_type
         } for s in project.systems],
-        created_at=project.created_at
+        created_at=project.created_at,
+        remark=project.remark,
+        contact_name=project.contact_name,
+        contact_phone=project.contact_phone,
     )
 
 

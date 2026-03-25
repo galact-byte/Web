@@ -1,38 +1,26 @@
 <template>
   <div class="login-page">
     <div class="login-container">
-      <!-- 左侧装饰 -->
+      <!-- 左侧品牌区 -->
       <div class="login-decoration">
+        <div class="grid-bg"></div>
         <div class="decoration-content">
-          <div class="logo">
-            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <line x1="16" y1="13" x2="8" y2="13"></line>
-              <line x1="16" y1="17" x2="8" y2="17"></line>
-              <polyline points="10 9 9 9 8 9"></polyline>
-            </svg>
-          </div>
-          <h1>项目完结单管理平台</h1>
-          <p>高效管理项目完结单，实现数据一键导出</p>
+          <div class="brand-mark">慎</div>
+          <h1 class="brand-title">慎微</h1>
+          <p class="brand-subtitle">圣人敬小慎微，动不失时</p>
+          <cite class="brand-cite">——《淮南子·人间训》</cite>
           <div class="features">
-            <div class="feature">
-              <span class="feature-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-              </span>
-              <span>项目录入与分发</span>
+            <div class="feature" style="animation-delay: 0.1s">
+              <span class="feature-dot"></span>
+              <span>项目全流程管控</span>
             </div>
-            <div class="feature">
-              <span class="feature-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-              </span>
-              <span>多角色协作管理</span>
+            <div class="feature" style="animation-delay: 0.2s">
+              <span class="feature-dot"></span>
+              <span>多角色协同作业</span>
             </div>
-            <div class="feature">
-              <span class="feature-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              </span>
-              <span>Excel/Word 导出</span>
+            <div class="feature" style="animation-delay: 0.3s">
+              <span class="feature-dot"></span>
+              <span>进度实时可视化</span>
             </div>
           </div>
         </div>
@@ -48,32 +36,13 @@
         <form @submit.prevent="handleSubmit" class="login-form">
           <div class="input-group">
             <label for="username">用户名</label>
-            <input
-              id="username"
-              v-model="form.username"
-              type="text"
-              class="input"
-              placeholder="输入用户名"
-              required
-            />
+            <input id="username" v-model="form.username" type="text" class="input" placeholder="输入用户名" required />
           </div>
-
           <div class="input-group">
             <label for="password">密码</label>
-            <input
-              id="password"
-              v-model="form.password"
-              type="password"
-              class="input"
-              placeholder="输入密码"
-              required
-            />
+            <input id="password" v-model="form.password" type="password" class="input" placeholder="输入密码" required />
           </div>
-
-          <div v-if="error" class="error-message">
-            {{ error }}
-          </div>
-
+          <div v-if="error" class="error-message">{{ error }}</div>
           <button type="submit" class="btn btn-primary btn-lg w-full" :disabled="loading">
             <span v-if="loading" class="loading-spinner" style="width: 20px; height: 20px;"></span>
             <span v-else>登 录</span>
@@ -89,39 +58,19 @@
     <!-- 首次登录修改密码弹窗 -->
     <div v-if="showChangePassword" class="modal-overlay">
       <div class="modal change-password-modal">
-        <div class="modal-header">
-          <h2>修改密码</h2>
-        </div>
+        <div class="modal-header"><h2>修改密码</h2></div>
         <div class="modal-body">
           <p class="change-password-hint">首次登录或密码已被重置，请设置新密码后继续使用。</p>
           <form @submit.prevent="handleChangePassword" class="login-form">
             <div class="input-group">
               <label for="newPassword">新密码</label>
-              <input
-                id="newPassword"
-                v-model="newPassword"
-                type="password"
-                class="input"
-                placeholder="请输入新密码（至少6位）"
-                minlength="6"
-                required
-              />
+              <input id="newPassword" v-model="newPassword" type="password" class="input" placeholder="请输入新密码（至少6位）" minlength="6" required />
             </div>
             <div class="input-group">
               <label for="confirmPassword">确认密码</label>
-              <input
-                id="confirmPassword"
-                v-model="confirmPassword"
-                type="password"
-                class="input"
-                placeholder="再次输入新密码"
-                minlength="6"
-                required
-              />
+              <input id="confirmPassword" v-model="confirmPassword" type="password" class="input" placeholder="再次输入新密码" minlength="6" required />
             </div>
-            <div v-if="changePasswordError" class="error-message">
-              {{ changePasswordError }}
-            </div>
+            <div v-if="changePasswordError" class="error-message">{{ changePasswordError }}</div>
             <button type="submit" class="btn btn-primary btn-lg w-full" :disabled="changingPassword">
               <span v-if="changingPassword" class="loading-spinner" style="width: 20px; height: 20px;"></span>
               <span v-else>确认修改</span>
@@ -163,7 +112,6 @@ async function handleSubmit() {
       username: form.username,
       password: form.password
     })
-    // 检查是否需要修改密码
     if (user.must_change_password) {
       showChangePassword.value = true
     } else {
@@ -218,12 +166,17 @@ async function handleChangePassword() {
   border-radius: var(--radius-xl);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
+  animation: containerIn 0.5s ease;
+}
+@keyframes containerIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* 左侧品牌区 */
 .login-decoration {
   flex: 1;
-  background: #0c1c1c;
+  background: #080f0f;
   padding: 3rem 2.5rem;
   display: flex;
   align-items: center;
@@ -232,23 +185,28 @@ async function handleChangePassword() {
   overflow: hidden;
 }
 
-.login-decoration::before {
+.grid-bg {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(0, 212, 170, 0.12) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.5;
+}
+
+.login-decoration::after {
   content: '';
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(ellipse at 20% 80%, rgba(0, 212, 170, 0.12) 0%, transparent 55%),
-    radial-gradient(ellipse at 80% 20%, rgba(255, 107, 157, 0.06) 0%, transparent 55%);
+  background: radial-gradient(ellipse at 30% 70%, rgba(0, 212, 170, 0.1) 0%, transparent 60%);
   pointer-events: none;
 }
 
-[data-theme="light"] .login-decoration {
-  background: #f0fdfb;
+[data-theme="light"] .login-decoration { background: #f0f7f6; }
+[data-theme="light"] .grid-bg {
+  background-image: radial-gradient(circle, rgba(8, 145, 178, 0.1) 1px, transparent 1px);
 }
-[data-theme="light"] .login-decoration::before {
-  background:
-    radial-gradient(ellipse at 20% 80%, rgba(8, 145, 178, 0.08) 0%, transparent 55%),
-    radial-gradient(ellipse at 80% 20%, rgba(217, 119, 6, 0.05) 0%, transparent 55%);
+[data-theme="light"] .login-decoration::after {
+  background: radial-gradient(ellipse at 30% 70%, rgba(8, 145, 178, 0.06) 0%, transparent 60%);
 }
 
 .decoration-content {
@@ -257,42 +215,56 @@ async function handleChangePassword() {
   text-align: center;
 }
 
-.logo {
+.brand-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 72px;
   height: 72px;
-  background: var(--accent-primary);
-  color: white;
-  border-radius: var(--radius-lg);
-  margin-bottom: 1.5rem;
+  border: 2px solid var(--accent-primary);
+  border-radius: 50%;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin-bottom: 1.25rem;
+  animation: markPulse 3s ease-in-out infinite;
+}
+@keyframes markPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 212, 170, 0.2); }
+  50% { box-shadow: 0 0 0 12px rgba(0, 212, 170, 0); }
 }
 
-.decoration-content h1 {
+.brand-title {
   font-family: 'DM Serif Display', serif;
-  font-size: 1.6rem;
+  font-size: 2.2rem;
   font-weight: 400;
   color: #e0f2f1;
-  margin-bottom: 0.375rem;
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.15em;
 }
-[data-theme="light"] .decoration-content h1 {
-  color: var(--text-primary);
-}
+[data-theme="light"] .brand-title { color: var(--text-primary); }
 
-.decoration-content p {
+.brand-subtitle {
   color: #80cbc4;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+  font-style: italic;
+}
+[data-theme="light"] .brand-subtitle { color: var(--text-secondary); }
+
+.brand-cite {
+  display: block;
+  color: #4db6ac;
+  font-size: 0.8rem;
   margin-bottom: 2rem;
+  font-style: normal;
 }
-[data-theme="light"] .decoration-content p {
-  color: var(--text-secondary);
-}
+[data-theme="light"] .brand-cite { color: var(--text-muted); }
 
 .features {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: 0.5rem;
   text-align: left;
 }
 
@@ -300,27 +272,24 @@ async function handleChangePassword() {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid rgba(0, 212, 170, 0.2);
-  border-radius: var(--radius-md);
-  background: rgba(0, 212, 170, 0.05);
+  padding: 0.5rem 0.875rem;
   color: #b2dfdb;
   font-size: 0.9rem;
-  transition: border-color var(--transition-normal);
+  opacity: 0;
+  animation: featureIn 0.4s ease forwards;
 }
-.feature:hover { border-color: rgba(0, 212, 170, 0.4); }
-
-[data-theme="light"] .feature {
-  border-color: rgba(8, 145, 178, 0.15);
-  background: rgba(8, 145, 178, 0.04);
-  color: var(--text-primary);
+@keyframes featureIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
 }
-[data-theme="light"] .feature:hover { border-color: rgba(8, 145, 178, 0.35); }
+[data-theme="light"] .feature { color: var(--text-primary); }
 
-.feature-icon {
-  display: flex;
-  align-items: center;
-  color: var(--accent-primary);
+.feature-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  flex-shrink: 0;
 }
 
 /* 右侧表单 */
@@ -342,11 +311,7 @@ async function handleChangePassword() {
 }
 .form-header p { color: var(--text-secondary); font-size: 0.9rem; }
 
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.125rem;
-}
+.login-form { display: flex; flex-direction: column; gap: 1.125rem; }
 
 .error-message {
   padding: 0.625rem 0.875rem;
@@ -357,13 +322,8 @@ async function handleChangePassword() {
   font-size: 0.85rem;
 }
 
-.form-footer {
-  margin-top: 1.25rem;
-  text-align: center;
-  font-size: 0.85rem;
-}
+.form-footer { margin-top: 1.25rem; text-align: center; font-size: 0.85rem; }
 
-/* 修改密码弹窗 */
 .change-password-modal { max-width: 400px; width: 90%; }
 .change-password-hint {
   color: var(--text-secondary);
@@ -372,11 +332,10 @@ async function handleChangePassword() {
   line-height: 1.5;
 }
 
-/* 响应式 */
 @media (max-width: 768px) {
   .login-container { flex-direction: column; }
   .login-decoration { padding: 2rem 1.5rem; }
-  .decoration-content h1 { font-size: 1.4rem; }
+  .brand-title { font-size: 1.8rem; }
   .features { display: none; }
 }
 </style>

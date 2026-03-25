@@ -2,6 +2,8 @@
 
 > **修订记录**
 >
+> - v6.3: 新功能 — 爬取客户联系人/电话，分发时自动填充到项目
+> - v6.2: 优化 — 顶部同步滚动条 + 定时爬取 + 分发弹窗备注框
 > - v6.1: 优化 — 多系统合并分发 + 分发状态显示
 > - v6.0: 新功能 — 系统进度汇报（按系统汇报阶段进度，一键同步，汇报历史）
 > - v5.5: 对齐模板 — 备案情况选项修正、新增优先级和资料归档字段、移除审批时间
@@ -15,6 +17,111 @@
 > - v3.0: UI 重构 — 去除"AI 味"，对齐前端设计规范（Void Space 暗色主题）
 > - v2.0: 代码审查修复 — 15 项安全/质量/性能问题修复
 > - v1.9: 后端 API 修复 — 路由顺序修正、新增趋势API、导入大小限制、错误处理加固
+
+## v6.3 — 爬取客户联系人 + 分发自动填充
+
+从项目交接页面爬取客户联系人和联系电话，分发时自动填充到项目中，员工在项目详情页可直接看到联系方式。
+
+### 修改文件
+
+#### `backend/app/models/progress.py` — 新增联系人字段
+- **修改内容**：`ProgressRecord` 新增 `contact_name`、`contact_phone` 列
+
+#### `backend/app/models/models.py` — Project 新增联系人 + 备注字段
+- **修改内容**：`Project` 新增 `remark`、`contact_name`、`contact_phone` 列
+
+#### `backend/app/services/progress_scraper.py` — 爬取联系人逻辑
+- **新增**：`HANDOVER_TYPE_PATHS` 映射、`_fetch_contacts()` 和 `_fetch_contacts_from_detail()` 方法
+- **修改**：`run()` 方法在爬取进度数据后自动补充联系人信息
+- **修改**：`EXCEL_COLUMNS` 和 `DB_FIELD_NAMES` 新增联系人字段
+
+#### `backend/app/routers/progress.py` — 分发时填充联系人
+- **修改内容**：`distribute_record` 创建项目时传入 `contact_name`、`contact_phone`、`remark`
+
+#### `backend/app/routers/projects.py` — 响应中返回联系人
+- **修改内容**：`project_to_response` 新增 `remark`、`contact_name`、`contact_phone`
+
+#### `backend/app/schemas/schemas.py` — Schema 同步
+- **修改内容**：`ProjectResponse` 新增 `remark`、`contact_name`、`contact_phone`
+
+#### `backend/app/schemas/progress.py` — Schema 同步
+- **修改内容**：`ProgressRecordResponse` 新增 `contact_name`、`contact_phone`、`distributed`
+- **修改内容**：`ProgressDistributeRequest` 新增 `remark` 可选字段
+
+#### `backend/app/main.py` — 数据库迁移
+- **修改内容**：自动添加 projects 和 progress_records 表的新列
+
+#### `frontend/src/views/ProjectProgress.vue` — 表格显示联系人
+- **修改内容**：列配置新增"客户联系人"和"联系电话"列
+
+#### `frontend/src/views/ProjectDetail.vue` — 详情页显示联系人
+- **修改内容**：基本信息区域新增"客户联系人"和"联系电话"显示
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **修改** | `backend/app/models/progress.py` |
+| **修改** | `backend/app/models/models.py` |
+| **修改** | `backend/app/services/progress_scraper.py` |
+| **修改** | `backend/app/routers/progress.py` |
+| **修改** | `backend/app/routers/projects.py` |
+| **修改** | `backend/app/schemas/schemas.py` |
+| **修改** | `backend/app/schemas/progress.py` |
+| **修改** | `backend/app/main.py` |
+| **修改** | `frontend/src/views/ProjectProgress.vue` |
+| **修改** | `frontend/src/views/ProjectDetail.vue` |
+
+### 测试方式
+
+1. 手动爬取，确认日志显示"已匹配 N 条联系人信息"
+2. 进度表格中显示客户联系人和联系电话列
+3. 分发项目后进入项目详情，确认显示客户联系人和联系电话
+4. 用员工账号查看项目详情，确认能看到联系方式
+
+---
+
+## v6.2 — 顶部同步滚动条 + 定时爬取 + 分发弹窗优化
+
+### 修改文件
+
+#### `backend/app/services/scrape_scheduler.py` — 定时爬取调度器（新增）
+- **功能**：基于 threading.Timer 的轻量定时器，支持开启/关闭/恢复，配置持久化在 progress_config.json
+- **全局单例**：`scheduler` 对象，应用启动时自动恢复
+
+#### `backend/app/routers/progress.py` — 新增定时爬取 API
+- **新增**：`GET /schedule/status`、`POST /schedule/start`、`POST /schedule/stop`
+
+#### `backend/app/main.py` — 启动恢复定时
+- **修改内容**：lifespan 中调用 `scheduler.restore_from_config()`
+
+#### `frontend/src/api/index.js` — 新增定时 API
+- **修改内容**：`progressApi` 新增 `getScheduleStatus`、`startSchedule`、`stopSchedule`
+
+#### `frontend/src/views/ProjectProgress.vue` — UI 优化
+- **顶部滚动条**：表格上方添加同步滚动条，拖动任一滚动条另一个同步联动
+- **定时爬取控件**：间隔选择下拉框 + 开启/关闭按钮
+- **分发弹窗**：新增备注输入框；成功后不弹 alert，直接刷新显示"已分发"；失败显示行内错误提示
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **新增** | `backend/app/services/scrape_scheduler.py` |
+| **修改** | `backend/app/routers/progress.py` |
+| **修改** | `backend/app/main.py` |
+| **修改** | `frontend/src/api/index.js` |
+| **修改** | `frontend/src/views/ProjectProgress.vue` |
+
+### 测试方式
+
+1. 开启定时爬取（选择间隔），确认状态显示"定时爬取中"
+2. 关闭定时爬取，确认状态恢复
+3. 重启后端，确认定时状态自动恢复
+4. 分发项目时填写备注，确认无 alert 弹出，直接显示"已分发"
+5. 表格顶部滚动条和底部滚动条同步联动
+
+---
 
 ## v6.1 — 多系统合并分发 + 分发状态显示
 

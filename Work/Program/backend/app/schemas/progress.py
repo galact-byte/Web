@@ -34,6 +34,8 @@ class ProgressRecordResponse(BaseModel):
     register_status: Optional[str] = None
     contract_status: Optional[str] = None
     remark: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
     scraped_at: Optional[datetime] = None
     distributed: bool = False  # 是否已分发到项目管理
 
@@ -86,3 +88,4 @@ class ProgressConfigUpdate(BaseModel):
 class ProgressDistributeRequest(BaseModel):
     """从爬取数据快速分发项目"""
     assignee_ids: List[int] = Field(..., min_length=1, description="分配的员工ID列表")
+    remark: Optional[str] = Field(None, description="分发备注（紧急度等）")

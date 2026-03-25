@@ -10,6 +10,25 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
           {{ scraping ? '爬取中...' : '手动爬取' }}
         </button>
+        <div v-if="userStore.isManager" class="schedule-controls">
+          <template v-if="!scheduleEnabled">
+            <select v-model="scheduleInterval" class="input input-sm schedule-select">
+              <option :value="10">10分钟</option>
+              <option :value="30">30分钟</option>
+              <option :value="60">1小时</option>
+              <option :value="120">2小时</option>
+              <option :value="360">6小时</option>
+              <option :value="720">12小时</option>
+              <option :value="1440">24小时</option>
+            </select>
+            <button class="btn btn-sm btn-secondary" @click="startSchedule">开启定时</button>
+          </template>
+          <template v-else>
+            <span class="schedule-status">定时爬取中（{{ formatInterval(scheduleInterval) }}）</span>
+            <button class="btn btn-sm btn-warning" @click="stopSchedule">关闭定时</button>
+          </template>
+        </div>
+        <button v-if="userStore.isManager" class="btn btn-sm btn-secondary" @click="handleBackfill">回填联系人</button>
         <button class="btn btn-secondary" @click="handleExport" :disabled="total === 0">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           导出 Excel
@@ -53,8 +72,12 @@
 
     <!-- Data table -->
     <div v-else>
-      <div class="table-wrapper">
-        <table>
+      <!-- 顶部同步滚动条 -->
+      <div class="top-scrollbar" ref="topScrollbar" @scroll="syncScroll('top')">
+        <div class="top-scrollbar-inner" :style="{ width: tableScrollWidth + 'px' }"></div>
+      </div>
+      <div class="table-wrapper" ref="tableWrapper" @scroll="syncScroll('table')">
+        <table ref="dataTable">
           <thead>
             <tr>
               <th v-for="col in shownColumns" :key="col.key">{{ col.label }}</th>
@@ -132,6 +155,10 @@
             <p v-if="employees.length === 0" class="no-employees">暂无可分配员工</p>
           </div>
         </div>
+        <div class="modal-field">
+          <label>分发备注：</label>
+          <textarea v-model="distributeRemark" class="input distribute-remark" rows="3" placeholder="描述项目紧急度、注意事项等（可选）"></textarea>
+        </div>
         <div class="modal-actions">
           <button class="btn btn-secondary" @click="showDistributeModal = false">取消</button>
           <button class="btn btn-primary" @click="handleDistribute" :disabled="selectedEmployees.length === 0 || distributing">
@@ -140,13 +167,15 @@
         </div>
       </div>
     </div>
+    <Toast :message="toastMsg" :type="toastType" @done="toastMsg = ''" />
   </AppLayout>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
+import Toast from '../components/Toast.vue'
 import { useUserStore } from '../stores/user'
 import { progressApi, usersApi } from '../api/index'
 
@@ -169,7 +198,7 @@ const typeName = computed(() => PROJECT_TYPES[projectType.value] || projectType.
 const ALL_COLUMNS = [
   { key: 'system_id', label: '系统编号', cls: 'cell-mono' },
   { key: 'system_name', label: '系统名称', cls: 'cell-name' },
-  { key: 'customer_name', label: '客户名称' },
+  { key: 'customer_name', label: '客户单位名称' },
   { key: 'system_level', label: '系统级别' },
   { key: 'system_tag', label: '系统标签' },
   { key: 'business_type', label: '业务类型' },
@@ -191,9 +220,11 @@ const ALL_COLUMNS = [
   { key: 'register_status', label: '备案状态' },
   { key: 'contract_status', label: '合同状态' },
   { key: 'remark', label: '备注' },
+  { key: 'contact_name', label: '客户联系人' },
+  { key: 'contact_phone', label: '联系电话' },
 ]
 
-const DEFAULT_VISIBLE = ['system_id', 'system_name', 'customer_name', 'system_level', 'project_name', 'project_location', 'project_manager', 'sale_contact', 'project_status', 'plan_printed', 'report_printed', 'register_status', 'contract_status', 'remark']
+const DEFAULT_VISIBLE = ['system_id', 'system_name', 'customer_name', 'system_level', 'project_name', 'project_location', 'project_manager', 'sale_contact', 'project_status', 'plan_printed', 'report_printed', 'register_status', 'contract_status', 'remark', 'contact_name', 'contact_phone']
 const visibleCols = ref(new Set(DEFAULT_VISIBLE))
 const showColToggle = ref(false)
 
@@ -210,18 +241,53 @@ const loading = ref(true)
 const scraping = ref(false)
 const records = ref([])
 const total = ref(0)
+
+// toast 通知
+const toastMsg = ref('')
+const toastType = ref('success')
+function showToast(msg, type = 'success') {
+  toastMsg.value = ''
+  nextTick(() => { toastMsg.value = msg; toastType.value = type })
+}
 const currentPage = ref(1)
 const pageSize = 50
 const searchText = ref('')
 const logs = ref([])
 const showLogs = ref(false)
 
+// 定时爬取
+const scheduleEnabled = ref(false)
+const scheduleInterval = ref(60)
+
 // 分发相关
 const employees = ref([])
 const showDistributeModal = ref(false)
+
+// 顶部同步滚动条
+const topScrollbar = ref(null)
+const tableWrapper = ref(null)
+const dataTable = ref(null)
+const tableScrollWidth = ref(0)
+let scrollingSrc = null
+
+function syncScroll(source) {
+  if (scrollingSrc && scrollingSrc !== source) return
+  scrollingSrc = source
+  const from = source === 'top' ? topScrollbar.value : tableWrapper.value
+  const to = source === 'top' ? tableWrapper.value : topScrollbar.value
+  if (from && to) to.scrollLeft = from.scrollLeft
+  requestAnimationFrame(() => { scrollingSrc = null })
+}
+
+function updateScrollWidth() {
+  if (dataTable.value) {
+    tableScrollWidth.value = dataTable.value.scrollWidth
+  }
+}
 const distributeRecord = ref(null)
 const selectedEmployees = ref([])
 const distributing = ref(false)
+const distributeRemark = ref('')
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
 const jumpPage = ref(1)
@@ -262,6 +328,42 @@ function formatTime(t) {
   return new Date(t).toLocaleString('zh-CN')
 }
 
+// 定时爬取操作
+async function fetchScheduleStatus() {
+  try {
+    const res = await progressApi.getScheduleStatus()
+    scheduleEnabled.value = res.data.enabled
+    scheduleInterval.value = res.data.interval_minutes || 60
+  } catch (err) { /* 非致命 */ }
+}
+
+async function startSchedule() {
+  try {
+    await progressApi.startSchedule(scheduleInterval.value)
+    scheduleEnabled.value = true
+  } catch (err) { showToast(err.response?.data?.detail || '开启失败', 'error') }
+}
+
+async function stopSchedule() {
+  try {
+    await progressApi.stopSchedule()
+    scheduleEnabled.value = false
+  } catch (err) { showToast(err.response?.data?.detail || '关闭失败', 'error') }
+}
+
+function formatInterval(minutes) {
+  if (minutes >= 1440) return `${minutes / 1440}天`
+  if (minutes >= 60) return `${minutes / 60}小时`
+  return `${minutes}分钟`
+}
+
+async function handleBackfill() {
+  try {
+    const res = await progressApi.backfillContacts()
+    showToast(res.data.message)
+  } catch (err) { showToast(err.response?.data?.detail || '回填失败', 'error') }
+}
+
 async function fetchRecords(resetPage = false) {
   if (resetPage) currentPage.value = 1
   loading.value = true
@@ -273,6 +375,7 @@ async function fetchRecords(resetPage = false) {
     })
     records.value = res.data.items
     total.value = res.data.total
+    nextTick(updateScrollWidth)
   } catch (err) {
     console.error('获取记录失败:', err)
   } finally {
@@ -295,11 +398,11 @@ async function handleScrape() {
   try {
     const res = await progressApi.scrape(projectType.value)
     const count = res.data.total_records
-    alert(`爬取完成，共获取 ${count} 条记录`)
+    showToast(`爬取完成，共获取 ${count} 条记录`)
     await fetchRecords(true)
     await fetchLogs()
   } catch (err) {
-    alert(err.response?.data?.detail || '爬取失败，请检查爬虫配置')
+    showToast(err.response?.data?.detail || '爬取失败，请检查爬虫配置', 'error')
   } finally {
     scraping.value = false
   }
@@ -317,7 +420,7 @@ async function handleExport() {
     a.click()
     window.URL.revokeObjectURL(url)
   } catch (err) {
-    alert(err.response?.data?.detail || '导出失败')
+    showToast(err.response?.data?.detail || '导出失败', 'error')
   }
 }
 
@@ -340,6 +443,7 @@ async function fetchEmployees() {
 function openDistribute(record) {
   distributeRecord.value = record
   selectedEmployees.value = []
+  distributeRemark.value = ''
   showDistributeModal.value = true
 }
 
@@ -359,14 +463,14 @@ async function handleDistribute() {
   if (selectedEmployees.value.length === 0) return
   distributing.value = true
   try {
-    const res = await progressApi.distribute(distributeRecord.value.id, {
+    await progressApi.distribute(distributeRecord.value.id, {
       assignee_ids: selectedEmployees.value,
+      remark: distributeRemark.value || null,
     })
-    alert(res.data.message)
     showDistributeModal.value = false
     fetchRecords()  // 刷新分发状态
   } catch (err) {
-    alert(err.response?.data?.detail || '分发失败')
+    showToast(err.response?.data?.detail || '分发失败', 'error')
   } finally {
     distributing.value = false
   }
@@ -383,7 +487,10 @@ watch(projectType, () => {
 onMounted(() => {
   fetchRecords()
   fetchLogs()
-  if (userStore.isManager) fetchEmployees()
+  if (userStore.isManager) {
+    fetchEmployees()
+    fetchScheduleStatus()
+  }
 })
 </script>
 
@@ -414,6 +521,9 @@ onMounted(() => {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+.schedule-controls { display: flex; align-items: center; gap: 0.4rem; margin-left: 0.5rem; padding-left: 0.75rem; border-left: 1px solid var(--border-color); }
+.schedule-select { width: 90px; padding: 0.25rem 0.4rem; font-size: 0.8rem; }
+.schedule-status { font-size: 0.8rem; color: var(--accent-primary); white-space: nowrap; }
 
 .search-box {
   display: flex;
@@ -495,6 +605,15 @@ onMounted(() => {
   overflow-x: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
+}
+.top-scrollbar {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 12px;
+  margin-bottom: -1px;
+}
+.top-scrollbar-inner {
+  height: 1px;
 }
 table {
   min-width: 100%;
@@ -672,6 +791,8 @@ tbody tr:hover .td-action { background: var(--bg-tertiary); }
 }
 .btn-distribute:hover { opacity: 0.85; }
 .badge-distributed { background: rgba(16, 185, 129, 0.15); color: #10b981; font-size: 0.78rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
+.distribute-remark { width: 100%; resize: vertical; font-size: 0.85rem; }
+.distribute-error { color: #ef4444; font-size: 0.85rem; margin-bottom: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(239, 68, 68, 0.1); border-radius: 4px; }
 .text-muted { font-size: 0.78rem; color: var(--text-muted); }
 
 /* 分发弹窗 */

@@ -8,7 +8,7 @@
             <polyline points="14 2 14 8 20 8"></polyline>
           </svg>
         </div>
-        <span class="logo-text">完结单平台</span>
+        <span class="logo-text">慎微</span>
       </div>
 
       <nav class="sidebar-nav">
@@ -133,8 +133,10 @@ function handleLogout() {
   border-radius: var(--radius-md);
   display: flex; align-items: center; justify-content: center;
   color: white;
+  transition: transform 0.3s ease;
   flex-shrink: 0;
 }
+.logo:hover { transform: rotate(8deg); }
 .logo-text { font-size: 1rem; font-weight: 600; }
 
 .sidebar-nav {
@@ -148,11 +150,29 @@ function handleLogout() {
   padding: 0.625rem 0.75rem;
   color: var(--text-secondary);
   border-radius: var(--radius-md);
-  transition: all 0.2s ease;
+  transition: color 0.15s ease, background 0.15s ease;
   text-decoration: none;
   font-size: 0.9rem;
   cursor: pointer;
   position: relative;
+}
+.nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 3px;
+  height: 60%;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent-primary);
+  transition: transform 0.2s ease;
+}
+.nav-item.active::before {
+  transform: translateY(-50%) scaleY(1);
+}
+.nav-item:hover::before {
+  transform: translateY(-50%) scaleY(0.5);
 }
 .nav-item:hover {
   background: var(--bg-tertiary);
@@ -162,17 +182,6 @@ function handleLogout() {
   background: var(--accent-glow);
   color: var(--accent-primary);
   font-weight: 500;
-}
-.nav-item.active::before {
-  content: '';
-  position: absolute;
-  left: -0.625rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
-  background: var(--accent-primary);
-  border-radius: 0 2px 2px 0;
 }
 
 /* Nav group (dropdown menu) */
