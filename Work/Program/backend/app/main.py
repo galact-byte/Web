@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.database import engine, Base, SessionLocal
-from app.routers import auth_router, users_router, projects_router, exports_router, backup_router, progress_router
+from app.routers import auth_router, users_router, projects_router, exports_router, backup_router, progress_router, system_progress_router
 from app.models import User, UserRole
 from app.services.auth import hash_password
 from sqlalchemy import inspect as sa_inspect, text as sa_text
@@ -84,6 +84,13 @@ def _migrate_db():
                     )
                     conn.commit()
                 logger.info("已为 systems 表添加 archive_status 列")
+            if "current_phase" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(
+                        sa_text("ALTER TABLE systems ADD COLUMN current_phase VARCHAR(20) DEFAULT 'not_started'")
+                    )
+                    conn.commit()
+                logger.info("已为 systems 表添加 current_phase 列")
     except OperationalError as e:
         logger.warning(f"数据库迁移检查失败（非致命）: {e}")
     except Exception as e:
@@ -161,6 +168,7 @@ app.include_router(projects_router)
 app.include_router(exports_router)
 app.include_router(backup_router)
 app.include_router(progress_router)
+app.include_router(system_progress_router)
 
 
 @app.get("/")

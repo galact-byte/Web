@@ -25,6 +25,27 @@ class AssignmentStatus(str, enum.Enum):
     submitted = "submitted"  # 已提交完结
 
 
+class SystemProgressPhase(str, enum.Enum):
+    """系统进度阶段"""
+    not_started = "not_started"           # 未开始
+    evaluation_prep = "evaluation_prep"   # 测评准备
+    scheme_writing = "scheme_writing"     # 方案编制
+    onsite_eval = "onsite_eval"           # 现场测评
+    report_writing = "report_writing"     # 报告编制
+    archived = "archived"                 # 完结归档
+
+
+# 阶段中文标签映射
+PHASE_LABELS = {
+    SystemProgressPhase.not_started: "未开始",
+    SystemProgressPhase.evaluation_prep: "测评准备",
+    SystemProgressPhase.scheme_writing: "方案编制",
+    SystemProgressPhase.onsite_eval: "现场测评",
+    SystemProgressPhase.report_writing: "报告编制",
+    SystemProgressPhase.archived: "完结归档",
+}
+
+
 class User(Base):
     """用户表"""
     __tablename__ = "users"
@@ -89,10 +110,17 @@ class System(Base):
     system_type = Column(String(50), default="传统系统")  # 系统类型
     archive_status = Column(String(10), default="否")  # 资料归档情况：是、否
     
+    current_phase = Column(String(20), default="not_started")  # 当前进度阶段
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 关系
     project = relationship("Project", back_populates="systems")
+    progress_reports = relationship(
+        "SystemProgressReport", back_populates="system",
+        cascade="all, delete-orphan",
+        order_by="SystemProgressReport.created_at.desc()"
+    )
 
 
 class ProjectAssignment(Base):
@@ -112,3 +140,23 @@ class ProjectAssignment(Base):
     # 关系
     project = relationship("Project", back_populates="assignments")
     assignee = relationship("User", back_populates="assignments")
+
+
+class SystemProgressReport(Base):
+    """系统进度汇报记录"""
+    __tablename__ = "system_progress_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    system_id = Column(Integer, ForeignKey("systems.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    reporter_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    phase = Column(String(20), nullable=False)  # SystemProgressPhase 枚举值
+    remark = Column(Text, nullable=True)          # 文字备注
+    report_week = Column(String(10), nullable=False)  # 格式 "2026-W13"
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # 关系
+    system = relationship("System", back_populates="progress_reports")
+    project = relationship("Project")
+    reporter = relationship("User")

@@ -35,6 +35,7 @@ class ProgressRecordResponse(BaseModel):
     contract_status: Optional[str] = None
     remark: Optional[str] = None
     scraped_at: Optional[datetime] = None
+    distributed: bool = False  # 是否已分发到项目管理
 
     class Config:
         from_attributes = True

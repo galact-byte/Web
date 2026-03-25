@@ -165,7 +165,25 @@ def get_records(
 
     total = query.count()
     items = query.order_by(desc(ProgressRecord.system_id)).offset(offset).limit(limit).all()
-    return ProgressListResponse(total=total, items=items)
+
+    # 批量计算分发状态：查哪些 system_id 已存在于 systems 表中
+    all_system_codes = [r.system_id for r in items if r.system_id]
+    distributed_codes = set()
+    if all_system_codes:
+        existing_systems = db.query(System.system_code).filter(
+            System.system_code.in_(all_system_codes)
+        ).all()
+        distributed_codes = {s[0] for s in existing_systems}
+
+    # 构造响应，手动设置 distributed 字段
+    result_items = []
+    for r in items:
+        item = ProgressRecordResponse.model_validate(r)
+        if r.system_id and r.system_id in distributed_codes:
+            item.distributed = True
+        result_items.append(item)
+
+    return ProgressListResponse(total=total, items=result_items)
 
 
 @router.get("/{project_type}/records/export")
@@ -315,6 +333,14 @@ def update_config(
     )
 
 
+def _parse_project_code(raw_code: str) -> str:
+    """项目编号：去掉系统编号末尾的子系统序号（如 QZXGC-202602007-03 → QZXGC-202602007）"""
+    parts = raw_code.rsplit("-", 1)
+    if len(parts) == 2 and parts[1].isdigit() and len(parts[1]) <= 2:
+        return parts[0]
+    return raw_code
+
+
 @router.post("/records/{record_id}/distribute")
 def distribute_record(
     record_id: int,
@@ -322,7 +348,10 @@ def distribute_record(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_manager),
 ):
-    """从爬取记录快速创建项目并分发给员工（需要经理权限）"""
+    """从爬取记录快速创建项目并分发给员工（需要经理权限）
+    - 项目编号不存在时：创建新项目 + 系统 + 分配员工
+    - 项目编号已存在时：追加系统到已有项目 + 补充分配未分配的员工
+    """
     record = db.query(ProgressRecord).filter(ProgressRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="记录不存在")
@@ -338,25 +367,59 @@ def distribute_record(
     # 业务类别映射
     type_name = PROJECT_TYPE_NAMES.get(record.project_type, "等保测评")
 
-    # 项目编号：去掉系统编号末尾的子系统序号（如 QZXGC-202602007-03 → QZXGC-202602007）
     raw_code = record.system_id or f"AUTO_{record.id}"
-    parts = raw_code.rsplit("-", 1)
-    if len(parts) == 2 and parts[1].isdigit() and len(parts[1]) <= 2:
-        project_code = parts[0]
-    else:
-        project_code = raw_code
+    project_code = _parse_project_code(raw_code)
 
-    # 检查是否已用该编号创建过项目（避免重复）
+    # 检查项目是否已存在
     existing = db.query(Project).filter(
         Project.project_code == project_code
     ).first()
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"项目编号 {project_code} 已存在，请勿重复分发",
-        )
 
-    # 从爬取数据创建项目
+    if existing:
+        # 项目已存在 → 检查该系统是否已添加
+        if record.system_id:
+            dup_system = db.query(System).filter(
+                System.project_id == existing.id,
+                System.system_code == record.system_id,
+            ).first()
+            if dup_system:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"系统 {record.system_id} 已分发到项目 {project_code}",
+                )
+
+        # 追加系统到已有项目
+        if record.system_name:
+            system = System(
+                project_id=existing.id,
+                system_code=record.system_id,
+                system_name=record.system_name,
+                system_level=record.system_level or "第二级",
+            )
+            db.add(system)
+
+        # 补充分配未分配的员工
+        new_count = 0
+        for emp in employees:
+            already = db.query(ProjectAssignment).filter(
+                ProjectAssignment.project_id == existing.id,
+                ProjectAssignment.assignee_id == emp.id,
+            ).first()
+            if not already:
+                db.add(ProjectAssignment(
+                    project_id=existing.id,
+                    assignee_id=emp.id,
+                ))
+                new_count += 1
+
+        db.commit()
+        return {
+            "message": f"已将系统追加到项目 {project_code}" + (f"，新增分配 {new_count} 名员工" if new_count else ""),
+            "project_id": existing.id,
+            "project_code": project_code,
+        }
+
+    # 项目不存在 → 新建项目
     project = Project(
         project_code=project_code,
         project_name=record.project_name or record.system_name or "未命名项目",

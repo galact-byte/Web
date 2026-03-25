@@ -60,6 +60,48 @@
           <div v-else class="empty-state" style="padding: 2rem;"><p class="text-muted">暂无系统信息</p></div>
         </section>
 
+        <!-- 系统进度汇报 -->
+        <section v-if="project.systems?.length > 0 && (myAssignmentExists || isProjectCreator)" class="card">
+          <div class="section-header">
+            <h2>系统进度{{ isProjectCreator && !myAssignmentExists ? '总览' : '汇报' }}</h2>
+            <div class="progress-header-actions">
+              <button v-if="myAssignmentExists && project.systems.length > 1" class="btn btn-sm btn-secondary" @click="openSyncModal">一键同步进度</button>
+              <button v-if="isProjectCreator" class="btn btn-sm btn-secondary" @click="showHistoryModal = true; fetchProgressHistory()">查看汇报历史</button>
+            </div>
+          </div>
+
+          <div class="progress-systems">
+            <div v-for="sys in systemProgressList" :key="sys.system_id" class="progress-system-item">
+              <div class="progress-system-name">{{ sys.system_name }}</div>
+              <ProgressStepper
+                :model-value="myAssignmentExists ? (progressForm[sys.system_id]?.phase || sys.current_phase) : sys.current_phase"
+                :editable="myAssignmentExists && project.status === 'assigned'"
+                @update:model-value="val => updateProgressForm(sys.system_id, val)"
+              />
+              <div v-if="myAssignmentExists && project.status === 'assigned'" class="progress-remark-row">
+                <input
+                  class="input input-sm"
+                  :value="progressForm[sys.system_id]?.remark ?? ''"
+                  @input="e => updateProgressRemark(sys.system_id, e.target.value)"
+                  placeholder="备注说明（可选）"
+                />
+              </div>
+              <div v-else-if="sys.latest_remark || sys.latest_reporter_name" class="progress-latest-info">
+                <span class="text-muted">最近汇报：</span>
+                <span v-if="sys.latest_reporter_name">{{ sys.latest_reporter_name }}</span>
+                <span v-if="sys.latest_report_time" class="text-muted"> · {{ formatTime(sys.latest_report_time) }}</span>
+                <span v-if="sys.latest_remark"> — {{ sys.latest_remark }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="myAssignmentExists && project.status === 'assigned'" class="progress-submit-bar">
+            <button class="btn btn-primary" @click="submitProgressReport" :disabled="submittingProgress">
+              {{ submittingProgress ? '提交中...' : '提交本周汇报' }}
+            </button>
+          </div>
+        </section>
+
         <section class="card">
           <div class="section-header">
             <h2>人员分配</h2>
@@ -119,6 +161,58 @@
         </div>
       </div>
 
+      <!-- 一键同步进度弹窗 -->
+      <div v-if="showSyncModal" class="modal-overlay" @click.self="showSyncModal = false">
+        <div class="modal">
+          <div class="modal-header"><h2>一键同步进度</h2><button class="btn btn-ghost" @click="showSyncModal = false">✕</button></div>
+          <div class="modal-body">
+            <p class="sync-hint">将 {{ project.systems.length }} 个系统的进度统一设置为：</p>
+            <div class="input-group">
+              <label>目标阶段</label>
+              <select v-model="syncForm.phase" class="input">
+                <option v-for="s in phaseOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>备注（可选）</label>
+              <input v-model="syncForm.remark" class="input" placeholder="备注说明" />
+            </div>
+            <p class="text-muted" style="font-size: 0.85rem; margin-top: 0.5rem;">此操作将覆盖所有系统的当前进度</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showSyncModal = false">取消</button>
+            <button class="btn btn-primary" @click="confirmSync" :disabled="syncingProgress">{{ syncingProgress ? '同步中...' : '确认同步' }}</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 汇报历史弹窗 -->
+      <div v-if="showHistoryModal" class="modal-overlay" @click.self="showHistoryModal = false">
+        <div class="modal modal-lg">
+          <div class="modal-header"><h2>汇报历史</h2><button class="btn btn-ghost" @click="showHistoryModal = false">✕</button></div>
+          <div class="modal-body">
+            <div class="history-filter">
+              <select v-model="historyFilter.systemId" class="input input-sm" @change="fetchProgressHistory">
+                <option :value="null">全部系统</option>
+                <option v-for="sys in project.systems" :key="sys.id" :value="sys.id">{{ sys.system_name }}</option>
+              </select>
+            </div>
+            <div v-if="progressHistory.length > 0" class="history-list">
+              <div v-for="(group, week) in groupedHistory" :key="week" class="history-week-group">
+                <div class="history-week-label">{{ week }}</div>
+                <div v-for="record in group" :key="record.id" class="history-record">
+                  <span class="history-system-name">{{ record.system_name }}</span>
+                  <span class="badge badge-sm badge-primary">{{ record.phase_label }}</span>
+                  <span v-if="record.remark" class="history-remark">{{ record.remark }}</span>
+                  <span class="text-muted history-meta">{{ record.reporter_name }} · {{ formatTime(record.created_at) }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="empty-state" style="padding: 2rem;"><p class="text-muted">暂无汇报记录</p></div>
+          </div>
+        </div>
+      </div>
+
     </template>
   </AppLayout>
 </template>
@@ -129,6 +223,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { projectsApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
+import ProgressStepper from '../components/ProgressStepper.vue'
 import { getCategoryShort, getStatusClass, getStatusText } from '../utils/project'
 
 const route = useRoute()
@@ -150,6 +245,28 @@ const savingAssignment = ref(false)
 const showAddModal = ref(false)
 const addForm = reactive({ department: '', contribution: '' })
 const addingContribution = ref(false)
+
+// 进度汇报状态
+const systemProgressList = ref([])
+const progressForm = reactive({})  // { [systemId]: { phase, remark } }
+const submittingProgress = ref(false)
+const showSyncModal = ref(false)
+const syncForm = reactive({ phase: 'not_started', remark: '' })
+const syncingProgress = ref(false)
+const showHistoryModal = ref(false)
+const progressHistory = ref([])
+const historyFilter = reactive({ systemId: null })
+
+const phaseOptions = [
+  { value: 'not_started', label: '未开始' },
+  { value: 'evaluation_prep', label: '测评准备' },
+  { value: 'scheme_writing', label: '方案编制' },
+  { value: 'onsite_eval', label: '现场测评' },
+  { value: 'report_writing', label: '报告编制' },
+  { value: 'archived', label: '完结归档' },
+]
+
+const isProjectCreator = computed(() => project.value?.creator_id === userStore.user?.id)
 
 const myAssignmentExists = computed(() => assignments.value.some(a => a.assignee_id === userStore.user?.id))
 const mySubmitted = computed(() => {
@@ -260,6 +377,96 @@ async function reopenProject() {
   finally { changingStatus.value = false }
 }
 
+// ============ 进度汇报 ============
+function updateProgressForm(systemId, phase) {
+  if (!progressForm[systemId]) progressForm[systemId] = { phase, remark: '' }
+  else progressForm[systemId].phase = phase
+}
+
+function updateProgressRemark(systemId, remark) {
+  if (!progressForm[systemId]) {
+    const sys = systemProgressList.value.find(s => s.system_id === systemId)
+    progressForm[systemId] = { phase: sys?.current_phase || 'not_started', remark }
+  } else {
+    progressForm[systemId].remark = remark
+  }
+}
+
+async function fetchProgressOverview() {
+  try {
+    const res = await projectsApi.getProgressOverview(route.params.id)
+    systemProgressList.value = res.data
+    // 初始化表单
+    for (const sys of res.data) {
+      if (!progressForm[sys.system_id]) {
+        progressForm[sys.system_id] = { phase: sys.current_phase, remark: '' }
+      }
+    }
+  } catch (err) { console.error('获取进度总览失败:', err) }
+}
+
+async function submitProgressReport() {
+  submittingProgress.value = true
+  try {
+    const reports = systemProgressList.value.map(sys => ({
+      system_id: sys.system_id,
+      phase: progressForm[sys.system_id]?.phase || sys.current_phase,
+      remark: progressForm[sys.system_id]?.remark || null,
+    }))
+    await projectsApi.submitProgress(route.params.id, { reports })
+    alert('汇报提交成功')
+    await fetchProgressOverview()
+  } catch (err) { console.error(err); alert(err.response?.data?.detail || '提交失败') }
+  finally { submittingProgress.value = false }
+}
+
+function openSyncModal() {
+  syncForm.phase = 'not_started'
+  syncForm.remark = ''
+  showSyncModal.value = true
+}
+
+async function confirmSync() {
+  if (!confirm(`确定将所有系统的进度同步为"${phaseOptions.find(p => p.value === syncForm.phase)?.label}"？`)) return
+  syncingProgress.value = true
+  try {
+    await projectsApi.syncProgress(route.params.id, syncForm)
+    showSyncModal.value = false
+    alert('进度同步成功')
+    // 更新本地表单
+    for (const sys of systemProgressList.value) {
+      progressForm[sys.system_id] = { phase: syncForm.phase, remark: syncForm.remark || '' }
+    }
+    await fetchProgressOverview()
+  } catch (err) { console.error(err); alert(err.response?.data?.detail || '同步失败') }
+  finally { syncingProgress.value = false }
+}
+
+async function fetchProgressHistory() {
+  try {
+    const params = {}
+    if (historyFilter.systemId) params.system_id = historyFilter.systemId
+    const res = await projectsApi.getProgressHistory(route.params.id, params)
+    progressHistory.value = res.data
+  } catch (err) { console.error('获取汇报历史失败:', err) }
+}
+
+const groupedHistory = computed(() => {
+  const groups = {}
+  for (const record of progressHistory.value) {
+    const week = record.report_week
+    if (!groups[week]) groups[week] = []
+    groups[week].push(record)
+  }
+  return groups
+})
+
+function formatTime(dt) {
+  if (!dt) return ''
+  const d = new Date(dt)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 async function fetchData() {
   loading.value = true
   try {
@@ -269,6 +476,10 @@ async function fetchData() {
     ])
     project.value = projRes.data
     assignments.value = assRes.data
+    // 项目有系统时获取进度总览
+    if (projRes.data.systems?.length > 0) {
+      await fetchProgressOverview()
+    }
   } catch (err) { console.error(err) }
   finally { loading.value = false }
 }
@@ -319,4 +530,29 @@ onMounted(fetchData)
 .btn-warning:disabled { opacity: 0.5; cursor: not-allowed; }
 .badge-sm { font-size: 0.7rem; padding: 0.15rem 0.4rem; margin-left: 0.4rem; vertical-align: middle; }
 .submit-progress { font-size: 0.85rem; font-weight: 400; color: var(--text-secondary); }
+
+/* 进度汇报样式 */
+.progress-header-actions { display: flex; gap: 0.5rem; }
+.progress-systems { display: flex; flex-direction: column; gap: 1.5rem; }
+.progress-system-item { padding: 1rem; background: var(--bg-tertiary); border-radius: var(--radius-md); }
+.progress-system-name { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.75rem; }
+.progress-remark-row { margin-top: 0.75rem; }
+.progress-remark-row .input { width: 100%; }
+.input-sm { padding: 0.35rem 0.6rem; font-size: 0.85rem; }
+.progress-latest-info { margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary); }
+.progress-submit-bar { margin-top: 1rem; display: flex; justify-content: flex-end; }
+.sync-hint { font-size: 0.95rem; margin-bottom: 0.75rem; }
+
+/* 汇报历史弹窗 */
+.modal-lg { max-width: 700px; width: 90%; }
+.history-filter { margin-bottom: 1rem; }
+.history-filter .input { max-width: 200px; }
+.history-list { display: flex; flex-direction: column; gap: 1rem; max-height: 400px; overflow-y: auto; }
+.history-week-group { }
+.history-week-label { font-weight: 600; font-size: 0.9rem; color: var(--accent-primary); margin-bottom: 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); }
+.history-record { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; font-size: 0.85rem; flex-wrap: wrap; }
+.history-system-name { font-weight: 500; min-width: 80px; }
+.history-remark { color: var(--text-secondary); }
+.history-meta { font-size: 0.8rem; margin-left: auto; }
+.badge-sm { font-size: 0.7rem; padding: 0.15rem 0.4rem; }
 </style>

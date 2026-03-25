@@ -87,7 +87,13 @@ export const projectsApi = {
   addContribution: (projectId, data) => api.post(`/api/projects/${projectId}/contributions`, data),
   submitCompletion: (projectId) => api.patch(`/api/projects/${projectId}/submit-completion`),
   retractCompletion: (projectId) => api.patch(`/api/projects/${projectId}/retract-completion`),
-  getWorkloadStats: (year, quarter) => api.get('/api/projects/workload-stats', { params: { year, quarter } })
+  getWorkloadStats: (year, quarter) => api.get('/api/projects/workload-stats', { params: { year, quarter } }),
+
+  // 系统进度汇报
+  getProgressOverview: (projectId) => api.get(`/api/projects/${projectId}/progress`),
+  getProgressHistory: (projectId, params) => api.get(`/api/projects/${projectId}/progress/history`, { params }),
+  submitProgress: (projectId, data) => api.post(`/api/projects/${projectId}/progress`, data),
+  syncProgress: (projectId, data) => api.post(`/api/projects/${projectId}/progress/sync`, data),
 }
 
 // ============ 导出 API ============
