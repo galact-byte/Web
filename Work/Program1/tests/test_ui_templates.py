@@ -36,6 +36,10 @@ class UiTemplateTests(unittest.TestCase):
         self.assertIn('name="view-transition"', html)
         self.assertIn('header-action', html)
         self.assertIn('待登录', html)
+        self.assertIn('兰台清晖', html)
+        self.assertIn('等保测评定级备案工作台', html)
+        self.assertIn('brand-emblem', html)
+        self.assertNotIn('fa-shield-halved', html)
         self.assertNotIn('访客模式', html)
         self.assertNotIn('route-curtain', html)
         self.assertNotIn('breadcrumb-path', html)
@@ -65,6 +69,9 @@ class UiTemplateTests(unittest.TestCase):
         self.assertNotIn('active-nav-pill', css)
         self.assertNotIn('route-pill-new', css)
         self.assertIn('inline-check', css)
+        self.assertIn('--brand-ink', css)
+        self.assertIn('--font-brand', css)
+        self.assertIn('--accent-cinnabar', css)
 
     def test_reports_template_uses_section_intro_layout(self):
         html = self.render_template('reports.html')
@@ -77,6 +84,7 @@ class UiTemplateTests(unittest.TestCase):
 
         self.assertIn('section-intro', html)
         self.assertIn('section-flag', html)
+        self.assertIn('处理结果', html)
 
     def test_index_template_uses_dashboard_overview_layout(self):
         html = self.render_template('index.html')
@@ -89,6 +97,31 @@ class UiTemplateTests(unittest.TestCase):
 
         self.assertIn('section-intro', html)
         self.assertIn('section-flag', html)
+
+    def test_actor_inputs_follow_current_login_state(self):
+        reports_html = self.render_template('reports.html')
+        workflow_html = self.render_template('workflow.html')
+        organizations_html = self.render_template('organizations.html')
+        systems_html = self.render_template('systems.html')
+        knowledge_html = self.render_template('knowledge.html')
+
+        self.assertIn('data-current-actor', reports_html)
+        self.assertIn('data-current-actor', workflow_html)
+        self.assertIn('data-current-actor', organizations_html)
+        self.assertIn('data-current-actor', systems_html)
+        self.assertIn('data-current-actor', knowledge_html)
+        self.assertIn('currentActorName()', reports_html)
+        self.assertIn('currentActorName()', workflow_html)
+        self.assertIn('currentActorName()', organizations_html)
+        self.assertIn('currentActorName()', systems_html)
+        self.assertIn('currentActorName()', knowledge_html)
+        self.assertIn('requestReviewMeta', organizations_html)
+        self.assertIn('requestReviewMeta', systems_html)
+        self.assertNotIn('value="tester"', reports_html)
+        self.assertNotIn('value="tester"', workflow_html)
+        self.assertNotIn("|| 'tester'", reports_html)
+        self.assertNotIn("|| 'tester'", workflow_html)
+        self.assertNotIn("updated_by: 'admin'", workflow_html)
 
     def test_users_template_uses_refined_admin_layout(self):
         html = self.render_template('users.html')

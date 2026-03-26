@@ -229,7 +229,12 @@ async function resetPassword(id, usernameEncoded) {
     return;
   }
   const username = decodeURIComponent(usernameEncoded || '');
-  const newPassword = prompt(`请输入 ${username} 的新密码（至少8位）`, '');
+  const newPassword = await window.appDialog.prompt(`请输入 ${username} 的新密码，长度至少 8 位。`, '', {
+    title: '重置密码',
+    label: '新密码',
+    placeholder: '请输入至少 8 位的新密码',
+    confirmText: '确认重置'
+  });
   if (newPassword === null) return;
   const pwd = (newPassword || '').trim();
   if (pwd.length < 8) {

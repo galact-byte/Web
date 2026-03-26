@@ -1540,7 +1540,7 @@ class ApiFlowTests(unittest.TestCase):
         resp = self.client.get('/login')
         self.assertEqual(resp.status_code, 200)
         self.assertIn('\u8d26\u53f7\u767b\u5f55', resp.text)
-        self.assertIn('\u8bf7\u4f7f\u7528\u7ba1\u7406\u5458\u5206\u53d1\u7684\u8d26\u53f7\u767b\u5f55', resp.text)
+        self.assertIn('\u8bf7\u4f7f\u7528\u7ba1\u7406\u5458\u5206\u53d1\u7684\u8d26\u53f7\u8fdb\u5165\u5de5\u4f5c\u53f0', resp.text)
         self.assertNotIn('admin123', resp.text)
 
     def test_31_register_then_login_success(self):
@@ -1581,8 +1581,8 @@ class ApiFlowTests(unittest.TestCase):
         self.assertIn('无法解析', str(resp.json().get('detail', '')))
 
     def test_36_parse_docx_fallback_supports_missing_package_relationship(self):
-        root = Path(__file__).resolve().parent.parent
-        candidates = sorted(root.glob('01-*.docx'))
+        template_root = self.__class__.main_module.LOCAL_OFFICIAL_TEMPLATE_DIR
+        candidates = sorted(template_root.glob('01-*.docx'))
         if not candidates:
             self.skipTest('missing fixture: 01-*.docx')
         src = candidates[0].read_bytes()
@@ -1597,8 +1597,8 @@ class ApiFlowTests(unittest.TestCase):
         self.assertGreater(len(kv), 0)
 
     def test_37_organization_word_import_supports_official_new_form_docx(self):
-        root = Path(__file__).resolve().parent.parent
-        candidates = sorted(root.glob('01-*.docx'))
+        template_root = self.__class__.main_module.LOCAL_OFFICIAL_TEMPLATE_DIR
+        candidates = sorted(template_root.glob('01-*.docx'))
         if not candidates:
             self.skipTest('missing fixture: 01-*.docx')
         src = candidates[0]
@@ -2271,6 +2271,102 @@ class ApiFlowTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn('总大小', str(ctx.exception.detail))
+
+    def test_56_direct_delete_should_auto_close_pending_delete_request(self):
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '自动结案单位',
+                'credit_code': '91350100M000100Y90',
+                'legal_representative': '结案人',
+                'address': '厦门市思明区',
+                'mobile_phone': '13100131990',
+                'email': 'autoclose@example.com',
+                'industry': '企业',
+                'organization_type': '企业',
+                'filing_region': '厦门',
+                'created_by': 'tester',
+            },
+            headers=self.admin_headers,
+        )
+        self.assertEqual(org_resp.status_code, 200, org_resp.text)
+        org_id = org_resp.json()['data']['id']
+
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            pending = self.__class__.main_module.DeleteRequest(
+                entity_type='organization',
+                entity_id=org_id,
+                reason='旧申请仍待审',
+                status='pending',
+                requested_by='tester',
+            )
+            db.add(pending)
+            db.commit()
+            db.refresh(pending)
+            request_id = pending.id
+        finally:
+            db.close()
+
+        delete_resp = self.client.delete(f'/api/organizations/{org_id}', headers=self.admin_headers)
+        self.assertEqual(delete_resp.status_code, 200, delete_resp.text)
+
+        list_resp = self.client.get('/api/delete-requests?entity_type=organization', headers=self.admin_headers)
+        self.assertEqual(list_resp.status_code, 200, list_resp.text)
+        item = next((row for row in list_resp.json()['items'] if row['id'] == request_id), None)
+        self.assertIsNotNone(item)
+        self.assertEqual(item['status'], 'approved')
+        self.assertEqual(item['reviewed_by'], 'admin')
+        self.assertIn('自动结案', item.get('review_comment') or '')
+
+    def test_57_list_delete_requests_should_backfill_auto_closed_comment_for_old_rows(self):
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '旧结案单位',
+                'credit_code': '91350100M000100Y91',
+                'legal_representative': '回填人',
+                'address': '太原市',
+                'mobile_phone': '13100131991',
+                'email': 'backfill@example.com',
+                'industry': '企业',
+                'organization_type': '企业',
+                'filing_region': '太原',
+                'created_by': 'tester',
+            },
+            headers=self.admin_headers,
+        )
+        self.assertEqual(org_resp.status_code, 200, org_resp.text)
+        org_id = org_resp.json()['data']['id']
+
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            org = db.query(self.__class__.main_module.Organization).filter_by(id=org_id).first()
+            org.deleted_by = 'admin'
+            org.deleted_at = datetime.now()
+            row = self.__class__.main_module.DeleteRequest(
+                entity_type='organization',
+                entity_id=org_id,
+                reason='历史记录',
+                status='approved',
+                requested_by='tester',
+                reviewed_by='admin',
+                reviewed_at=org.deleted_at,
+                review_comment=None,
+            )
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            request_id = row.id
+        finally:
+            db.close()
+
+        list_resp = self.client.get('/api/delete-requests?entity_type=organization', headers=self.admin_headers)
+        self.assertEqual(list_resp.status_code, 200, list_resp.text)
+        item = next((row for row in list_resp.json()['items'] if row['id'] == request_id), None)
+        self.assertIsNotNone(item)
+        self.assertEqual(item['reviewed_by'], 'admin')
+        self.assertIn('自动结案', item.get('review_comment') or '')
 
 
 if __name__ == '__main__':

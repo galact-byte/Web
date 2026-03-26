@@ -28,8 +28,8 @@
       <input id="templateId" type="number" placeholder="留空使用默认模板" />
     </div>
     <div>
-      <label>生成人</label>
-      <input id="reportActor" value="tester" />
+      <label>当前生成人</label>
+      <input id="reportActor" data-current-actor data-actor-placeholder="登录后自动显示当前账号" readonly />
     </div>
     <div>
       <label>&nbsp;</label>
@@ -267,7 +267,7 @@ async function generateReport() {
   const systemId = document.getElementById('systemId').value;
   const reportType = document.getElementById('reportType').value;
   const templateId = document.getElementById('templateId').value.trim();
-  const actor = document.getElementById('reportActor').value.trim() || 'tester';
+  const actor = currentActorName();
   if (!systemId) {
     setResult('reportResult', '请填写系统ID。');
     return;
@@ -295,7 +295,7 @@ async function setSignature() {
     '签章位置': document.getElementById('sealPosition').value.trim(),
     '签章日期': new Date().toISOString().slice(0, 10)
   };
-  const res = await fetch(`/api/reports/${reportId}/signature?actor=tester`, {
+  const res = await fetch(`/api/reports/${reportId}/signature?actor=${encodeURIComponent(currentActorName())}`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json', ...authHeaders()},
     body: JSON.stringify(payload)
@@ -317,7 +317,7 @@ async function submitReport() {
   const reportId = getReportId();
   if (!reportId) return;
   const reviewer = document.getElementById('reviewer').value.trim() || 'leader';
-  const res = await fetch(`/api/reports/${reportId}/submit?actor=tester&reviewer=${encodeURIComponent(reviewer)}`, {method: 'POST', headers: authHeaders()});
+  const res = await fetch(`/api/reports/${reportId}/submit?actor=${encodeURIComponent(currentActorName())}&reviewer=${encodeURIComponent(reviewer)}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   setResult('reviewResult', res.ok ? (data.message || '已提交审核') : `提交失败：${msg(data)}`);
   loadReports();
@@ -367,7 +367,7 @@ async function addSection() {
     return;
   }
   const payload = {name, content: parseSectionContent()};
-  const res = await fetch(`/api/reports/${reportId}/sections?actor=tester`, {
+  const res = await fetch(`/api/reports/${reportId}/sections?actor=${encodeURIComponent(currentActorName())}`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json', ...authHeaders()},
     body: JSON.stringify(payload)
@@ -381,7 +381,7 @@ async function deleteSection() {
   const reportId = getReportId();
   if (!reportId) return;
   const idx = document.getElementById('deleteSectionIndex').value;
-  const res = await fetch(`/api/reports/${reportId}/sections/${idx}?actor=tester`, {method: 'DELETE', headers: authHeaders()});
+  const res = await fetch(`/api/reports/${reportId}/sections/${idx}?actor=${encodeURIComponent(currentActorName())}`, {method: 'DELETE', headers: authHeaders()});
   const data = await res.json();
   setResult('sectionResult', res.ok ? (data.message || '章节删除成功') : `删除失败：${msg(data)}`);
   showReportSections();
@@ -392,7 +392,7 @@ async function reorderSection() {
   if (!reportId) return;
   const fromIndex = document.getElementById('fromIndex').value;
   const toIndex = document.getElementById('toIndex').value;
-  const res = await fetch(`/api/reports/${reportId}/sections/reorder?from_index=${fromIndex}&to_index=${toIndex}&actor=tester`, {method: 'POST', headers: authHeaders()});
+  const res = await fetch(`/api/reports/${reportId}/sections/reorder?from_index=${fromIndex}&to_index=${toIndex}&actor=${encodeURIComponent(currentActorName())}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   setResult('sectionResult', res.ok ? (data.message || '章节顺序已调整') : `调整失败：${msg(data)}`);
   showReportSections();

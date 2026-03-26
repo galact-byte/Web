@@ -208,9 +208,15 @@ async function toggleUser(id, enabled) {
 }
 
 async function resetPassword(id, username) {
-  const ok = confirm(`确认重置用户 ${decodeURIComponent(username)} 的密码？`);
+  const displayName = decodeURIComponent(username);
+  const ok = await window.appDialog.confirm(`确认重置用户 ${displayName} 的密码吗？`, '重置密码', '继续');
   if (!ok) return;
-  const newPassword = prompt('请输入新的临时密码（至少 8 位）');
+  const newPassword = await window.appDialog.prompt('请输入新的临时密码，长度至少 8 位。', '', {
+    title: '设置临时密码',
+    label: '临时密码',
+    placeholder: '请输入至少 8 位的新密码',
+    confirmText: '确认重置'
+  });
   if (!newPassword) return;
   const res = await fetch(`/api/auth/users/${id}/reset-password`, {
     method: 'POST',
@@ -222,7 +228,7 @@ async function resetPassword(id, username) {
     setUserResult(`重置失败：${resultText(data)}`);
     return;
   }
-  setUserResult(`密码已重置：${data.username || decodeURIComponent(username)}，请通知该用户尽快登录并修改密码。`);
+  setUserResult(`密码已重置：${data.username || displayName}，请通知该用户尽快登录并修改密码。`);
   loadUsers();
 }
 

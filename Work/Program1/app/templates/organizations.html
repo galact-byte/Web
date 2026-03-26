@@ -22,7 +22,7 @@
     <div><label>单位类型 <span class="field-required">*</span></label><input id="organizationType" placeholder="企业/事业单位/机关单位" /></div>
     <div><label>备案地区 <span class="field-required">*</span></label><input id="filingRegion" /></div>
     <div><label>主管部门</label><input id="supervisingDepartment" placeholder="可空" /></div>
-    <div><label>录入人</label><input id="createdBy" value="tester" /></div>
+    <div><label>当前录入账号</label><input id="createdBy" data-current-actor data-actor-placeholder="登录后自动显示当前账号" readonly /></div>
   </div>
   <div class="action-strip">
     <button onclick="createOrg()"><i class="fas fa-save"></i> 保存单位</button>
@@ -120,11 +120,11 @@
     <table>
       <thead>
         <tr>
-          <th>申请ID</th><th>单位ID</th><th>申请人</th><th>状态</th><th>原因</th><th>操作</th>
+          <th>申请ID</th><th>单位ID</th><th>提交信息</th><th>状态</th><th>处理结果</th><th>原因</th><th>操作</th>
         </tr>
       </thead>
       <tbody id="orgDeleteReqTable">
-        <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">暂无数据</td></tr>
+        <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px;">暂无数据</td></tr>
       </tbody>
     </table>
   </div>
@@ -212,6 +212,37 @@ function reqStatusBadge(status) {
   return `<span class="status-badge ${cls}">${esc(label)}</span>`;
 }
 
+function formatDateTime(value) {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return esc(value);
+  return esc(parsed.toLocaleString('zh-CN', {hour12: false}));
+}
+
+function requestStatusBadge(item) {
+  const comment = String(item?.review_comment || '');
+  if (item?.status === 'approved' && comment.includes('自动结案')) {
+    return '<span class="status-badge status-active">自动结案</span>';
+  }
+  return reqStatusBadge(item?.status || '');
+}
+
+function requestReviewMeta(item) {
+  if (!item || item.status === 'pending') {
+    return '<span class="table-meta">等待管理员处理</span>';
+  }
+  const reviewer = esc(item.reviewed_by || '-');
+  const reviewedAt = formatDateTime(item.reviewed_at);
+  const comment = esc(item.review_comment || (item.status === 'approved' ? '已处理' : '-'));
+  return `
+    <div class="table-meta">
+      <strong>处理人：</strong>${reviewer}<br>
+      <span>时间：${reviewedAt}</span><br>
+      <span>说明：${comment}</span>
+    </div>
+  `;
+}
+
 /* 清空搜索 */
 function clearOrgSearch() {
   document.getElementById('searchName').value = '';
@@ -234,7 +265,7 @@ function formOrgPayload() {
     organization_type: document.getElementById('organizationType').value.trim(),
     filing_region: document.getElementById('filingRegion').value.trim(),
     supervising_department: document.getElementById('supervisingDepartment').value.trim() || null,
-    created_by: document.getElementById('createdBy').value.trim() || 'tester'
+    created_by: currentActorName()
   };
 }
 
@@ -300,7 +331,7 @@ async function importOrgWord() {
     setOrgResult('正在导入Word，请稍候...');
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch('/api/organizations/import/word?actor=tester', {method: 'POST', headers: authHeaders(), body: fd});
+    const res = await fetch(`/api/organizations/import/word?actor=${encodeURIComponent(currentActorName())}`, {method: 'POST', headers: authHeaders(), body: fd});
     const text = await res.text();
     let data = {};
     try {
@@ -357,7 +388,7 @@ async function loadOrgs() {
 }
 
 async function archiveOrg(id) {
-  const res = await fetch(`/api/organizations/${id}/archive?actor=tester`, {method: 'POST', headers: authHeaders()});
+  const res = await fetch(`/api/organizations/${id}/archive?actor=${encodeURIComponent(currentActorName())}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     setOrgResult(`归档失败：${apiErrorText(data)}`);
@@ -368,10 +399,15 @@ async function archiveOrg(id) {
 }
 
 async function deleteOrg(id) {
-  const reason = prompt('请输入删除原因（可空）', '');
+  const reason = await window.appDialog.prompt('请输入删除原因，可留空。', '', {
+    title: '提交删除申请',
+    label: '删除原因',
+    placeholder: '例如：录入错误、重复数据',
+    confirmText: '提交申请'
+  });
   if (reason === null) return;
   try {
-    const res = await fetch(`/api/organizations/${id}/delete-request?actor=tester&reason=${encodeURIComponent(reason)}`, {method: 'POST', headers: authHeaders()});
+    const res = await fetch(`/api/organizations/${id}/delete-request?actor=${encodeURIComponent(currentActorName())}&reason=${encodeURIComponent(reason)}`, {method: 'POST', headers: authHeaders()});
     const data = await res.json();
     if (!res.ok) {
       setOrgResult(`提交删除申请失败：${apiErrorText(data)}`);
@@ -413,7 +449,7 @@ async function loadRecycleOrgs() {
 }
 
 async function restoreOrg(id) {
-  const res = await fetch(`/api/organizations/${id}/restore?actor=tester`, {method: 'POST', headers: authHeaders()});
+  const res = await fetch(`/api/organizations/${id}/restore?actor=${encodeURIComponent(currentActorName())}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     setOrgResult(`恢复失败：${apiErrorText(data)}`);
@@ -425,8 +461,9 @@ async function restoreOrg(id) {
 }
 
 async function cleanupRecycleOrgs() {
-  if (!confirm('仅清理超过30天且无关联系统的单位，继续吗？')) return;
-  const res = await fetch('/api/organizations/recycle-bin/cleanup?actor=admin', {method: 'POST', headers: authHeaders()});
+  const confirmed = await window.appDialog.confirm('仅会清理超过 30 天且无关联系统的单位。是否继续？', '清理回收站', '开始清理');
+  if (!confirmed) return;
+  const res = await fetch(`/api/organizations/recycle-bin/cleanup?actor=${encodeURIComponent(currentActorName())}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     setOrgResult(`清理失败：${apiErrorText(data)}`);
@@ -439,21 +476,27 @@ async function cleanupRecycleOrgs() {
 async function loadOrgDeleteRequests() {
   const res = await fetch('/api/delete-requests?entity_type=organization', {headers: authHeaders()});
   if (!res.ok) {
-    document.getElementById('orgDeleteReqTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:24px;">加载失败</td></tr>';
+    document.getElementById('orgDeleteReqTable').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:24px;">加载失败</td></tr>';
     return;
   }
   const data = await res.json();
   const items = data.items || [];
   if (!items.length) {
-    document.getElementById('orgDeleteReqTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">暂无申请</td></tr>';
+    document.getElementById('orgDeleteReqTable').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px;">暂无申请</td></tr>';
     return;
   }
   document.getElementById('orgDeleteReqTable').innerHTML = items.map(i => `
     <tr>
       <td>${esc(i.id)}</td>
       <td>${esc(i.entity_id)}</td>
-      <td>${esc(i.requested_by || '-')}</td>
-      <td>${reqStatusBadge(i.status)}</td>
+      <td>
+        <div class="table-meta">
+          <strong>申请人：</strong>${esc(i.requested_by || '-')}<br>
+          <span>提交：${formatDateTime(i.requested_at)}</span>
+        </div>
+      </td>
+      <td>${requestStatusBadge(i)}</td>
+      <td>${requestReviewMeta(i)}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${esc(i.reason || '-')}</td>
       <td>
         ${i.status === 'pending' ? `
@@ -461,15 +504,25 @@ async function loadOrgDeleteRequests() {
             <button class="btn-lite btn-sm" onclick="reviewOrgDeleteReq(${i.id}, 'approve')"><i class="fas fa-check"></i> 通过</button>
             <button class="btn-lite btn-sm btn-danger" onclick="reviewOrgDeleteReq(${i.id}, 'reject')"><i class="fas fa-times"></i> 驳回</button>
           </div>
-        ` : '-'}
+        ` : '<span class="table-meta">已处理</span>'}
       </td>
     </tr>
   `).join('');
 }
 
 async function reviewOrgDeleteReq(id, action) {
-  const comment = action === 'reject' ? (prompt('请输入驳回原因', '') || '') : '';
-  const res = await fetch(`/api/delete-requests/${id}/review?action=${action}&actor=admin&comment=${encodeURIComponent(comment)}`, {method: 'POST', headers: authHeaders()});
+  let comment = '';
+  if (action === 'reject') {
+    const input = await window.appDialog.prompt('请输入驳回原因。', '', {
+      title: '驳回删除申请',
+      label: '驳回原因',
+      placeholder: '请填写驳回原因',
+      confirmText: '确认驳回'
+    });
+    if (input === null) return;
+    comment = input || '';
+  }
+  const res = await fetch(`/api/delete-requests/${id}/review?action=${action}&actor=${encodeURIComponent(currentActorName())}&comment=${encodeURIComponent(comment)}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     setOrgResult(`审核失败：${apiErrorText(data)}`);
@@ -484,7 +537,7 @@ async function reviewOrgDeleteReq(id, action) {
 async function createCollectionLink() {
   const orgId = document.getElementById('collectionOrgId').value.trim();
   const days = document.getElementById('collectionDays').value.trim() || '7';
-  const params = new URLSearchParams({expires_days: days, actor: 'tester'});
+  const params = new URLSearchParams({expires_days: days, actor: currentActorName()});
   if (orgId) params.set('organization_id', orgId);
   const res = await fetch('/api/organizations/collection-links?' + params.toString(), {method: 'POST', headers: authHeaders()});
   const data = await res.json();
@@ -517,11 +570,21 @@ async function loadCollectionLinks() {
 }
 
 async function reviewSubmission(id, action) {
-  const comment = action === 'reject' ? prompt('请输入驳回意见', '') || '' : '';
-  const params = new URLSearchParams({action, actor: 'tester', comment});
+  let comment = '';
+  if (action === 'reject') {
+    const input = await window.appDialog.prompt('请输入驳回意见。', '', {
+      title: '审核驳回',
+      label: '驳回意见',
+      placeholder: '请填写驳回意见',
+      confirmText: '确认驳回'
+    });
+    if (input === null) return;
+    comment = input || '';
+  }
+  const params = new URLSearchParams({action, actor: currentActorName(), comment});
   const res = await fetch(`/api/organizations/submissions/${id}/review?` + params.toString(), {method: 'POST', headers: authHeaders()});
   const data = await res.json();
-  alert(data.message || data.detail || '操作完成');
+  await window.appDialog.alert(data.message || data.detail || '操作完成', '审核结果');
   loadSubmissions();
   loadOrgs();
 }

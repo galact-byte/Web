@@ -50,7 +50,7 @@
 {% else %}
   {% set page_title = '业务工作台' %}
   {% set page_desc = '统一承载定级备案相关业务页面，保持一致的信息结构和操作体验。' %}
-  {% set page_icon = 'fa-shield-halved' %}
+  {% set page_icon = 'fa-bars-progress' %}
 {% endif %}
 {% set page_layout_variant = page_layout_variant|default('standard', true) %}
 {% set request_state = request|attr('state')|default(none, true) %}
@@ -63,35 +63,17 @@
   {% set initial_user_hint = '当前页面跳过登录校验' %}
   {% set initial_action_mode = 'lite' %}
   {% set initial_action_text = '免登录模式' %}
-{% elif server_user_name %}
-  {% if server_user_role == 'admin' %}
-    {% set initial_role_badge = '系统管理员' %}
-  {% elif server_user_role == 'editor' %}
-    {% set initial_role_badge = '业务编辑' %}
-  {% elif server_user_role == 'auditor' %}
-    {% set initial_role_badge = '审核人员' %}
-  {% else %}
-    {% set initial_role_badge = '已登录' %}
-  {% endif %}
-  {% set initial_user_name = server_user_name %}
-  {% if server_user_force_change %}
-    {% set initial_user_hint = '当前账号需先修改密码后再继续操作' %}
-  {% else %}
-    {% set initial_user_hint = '账号状态正常，可进入当前业务页面' %}
-  {% endif %}
-  {% set initial_action_mode = 'logout' %}
-  {% set initial_action_text = '退出登录' %}
 {% else %}
-  {% set initial_role_badge = '待登录' %}
-  {% set initial_user_name = '未登录' %}
-  {% set initial_user_hint = '请使用管理员分发的账号登录' %}
-  {% set initial_action_mode = 'login' %}
-  {% set initial_action_text = '登录' %}
+  {% set initial_role_badge = '同步中' %}
+  {% set initial_user_name = '正在确认账号状态' %}
+  {% set initial_user_hint = '正在读取本地登录状态' %}
+  {% set initial_action_mode = 'sync' %}
+  {% set initial_action_text = '状态同步中' %}
 {% endif %}
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light" />
   <meta name="view-transition" content="same-origin" />
-  <title>{{ page_title }} - 定级备案管理系统</title>
+  <title>{{ page_title }} - 兰台清晖</title>
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -128,11 +110,16 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <div class="brand-mark" aria-hidden="true">
-          <i class="fas fa-shield-halved"></i>
+          <svg viewBox="0 0 64 64" class="brand-emblem" aria-hidden="true" focusable="false">
+            <rect x="11" y="10" width="42" height="44" rx="13" fill="none" stroke="rgba(255,245,226,0.86)" stroke-width="2.8" />
+            <path d="M23 20.5h18" fill="none" stroke="#fff5e2" stroke-linecap="round" stroke-width="2.8" />
+            <path d="M24 25.5v14.5M32 23.5v18.5M40 25.5v14.5" fill="none" stroke="#fff5e2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8" />
+            <path d="M21.5 43.5h21" fill="none" stroke="#fff5e2" stroke-linecap="round" stroke-width="2.8" />
+          </svg>
         </div>
         <div class="brand-copy">
-          <strong>定级备案系统</strong>
-          <span>安全评测与备案协同工作台</span>
+          <strong>兰台清晖</strong>
+          <span>等保测评定级备案工作台</span>
         </div>
         <button class="sidebar-close" type="button" onclick="closeSidebar()" aria-label="关闭导航">
           <i class="fas fa-times"></i>
@@ -221,7 +208,7 @@
         {% if page_layout_variant != 'management-tight' %}
         <section class="page-hero">
           <div class="page-hero-copy">
-            <span class="page-eyebrow">安全评测与备案协同平台</span>
+            <span class="page-eyebrow">等保测评定级备案工作台</span>
             <h1>
               <i class="fas {{ page_icon }}"></i>
               <span>{{ page_title }}</span>
@@ -248,6 +235,21 @@
     </main>
   </div>
 </body>
+<div class="modal-overlay" id="appDialogOverlay" aria-hidden="true">
+  <div class="modal-box app-dialog-box" role="dialog" aria-modal="true" aria-labelledby="appDialogTitle">
+    <button class="modal-close" type="button" onclick="window.appDialog.close(null)" aria-label="关闭弹窗">&times;</button>
+    <h2 id="appDialogTitle">提示</h2>
+    <p class="app-dialog-text" id="appDialogText"></p>
+    <div class="app-dialog-field hidden" id="appDialogField">
+      <label for="appDialogInput" id="appDialogLabel">请输入内容</label>
+      <input id="appDialogInput" type="text" />
+    </div>
+    <div class="app-dialog-actions">
+      <button class="btn-lite" type="button" id="appDialogCancel">取消</button>
+      <button type="button" id="appDialogConfirm">确定</button>
+    </div>
+  </div>
+</div>
 <script>
 const roleLabels = {
   guest: '待登录',
@@ -285,7 +287,40 @@ function setGuestState() {
     authBtn.dataset.mode = 'login';
     authBtn.onclick = null;
   }
+  window.__currentUserName = '';
   applyRoleUI('guest');
+  syncCurrentActorFields();
+}
+
+function setPendingState() {
+  const badge = document.getElementById('currentRoleBadge');
+  const userName = document.getElementById('currentUserName');
+  const userHint = document.getElementById('currentUserHint');
+  const authBtn = document.getElementById('authEntryBtn');
+  if (badge) badge.textContent = '同步中';
+  if (userName) userName.textContent = '正在确认账号状态';
+  if (userHint) userHint.textContent = '正在读取本地登录状态';
+  if (authBtn) {
+    authBtn.textContent = '状态同步中';
+    authBtn.href = '#';
+    authBtn.dataset.mode = 'sync';
+    authBtn.onclick = (event) => event.preventDefault();
+  }
+  window.__currentUserName = '';
+  syncCurrentActorFields();
+}
+
+function syncCurrentActorFields() {
+  const actor = (window.__currentUserName || '').trim();
+  document.querySelectorAll('[data-current-actor]').forEach((el) => {
+    const placeholder = el.getAttribute('data-actor-placeholder') || '登录后自动显示当前账号';
+    if ('value' in el) {
+      el.value = actor;
+      el.placeholder = actor ? '' : placeholder;
+      return;
+    }
+    el.textContent = actor || placeholder;
+  });
 }
 
 function openSidebar() {
@@ -356,6 +391,112 @@ function syncRouteScrollPosition() {
   window.scrollTo(0, 0);
   document.documentElement.scrollTop = 0;
   document.body.scrollTop = 0;
+}
+
+const appDialog = (() => {
+  const overlay = document.getElementById('appDialogOverlay');
+  const titleEl = document.getElementById('appDialogTitle');
+  const textEl = document.getElementById('appDialogText');
+  const fieldWrap = document.getElementById('appDialogField');
+  const labelEl = document.getElementById('appDialogLabel');
+  const inputEl = document.getElementById('appDialogInput');
+  const cancelBtn = document.getElementById('appDialogCancel');
+  const confirmBtn = document.getElementById('appDialogConfirm');
+  let resolver = null;
+  let mode = 'alert';
+
+  function open(config) {
+    mode = config.mode || 'alert';
+    titleEl.textContent = config.title || '提示';
+    textEl.textContent = config.message || '';
+    confirmBtn.textContent = config.confirmText || '确定';
+    cancelBtn.textContent = config.cancelText || '取消';
+    fieldWrap.classList.toggle('hidden', mode !== 'prompt');
+    cancelBtn.classList.toggle('hidden', mode === 'alert');
+    if (mode === 'prompt') {
+      labelEl.textContent = config.label || '请输入内容';
+      inputEl.value = config.value || '';
+      inputEl.placeholder = config.placeholder || '';
+    }
+    overlay.classList.add('visible');
+    overlay.setAttribute('aria-hidden', 'false');
+    window.requestAnimationFrame(() => {
+      (mode === 'prompt' ? inputEl : confirmBtn).focus();
+      if (mode === 'prompt') inputEl.select();
+    });
+    return new Promise((resolve) => {
+      resolver = resolve;
+    });
+  }
+
+  function close(value) {
+    if (!resolver) return;
+    const done = resolver;
+    resolver = null;
+    overlay.classList.remove('visible');
+    overlay.setAttribute('aria-hidden', 'true');
+    done(value);
+  }
+
+  confirmBtn.addEventListener('click', () => {
+    if (mode === 'prompt') {
+      close(inputEl.value);
+      return;
+    }
+    close(true);
+  });
+
+  cancelBtn.addEventListener('click', () => close(mode === 'prompt' ? null : false));
+  overlay.addEventListener('click', (event) => {
+    if (event.target !== overlay) return;
+    close(mode === 'alert' ? true : (mode === 'prompt' ? null : false));
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (!overlay.classList.contains('visible')) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close(mode === 'alert' ? true : (mode === 'prompt' ? null : false));
+      return;
+    }
+    if (event.key === 'Enter' && mode === 'prompt' && document.activeElement === inputEl) {
+      event.preventDefault();
+      close(inputEl.value);
+    }
+  });
+
+  return {
+    alert(message, title='提示', confirmText='确定') {
+      return open({mode: 'alert', title, message, confirmText});
+    },
+    confirm(message, title='请确认', confirmText='确定', cancelText='取消') {
+      return open({mode: 'confirm', title, message, confirmText, cancelText});
+    },
+    prompt(message, value='', options={}) {
+      return open({
+        mode: 'prompt',
+        title: options.title || '请输入内容',
+        message,
+        value,
+        label: options.label || '输入内容',
+        placeholder: options.placeholder || '',
+        confirmText: options.confirmText || '确定',
+        cancelText: options.cancelText || '取消',
+      });
+    },
+    close,
+  };
+})();
+
+window.appDialog = appDialog;
+
+function armRouteEntrance() {
+  document.body.classList.remove('page-enter-ready');
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      document.body.classList.add('page-enter-ready');
+    });
+  });
 }
 
 function navigateWithTransition(url) {
@@ -459,10 +600,13 @@ function bindNavigationTransitions() {
 
 async function refreshCurrentRole() {
   if ({{ 'true' if lite_mode else 'false' }}) {
+    window.__currentUserName = 'lite';
     applyRoleUI('admin');
+    syncCurrentActorFields();
     return;
   }
 
+  setPendingState();
   const token = localStorage.getItem('auth_token') || '';
   if (!token) {
     setGuestState();
@@ -484,6 +628,7 @@ async function refreshCurrentRole() {
 
     if (badge) badge.textContent = roleLabels[data.role] || data.role || '已登录';
     if (userName) userName.textContent = data.username || '已登录';
+    window.__currentUserName = data.username || '';
     if (userHint) {
       userHint.textContent = data.must_change_password
         ? '当前账号需先修改密码后再继续操作'
@@ -491,6 +636,7 @@ async function refreshCurrentRole() {
     }
 
     applyRoleUI(data.role || 'guest');
+    syncCurrentActorFields();
     if (authBtn) {
       authBtn.textContent = '退出登录';
       authBtn.href = '#';
@@ -505,13 +651,16 @@ async function refreshCurrentRole() {
   }
 }
 
+syncCurrentActorFields();
 refreshCurrentRole();
 bindNavigationTransitions();
 scheduleRoutePrefetch();
 syncRouteScrollPosition();
+armRouteEntrance();
 
 window.addEventListener('pageshow', () => {
   syncRouteScrollPosition();
+  armRouteEntrance();
   window.setTimeout(() => {
     clearRouteTransitionState();
   }, ROUTE_TRANSITION_CLEAR_DELAY);
@@ -545,6 +694,14 @@ function openApiDocs() {
   const token = localStorage.getItem('auth_token') || '';
   const url = token ? `/docs?token=${encodeURIComponent(token)}` : '/docs';
   window.open(url, '_blank');
+}
+
+function currentActorName(fallback='system') {
+  return (window.__currentUserName || '').trim() || fallback;
+}
+
+function currentActorRole(fallback='guest') {
+  return (window.__currentUserRole || '').trim() || fallback;
 }
 </script>
 </html>

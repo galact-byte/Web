@@ -18,7 +18,7 @@
     <div><label>区县</label><input id="district" placeholder="如：鼓楼区" /></div>
     <div><label>等保级别</label><input id="protectionLevel" placeholder="如：3" /></div>
     <div><label>版本号</label><input id="versionNo" type="number" value="1" min="1" /></div>
-    <div><label>上传人</label><input id="actor" value="admin" /></div>
+    <div><label>当前上传账号</label><input id="actor" data-current-actor data-actor-placeholder="登录后自动显示当前账号" readonly /></div>
     <div><label>文件 <span class="field-required">*</span></label><input id="file" type="file" class="input-file-plain" /></div>
   </div>
 
@@ -166,7 +166,7 @@ async function uploadKnowledge() {
   fd.append('district', document.getElementById('district').value.trim());
   fd.append('protection_level', document.getElementById('protectionLevel').value.trim());
   fd.append('version_no', document.getElementById('versionNo').value);
-  fd.append('actor', document.getElementById('actor').value.trim());
+  fd.append('actor', currentActorName());
   fd.append('file', file);
 
   setResult('正在上传，请稍候...');
