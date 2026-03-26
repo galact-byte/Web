@@ -165,7 +165,7 @@ function clearTplSearch() {
 
 async function importLocalOfficialTemplates() {
   setTplResult('正在导入本地官方模板...');
-  const res = await fetch('/api/templates/import-local-official?actor=admin', {method: 'POST', headers: authHeaders()});
+  const res = await fetch(`/api/templates/import-local-official?actor=${encodeURIComponent(currentActorName())}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {
     setTplResult(`导入失败：${messageFrom(data)}`);
@@ -264,7 +264,12 @@ async function setDefault(id) {
 }
 
 async function editTemplate(id) {
-  const name = prompt('请输入新的模板名称');
+  const name = await window.appDialog.prompt('请输入新的模板名称。', '', {
+    title: '编辑模板名称',
+    label: '模板名称',
+    placeholder: '请输入新的模板名称',
+    confirmText: '保存修改'
+  });
   if (!name) return;
   const res = await fetch(`/api/templates/${id}`, {
     method: 'PUT',
@@ -317,7 +322,12 @@ async function showVersions(id) {
     return;
   }
   const items = data.items || [];
-  const pick = prompt(`当前模板共有 ${items.length} 个版本。输入要恢复的版本ID（留空仅查看）`, '');
+  const pick = await window.appDialog.prompt(`当前模板共有 ${items.length} 个版本。输入要恢复的版本 ID，留空则仅查看。`, '', {
+    title: '模板版本',
+    label: '版本 ID',
+    placeholder: '请输入版本 ID',
+    confirmText: '继续'
+  });
   if (!pick) {
     setTplResult(items.length ? `共 ${items.length} 个版本，可按提示输入版本ID恢复。` : '暂无历史版本。');
     return;
@@ -335,7 +345,8 @@ async function showVersions(id) {
 }
 
 async function deleteTemplate(id) {
-  if (!confirm('确认删除该模板？')) return;
+  const confirmed = await window.appDialog.confirm('删除后不可恢复，确认删除该模板吗？', '删除模板', '确认删除');
+  if (!confirmed) return;
   const res = await fetch(`/api/templates/${id}`, {method: 'DELETE', headers: authHeaders()});
   const data = await res.json();
   if (!res.ok) {

@@ -57,3 +57,6 @@ Thumbs.db
 
 # 需求文档
 *.docx
+
+# 本地规划与设计文档
+docs/superpowers/

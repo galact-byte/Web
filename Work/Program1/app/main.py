@@ -111,6 +111,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 EXPORT_DIR = BASE_DIR / "exports"
 BACKUP_DIR = EXPORT_DIR / "backups"
+LOCAL_OFFICIAL_TEMPLATE_DIR = BASE_DIR / "template_docs"
 MAX_ORG_ATTACHMENT = 100 * 1024 * 1024
 MAX_SYS_ATTACHMENT = 200 * 1024 * 1024
 MAX_KNOWLEDGE_FILE = 300 * 1024 * 1024
@@ -270,6 +271,7 @@ def ensure_dirs() -> None:
     (UPLOAD_DIR / "attachments").mkdir(parents=True, exist_ok=True)
     (UPLOAD_DIR / "knowledge").mkdir(parents=True, exist_ok=True)
     (UPLOAD_DIR / "templates").mkdir(parents=True, exist_ok=True)
+    LOCAL_OFFICIAL_TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -737,6 +739,115 @@ def require_roles(
     if STRICT_AUTH or allowed_roles:
         raise HTTPException(status_code=401, detail="请先登录。")
     return "legacy_user", "evaluator"
+
+
+def resolve_effective_actor_name(request: Request, db: Session, fallback: str | None = None) -> str:
+    user = get_current_user_optional(request, db)
+    if user and getattr(user, "username", ""):
+        return str(user.username).strip()
+    text = str(fallback or "").strip()
+    return text or "system"
+
+
+def finalize_pending_delete_requests(
+    db: Session,
+    *,
+    entity_type: str,
+    entity_id: int,
+    reviewer: str,
+    reviewed_at: datetime | None = None,
+    comment: str | None = None,
+) -> None:
+    rows = (
+        db.query(DeleteRequest)
+        .filter(
+            DeleteRequest.entity_type == entity_type,
+            DeleteRequest.entity_id == entity_id,
+            DeleteRequest.status == "pending",
+        )
+        .all()
+    )
+    if not rows:
+        return
+    resolved_at = reviewed_at or datetime.now()
+    default_comment = comment or "实体已由管理员直接删除，申请自动结案。"
+    for row in rows:
+        row.status = "approved"
+        row.reviewed_by = reviewer
+        row.reviewed_at = resolved_at
+        row.review_comment = row.review_comment or default_comment
+
+
+def reconcile_pending_delete_requests(db: Session) -> None:
+    rows = db.query(DeleteRequest).filter(DeleteRequest.status == "pending").all()
+    changed = False
+    for row in rows:
+        deleted_by = ""
+        deleted_at: datetime | None = None
+        if row.entity_type == "organization":
+            org = db.query(Organization).filter(Organization.id == row.entity_id).first()
+            if not org or not org.deleted_at:
+                continue
+            deleted_by = str(org.deleted_by or "").strip()
+            deleted_at = org.deleted_at
+        elif row.entity_type == "system":
+            system = db.query(SystemInfo).filter(SystemInfo.id == row.entity_id).first()
+            if not system or not system.deleted_at:
+                continue
+            deleted_by = str(system.deleted_by or "").strip()
+            deleted_at = system.deleted_at
+        else:
+            continue
+        row.status = "approved"
+        row.reviewed_by = deleted_by or "system"
+        row.reviewed_at = deleted_at or datetime.now()
+        row.review_comment = row.review_comment or "实体已由管理员直接删除，申请自动结案。"
+        changed = True
+    if changed:
+        db.commit()
+
+
+def backfill_delete_request_review_comments(db: Session) -> None:
+    rows = (
+        db.query(DeleteRequest)
+        .filter(
+            DeleteRequest.status == "approved",
+            DeleteRequest.reviewed_by.is_not(None),
+            or_(DeleteRequest.review_comment.is_(None), DeleteRequest.review_comment == ""),
+        )
+        .all()
+    )
+    changed = False
+    for row in rows:
+        entity_deleted_by = ""
+        entity_deleted_at: datetime | None = None
+        if row.entity_type == "organization":
+            org = db.query(Organization).filter(Organization.id == row.entity_id).first()
+            if not org or not org.deleted_at:
+                continue
+            entity_deleted_by = str(org.deleted_by or "").strip()
+            entity_deleted_at = org.deleted_at
+        elif row.entity_type == "system":
+            system = db.query(SystemInfo).filter(SystemInfo.id == row.entity_id).first()
+            if not system or not system.deleted_at:
+                continue
+            entity_deleted_by = str(system.deleted_by or "").strip()
+            entity_deleted_at = system.deleted_at
+        else:
+            continue
+        if not entity_deleted_by or str(row.reviewed_by or "").strip() != entity_deleted_by:
+            continue
+        reviewed_at = row.reviewed_at or entity_deleted_at
+        if not reviewed_at or not entity_deleted_at:
+            continue
+        if abs((reviewed_at - entity_deleted_at).total_seconds()) > 5:
+            continue
+        row.review_comment = "实体已由管理员直接删除，申请自动结案。"
+        if row.reviewed_at is None:
+            row.reviewed_at = entity_deleted_at
+        changed = True
+    if changed:
+        db.commit()
 
 
 ORG_FIELDS = [
@@ -1250,7 +1361,7 @@ def local_official_template_config(report_type: str, default_title: str) -> dict
 
 
 def find_latest_docx_by_pattern(pattern: str) -> Path | None:
-    candidates = sorted(BASE_DIR.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+    candidates = sorted(LOCAL_OFFICIAL_TEMPLATE_DIR.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
     return candidates[0] if candidates else None
 
 
@@ -2461,8 +2572,9 @@ def delete_template(request: Request, template_id: int, db: Session = Depends(ge
 
 @app.post("/api/organizations")
 def create_organization(request: Request, payload: OrganizationCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
-    require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    actor_name, _ = require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
     data = payload.model_dump()
+    data["created_by"] = resolve_effective_actor_name(request, db, payload.created_by or actor_name)
     normalize_org_payload(data)
     validate_org_payload(data)
     assert_credit_code_available(db, data["credit_code"])
@@ -2470,7 +2582,7 @@ def create_organization(request: Request, payload: OrganizationCreate, db: Sessi
     db.add(org)
     db.flush()
     db.refresh(org)
-    record_org_history(db, org.id, payload.created_by, "create", None, obj_to_dict(org, ORG_FIELDS))
+    record_org_history(db, org.id, data["created_by"], "create", None, obj_to_dict(org, ORG_FIELDS))
     db.commit()
     return {"message": "创建成功", "data": obj_to_dict(org, ORG_FIELDS)}
 
@@ -3026,6 +3138,13 @@ def delete_organization(
     before = obj_to_dict(org, ORG_FIELDS)
     org.deleted_at = datetime.now()
     org.deleted_by = actor_name
+    finalize_pending_delete_requests(
+        db,
+        entity_type="organization",
+        entity_id=org.id,
+        reviewer=actor_name,
+        reviewed_at=org.deleted_at,
+    )
     db.flush()
     db.refresh(org)
     record_org_history(db, org.id, actor_name, "delete", before, obj_to_dict(org, ORG_FIELDS))
@@ -3112,17 +3231,18 @@ def export_organization_word(request: Request, org_id: int, db: Session = Depend
 
 @app.post("/api/systems")
 def create_system(request: Request, payload: SystemCreate, db: Session = Depends(get_db)) -> dict[str, Any]:
-    require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    actor_name, _ = require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
     org = get_org_or_404(db, payload.organization_id)
     if org.archived and org.locked:
         raise HTTPException(status_code=403, detail="单位已归档锁定，不可新增系统。")
     data = payload.model_dump()
+    data["created_by"] = resolve_effective_actor_name(request, db, payload.created_by or actor_name)
     validate_system_payload(data, partial=False)
     data["system_code"] = generate_system_code(db)
     system = SystemInfo(**data)
     db.add(system)
     db.flush()
-    record_system_history(db, system.id, payload.created_by, "create", None, obj_to_dict(system, SYSTEM_FIELDS))
+    record_system_history(db, system.id, data["created_by"], "create", None, obj_to_dict(system, SYSTEM_FIELDS))
     instance = WorkflowInstance(system_id=system.id, current_step_index=0, status="in_progress")
     db.add(instance)
     recalc_workflow_due_at(db, instance, get_workflow_config(db))
@@ -3485,6 +3605,13 @@ def delete_system(
     before = obj_to_dict(system, SYSTEM_FIELDS)
     system.deleted_at = datetime.now()
     system.deleted_by = actor_name
+    finalize_pending_delete_requests(
+        db,
+        entity_type="system",
+        entity_id=system.id,
+        reviewer=actor_name,
+        reviewed_at=system.deleted_at,
+    )
     db.flush()
     db.refresh(system)
     record_system_history(db, system.id, actor_name, "delete", before, obj_to_dict(system, SYSTEM_FIELDS))
@@ -3558,6 +3685,8 @@ def list_delete_requests(
     requested_by: str | None = None,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    reconcile_pending_delete_requests(db)
+    backfill_delete_request_review_comments(db)
     current_user = get_current_user_optional(request, db)
     q = db.query(DeleteRequest)
     if entity_type:
@@ -4411,7 +4540,7 @@ def update_workflow(request: Request, payload: WorkflowConfigUpdate, db: Session
         assert_safe_text(step, "workflow.step")
     config = get_workflow_config(db)
     config.steps_json = payload.steps
-    config.updated_by = actor or payload.updated_by
+    config.updated_by = resolve_effective_actor_name(request, db, payload.updated_by or actor)
     get_or_create_workflow_step_rules(db, config)
     in_progress_rows = db.query(WorkflowInstance).filter(WorkflowInstance.status == "in_progress").all()
     for row in in_progress_rows:
@@ -4449,7 +4578,7 @@ def update_workflow_rules(request: Request, payload: dict[str, Any], db: Session
     actor, _ = require_roles(request, db, {"admin"}, legacy_admin=(not STRICT_AUTH))
     config = get_workflow_config(db)
     rules = payload.get("rules") or []
-    updated_by = str(payload.get("updated_by") or actor or "admin")
+    updated_by = resolve_effective_actor_name(request, db, str(payload.get("updated_by") or actor or "admin"))
     assert_safe_text(updated_by, "updated_by")
     if not isinstance(rules, list) or not rules:
         raise HTTPException(status_code=400, detail="rules 不能为空。")

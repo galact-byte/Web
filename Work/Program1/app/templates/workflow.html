@@ -47,8 +47,8 @@
       <input id="systemId" type="number" placeholder="关联系统ID" />
     </div>
     <div>
-      <label>执行人</label>
-      <input id="actor" value="tester" />
+      <label>当前执行账号</label>
+      <input id="actor" data-current-actor data-actor-placeholder="登录后自动显示当前账号" readonly />
     </div>
     <div>
       <label>动作</label>
@@ -233,7 +233,7 @@ async function saveRules() {
   const res = await fetch('/api/workflow/rules', {
     method: 'PUT',
     headers: {'Content-Type': 'application/json', ...authHeaders()},
-    body: JSON.stringify({updated_by: 'admin', rules})
+    body: JSON.stringify({updated_by: currentActorName(), rules})
   });
   const data = await res.json();
   if (!res.ok) {
@@ -264,7 +264,7 @@ async function loadInstance() {
 async function advanceWorkflow() {
   const systemId = getSystemId();
   if (!systemId) return;
-  const actor = document.getElementById('actor').value.trim() || 'tester';
+  const actor = currentActorName();
   const action = document.getElementById('action').value;
   const res = await fetch(`/api/workflow/instances/${systemId}/advance?actor=${encodeURIComponent(actor)}&action=${action}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
@@ -276,7 +276,7 @@ async function extendDue() {
   const systemId = getSystemId();
   if (!systemId) return;
   const hours = document.getElementById('extendHours').value || '24';
-  const actor = document.getElementById('actor').value.trim() || 'admin';
+  const actor = currentActorName();
   const res = await fetch(`/api/workflow/instances/${systemId}/extend?hours=${hours}&actor=${encodeURIComponent(actor)}`, {method: 'POST', headers: authHeaders()});
   const data = await res.json();
   setResult('instanceResult', res.ok ? (data.message || '时限已延长') : `延时失败：${getErrorText(data)}`);
