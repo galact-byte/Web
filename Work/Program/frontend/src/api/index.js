@@ -128,7 +128,6 @@ export const progressApi = {
   getScheduleStatus: () => api.get('/api/progress/schedule/status'),
   startSchedule: (interval) => api.post('/api/progress/schedule/start', null, { params: { interval_minutes: interval } }),
   stopSchedule: () => api.post('/api/progress/schedule/stop'),
-  backfillContacts: () => api.post('/api/progress/backfill-contacts'),
 }
 
 export default api

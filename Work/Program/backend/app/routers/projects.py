@@ -322,10 +322,7 @@ def update_project(
     project.business_manager_name = request.business_manager_name
     project.implementation_manager_id = request.implementation_manager_id
 
-    # 更新系统：先清除关联的分配记录中的系统引用，再删除旧系统
-    db.query(ProjectAssignment).filter(
-        ProjectAssignment.project_id == project_id,
-    ).update({"department": ProjectAssignment.department}, synchronize_session="fetch")
+    # 更新系统：删除旧系统后重新创建
     db.query(System).filter(System.project_id == project_id).delete()
     for sys_data in request.systems:
         system = System(
