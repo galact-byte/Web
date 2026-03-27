@@ -132,7 +132,14 @@ def update_user(
         raise HTTPException(status_code=404, detail="用户不存在")
     
     if request.display_name:
+        old_name = user.display_name
         user.display_name = request.display_name
+        # 经理改名时同步更新爬取记录中的项目经理名，避免历史数据不可见
+        if old_name != request.display_name and user.role == UserRole.manager:
+            from app.models.progress import ProgressRecord
+            db.query(ProgressRecord).filter(
+                ProgressRecord.project_manager == old_name
+            ).update({"project_manager": request.display_name}, synchronize_session="fetch")
     if request.role:
         if request.role not in [r.value for r in UserRole]:
             raise HTTPException(status_code=400, detail=f"无效的角色: {request.role}")
@@ -186,9 +193,12 @@ def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    # 清理该用户在项目表中的外键引用，避免级联错误
-    from app.models import Project, ProjectAssignment
+    # 清理该用户在各表中的外键引用，避免级联错误
+    from app.models import Project, ProjectAssignment, SystemProgressReport
     db.query(ProjectAssignment).filter(ProjectAssignment.assignee_id == user_id).delete(
+        synchronize_session="fetch"
+    )
+    db.query(SystemProgressReport).filter(SystemProgressReport.reporter_id == user_id).delete(
         synchronize_session="fetch"
     )
     db.query(Project).filter(Project.implementation_manager_id == user_id).update(
