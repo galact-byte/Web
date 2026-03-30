@@ -40,7 +40,7 @@ class LoginRequest(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    new_password: str = Field(..., min_length=6, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
     old_password: Optional[str] = None  # 首次改密可不填，主动改密必填
 
 
@@ -83,6 +83,8 @@ class ProjectBase(BaseModel):
     priority: str = "/"
     business_manager_name: Optional[str] = None
     implementation_manager_id: Optional[int] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
 
 
 class ProjectCreate(ProjectBase):

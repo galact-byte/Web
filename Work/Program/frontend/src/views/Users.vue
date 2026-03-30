@@ -136,8 +136,10 @@ async function submitUser() {
   try {
     if (isEdit.value) {
       await usersApi.update(editingId.value, { display_name: form.display_name, role: form.role, department: form.department })
+      alert('用户信息已更新')
     } else {
       await usersApi.create(form)
+      alert('用户创建成功')
     }
     showModal.value = false
     await fetchUsers()

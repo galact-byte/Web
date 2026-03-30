@@ -255,6 +255,8 @@ def create_project(
         priority=request.priority,
         business_manager_name=request.business_manager_name,
         implementation_manager_id=request.implementation_manager_id,
+        contact_name=request.contact_name,
+        contact_phone=request.contact_phone,
         creator_id=current_user.id,
         status=ProjectStatus.draft
     )
@@ -321,6 +323,8 @@ def update_project(
     project.priority = request.priority
     project.business_manager_name = request.business_manager_name
     project.implementation_manager_id = request.implementation_manager_id
+    project.contact_name = request.contact_name
+    project.contact_phone = request.contact_phone
 
     # 更新系统：删除旧系统后重新创建
     db.query(System).filter(System.project_id == project_id).delete()
