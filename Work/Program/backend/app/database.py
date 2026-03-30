@@ -1,6 +1,8 @@
 """
 数据库配置
 """
+import app.env  # noqa: F401  确保优先加载 backend/.env
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os

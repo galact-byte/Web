@@ -1,6 +1,8 @@
 """
 慎微项目管理平台 - 后端入口
 """
+import app.env  # noqa: F401  确保优先加载 backend/.env
+
 import os
 import logging
 import secrets

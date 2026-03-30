@@ -1640,3 +1640,64 @@ _无新增文件_
 - 运行 `start.bat`，确认后端和前端服务正常启动
 - 关闭 CMD 窗口，确认后端（端口 8000）和前端（端口 5173）进程均已自动停止
 - 无需再去任务管理器手动终止进程
+
+---
+
+## 2026-03-30
+
+### 统一项目内提示弹框
+
+#### frontend/src/components/AppAlert.vue / frontend/src/components/AppConfirm.vue / frontend/src/services/appAlert.js / frontend/src/services/appConfirm.js / frontend/src/App.vue
+
+- **修改内容**：
+  - 新增全局居中提示弹框 `AppAlert`
+  - 新增全局居中确认弹框 `AppConfirm`
+  - 根组件统一挂载提示层，替换浏览器原生 `alert/confirm`
+  - 保持原有“先确认/提示，再继续后续逻辑”的交互顺序
+
+#### frontend/src/views/Backup.vue / frontend/src/views/Export.vue / frontend/src/views/ProjectForm.vue / frontend/src/views/Projects.vue / frontend/src/views/Users.vue / frontend/src/views/ProjectDetail.vue / frontend/src/views/ProjectProgress.vue
+
+- **修改内容**：
+  - 将页面内原生 `alert()` 替换为统一的项目内提示弹框
+  - 将页面内原生 `confirm()` 替换为统一的项目内确认弹框
+  - 危险操作、普通确认、成功/失败反馈统一为项目主题风格
+
+### 修复生产环境配置读取与 API 地址问题
+
+#### backend/app/env.py / backend/app/main.py / backend/app/database.py / backend/app/services/auth.py
+
+- **修改内容**：
+  - 新增 `backend/.env` 自动加载逻辑
+  - 后端入口、数据库配置、认证服务在读取环境变量前统一加载 `.env`
+  - 修复部署时虽然配置了 `backend/.env`，但 `ENV`、`SECRET_KEY`、`DATABASE_URL`、`CORS_ORIGINS` 实际未生效的问题
+
+#### frontend/src/api/index.js
+
+- **修改内容**：
+  - 开发环境继续默认请求 `http://localhost:8000`
+  - 生产构建默认改为相对路径 `/api`
+  - 修复生产包在未显式设置 `VITE_API_URL` 时错误回落到浏览器本机 `localhost:8000` 的问题
+
+#### frontend/vite.config.js
+
+- **修改内容**：
+  - 为 `vite preview` 增加 `/api` 代理
+  - 便于 Linux/macOS 下用生产构建预览时直连本机后端
+
+### 更新 Linux/macOS 一键启动脚本
+
+#### start.sh
+
+- **修改内容**：
+  - 改为读取 `backend/.env`
+  - 支持根据 `ENV` 区分 dev/prod 启动模式
+  - dev 模式继续使用 `uvicorn --reload` + `vite`
+  - prod 模式改为非 reload 后端 + `npm run build` + `vite preview`
+  - 增加浏览器自动打开和更稳妥的子进程清理逻辑
+
+### 验证记录
+
+- `npm run build`：通过
+- 后端入口导入验证：通过
+- 最新生产构建产物确认 `baseURL=""`，不再写死 `localhost:8000`
+- 本机环境无 `bash`，未直接执行 `bash -n start.sh`

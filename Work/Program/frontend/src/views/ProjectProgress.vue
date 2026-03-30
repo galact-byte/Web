@@ -177,6 +177,7 @@ import AppLayout from '../components/AppLayout.vue'
 import Toast from '../components/Toast.vue'
 import { useUserStore } from '../stores/user'
 import { progressApi, usersApi } from '../api/index'
+import { showAppConfirm } from '../services/appConfirm'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -385,7 +386,12 @@ async function fetchLogs() {
 }
 
 async function handleScrape() {
-  if (!confirm(`确定要爬取${typeName.value}数据吗？这可能需要几秒钟。`)) return
+  const confirmed = await showAppConfirm(`确定要爬取${typeName.value}数据吗？这可能需要几秒钟。`, {
+    title: '确认爬取数据',
+    type: 'warning',
+    confirmText: '开始爬取',
+  })
+  if (!confirmed) return
   scraping.value = true
   try {
     const res = await progressApi.scrape(projectType.value)

@@ -81,6 +81,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useUserStore } from '../stores/user'
 import { usersApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
+import { showAppAlert } from '../services/appAlert'
 
 const userStore = useUserStore()
 
@@ -126,8 +127,8 @@ async function resetPassword() {
   try {
     const res = await usersApi.resetPassword(userToReset.value.id)
     showResetModal.value = false
-    alert(res.data.message || '密码重置成功')
-  } catch (err) { console.error(err); alert(err.response?.data?.detail || '重置失败') }
+    await showAppAlert(res.data.message || '密码重置成功', { type: 'success', title: '重置成功' })
+  } catch (err) { console.error(err); await showAppAlert(err.response?.data?.detail || '重置失败', { type: 'error', title: '重置失败' }) }
   finally { resetting.value = false }
 }
 
@@ -136,14 +137,14 @@ async function submitUser() {
   try {
     if (isEdit.value) {
       await usersApi.update(editingId.value, { display_name: form.display_name, role: form.role, department: form.department })
-      alert('用户信息已更新')
+      await showAppAlert('用户信息已更新', { type: 'success', title: '保存成功' })
     } else {
       await usersApi.create(form)
-      alert('用户创建成功')
+      await showAppAlert('用户创建成功', { type: 'success', title: '创建成功' })
     }
     showModal.value = false
     await fetchUsers()
-  } catch (err) { console.error(err); alert(err.response?.data?.detail || '操作失败') }
+  } catch (err) { console.error(err); await showAppAlert(err.response?.data?.detail || '操作失败', { type: 'error', title: '保存失败' }) }
   finally { submitting.value = false }
 }
 
@@ -156,7 +157,7 @@ async function deleteUser() {
     await fetchUsers()
   } catch (err) {
     console.error(err)
-    alert(err.response?.data?.detail || '删除失败，请稍后重试')
+    await showAppAlert(err.response?.data?.detail || '删除失败，请稍后重试', { type: 'error', title: '删除失败' })
   } finally { deleting.value = false }
 }
 

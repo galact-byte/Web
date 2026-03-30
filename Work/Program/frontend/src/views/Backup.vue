@@ -101,6 +101,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { backupApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
+import { showAppAlert } from '../services/appAlert'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -140,7 +141,7 @@ async function exportJson() {
     triggerDownload(new Blob([response.data]), `backup_${timestamp}.json`)
   } catch (err) {
     console.error(err)
-    alert('导出失败: ' + (err.response?.data?.detail || err.message))
+    await showAppAlert('导出失败: ' + (err.response?.data?.detail || err.message), { type: 'error', title: '导出失败' })
   } finally { exportingJson.value = false }
 }
 
@@ -154,21 +155,21 @@ async function downloadDb() {
   } catch (err) {
     console.error(err)
     const msg = err.response?.status === 400 ? '当前数据库非 SQLite，不支持直接下载' : '下载失败'
-    alert(msg)
+    await showAppAlert(msg, { type: 'error', title: '下载失败' })
   } finally { downloadingDb.value = false }
 }
 
 function handleFileSelect(e) {
   const file = e.target.files[0]
   if (file && file.name.endsWith('.json')) { selectedFile.value = file; restoreResult.value = null }
-  else if (file) { alert('仅支持 .json 格式的备份文件') }
+  else if (file) { showAppAlert('仅支持 .json 格式的备份文件', { type: 'error', title: '文件格式不支持' }) }
 }
 
 function handleDrop(e) {
   isDragOver.value = false
   const file = e.dataTransfer.files[0]
   if (file && file.name.endsWith('.json')) { selectedFile.value = file; restoreResult.value = null }
-  else if (file) { alert('仅支持 .json 格式的备份文件') }
+  else if (file) { showAppAlert('仅支持 .json 格式的备份文件', { type: 'error', title: '文件格式不支持' }) }
 }
 
 function clearFile() {
@@ -191,15 +192,15 @@ async function doRestore() {
     try {
       await userStore.fetchCurrentUser()
     } catch {
-      alert('数据已恢复，但当前账户状态已变更，请重新登录')
+      await showAppAlert('数据已恢复，但当前账户状态已变更，请重新登录', { type: 'info', title: '需要重新登录' })
       userStore.logout()
       router.push('/login')
       return
     }
-    alert(response.data.message || '数据恢复成功')
+    await showAppAlert(response.data.message || '数据恢复成功', { type: 'success', title: '恢复成功' })
   } catch (err) {
     console.error(err)
-    alert('恢复失败: ' + (err.response?.data?.detail || err.message))
+    await showAppAlert('恢复失败: ' + (err.response?.data?.detail || err.message), { type: 'error', title: '恢复失败' })
   } finally { importing.value = false }
 }
 </script>

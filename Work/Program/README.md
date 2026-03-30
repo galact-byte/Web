@@ -13,6 +13,9 @@
 **Linux/macOS** — 运行 `bash start.sh`
 
 > 脚本会自动检查环境、安装依赖、启动前后端服务并打开浏览器。
+>
+> - `ENV=dev` 时：启动开发模式后端和 Vite 开发服务器
+> - `ENV=prod` 时：启动生产模式后端，并执行前端构建后用 `vite preview` 预览生产包
 
 ### 手动启动
 
@@ -47,6 +50,12 @@ npm run dev
 ```
 
 前端启动后访问 http://localhost:5173
+
+### 生产部署说明
+
+- 前端生产构建默认使用相对路径 `/api` 访问后端
+- 推荐使用 Nginx 托管 `frontend/dist`，并将 `/api` 反向代理到后端
+- 若使用 `vite preview` 临时预览生产包，项目已内置 `/api` 到本机后端的代理
 
 ---
 
@@ -117,6 +126,8 @@ cp backend/.env.example backend/.env
 |------|------|------|
 | `ENV` | `dev`（默认） | 开发模式：启用 Swagger 文档（`/docs`），使用默认密钥 |
 | `ENV` | `prod` | 生产模式：禁用 Swagger 文档，强制要求设置 `SECRET_KEY` |
+
+> 应用启动时会自动读取 `backend/.env`。若系统环境变量与 `.env` 同时存在，系统环境变量优先。
 
 ### 数据库
 
@@ -210,6 +221,16 @@ cp backend/progress_config.example.json backend/progress_config.json
 ```bash
 # 多个来源用逗号分隔
 CORS_ORIGINS=https://你的前端域名
+```
+
+### 前端生产环境 API 地址
+
+- 开发环境默认请求 `http://localhost:8000`
+- 生产环境默认请求相对路径 `/api`
+- 如果你的生产环境不是通过 Nginx 反代 `/api`，可显式设置：
+
+```bash
+VITE_API_URL=https://你的后端地址
 ```
 
 ---

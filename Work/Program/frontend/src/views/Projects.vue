@@ -90,6 +90,7 @@ import { useUserStore } from '../stores/user'
 import { projectsApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
 import { getCategoryShort, getStatusClass, getStatusText } from '../utils/project'
+import { showAppAlert } from '../services/appAlert'
 
 const userStore = useUserStore()
 
@@ -129,7 +130,7 @@ async function deleteProject() {
     projectToDelete.value = null
   } catch (err) {
     console.error('Delete failed:', err)
-    alert(err.response?.data?.detail || '删除失败，请稍后重试')
+    await showAppAlert(err.response?.data?.detail || '删除失败，请稍后重试', { type: 'error', title: '删除失败' })
   } finally { deleting.value = false }
 }
 
