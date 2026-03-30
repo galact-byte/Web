@@ -40,6 +40,8 @@
             <label for="implementation_manager_id">实施负责人</label>
             <select id="implementation_manager_id" v-model="form.implementation_manager_id" class="select"><option :value="null">请选择</option><option v-for="u in allUsers" :key="u.id" :value="u.id">{{ u.display_name }}</option></select>
           </div>
+          <div class="input-group"><label for="contact_name">客户联系人</label><input id="contact_name" v-model="form.contact_name" class="input" placeholder="输入客户联系人姓名" /></div>
+          <div class="input-group"><label for="contact_phone">联系电话</label><input id="contact_phone" v-model="form.contact_phone" class="input" placeholder="输入联系电话" /></div>
         </div>
       </section>
 
@@ -111,7 +113,9 @@ const categories = [
 const form = reactive({
   project_code: '', project_name: '', client_name: '', business_category: '等保测评',
   project_location: '', contract_status: '未签订', filing_status: '未备案',
-  priority: '/', business_manager_name: '', implementation_manager_id: null, systems: []
+  priority: '/', business_manager_name: '', implementation_manager_id: null,
+  contact_name: '', contact_phone: '',
+  systems: []
 })
 
 function addSystem() {
@@ -156,6 +160,7 @@ async function fetchData() {
         contract_status: p.contract_status, filing_status: p.filing_status,
         priority: p.priority || '/',
         business_manager_name: p.business_manager_name || '', implementation_manager_id: p.implementation_manager_id,
+        contact_name: p.contact_name || '', contact_phone: p.contact_phone || '',
         systems: p.systems.map(s => ({ system_code: s.system_code, system_name: s.system_name, system_level: s.system_level, system_type: s.system_type, archive_status: s.archive_status || '否' }))
       })
     }

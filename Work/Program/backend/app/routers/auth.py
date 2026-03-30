@@ -1,6 +1,7 @@
 """
 认证路由
 """
+import re
 from time import time
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
@@ -92,6 +93,30 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
     )
 
 
+def _validate_password_complexity(password: str) -> None:
+    """校验密码复杂度：至少8位，必须包含大写字母、小写字母和数字"""
+    if len(password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="密码长度不能少于8位"
+        )
+    if not re.search(r'[A-Z]', password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="密码必须包含至少一个大写字母"
+        )
+    if not re.search(r'[a-z]', password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="密码必须包含至少一个小写字母"
+        )
+    if not re.search(r'[0-9]', password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="密码必须包含至少一个数字"
+        )
+
+
 @router.post("/change-password")
 def change_password(
     request: ChangePasswordRequest,
@@ -111,6 +136,9 @@ def change_password(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="当前密码错误"
             )
+
+    # 密码复杂度校验
+    _validate_password_complexity(request.new_password)
 
     # 新密码不能与旧密码相同
     if verify_password(request.new_password, current_user.password_hash):

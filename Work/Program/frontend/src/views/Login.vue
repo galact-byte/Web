@@ -61,17 +61,26 @@
         <div class="modal-header"><h2>修改密码</h2></div>
         <div class="modal-body">
           <p class="change-password-hint">首次登录或密码已被重置，请设置新密码后继续使用。</p>
+          <div class="password-rules">
+            <p class="rules-title">密码要求：</p>
+            <ul>
+              <li :class="{ 'rule-pass': newPassword.length >= 8 }">至少8位字符</li>
+              <li :class="{ 'rule-pass': /[A-Z]/.test(newPassword) }">包含大写字母</li>
+              <li :class="{ 'rule-pass': /[a-z]/.test(newPassword) }">包含小写字母</li>
+              <li :class="{ 'rule-pass': /[0-9]/.test(newPassword) }">包含数字</li>
+            </ul>
+          </div>
           <form @submit.prevent="handleChangePassword" class="login-form">
             <div class="input-group">
               <label for="newPassword">新密码</label>
-              <input id="newPassword" v-model="newPassword" type="password" class="input" placeholder="请输入新密码（至少6位）" minlength="6" required />
+              <input id="newPassword" v-model="newPassword" type="password" class="input" placeholder="请输入新密码" minlength="8" required />
             </div>
             <div class="input-group">
               <label for="confirmPassword">确认密码</label>
-              <input id="confirmPassword" v-model="confirmPassword" type="password" class="input" placeholder="再次输入新密码" minlength="6" required />
+              <input id="confirmPassword" v-model="confirmPassword" type="password" class="input" placeholder="再次输入新密码" minlength="8" required />
             </div>
             <div v-if="changePasswordError" class="error-message">{{ changePasswordError }}</div>
-            <button type="submit" class="btn btn-primary btn-lg w-full" :disabled="changingPassword">
+            <button type="submit" class="btn btn-primary btn-lg w-full" :disabled="changingPassword || !isPasswordValid">
               <span v-if="changingPassword" class="loading-spinner" style="width: 20px; height: 20px;"></span>
               <span v-else>确认修改</span>
             </button>
@@ -83,7 +92,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 
@@ -101,6 +110,11 @@ const changingPassword = ref(false)
 const form = reactive({
   username: '',
   password: ''
+})
+
+const isPasswordValid = computed(() => {
+  const p = newPassword.value
+  return p.length >= 8 && /[A-Z]/.test(p) && /[a-z]/.test(p) && /[0-9]/.test(p)
 })
 
 async function handleSubmit() {
@@ -127,8 +141,8 @@ async function handleSubmit() {
 async function handleChangePassword() {
   changePasswordError.value = ''
 
-  if (newPassword.value.length < 6) {
-    changePasswordError.value = '密码长度不能少于6位'
+  if (!isPasswordValid.value) {
+    changePasswordError.value = '密码不符合复杂度要求，请检查上方提示'
     return
   }
   if (newPassword.value !== confirmPassword.value) {
@@ -327,9 +341,47 @@ async function handleChangePassword() {
 .change-password-modal { max-width: 400px; width: 90%; }
 .change-password-hint {
   color: var(--text-secondary);
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   font-size: 0.85rem;
   line-height: 1.5;
+}
+.password-rules {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+}
+.password-rules .rules-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--text-primary);
+}
+.password-rules ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.password-rules li {
+  color: var(--text-muted);
+  padding-left: 1.2rem;
+  position: relative;
+}
+.password-rules li::before {
+  content: '○';
+  position: absolute;
+  left: 0;
+  color: var(--text-muted);
+}
+.password-rules li.rule-pass {
+  color: #10b981;
+}
+.password-rules li.rule-pass::before {
+  content: '●';
+  color: #10b981;
 }
 
 @media (max-width: 768px) {
