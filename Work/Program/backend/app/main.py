@@ -130,7 +130,18 @@ def _seed_admin():
     db = SessionLocal()
     try:
         if db.query(User).count() == 0:
-            initial_password = "admin123" if IS_DEV else secrets.token_urlsafe(12)
+            # 优先从环境变量读取密码，开发模式兜底 admin123，生产模式兜底随机密码
+            env_password = (os.getenv("DEFAULT_ADMIN_PASSWORD") or "").strip()
+            if env_password:
+                initial_password = env_password
+                password_source = "环境变量"
+            elif IS_DEV:
+                initial_password = "admin123"
+                password_source = "开发默认"
+            else:
+                initial_password = secrets.token_urlsafe(12)
+                password_source = "随机生成"
+
             admin = User(
                 username="admin",
                 password_hash=hash_password(initial_password),
@@ -141,11 +152,20 @@ def _seed_admin():
             )
             db.add(admin)
             db.commit()
+
             if IS_DEV:
                 logger.info("已创建默认管理员账户: admin（开发模式，请及时修改密码）")
             else:
-                # 生产环境使用 print 输出一次性密码，不写入持久日志
-                print(f"[初始化] 管理员账户已创建，初始密码: {initial_password}（请立即登录并修改）")
+                msg = f"[初始化] 管理员账户已创建（密码来源: {password_source}），请立即登录并修改密码"
+                if password_source == "环境变量":
+                    # 环境变量指定的密码，用户已知，不需要输出明文
+                    logger.info(msg)
+                    print(msg)
+                else:
+                    # 随机生成的密码，必须输出明文且写入日志，防止丢失
+                    full_msg = f"{msg}，初始密码: {initial_password}"
+                    logger.warning(full_msg)
+                    print(full_msg)
     except Exception as e:
         if not IS_DEV:
             raise RuntimeError(f"初始化管理员账户失败: {e}")
