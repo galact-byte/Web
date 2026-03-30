@@ -229,6 +229,7 @@ import AppLayout from '../components/AppLayout.vue'
 import ProgressStepper from '../components/ProgressStepper.vue'
 import Toast from '../components/Toast.vue'
 import { getCategoryShort, getStatusClass, getStatusText } from '../utils/project'
+import { showAppConfirm } from '../services/appConfirm'
 
 const route = useRoute()
 const router = useRouter()
@@ -318,7 +319,12 @@ async function saveAssignment() {
 }
 
 async function deleteAssignment(a) {
-  if (!confirm(`确定删除 ${a.assignee_name} 的分配记录？`)) return
+  const confirmed = await showAppConfirm(`确定删除 ${a.assignee_name} 的分配记录？`, {
+    title: '确认删除分配记录',
+    type: 'danger',
+    confirmText: '确认删除',
+  })
+  if (!confirmed) return
   try {
     await projectsApi.deleteAssignment(route.params.id, a.id)
     await fetchData()
@@ -351,9 +357,19 @@ async function completeProject() {
   const notSubmittedNames = Object.values(byEmployee).filter(e => !e.all).map(e => e.name)
 
   if (notSubmittedNames.length > 0) {
-    if (!confirm(`以下人员尚未提交完结申请：${notSubmittedNames.join('、')}\n\n确定要强制标记为已完成吗？`)) return
+    const forceConfirmed = await showAppConfirm(`以下人员尚未提交完结申请：${notSubmittedNames.join('、')}\n\n确定要强制标记为已完成吗？`, {
+      title: '存在未提交人员',
+      type: 'danger',
+      confirmText: '强制完成',
+    })
+    if (!forceConfirmed) return
   } else {
-    if (!confirm('所有人员已提交完结申请，确定将此项目标记为已完成？')) return
+    const confirmed = await showAppConfirm('所有人员已提交完结申请，确定将此项目标记为已完成？', {
+      title: '确认标记完成',
+      type: 'warning',
+      confirmText: '确认完成',
+    })
+    if (!confirmed) return
   }
   changingStatus.value = true
   try {
@@ -364,7 +380,12 @@ async function completeProject() {
 }
 
 async function submitCompletion() {
-  if (!confirm('确定提交完结申请？提交后将无法编辑贡献信息，如需修改请先撤回。')) return
+  const confirmed = await showAppConfirm('确定提交完结申请？提交后将无法编辑贡献信息，如需修改请先撤回。', {
+    title: '确认提交完结申请',
+    type: 'warning',
+    confirmText: '确认提交',
+  })
+  if (!confirmed) return
   try {
     await projectsApi.submitCompletion(route.params.id)
     await fetchData()
@@ -372,7 +393,12 @@ async function submitCompletion() {
 }
 
 async function retractCompletion() {
-  if (!confirm('确定撤回完结申请？撤回后可继续编辑贡献信息。')) return
+  const confirmed = await showAppConfirm('确定撤回完结申请？撤回后可继续编辑贡献信息。', {
+    title: '确认撤回申请',
+    type: 'warning',
+    confirmText: '确认撤回',
+  })
+  if (!confirmed) return
   try {
     await projectsApi.retractCompletion(route.params.id)
     await fetchData()
@@ -380,7 +406,12 @@ async function retractCompletion() {
 }
 
 async function reopenProject() {
-  if (!confirm('确定重新开启此项目？')) return
+  const confirmed = await showAppConfirm('确定重新开启此项目？', {
+    title: '确认重新开启',
+    type: 'warning',
+    confirmText: '确认开启',
+  })
+  if (!confirmed) return
   changingStatus.value = true
   try {
     await projectsApi.updateStatus(route.params.id, 'assigned')
@@ -439,7 +470,12 @@ function openSyncModal() {
 }
 
 async function confirmSync() {
-  if (!confirm(`确定将所有系统的进度同步为"${phaseOptions.find(p => p.value === syncForm.phase)?.label}"？`)) return
+  const confirmed = await showAppConfirm(`确定将所有系统的进度同步为"${phaseOptions.find(p => p.value === syncForm.phase)?.label}"？`, {
+    title: '确认同步进度',
+    type: 'warning',
+    confirmText: '确认同步',
+  })
+  if (!confirmed) return
   syncingProgress.value = true
   try {
     await projectsApi.syncProgress(route.params.id, syncForm)

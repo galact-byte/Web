@@ -83,6 +83,7 @@ import { useUserStore } from '../stores/user'
 import { projectsApi, exportsApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
 import { getCategoryShort } from '../utils/project'
+import { showAppAlert } from '../services/appAlert'
 
 const userStore = useUserStore()
 
@@ -128,7 +129,7 @@ async function exportExcel() {
     link.click()
     document.body.removeChild(link)
     setTimeout(() => window.URL.revokeObjectURL(url), 100)
-  } catch (err) { console.error(err); alert('导出失败') }
+  } catch (err) { console.error(err); await showAppAlert('导出失败', { type: 'error', title: 'Excel 导出失败' }) }
   finally { exporting.value = false }
 }
 
@@ -156,7 +157,7 @@ async function exportWord() {
     link.click()
     document.body.removeChild(link)
     setTimeout(() => window.URL.revokeObjectURL(url), 100)
-  } catch (err) { console.error(err); alert('导出失败') }
+  } catch (err) { console.error(err); await showAppAlert('导出失败', { type: 'error', title: 'Word 导出失败' }) }
   finally { exportingWord.value = false }
 }
 

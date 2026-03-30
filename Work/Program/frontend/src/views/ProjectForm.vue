@@ -93,6 +93,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { projectsApi, usersApi } from '../api'
 import AppLayout from '../components/AppLayout.vue'
+import { showAppAlert } from '../services/appAlert'
+import { showAppConfirm } from '../services/appConfirm'
 
 const route = useRoute()
 const router = useRouter()
@@ -128,7 +130,12 @@ async function handleSubmit() {
   // 警告用户未填写系统名称的系统将被忽略
   const emptySystems = form.systems.filter(s => !s.system_name.trim())
   if (emptySystems.length > 0) {
-    if (!confirm(`有 ${emptySystems.length} 个系统未填写名称，提交时将被忽略。是否继续？`)) return
+    const confirmed = await showAppConfirm(`有 ${emptySystems.length} 个系统未填写名称，提交时将被忽略。是否继续？`, {
+      title: '部分系统将被忽略',
+      type: 'warning',
+      confirmText: '继续提交',
+    })
+    if (!confirmed) return
   }
 
   submitting.value = true
@@ -142,7 +149,7 @@ async function handleSubmit() {
     router.push('/projects')
   } catch (err) {
     console.error('Submit failed:', err)
-    alert(err.response?.data?.detail || '操作失败')
+    await showAppAlert(err.response?.data?.detail || '操作失败', { type: 'error', title: '保存失败' })
   } finally { submitting.value = false }
 }
 

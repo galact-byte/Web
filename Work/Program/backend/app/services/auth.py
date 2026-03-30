@@ -1,6 +1,8 @@
 """
 认证服务
 """
+import app.env  # noqa: F401  确保优先加载 backend/.env
+
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional

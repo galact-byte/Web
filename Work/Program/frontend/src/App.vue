@@ -5,6 +5,8 @@
         <component :is="Component" :key="$route.path" />
       </transition>
     </router-view>
+    <AppAlert />
+    <AppConfirm />
   </div>
 </template>
 
@@ -12,6 +14,8 @@
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from './stores/user'
+import AppAlert from './components/AppAlert.vue'
+import AppConfirm from './components/AppConfirm.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
