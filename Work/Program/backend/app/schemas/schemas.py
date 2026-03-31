@@ -15,7 +15,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=6)
+    encrypted_password: str = Field(..., min_length=1)
 
 
 class UserUpdate(BaseModel):
@@ -36,12 +36,12 @@ class UserResponse(UserBase):
 # ============ 认证 ============
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=50)
-    password: str = Field(..., min_length=1, max_length=128)
+    encrypted_password: str = Field(..., min_length=1)
 
 
 class ChangePasswordRequest(BaseModel):
-    new_password: str = Field(..., min_length=8, max_length=128)
-    old_password: Optional[str] = None  # 首次改密可不填，主动改密必填
+    encrypted_new_password: str = Field(..., min_length=1)
+    encrypted_old_password: Optional[str] = None  # 首次改密可不填，主动改密必填
 
 
 class TokenResponse(BaseModel):
