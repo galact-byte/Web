@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import User, UserRole
 from app.schemas import UserCreate, UserUpdate, UserResponse
 from app.services.auth import hash_password, get_current_user, get_current_manager
+from app.utils.rsa_crypto import decrypt_password
 
 router = APIRouter(prefix="/api/users", tags=["用户"])
 
@@ -97,9 +98,18 @@ def create_user(
             detail="用户名已存在"
         )
     
+    # 解密密码
+    try:
+        password = decrypt_password(request.encrypted_password)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="密码解密失败，请刷新页面重试"
+        )
+
     user = User(
         username=request.username,
-        password_hash=hash_password(request.password),
+        password_hash=hash_password(password),
         display_name=request.display_name,
         role=UserRole(request.role) if request.role in [r.value for r in UserRole] else UserRole.employee,
         department=request.department

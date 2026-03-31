@@ -53,6 +53,7 @@ api.interceptors.response.use(
 
 // ============ 认证 API ============
 export const authApi = {
+  getPublicKey: () => api.get('/api/auth/public-key'),
   login: (data) => api.post('/api/auth/login', data),
   changePassword: (data) => api.post('/api/auth/change-password', data),
   me: () => api.get('/api/auth/me')

@@ -13,6 +13,7 @@ from app.services.auth import (
     hash_password, verify_password, create_access_token,
     get_current_user_raw,
 )
+from app.utils.rsa_crypto import get_public_key_pem, decrypt_password
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
@@ -59,15 +60,31 @@ def _clear_attempts(client_ip: str):
     _login_attempts.pop(client_ip, None)
 
 
+@router.get("/public-key")
+def get_rsa_public_key():
+    """获取 RSA 公钥（供前端加密密码使用）"""
+    return {"public_key": get_public_key_pem()}
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
-    """用户登录"""
+    """用户登录（密码使用 RSA 加密传输）"""
     client_ip = req.client.host if req.client else "unknown"
     _check_rate_limit(client_ip)
 
+    # 解密密码
+    try:
+        password = decrypt_password(request.encrypted_password)
+    except ValueError:
+        _record_failed_attempt(client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="密码解密失败，请刷新页面重试"
+        )
+
     user = db.query(User).filter(User.username == request.username).first()
 
-    if not user or not verify_password(request.password, user.password_hash):
+    if not user or not verify_password(password, user.password_hash):
         _record_failed_attempt(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -123,31 +140,47 @@ def change_password(
     current_user: User = Depends(get_current_user_raw),
     db: Session = Depends(get_db)
 ):
-    """修改当前用户密码（首次登录或主动修改）"""
+    """修改当前用户密码（首次登录或主动修改，密码使用 RSA 加密传输）"""
+    # 解密新密码
+    try:
+        new_password = decrypt_password(request.encrypted_new_password)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="新密码解密失败，请刷新页面重试"
+        )
+
     # 非首次改密时，必须验证旧密码
     if not current_user.must_change_password:
-        if not request.old_password:
+        if not request.encrypted_old_password:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="请输入当前密码"
             )
-        if not verify_password(request.old_password, current_user.password_hash):
+        try:
+            old_password = decrypt_password(request.encrypted_old_password)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="旧密码解密失败，请刷新页面重试"
+            )
+        if not verify_password(old_password, current_user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="当前密码错误"
             )
 
     # 密码复杂度校验
-    _validate_password_complexity(request.new_password)
+    _validate_password_complexity(new_password)
 
     # 新密码不能与旧密码相同
-    if verify_password(request.new_password, current_user.password_hash):
+    if verify_password(new_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="新密码不能与当前密码相同"
         )
 
-    current_user.password_hash = hash_password(request.new_password)
+    current_user.password_hash = hash_password(new_password)
     current_user.must_change_password = False
     db.commit()
 

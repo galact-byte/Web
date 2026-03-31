@@ -80,8 +80,10 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useUserStore } from '../stores/user'
 import { usersApi } from '../api'
+import api from '../api'
 import AppLayout from '../components/AppLayout.vue'
 import { showAppAlert } from '../services/appAlert'
+import { fetchPublicKey, encryptPassword, clearPublicKeyCache } from '../utils/crypto'
 
 const userStore = useUserStore()
 
@@ -139,7 +141,23 @@ async function submitUser() {
       await usersApi.update(editingId.value, { display_name: form.display_name, role: form.role, department: form.department })
       await showAppAlert('用户信息已更新', { type: 'success', title: '保存成功' })
     } else {
-      await usersApi.create(form)
+      // 加密密码后再发送
+      let encryptedPwd
+      try {
+        const publicKey = await fetchPublicKey(api)
+        encryptedPwd = await encryptPassword(form.password, publicKey)
+      } catch {
+        clearPublicKeyCache()
+        const publicKey = await fetchPublicKey(api)
+        encryptedPwd = await encryptPassword(form.password, publicKey)
+      }
+      await usersApi.create({
+        username: form.username,
+        encrypted_password: encryptedPwd,
+        display_name: form.display_name,
+        role: form.role,
+        department: form.department
+      })
       await showAppAlert('用户创建成功', { type: 'success', title: '创建成功' })
     }
     showModal.value = false
