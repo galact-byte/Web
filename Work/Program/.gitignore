@@ -54,3 +54,6 @@ Thumbs.db
 
 # OMC 状态
 .omc/
+
+*.bat
+!start.bat
