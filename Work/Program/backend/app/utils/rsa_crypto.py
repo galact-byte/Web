@@ -24,7 +24,7 @@ def _generate_rsa_keypair():
     return private_key
 
 
-def _load_private_key_from_env() -> rsa.RSAPrivateKey | None:
+def _load_private_key_from_env():
     """
     尝试从环境变量加载 RSA 私钥：
     - RSA_PRIVATE_KEY_FILE: 文件路径
