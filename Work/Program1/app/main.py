@@ -112,6 +112,9 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 EXPORT_DIR = BASE_DIR / "exports"
 BACKUP_DIR = EXPORT_DIR / "backups"
 LOCAL_OFFICIAL_TEMPLATE_DIR = BASE_DIR / "template_docs"
+DESKTOP_FILING_TEMPLATE_PATH = Path(
+    r"C:\Users\galact\Desktop\山西晋深交易有限公司-山西国资供应链服务系统-网络安全等级保护定级备案表.docx"
+)
 MAX_ORG_ATTACHMENT = 100 * 1024 * 1024
 MAX_SYS_ATTACHMENT = 200 * 1024 * 1024
 MAX_KNOWLEDGE_FILE = 300 * 1024 * 1024
@@ -506,10 +509,25 @@ def ensure_user_account_schema() -> None:
             conn.execute(text("ALTER TABLE user_accounts ADD COLUMN password_updated_at DATETIME NULL"))
 
 
+def ensure_filing_workspace_schema() -> None:
+    insp = inspect(engine)
+    tables = set(insp.get_table_names())
+    with engine.begin() as conn:
+        if "organizations" in tables:
+            org_cols = {c["name"] for c in insp.get_columns("organizations")}
+            if "filing_detail" not in org_cols:
+                conn.execute(text("ALTER TABLE organizations ADD COLUMN filing_detail JSON NULL"))
+        if "systems" in tables:
+            sys_cols = {c["name"] for c in insp.get_columns("systems")}
+            if "filing_detail" not in sys_cols:
+                conn.execute(text("ALTER TABLE systems ADD COLUMN filing_detail JSON NULL"))
+
+
 def run_startup_tasks() -> None:
     ensure_dirs()
     init_db()
     ensure_user_account_schema()
+    ensure_filing_workspace_schema()
     ensure_default_accounts()
 
 
@@ -873,6 +891,7 @@ ORG_FIELDS = [
     "data_security_owner_email",
     "supervising_department",
     "filing_region",
+    "filing_detail",
     "involves_state_secret",
     "is_cii",
     "remark",
@@ -921,6 +940,7 @@ SYSTEM_FIELDS = [
     "system_name",
     "system_code",
     "proposed_level",
+    "filing_detail",
     "business_description",
     "system_type",
     "deployment_mode",
@@ -1069,6 +1089,227 @@ def normalize_org_payload(data: dict[str, Any]) -> None:
             data[key] = data[key].strip()
 
 
+def deep_copy_json(value: Any) -> Any:
+    return json.loads(json.dumps(value, ensure_ascii=False))
+
+
+def default_org_filing_detail() -> dict[str, Any]:
+    return {
+        "table1": {
+            "address_parts": {"province": "", "city": "", "district": "", "detail": ""},
+            "postal_code": "",
+            "district_code": "",
+            "unit_internet_addresses": "无",
+            "responsible_person": {"name": "", "title": "", "office_phone": "", "email": ""},
+            "affiliation": {"code": "", "other": ""},
+            "organization_type_detail": {"code": "", "other": ""},
+            "industry_category": {"code": "", "label": "", "other": ""},
+            "current_filing_counts": {"2": 0, "3": 0, "4": 0, "5": 0},
+            "total_filing_counts": {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0},
+        }
+    }
+
+
+def default_system_filing_detail() -> dict[str, Any]:
+    return {
+        "table2": {
+            "object_types": [],
+            "technology_types": [],
+            "technology_other": "",
+            "business_types": [],
+            "business_other": "",
+            "business_description": "",
+            "network_service": {
+                "scope_code": "",
+                "cross_province_count": "",
+                "cross_city_count": "",
+                "other": "",
+                "service_targets": [],
+                "service_target_other": "",
+            },
+            "network_platform": {
+                "coverage": {"code": "", "other": ""},
+                "network_nature": {
+                    "code": "",
+                    "other": "",
+                    "source_ip_range": "",
+                    "domain": "",
+                    "protocol_ports": "",
+                },
+                "interconnection": {"items": [], "other": ""},
+            },
+            "go_live_date": "",
+            "is_sub_system": False,
+            "parent_system_name": "",
+            "parent_organization_name": "",
+        },
+        "table3": {
+            "business_security_damage_items": [],
+            "business_security_level": 0,
+            "service_security_damage_items": [],
+            "service_security_level": 0,
+            "final_level": 0,
+            "grading_date": "",
+            "grading_report": {"has_file": False, "file_name": "", "attachment_ids": []},
+            "expert_review": {"status": "unreviewed", "file_name": "", "attachment_ids": []},
+            "has_supervisor": False,
+            "supervisor_name": "",
+            "supervisor_review": {"status": "unreviewed", "file_name": "", "attachment_ids": []},
+            "filler_name": "",
+            "filled_date": "",
+        },
+        "table4": {
+            "cloud": {
+                "enabled": False,
+                "responsibility_types": [],
+                "service_modes": [],
+                "service_mode_other": "",
+                "deployment_modes": [],
+                "deployment_mode_other": "",
+                "customer_count": "",
+                "infra_location": "",
+                "ops_location": "",
+                "provider_name": "",
+                "provider_level": "",
+                "provider_platform_name": "",
+                "provider_record_no": "",
+                "customer_ops_location": "",
+                "record_file_name": "",
+                "attachment_ids": [],
+            },
+            "mobile": {
+                "enabled": False,
+                "app_name": "",
+                "wireless_channels": [],
+                "terminal_types": [],
+            },
+            "iot": {
+                "enabled": False,
+                "perception_layers": [],
+                "perception_other": "",
+                "transport_layers": [],
+                "transport_other": "",
+            },
+            "industrial_control": {
+                "enabled": False,
+                "function_layers": [],
+                "components": [],
+                "component_other": "",
+            },
+            "big_data": {
+                "enabled": False,
+                "system_components": [],
+                "cross_border_status": "",
+                "application_count": "",
+                "infra_location": "",
+                "ops_location": "",
+                "provider_name": "",
+                "provider_level": "",
+                "provider_platform_name": "",
+                "provider_record_no": "",
+                "record_file_name": "",
+                "attachment_ids": [],
+            },
+        },
+        "table5": {
+            "network_topology": {"status": "none", "file_name": "", "attachment_ids": []},
+            "security_org_and_rules": {"status": "none", "file_name": "", "attachment_ids": []},
+            "security_design_plan": {"status": "none", "file_name": "", "attachment_ids": []},
+            "security_products": {"status": "none", "file_name": "", "attachment_ids": []},
+            "security_services": {"status": "none", "file_name": "", "attachment_ids": []},
+            "supervisor_guidance": {"status": "none", "file_name": "", "attachment_ids": []},
+        },
+        "table6": {"items": []},
+    }
+
+
+def merged_org_filing_detail(org: Organization | None) -> dict[str, Any]:
+    data = default_org_filing_detail()
+    if org and isinstance(org.filing_detail, dict):
+        data = deep_merge_dicts(data, org.filing_detail)
+    return data
+
+
+def merged_system_filing_detail(system: SystemInfo | None) -> dict[str, Any]:
+    data = default_system_filing_detail()
+    if system and isinstance(system.filing_detail, dict):
+        data = deep_merge_dicts(data, system.filing_detail)
+    return data
+
+
+def deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged = deep_copy_json(base)
+    for key, value in (override or {}).items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge_dicts(merged[key], value)
+            continue
+        merged[key] = deep_copy_json(value)
+    return merged
+
+
+def to_int_or_zero(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on", "y", "是", "有"}
+    return False
+
+
+def normalize_attachment_refs(refs: Any) -> list[int]:
+    if not isinstance(refs, list):
+        return []
+    result: list[int] = []
+    for item in refs:
+        try:
+            value = int(item)
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            result.append(value)
+    return result
+
+
+def normalize_slot_attachment_map(mapping: Any) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    if not isinstance(mapping, dict):
+        return result
+    for slot_key, slot_value in mapping.items():
+        if not isinstance(slot_value, dict):
+            continue
+        result[str(slot_key)] = {
+            "file_name": str(slot_value.get("file_name") or "").strip(),
+            "attachment_ids": normalize_attachment_refs(slot_value.get("attachment_ids")),
+        }
+    return result
+
+
+def get_attachment_briefs(db: Session, attachment_ids: list[int]) -> list[dict[str, Any]]:
+    if not attachment_ids:
+        return []
+    rows = db.query(Attachment).filter(Attachment.id.in_(attachment_ids)).order_by(Attachment.uploaded_at.desc()).all()
+    index = {
+        row.id: {
+            "id": row.id,
+            "file_name": row.file_name,
+            "file_size": row.file_size,
+            "uploaded_at": row.uploaded_at,
+            "download_url": f"/api/attachment-files/{row.id}/download",
+            "preview_url": f"/api/attachment-files/{row.id}/preview",
+        }
+        for row in rows
+    }
+    return [index[attachment_id] for attachment_id in attachment_ids if attachment_id in index]
+
+
 def assert_credit_code_available(db: Session, credit_code: str, current_org_id: int | None = None) -> None:
     exists = db.query(Organization).filter(Organization.credit_code == credit_code).first()
     if not exists:
@@ -1208,6 +1449,265 @@ def record_system_history(
         )
     )
 
+
+def parse_workspace_date(raw_value: Any) -> date | None:
+    value = str(raw_value or "").strip()
+    if not value:
+        return None
+    value = value.replace("年", "-").replace("月", "-").replace("日", "").replace("/", "-").replace(".", "-")
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def format_workspace_date(raw_value: Any) -> str:
+    if isinstance(raw_value, date):
+        return raw_value.isoformat()
+    parsed = parse_workspace_date(raw_value)
+    return parsed.isoformat() if parsed else ""
+
+
+def summarize_table6_item(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "data_name": str(item.get("data_name") or "").strip(),
+        "data_level": str(item.get("data_level") or "").strip(),
+        "data_category": str(item.get("data_category") or "").strip(),
+    }
+
+
+def hydrate_workspace_attachments(db: Session, detail: dict[str, Any]) -> dict[str, Any]:
+    data = deep_copy_json(detail)
+    table3 = data.get("table3") if isinstance(data.get("table3"), dict) else {}
+    for slot in ("grading_report", "expert_review", "supervisor_review"):
+        slot_data = table3.get(slot)
+        if isinstance(slot_data, dict):
+            slot_data["attachments"] = get_attachment_briefs(db, normalize_attachment_refs(slot_data.get("attachment_ids")))
+    table4 = data.get("table4") if isinstance(data.get("table4"), dict) else {}
+    for slot in ("cloud", "big_data"):
+        slot_data = table4.get(slot)
+        if isinstance(slot_data, dict):
+            slot_data["attachments"] = get_attachment_briefs(db, normalize_attachment_refs(slot_data.get("attachment_ids")))
+    table5 = data.get("table5") if isinstance(data.get("table5"), dict) else {}
+    for slot_data in table5.values():
+        if isinstance(slot_data, dict):
+            slot_data["attachments"] = get_attachment_briefs(db, normalize_attachment_refs(slot_data.get("attachment_ids")))
+    return data
+
+
+def sync_org_from_workspace(db: Session, org: Organization, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    before = obj_to_dict(org, ORG_FIELDS)
+    table1 = merged_org_filing_detail(org).get("table1", {})
+    incoming_detail = payload.get("filing_detail") if isinstance(payload.get("filing_detail"), dict) else {}
+    merged_detail = deep_merge_dicts(merged_org_filing_detail(org), incoming_detail)
+    table1 = merged_detail.get("table1", {})
+    address_parts = table1.get("address_parts") if isinstance(table1.get("address_parts"), dict) else {}
+    address = str(payload.get("address") or "").strip()
+    if not address:
+        address = "".join(
+            [
+                str(address_parts.get("province") or "").strip(),
+                str(address_parts.get("city") or "").strip(),
+                str(address_parts.get("district") or "").strip(),
+                str(address_parts.get("detail") or "").strip(),
+            ]
+        )
+    industry_meta = table1.get("industry_category") if isinstance(table1.get("industry_category"), dict) else {}
+    org_type_meta = table1.get("organization_type_detail") if isinstance(table1.get("organization_type_detail"), dict) else {}
+    responsible_person = table1.get("responsible_person") if isinstance(table1.get("responsible_person"), dict) else {}
+    org_data = {
+        "name": str(payload.get("name") or org.name).strip(),
+        "credit_code": str(payload.get("credit_code") or org.credit_code).strip().upper(),
+        "legal_representative": str(responsible_person.get("name") or payload.get("legal_representative") or org.legal_representative).strip(),
+        "address": address or org.address,
+        "office_phone": str(responsible_person.get("office_phone") or payload.get("office_phone") or org.office_phone or "").strip() or None,
+        "mobile_phone": str(payload.get("mobile_phone") or org.mobile_phone).strip(),
+        "email": str(responsible_person.get("email") or payload.get("email") or org.email).strip(),
+        "industry": str(industry_meta.get("label") or payload.get("industry") or org.industry).strip(),
+        "organization_type": str(org_type_meta.get("label") or payload.get("organization_type") or org.organization_type).strip(),
+        "cybersecurity_dept": str(payload.get("cybersecurity_dept") or org.cybersecurity_dept or "").strip() or None,
+        "cybersecurity_owner_name": str(payload.get("cybersecurity_owner_name") or org.cybersecurity_owner_name or "").strip() or None,
+        "cybersecurity_owner_title": str(payload.get("cybersecurity_owner_title") or org.cybersecurity_owner_title or "").strip() or None,
+        "cybersecurity_owner_phone": str(payload.get("cybersecurity_owner_phone") or org.cybersecurity_owner_phone or "").strip() or None,
+        "cybersecurity_owner_email": str(payload.get("cybersecurity_owner_email") or org.cybersecurity_owner_email or "").strip() or None,
+        "data_security_dept": str(payload.get("data_security_dept") or org.data_security_dept or "").strip() or None,
+        "data_security_owner_name": str(payload.get("data_security_owner_name") or org.data_security_owner_name or "").strip() or None,
+        "data_security_owner_title": str(payload.get("data_security_owner_title") or org.data_security_owner_title or "").strip() or None,
+        "data_security_owner_phone": str(payload.get("data_security_owner_phone") or org.data_security_owner_phone or "").strip() or None,
+        "data_security_owner_email": str(payload.get("data_security_owner_email") or org.data_security_owner_email or "").strip() or None,
+        "supervising_department": str(payload.get("supervising_department") or org.supervising_department or "").strip() or None,
+        "filing_region": str(payload.get("filing_region") or org.filing_region).strip(),
+        "involves_state_secret": coerce_bool(payload.get("involves_state_secret", org.involves_state_secret)),
+        "is_cii": coerce_bool(payload.get("is_cii", org.is_cii)),
+        "remark": str(payload.get("remark") or org.remark or "").strip() or None,
+    }
+    normalize_org_payload(org_data)
+    validate_org_partial(org_data)
+    assert_credit_code_available(db, org_data["credit_code"], current_org_id=org.id)
+    for key, value in org_data.items():
+        setattr(org, key, value)
+    org.filing_detail = merged_detail
+    return before, obj_to_dict(org, ORG_FIELDS)
+
+
+def build_org_address_parts(org: Organization, detail: dict[str, Any]) -> dict[str, Any]:
+    table1 = detail.get("table1") if isinstance(detail.get("table1"), dict) else {}
+    address_parts = table1.get("address_parts") if isinstance(table1.get("address_parts"), dict) else {}
+    if any(str(address_parts.get(key) or "").strip() for key in ("province", "city", "district", "detail")):
+        return address_parts
+    return {"province": "", "city": "", "district": "", "detail": org.address or ""}
+
+
+def sync_system_from_workspace(system: SystemInfo, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    before = obj_to_dict(system, SYSTEM_FIELDS)
+    incoming_detail = payload.get("filing_detail") if isinstance(payload.get("filing_detail"), dict) else {}
+    merged_detail = deep_merge_dicts(merged_system_filing_detail(system), incoming_detail)
+    table2 = merged_detail.get("table2", {})
+    table3 = merged_detail.get("table3", {})
+    table6 = merged_detail.get("table6", {})
+    final_level = to_int_or_zero(table3.get("final_level")) or max(
+        to_int_or_zero(table3.get("business_security_level")),
+        to_int_or_zero(table3.get("service_security_level")),
+        system.proposed_level or 0,
+    )
+    go_live = format_workspace_date(table2.get("go_live_date"))
+    first_data_item = {}
+    if isinstance(table6, dict) and isinstance(table6.get("items"), list) and table6["items"]:
+        first = table6["items"][0]
+        if isinstance(first, dict):
+            first_data_item = summarize_table6_item(first)
+    system_data = {
+        "system_name": str(payload.get("system_name") or system.system_name).strip(),
+        "proposed_level": min(max(final_level or 1, 1), 5),
+        "business_description": str(table2.get("business_description") or payload.get("business_description") or "").strip() or None,
+        "system_type": str(payload.get("system_type") or system.system_type or "").strip() or None,
+        "deployment_mode": str(payload.get("deployment_mode") or system.deployment_mode or "").strip() or None,
+        "go_live_date": parse_workspace_date(go_live) or system.go_live_date,
+        "service_scope": str(payload.get("service_scope") or system.service_scope or "").strip() or None,
+        "service_object": str(payload.get("service_object") or system.service_object or "").strip() or None,
+        "boundary": str(payload.get("boundary") or system.boundary or "").strip() or None,
+        "network_topology": str(payload.get("network_topology") or system.network_topology or "").strip() or None,
+        "data_name": str(first_data_item.get("data_name") or payload.get("data_name") or system.data_name or "").strip() or None,
+        "data_level": str(first_data_item.get("data_level") or payload.get("data_level") or system.data_level or "").strip() or None,
+        "data_category": str(first_data_item.get("data_category") or payload.get("data_category") or system.data_category or "").strip() or None,
+        "level_basis": str(payload.get("level_basis") or system.level_basis or "").strip() or None,
+        "level_reason": str(payload.get("level_reason") or system.level_reason or "").strip() or None,
+        "impact_scope": str(payload.get("impact_scope") or system.impact_scope or "").strip() or None,
+        "needs_expert_review": table3.get("expert_review", {}).get("status") == "reviewed" if isinstance(table3.get("expert_review"), dict) else system.needs_expert_review,
+    }
+    validate_system_payload(system_data, partial=True)
+    for key, value in system_data.items():
+        setattr(system, key, value)
+    system.filing_detail = merged_detail
+    return before, obj_to_dict(system, SYSTEM_FIELDS)
+
+
+def build_filing_overview_item(org: Organization, systems: list[SystemInfo]) -> dict[str, Any]:
+    org_detail = merged_org_filing_detail(org)
+    return {
+        "organization": {
+            "id": org.id,
+            "name": org.name,
+            "credit_code": org.credit_code,
+            "industry": org.industry,
+            "filing_region": org.filing_region,
+            "archived": org.archived,
+            "locked": org.locked,
+            "filing_detail": org_detail,
+        },
+        "system_count": len(systems),
+        "systems": [
+            {
+                "id": system.id,
+                "system_name": system.system_name,
+                "system_code": system.system_code,
+                "proposed_level": system.proposed_level,
+                "archived": system.archived,
+                "locked": system.locked,
+                "go_live_date": system.go_live_date.isoformat() if system.go_live_date else "",
+                "updated_at": system.updated_at,
+            }
+            for system in systems
+        ],
+    }
+
+
+def build_workspace_detail_response(db: Session, org: Organization, system: SystemInfo) -> dict[str, Any]:
+    org_detail = merged_org_filing_detail(org)
+    table1 = org_detail.get("table1", {})
+    if isinstance(table1, dict):
+        if not str(table1.get("unit_internet_addresses") or "").strip():
+            table1["unit_internet_addresses"] = "无"
+        table1["address_parts"] = build_org_address_parts(org, org_detail)
+        responsible_person = table1.get("responsible_person") if isinstance(table1.get("responsible_person"), dict) else {}
+        responsible_person.setdefault("name", org.legal_representative or "")
+        responsible_person.setdefault("office_phone", org.office_phone or "")
+        responsible_person.setdefault("email", org.email or "")
+        table1["responsible_person"] = responsible_person
+    system_detail = hydrate_workspace_attachments(db, merged_system_filing_detail(system))
+    table2 = system_detail.get("table2", {})
+    if isinstance(table2, dict):
+        table2["go_live_date"] = format_workspace_date(table2.get("go_live_date") or system.go_live_date)
+    table3 = system_detail.get("table3", {})
+    if isinstance(table3, dict):
+        table3["final_level"] = to_int_or_zero(table3.get("final_level")) or system.proposed_level
+        table3["filled_date"] = str(table3.get("filled_date") or "").strip()
+    return {
+        "organization": {
+            "id": org.id,
+            "name": org.name,
+            "credit_code": org.credit_code,
+            "address": org.address,
+            "office_phone": org.office_phone,
+            "mobile_phone": org.mobile_phone,
+            "email": org.email,
+            "industry": org.industry,
+            "organization_type": org.organization_type,
+            "cybersecurity_dept": org.cybersecurity_dept,
+            "cybersecurity_owner_name": org.cybersecurity_owner_name,
+            "cybersecurity_owner_title": org.cybersecurity_owner_title,
+            "cybersecurity_owner_phone": org.cybersecurity_owner_phone,
+            "cybersecurity_owner_email": org.cybersecurity_owner_email,
+            "data_security_dept": org.data_security_dept,
+            "data_security_owner_name": org.data_security_owner_name,
+            "data_security_owner_title": org.data_security_owner_title,
+            "data_security_owner_phone": org.data_security_owner_phone,
+            "data_security_owner_email": org.data_security_owner_email,
+            "supervising_department": org.supervising_department,
+            "filing_region": org.filing_region,
+            "involves_state_secret": org.involves_state_secret,
+            "is_cii": org.is_cii,
+            "remark": org.remark,
+            "archived": org.archived,
+            "locked": org.locked,
+            "filing_detail": org_detail,
+        },
+        "system": {
+            "id": system.id,
+            "organization_id": system.organization_id,
+            "system_name": system.system_name,
+            "system_code": system.system_code,
+            "proposed_level": system.proposed_level,
+            "business_description": system.business_description,
+            "system_type": system.system_type,
+            "deployment_mode": system.deployment_mode,
+            "go_live_date": system.go_live_date.isoformat() if system.go_live_date else "",
+            "service_scope": system.service_scope,
+            "service_object": system.service_object,
+            "boundary": system.boundary,
+            "network_topology": system.network_topology,
+            "data_name": system.data_name,
+            "data_level": system.data_level,
+            "data_category": system.data_category,
+            "level_basis": system.level_basis,
+            "level_reason": system.level_reason,
+            "impact_scope": system.impact_scope,
+            "needs_expert_review": system.needs_expert_review,
+            "archived": system.archived,
+            "locked": system.locked,
+            "filing_detail": system_detail,
+        },
+    }
 
 def get_workflow_config(db: Session) -> WorkflowConfig:
     config = db.query(WorkflowConfig).filter(WorkflowConfig.name == "default").first()
@@ -1785,7 +2285,7 @@ def organizations_collect_page(token: str, request: Request, db: Session = Depen
 
 @app.get("/systems", response_class=HTMLResponse)
 def systems_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "systems.html", {"request": request})
+    return RedirectResponse(url="/organizations?focus=systems", status_code=307)
 
 
 @app.get("/users", response_class=HTMLResponse)
@@ -3288,6 +3788,138 @@ def list_systems(
     return {"total": len(items), "items": items}
 
 
+@app.get("/api/filing-workspace/overview")
+def filing_workspace_overview(
+    keyword: str | None = None,
+    include_archived: bool = False,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    org_query = db.query(Organization).filter(Organization.deleted_at.is_(None))
+    if keyword:
+        token = f"%{escape_like(keyword.strip())}%"
+        org_query = org_query.filter(
+            or_(
+                Organization.name.like(token),
+                Organization.credit_code.like(token),
+                Organization.industry.like(token),
+            )
+        )
+    if not include_archived:
+        org_query = org_query.filter(Organization.archived.is_(False))
+    organizations = org_query.order_by(Organization.archived.asc(), Organization.updated_at.desc()).all()
+    org_ids = [org.id for org in organizations]
+    systems_by_org: dict[int, list[SystemInfo]] = {org_id: [] for org_id in org_ids}
+    if org_ids:
+        sys_query = db.query(SystemInfo).filter(SystemInfo.organization_id.in_(org_ids), SystemInfo.deleted_at.is_(None))
+        if not include_archived:
+            sys_query = sys_query.filter(SystemInfo.archived.is_(False))
+        rows = sys_query.order_by(SystemInfo.archived.asc(), SystemInfo.updated_at.desc()).all()
+        for row in rows:
+            systems_by_org.setdefault(row.organization_id, []).append(row)
+    items = [build_filing_overview_item(org, systems_by_org.get(org.id, [])) for org in organizations]
+    return {"total": len(items), "items": items}
+
+
+@app.get("/api/filing-workspace/systems/{system_id}")
+def filing_workspace_detail(system_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    system = get_system_or_404(db, system_id)
+    org = get_org_or_404(db, system.organization_id)
+    return build_workspace_detail_response(db, org, system)
+
+
+@app.put("/api/filing-workspace/systems/{system_id}")
+def save_filing_workspace(
+    request: Request,
+    system_id: int,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, role = require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    system = get_system_or_404(db, system_id)
+    org = get_org_or_404(db, system.organization_id)
+    effective_is_admin = role == "admin"
+    if (org.archived and org.locked) or (system.archived and system.locked and not effective_is_admin):
+        raise HTTPException(status_code=403, detail="当前对象已归档锁定，不可编辑。")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="payload 必须为对象。")
+    org_payload = payload.get("organization") if isinstance(payload.get("organization"), dict) else {}
+    system_payload = payload.get("system") if isinstance(payload.get("system"), dict) else {}
+    assert_safe_payload(org_payload, "organization")
+    assert_safe_payload(system_payload, "system")
+    before_org, _ = sync_org_from_workspace(db, org, org_payload)
+    before_system, _ = sync_system_from_workspace(system, system_payload)
+    db.flush()
+    db.refresh(org)
+    db.refresh(system)
+    record_org_history(db, org.id, actor, "workspace_update", before_org, obj_to_dict(org, ORG_FIELDS))
+    record_system_history(db, system.id, actor, "workspace_update", before_system, obj_to_dict(system, SYSTEM_FIELDS))
+    db.commit()
+    db.refresh(org)
+    db.refresh(system)
+    return {"message": "备案信息已保存", "data": build_workspace_detail_response(db, org, system)}
+
+
+@app.post("/api/filing-workspace/systems/{system_id}/attachments/{slot_key}")
+async def upload_filing_workspace_attachment(
+    request: Request,
+    system_id: int,
+    slot_key: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    system = get_system_or_404(db, system_id)
+    content = await file.read()
+    if len(content) > MAX_SYS_ATTACHMENT:
+        raise HTTPException(status_code=400, detail=f"文件大小超过限制({MAX_SYS_ATTACHMENT // 1024 // 1024}MB)。")
+    row = save_attachment_row(
+        db,
+        entity_type="system",
+        entity_id=system_id,
+        actor=actor,
+        file_name=file.filename,
+        content=content,
+    )
+    detail = merged_system_filing_detail(system)
+    slot_key = slot_key.strip()
+    slot_map = detail.setdefault("_attachment_slots", {})
+    if not isinstance(slot_map, dict):
+        slot_map = {}
+        detail["_attachment_slots"] = slot_map
+    slot_item = slot_map.setdefault(slot_key, {"file_name": "", "attachment_ids": []})
+    if not isinstance(slot_item, dict):
+        slot_item = {"file_name": "", "attachment_ids": []}
+        slot_map[slot_key] = slot_item
+    slot_item["file_name"] = Path(file.filename).name
+    slot_item["attachment_ids"] = normalize_attachment_refs(slot_item.get("attachment_ids")) + [row.id]
+    if slot_key.startswith("table3."):
+        name = slot_key.split(".", 1)[1]
+        target = detail.setdefault("table3", {}).setdefault(name, {})
+        if isinstance(target, dict):
+            target["file_name"] = slot_item["file_name"]
+            target["attachment_ids"] = slot_item["attachment_ids"]
+    elif slot_key.startswith("table4.cloud"):
+        target = detail.setdefault("table4", {}).setdefault("cloud", {})
+        if isinstance(target, dict):
+            target["record_file_name"] = slot_item["file_name"]
+            target["attachment_ids"] = slot_item["attachment_ids"]
+    elif slot_key.startswith("table4.big_data"):
+        target = detail.setdefault("table4", {}).setdefault("big_data", {})
+        if isinstance(target, dict):
+            target["record_file_name"] = slot_item["file_name"]
+            target["attachment_ids"] = slot_item["attachment_ids"]
+    elif slot_key.startswith("table5."):
+        name = slot_key.split(".", 1)[1]
+        target = detail.setdefault("table5", {}).setdefault(name, {})
+        if isinstance(target, dict):
+            target["file_name"] = slot_item["file_name"]
+            target["attachment_ids"] = slot_item["attachment_ids"]
+    system.filing_detail = detail
+    db.commit()
+    db.refresh(system)
+    return {"message": "附件上传成功", "data": build_workspace_detail_response(db, system.organization, system)}
+
+
 @app.get("/api/systems/recycle-bin/list")
 def list_system_recycle_bin(
     include_expired: bool = Query(False),
@@ -3769,25 +4401,306 @@ def review_delete_request(
     return {"message": "删除申请处理完成", "status": row.status}
 
 
+def replace_cell_text(cell: Any, text: str, *, bold: bool | None = None) -> None:
+    paragraph = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+    if paragraph.runs:
+        paragraph.runs[0].text = text
+        if bold is not None:
+            paragraph.runs[0].bold = bold
+        for run in paragraph.runs[1:]:
+            run.text = ""
+    else:
+        run = paragraph.add_run(text)
+        if bold is not None:
+            run.bold = bold
+    for extra in cell.paragraphs[1:]:
+        for run in extra.runs:
+            run.text = ""
+
+
+def render_marked_choices(options: list[str], selected: list[str] | str | None, *, other_value: str = "") -> str:
+    picked = {str(item).strip() for item in (selected if isinstance(selected, list) else [selected] if selected else []) if str(item).strip()}
+    parts: list[str] = []
+    for option in options:
+        label = str(option).strip()
+        mark = "√" if label in picked else "□"
+        parts.append(f"{mark}{label}")
+    if other_value:
+        mark = "√" if ("其他" in picked or other_value) else "□"
+        parts.append(f"{mark}其他 {other_value}".strip())
+    return "  ".join(parts)
+
+
+def joined_text(values: Any, *, empty_text: str = "无", sep: str = " / ", other_value: str = "") -> str:
+    if isinstance(values, list):
+        items = [str(item).strip() for item in values if str(item).strip()]
+        if other_value:
+            items.append(f"其他 {other_value}".strip())
+        return sep.join(items) if items else empty_text
+    text = str(values or "").strip()
+    if other_value and text:
+        return f"{text}{sep}其他 {other_value}".strip()
+    if other_value and not text:
+        return f"其他 {other_value}".strip()
+    return text or empty_text
+
+
+def extract_workspace_export_context(org: Organization, system: SystemInfo) -> dict[str, Any]:
+    org_detail = merged_org_filing_detail(org)
+    sys_detail = merged_system_filing_detail(system)
+    table1 = org_detail.get("table1", {})
+    table2 = sys_detail.get("table2", {})
+    table3 = sys_detail.get("table3", {})
+    table4 = sys_detail.get("table4", {})
+    table5 = sys_detail.get("table5", {})
+    table6 = sys_detail.get("table6", {})
+    return {
+        "table1": table1 if isinstance(table1, dict) else {},
+        "table2": table2 if isinstance(table2, dict) else {},
+        "table3": table3 if isinstance(table3, dict) else {},
+        "table4": table4 if isinstance(table4, dict) else {},
+        "table5": table5 if isinstance(table5, dict) else {},
+        "table6": table6 if isinstance(table6, dict) else {"items": []},
+    }
+
+
+def fill_filing_template_document(doc: Document, org: Organization, system: SystemInfo) -> None:
+    ctx = extract_workspace_export_context(org, system)
+    table1 = ctx["table1"]
+    table2 = ctx["table2"]
+    table3 = ctx["table3"]
+    table4 = ctx["table4"]
+    table5 = ctx["table5"]
+    table6 = ctx["table6"]
+    address_parts = table1.get("address_parts") if isinstance(table1.get("address_parts"), dict) else {}
+    responsible_person = table1.get("responsible_person") if isinstance(table1.get("responsible_person"), dict) else {}
+    affiliation = table1.get("affiliation") if isinstance(table1.get("affiliation"), dict) else {}
+    org_type = table1.get("organization_type_detail") if isinstance(table1.get("organization_type_detail"), dict) else {}
+    industry = table1.get("industry_category") if isinstance(table1.get("industry_category"), dict) else {}
+    current_counts = table1.get("current_filing_counts") if isinstance(table1.get("current_filing_counts"), dict) else {}
+    total_counts = table1.get("total_filing_counts") if isinstance(table1.get("total_filing_counts"), dict) else {}
+    date_text = datetime.now().strftime("%Y-%m-%d")
+
+    for paragraph in doc.paragraphs:
+        text = paragraph.text.strip()
+        if text.startswith("备 案 单 位："):
+            paragraph.text = f"备 案 单 位：    {org.name}"
+        elif text.startswith("备 案 日 期："):
+            paragraph.text = f"备 案 日 期：    {date_text}"
+
+    if len(doc.tables) < 7:
+        raise HTTPException(status_code=500, detail="备案模板结构不完整。")
+
+    t1 = doc.tables[1]
+    replace_cell_text(t1.rows[0].cells[1], org.name)
+    replace_cell_text(t1.rows[1].cells[1], org.credit_code)
+    address_text = (
+        f"{str(address_parts.get('province') or '').strip()} "
+        f"省(自治区、直辖市)    {str(address_parts.get('city') or '').strip()} 地(区、市、州、盟)\n"
+        f"{str(address_parts.get('district') or '').strip()} 县(区、市、旗)  详细地址 {str(address_parts.get('detail') or org.address).strip()}"
+    ).strip()
+    replace_cell_text(t1.rows[2].cells[1], address_text)
+    replace_cell_text(t1.rows[3].cells[1], str(table1.get("postal_code") or ""))
+    replace_cell_text(t1.rows[3].cells[6], str(table1.get("district_code") or ""))
+    replace_cell_text(t1.rows[4].cells[2], str(responsible_person.get("name") or org.legal_representative or ""))
+    replace_cell_text(t1.rows[4].cells[6], str(responsible_person.get("title") or ""))
+    replace_cell_text(t1.rows[5].cells[2], str(responsible_person.get("office_phone") or org.office_phone or "/"))
+    replace_cell_text(t1.rows[5].cells[6], str(responsible_person.get("email") or org.email or "/"))
+    replace_cell_text(t1.rows[6].cells[1], str(org.cybersecurity_dept or ""))
+    replace_cell_text(t1.rows[7].cells[2], str(org.cybersecurity_owner_name or ""))
+    replace_cell_text(t1.rows[7].cells[6], str(org.cybersecurity_owner_title or ""))
+    replace_cell_text(t1.rows[8].cells[2], str(org.cybersecurity_owner_phone or "/"))
+    replace_cell_text(t1.rows[8].cells[6], str(org.cybersecurity_owner_email or "/"))
+    replace_cell_text(t1.rows[9].cells[2], str(org.mobile_phone or "/"))
+    replace_cell_text(t1.rows[9].cells[6], str(org.cybersecurity_owner_email or org.email or "/"))
+    replace_cell_text(t1.rows[10].cells[1], str(org.data_security_dept or ""))
+    replace_cell_text(t1.rows[11].cells[2], str(org.data_security_owner_name or ""))
+    replace_cell_text(t1.rows[11].cells[6], str(org.data_security_owner_title or ""))
+    replace_cell_text(t1.rows[12].cells[2], str(org.data_security_owner_phone or "/"))
+    replace_cell_text(t1.rows[12].cells[6], str(org.data_security_owner_email or "/"))
+    replace_cell_text(t1.rows[13].cells[2], str(org.mobile_phone or "/"))
+    replace_cell_text(t1.rows[13].cells[6], str(org.data_security_owner_email or org.email or "/"))
+    replace_cell_text(
+        t1.rows[14].cells[1],
+        render_marked_choices(
+            ["中央", "省(自治区、直辖市)", "地(区、市、州、盟)", "县（区、市、旗）"],
+            [str(affiliation.get("label") or "").strip()],
+            other_value=str(affiliation.get("other") or "").strip(),
+        ),
+    )
+    replace_cell_text(
+        t1.rows[15].cells[1],
+        render_marked_choices(
+            ["党委机关", "政府机关", "事业单位", "企业"],
+            [str(org_type.get("label") or org.organization_type or "").strip()],
+            other_value=str(org_type.get("other") or "").strip(),
+        ),
+    )
+    replace_cell_text(
+        t1.rows[16].cells[1],
+        str(industry.get("label") or org.industry or "").strip(),
+    )
+    replace_cell_text(t1.rows[17].cells[1], f"{to_int_or_zero(sum(current_counts.values()))} 个")
+    replace_cell_text(t1.rows[17].cells[3], str(to_int_or_zero(current_counts.get("2"))))
+    replace_cell_text(t1.rows[17].cells[7], str(to_int_or_zero(current_counts.get("3"))))
+    replace_cell_text(t1.rows[18].cells[3], str(to_int_or_zero(current_counts.get("4"))))
+    replace_cell_text(t1.rows[18].cells[7], str(to_int_or_zero(current_counts.get("5"))))
+    replace_cell_text(t1.rows[19].cells[1], f"{to_int_or_zero(sum(total_counts.values()))} 个")
+    replace_cell_text(t1.rows[19].cells[3], str(to_int_or_zero(total_counts.get("1"))))
+    replace_cell_text(t1.rows[19].cells[7], str(to_int_or_zero(total_counts.get("2"))))
+    replace_cell_text(t1.rows[20].cells[3], str(to_int_or_zero(total_counts.get("3"))))
+    replace_cell_text(t1.rows[20].cells[7], str(to_int_or_zero(total_counts.get("4"))))
+    replace_cell_text(t1.rows[21].cells[3], str(to_int_or_zero(total_counts.get("5"))))
+
+    t2 = doc.tables[2]
+    replace_cell_text(t2.rows[0].cells[2], system.system_name)
+    replace_cell_text(t2.rows[1].cells[2], joined_text(table2.get("object_types"), empty_text="信息系统"))
+    replace_cell_text(t2.rows[2].cells[2], joined_text(table2.get("business_types")))
+    replace_cell_text(t2.rows[3].cells[2], str(table2.get("business_description") or system.business_description or ""))
+    network_service = table2.get("network_service") if isinstance(table2.get("network_service"), dict) else {}
+    network_platform = table2.get("network_platform") if isinstance(table2.get("network_platform"), dict) else {}
+    service_scope_text = str(network_service.get("scope_code") or "").strip()
+    if network_service.get("other"):
+        service_scope_text = f"{service_scope_text} / 其他 {network_service.get('other')}".strip()
+    replace_cell_text(t2.rows[4].cells[2], service_scope_text)
+    replace_cell_text(t2.rows[5].cells[2], joined_text(network_service.get("service_targets")))
+    coverage = network_platform.get("coverage") if isinstance(network_platform.get("coverage"), dict) else {}
+    replace_cell_text(t2.rows[6].cells[2], str(coverage.get("label") or coverage.get("code") or ""))
+    network_nature = network_platform.get("network_nature") if isinstance(network_platform.get("network_nature"), dict) else {}
+    network_nature_text = str(network_nature.get("label") or network_nature.get("code") or "").strip()
+    if str(network_nature.get("label") or network_nature.get("code") or "").strip() == "互联网":
+        network_nature_text = (
+            f"{network_nature_text}  源站IP地址范围 {str(network_nature.get('source_ip_range') or '')}  "
+            f"域名 {str(network_nature.get('domain') or '')}  主要协议/端口 {str(network_nature.get('protocol_ports') or '')}"
+        ).strip()
+    elif network_nature.get("other"):
+        network_nature_text = f"{network_nature_text} / 其他 {network_nature.get('other')}".strip()
+    replace_cell_text(t2.rows[7].cells[2], network_nature_text)
+    interconnection = network_platform.get("interconnection") if isinstance(network_platform.get("interconnection"), dict) else {}
+    replace_cell_text(t2.rows[8].cells[2], joined_text(interconnection.get("items"), other_value=str(interconnection.get("other") or "")))
+    replace_cell_text(t2.rows[9].cells[2], format_workspace_date(table2.get("go_live_date") or system.go_live_date))
+    replace_cell_text(t2.rows[10].cells[2], "是" if coerce_bool(table2.get("is_sub_system")) else "否")
+    replace_cell_text(t2.rows[11].cells[2], str(table2.get("parent_system_name") or "无"))
+    replace_cell_text(t2.rows[12].cells[2], str(table2.get("parent_organization_name") or ""))
+
+    t3 = doc.tables[3]
+    business_items = {str(item).strip() for item in table3.get("business_security_damage_items", []) if str(item).strip()}
+    service_items = {str(item).strip() for item in table3.get("service_security_damage_items", []) if str(item).strip()}
+    for idx in range(1, 6):
+        label = t3.rows[idx].cells[1].text.replace("\n", " / ").strip()
+        replace_cell_text(t3.rows[idx].cells[2], f"{'√' if label in business_items else '□'} {label}")
+    for idx in range(6, 11):
+        label = t3.rows[idx].cells[1].text.replace("\n", " / ").strip()
+        replace_cell_text(t3.rows[idx].cells[2], f"{'√' if label in service_items else '□'} {label}")
+    final_level = to_int_or_zero(table3.get("final_level")) or system.proposed_level
+    replace_cell_text(t3.rows[11].cells[2], render_marked_choices(["第二级", "第三级", "第四级", "第五级"], [f"第{final_level}级"]))
+    replace_cell_text(t3.rows[12].cells[2], format_workspace_date(table3.get("grading_date")))
+    grading_report = table3.get("grading_report") if isinstance(table3.get("grading_report"), dict) else {}
+    replace_cell_text(t3.rows[13].cells[2], f"{'有' if coerce_bool(grading_report.get('has_file')) else '无'}    附件名称 {grading_report.get('file_name') or ''}", bold=True)
+    expert_review = table3.get("expert_review") if isinstance(table3.get("expert_review"), dict) else {}
+    replace_cell_text(t3.rows[14].cells[2], f"{'已评审' if expert_review.get('status') == 'reviewed' else '未评审'}    附件名称 {expert_review.get('file_name') or ''}", bold=True)
+    has_supervisor = coerce_bool(table3.get("has_supervisor"))
+    replace_cell_text(t3.rows[15].cells[2], "有" if has_supervisor else "无")
+    replace_cell_text(t3.rows[16].cells[2], str(table3.get("supervisor_name") or "无"))
+    supervisor_review = table3.get("supervisor_review") if isinstance(table3.get("supervisor_review"), dict) else {}
+    replace_cell_text(t3.rows[17].cells[2], f"{'已审核' if supervisor_review.get('status') == 'reviewed' else '未审核'}    附件名称 {supervisor_review.get('file_name') or ''}", bold=True)
+    replace_cell_text(t3.rows[18].cells[0], f"填表人： {str(table3.get('filler_name') or '').strip()}")
+    replace_cell_text(t3.rows[18].cells[3], f"填表日期：{format_workspace_date(table3.get('filled_date'))}")
+
+    t4 = doc.tables[4]
+    cloud = table4.get("cloud") if isinstance(table4.get("cloud"), dict) else {}
+    replace_cell_text(t4.rows[0].cells[2], "是" if coerce_bool(cloud.get("enabled")) else "否")
+    replace_cell_text(t4.rows[1].cells[2], joined_text(cloud.get("responsibility_types")))
+    replace_cell_text(t4.rows[2].cells[2], joined_text(cloud.get("service_modes"), other_value=str(cloud.get("service_mode_other") or "")))
+    replace_cell_text(t4.rows[3].cells[2], joined_text(cloud.get("deployment_modes"), other_value=str(cloud.get("deployment_mode_other") or "")))
+    replace_cell_text(t4.rows[5].cells[2], str(cloud.get("customer_count") or ""))
+    replace_cell_text(t4.rows[6].cells[2], str(cloud.get("infra_location") or ""))
+    replace_cell_text(t4.rows[7].cells[2], str(cloud.get("ops_location") or ""))
+    replace_cell_text(
+        t4.rows[9].cells[2],
+        (
+            f"云服务商为 {str(cloud.get('provider_name') or '')} / 平台安全等级 {str(cloud.get('provider_level') or '')} / "
+            f"平台名称 {str(cloud.get('provider_platform_name') or '')} / 平台备案编号 {str(cloud.get('provider_record_no') or '')}"
+        ).strip(),
+    )
+    replace_cell_text(t4.rows[10].cells[2], str(cloud.get("customer_ops_location") or ""))
+    replace_cell_text(t4.rows[11].cells[2], str(cloud.get("record_file_name") or ""))
+    mobile = table4.get("mobile") if isinstance(table4.get("mobile"), dict) else {}
+    replace_cell_text(t4.rows[12].cells[2], "是" if coerce_bool(mobile.get("enabled")) else "否")
+    replace_cell_text(t4.rows[13].cells[2], str(mobile.get("app_name") or ""))
+    replace_cell_text(t4.rows[14].cells[2], joined_text(mobile.get("wireless_channels")))
+    replace_cell_text(t4.rows[15].cells[2], joined_text(mobile.get("terminal_types")))
+    iot = table4.get("iot") if isinstance(table4.get("iot"), dict) else {}
+    replace_cell_text(t4.rows[16].cells[2], "是" if coerce_bool(iot.get("enabled")) else "否")
+    replace_cell_text(t4.rows[17].cells[2], joined_text(iot.get("perception_layers"), other_value=str(iot.get("perception_other") or "")))
+    replace_cell_text(t4.rows[18].cells[2], joined_text(iot.get("transport_layers"), other_value=str(iot.get("transport_other") or "")))
+    industrial = table4.get("industrial_control") if isinstance(table4.get("industrial_control"), dict) else {}
+    replace_cell_text(t4.rows[19].cells[2], "是" if coerce_bool(industrial.get("enabled")) else "否")
+    replace_cell_text(t4.rows[20].cells[2], joined_text(industrial.get("function_layers")))
+    replace_cell_text(t4.rows[21].cells[2], joined_text(industrial.get("components"), other_value=str(industrial.get("component_other") or "")))
+    big_data = table4.get("big_data") if isinstance(table4.get("big_data"), dict) else {}
+    replace_cell_text(t4.rows[22].cells[2], "是" if coerce_bool(big_data.get("enabled")) else "否")
+    replace_cell_text(t4.rows[23].cells[2], joined_text(big_data.get("system_components")))
+    replace_cell_text(t4.rows[24].cells[2], str(big_data.get("cross_border_status") or ""))
+    replace_cell_text(t4.rows[26].cells[2], str(big_data.get("application_count") or ""))
+    replace_cell_text(t4.rows[27].cells[2], str(big_data.get("infra_location") or ""))
+    replace_cell_text(t4.rows[28].cells[2], str(big_data.get("ops_location") or ""))
+    replace_cell_text(
+        t4.rows[30].cells[2],
+        (
+            f"大数据平台服务商 {str(big_data.get('provider_name') or '')} 平台安全等级 {str(big_data.get('provider_level') or '')} / "
+            f"平台名称 {str(big_data.get('provider_platform_name') or '')} 平台备案编号 {str(big_data.get('provider_record_no') or '')}"
+        ).strip(),
+    )
+    replace_cell_text(t4.rows[31].cells[2], str(big_data.get("record_file_name") or ""))
+
+    t5 = doc.tables[5]
+    table5_rows = [
+        ("network_topology", 0),
+        ("security_org_and_rules", 1),
+        ("security_design_plan", 2),
+        ("security_products", 3),
+        ("security_services", 4),
+        ("supervisor_guidance", 5),
+    ]
+    for slot_name, row_index in table5_rows:
+        slot = table5.get(slot_name) if isinstance(table5.get(slot_name), dict) else {}
+        status = str(slot.get("status") or "none").strip()
+        label = "有" if status == "has" else "无"
+        replace_cell_text(t5.rows[row_index].cells[1], f"{label}    附件名称  {str(slot.get('file_name') or '')}")
+
+    t6 = doc.tables[6]
+    items = table6.get("items") if isinstance(table6.get("items"), list) else []
+    if items and isinstance(items[0], dict):
+        item = items[0]
+        replace_cell_text(t6.rows[0].cells[1], str(item.get("data_name") or ""))
+        replace_cell_text(t6.rows[0].cells[3], str(item.get("data_level") or ""))
+        replace_cell_text(t6.rows[1].cells[1], str(item.get("data_category") or ""))
+        replace_cell_text(t6.rows[2].cells[1], str(item.get("data_security_dept") or ""))
+        replace_cell_text(t6.rows[2].cells[3], str(item.get("data_security_owner") or ""))
+        replace_cell_text(t6.rows[3].cells[1], joined_text(item.get("personal_info_flags")))
+        replace_cell_text(t6.rows[4].cells[1], str(item.get("data_total") or ""))
+        replace_cell_text(t6.rows[5].cells[1], str(item.get("monthly_growth") or ""))
+        replace_cell_text(t6.rows[6].cells[1], joined_text(item.get("data_sources"), other_value=str(item.get("data_source_other") or "")))
+        replace_cell_text(t6.rows[7].cells[1], str(item.get("source_units") or ""))
+        replace_cell_text(t6.rows[8].cells[1], str(item.get("target_units") or ""))
+        replace_cell_text(t6.rows[9].cells[1], str(item.get("interaction") or ""))
+        replace_cell_text(t6.rows[10].cells[1], str(item.get("storage_platform") or ""))
+        replace_cell_text(t6.rows[11].cells[1], str(item.get("storage_machine_room") or ""))
+        replace_cell_text(t6.rows[12].cells[1], str(item.get("storage_location") or ""))
+
+
 @app.get("/api/systems/{system_id}/export/word")
 def export_system_word(request: Request, system_id: int, db: Session = Depends(get_db)) -> FileResponse:
     require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
     system = get_system_or_404(db, system_id)
-    path = EXPORT_DIR / f"system_{system.id}_{datetime.now():%Y%m%d%H%M%S}.docx"
-    doc = Document()
-    doc.add_heading("系统基础信息", level=1)
-    for key, value in [
-        ("系统名称", system.system_name),
-        ("系统编号", system.system_code),
-        ("拟定等级", system.proposed_level),
-        ("业务描述", system.business_description or ""),
-        ("部署方式", system.deployment_mode or ""),
-        ("系统类型", system.system_type or ""),
-        ("上线时间", system.go_live_date.isoformat() if system.go_live_date else ""),
-        ("定级依据", system.level_basis or ""),
-        ("定级理由", system.level_reason or ""),
-    ]:
-        doc.add_paragraph(f"{key}: {value}")
+    org = get_org_or_404(db, system.organization_id)
+    template_path = DESKTOP_FILING_TEMPLATE_PATH if DESKTOP_FILING_TEMPLATE_PATH.exists() else find_latest_docx_by_pattern("01-*.docx")
+    if not template_path or not Path(template_path).exists():
+        raise HTTPException(status_code=404, detail="备案表模板不存在，无法导出。")
+    path = EXPORT_DIR / f"filing_{system.id}_{datetime.now():%Y%m%d%H%M%S}.docx"
+    doc = Document(str(template_path))
+    fill_filing_template_document(doc, org, system)
     doc.save(path)
     return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
 
