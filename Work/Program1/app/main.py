@@ -5901,6 +5901,51 @@ def dashboard_summary(
     }
 
 
+@app.get("/api/alerts/summary")
+def alerts_summary(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    current_user = get_current_user_optional(request, db)
+    role = current_user.role if current_user else ""
+    username = current_user.username if current_user else ""
+
+    delete_query = db.query(DeleteRequest).filter(DeleteRequest.status == "pending")
+    if role == "evaluator":
+        delete_query = delete_query.filter(DeleteRequest.requested_by == username)
+
+    pending_org_delete_count = delete_query.filter(DeleteRequest.entity_type == "organization").count()
+    pending_sys_delete_count = delete_query.filter(DeleteRequest.entity_type == "system").count()
+
+    org_recycle_query = db.query(Organization).filter(Organization.deleted_at.is_not(None))
+    sys_recycle_query = db.query(SystemInfo).filter(SystemInfo.deleted_at.is_not(None))
+    if role == "evaluator":
+        org_recycle_query = org_recycle_query.filter(Organization.created_by == username)
+        sys_recycle_query = sys_recycle_query.filter(SystemInfo.created_by == username)
+
+    org_recycle_count = org_recycle_query.count()
+    sys_recycle_count = sys_recycle_query.count()
+    total_attention_count = pending_org_delete_count + pending_sys_delete_count + org_recycle_count + sys_recycle_count
+
+    items: list[str] = []
+    if pending_org_delete_count:
+        items.append(f"单位删除申请待处理 {pending_org_delete_count} 条")
+    if pending_sys_delete_count:
+        items.append(f"系统删除申请待处理 {pending_sys_delete_count} 条")
+    if org_recycle_count:
+        items.append(f"单位回收站 {org_recycle_count} 条")
+    if sys_recycle_count:
+        items.append(f"系统回收站 {sys_recycle_count} 条")
+    if not items:
+        items.append("当前没有待处理删除申请和回收站对象")
+
+    return {
+        "total_attention_count": total_attention_count,
+        "pending_org_delete_count": pending_org_delete_count,
+        "pending_sys_delete_count": pending_sys_delete_count,
+        "org_recycle_count": org_recycle_count,
+        "sys_recycle_count": sys_recycle_count,
+        "items": items,
+    }
+
+
 @app.get("/api/dashboard/drilldown")
 def dashboard_drilldown(
     request: Request,

@@ -1,5 +1,15 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="panel dashboard-alert-panel" id="dashboardAttentionPanel" hidden>
+  <div class="dashboard-alert-head">
+    <strong><i class="fas fa-bell"></i> 待处理提醒</strong>
+    <span class="table-meta" id="dashboardAttentionMeta">当前没有待处理提醒</span>
+  </div>
+  <div class="dashboard-alert-marquee">
+    <div class="dashboard-alert-track" id="dashboardAttentionTrack"></div>
+  </div>
+</div>
+
 <div class="panel" id="dashboardCapture">
   <div class="section-intro">
     <div class="section-copy">
@@ -211,6 +221,24 @@ function authToken() {
 function authHeaders() {
   const token = authToken();
   return token ? {'X-Auth-Token': token} : {};
+}
+
+function renderAttentionSummary(summary) {
+  const panel = document.getElementById('dashboardAttentionPanel');
+  const meta = document.getElementById('dashboardAttentionMeta');
+  const track = document.getElementById('dashboardAttentionTrack');
+  const items = Array.isArray(summary?.items) ? summary.items : [];
+  if (!panel || !meta || !track) return;
+  if (!summary || Number(summary.total_attention_count || 0) <= 0) {
+    panel.hidden = true;
+    track.innerHTML = '';
+    meta.textContent = '当前没有待处理提醒';
+    return;
+  }
+  panel.hidden = false;
+  meta.textContent = `共 ${summary.total_attention_count} 条提醒`;
+  const content = items.map(item => `<span>${esc(item)}</span>`).join('<span class="dashboard-alert-sep">•</span>');
+  track.innerHTML = `<div class="dashboard-alert-line">${content}</div><div class="dashboard-alert-line" aria-hidden="true">${content}</div>`;
 }
 
 /* XSS 转义 */
@@ -601,5 +629,9 @@ function toggleFullscreen() {
 }
 
 loadDashboard();
+renderAttentionSummary(window.__attentionSummary || null);
+window.addEventListener('app-attention-summary', (event) => {
+  renderAttentionSummary(event.detail?.summary || null);
+});
 </script>
 {% endblock %}

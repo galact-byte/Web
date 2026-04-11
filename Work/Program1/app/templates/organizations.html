@@ -1,627 +1,199 @@
 {% extends "base.html" %}
 {% block content %}
-
-<!-- 单位信息录入面板 -->
-<div class="panel">
-  <div class="section-intro">
-    <div class="section-copy">
-      <h2><i class="fas fa-plus-circle"></i> 单位信息录入</h2>
-      <p>先录入基础信息，再补充采集链接、删除申请和提交审核。字段 ID 与接口保持不变，现有功能不受影响。</p>
+<div class="workspace">
+  <section class="panel">
+    <div class="section-intro">
+      <div class="section-copy">
+        <h2><i class="fas fa-list-ul"></i> 备案对象工作台</h2>
+        <p>按单位展开查看系统，系统级完成“完善信息”和“导出 Word”。新建单位、新增系统改为弹框处理，避免把列表区撑长。</p>
+      </div>
+      <div class="workspace-account-flag">
+        <span class="section-flag">列表 + 详情</span>
+        <span class="mini-badge">当前账号：<strong data-current-actor data-actor-placeholder="待登录">待登录</strong></span>
+      </div>
     </div>
-    <span class="section-flag">基础信息</span>
-  </div>
-  <div class="grid grid-3">
-    <div><label>单位名称 <span class="field-required">*</span></label><input id="name" placeholder="请填写真实单位名称" /></div>
-    <div><label>统一社会信用代码 <span class="field-required">*</span></label><input id="creditCode" placeholder="18位大写字母或数字" /></div>
-    <div><label>单位负责人 <span class="field-required">*</span></label><input id="legalRepresentative" /></div>
-    <div><label>单位地址 <span class="field-required">*</span></label><input id="address" /></div>
-    <div><label>办公电话</label><input id="officePhone" placeholder="如：0591-1234567（可空）" /></div>
-    <div><label>移动电话 <span class="field-required">*</span></label><input id="mobilePhone" placeholder="11位中国大陆手机号" /></div>
-    <div><label>邮箱 <span class="field-required">*</span></label><input id="email" placeholder="如：user@example.com" /></div>
-    <div><label>所属行业 <span class="field-required">*</span></label><input id="industry" /></div>
-    <div><label>单位类型 <span class="field-required">*</span></label><input id="organizationType" placeholder="企业/事业单位/机关单位" /></div>
-    <div><label>备案地区 <span class="field-required">*</span></label><input id="filingRegion" /></div>
-    <div><label>主管部门</label><input id="supervisingDepartment" placeholder="可空" /></div>
-    <div><label>当前录入账号</label><input id="createdBy" data-current-actor data-actor-placeholder="登录后自动显示当前账号" readonly /></div>
-  </div>
-  <div class="action-strip">
-    <button onclick="createOrg()"><i class="fas fa-save"></i> 保存单位</button>
-    <label class="file-inline">
-      <input id="orgWordFile" type="file" accept=".docx" />
-    </label>
-    <button class="btn-lite" onclick="importOrgWord()"><i class="fas fa-file-word"></i> Word导入</button>
-  </div>
-  <p class="hint">必填项不能为空；单位名称需真实填写，统一社会信用代码、手机号和邮箱会按格式校验。其他文本字段如暂缺可填写“/”占位。</p>
-  <div class="result" id="orgResult">可在此查看操作结果。</div>
-</div>
-
-<!-- 单位列表面板 -->
-<div class="panel">
-  <div class="section-intro">
-    <div class="section-copy">
-      <h2><i class="fas fa-list"></i> 单位列表</h2>
-      <p>支持按名称、信用代码和行业快速筛选。结果区保留原有分页和操作逻辑，只优化信息呈现与操作节奏。</p>
+    <div class="search-bar workspace-toolbar">
+      <div>
+        <label>关键字</label>
+        <input id="workspaceKeyword" placeholder="单位名称、信用代码、行业关键词" />
+      </div>
+      <div class="inline-check-row workspace-toolbar-check">
+        <label class="inline-check">
+          <input id="workspaceIncludeArchived" type="checkbox" />
+          <span>包含归档对象</span>
+        </label>
+      </div>
+      <div class="workspace-toolbar-actions">
+        <button class="btn-lite" id="workspaceReloadBtn"><i class="fas fa-rotate"></i> 刷新列表</button>
+        <button id="workspaceToggleCreateBtn"><i class="fas fa-plus"></i> 新建单位</button>
+      </div>
     </div>
-    <span class="section-flag">查询与维护</span>
-  </div>
-  <!-- 搜索工具栏 -->
-  <div class="search-bar">
-    <div>
-      <label>单位名称</label>
-      <input id="searchName" placeholder="模糊搜索" onkeydown="if(event.key==='Enter')loadOrgs()" />
+
+    <div class="workspace-list" id="workspaceList"></div>
+    <div class="result" id="workspaceListResult">请选择一个系统进入统一录入。</div>
+  </section>
+
+  <section class="panel workspace-detail-panel" id="workspaceDetailPanel" hidden>
+    <div class="section-intro">
+      <div class="section-copy">
+        <h2><i class="fas fa-pen-ruler"></i> 备案信息录入</h2>
+        <p id="workspaceDetailHint">按 Word 模板维护表一到表六，并同步系统最终安全保护等级。</p>
+      </div>
+      <div class="panel-actions">
+        <button class="btn-lite" id="workspaceSaveBtn"><i class="fas fa-floppy-disk"></i> 保存</button>
+        <button class="btn-lite" id="workspaceExportBtn"><i class="fas fa-file-word"></i> 导出 Word</button>
+      </div>
     </div>
-    <div>
-      <label>统一社会信用代码</label>
-      <input id="searchCredit" placeholder="精确匹配" onkeydown="if(event.key==='Enter')loadOrgs()" />
+
+    <div class="workspace-detail-head" id="workspaceDetailHead"></div>
+    <div class="workspace-form-stack">
+      <div id="workspaceTable1"></div>
+      <div id="workspaceTable2"></div>
+      <div id="workspaceTable3"></div>
+      <div id="workspaceTable4"></div>
+      <div id="workspaceTable5"></div>
+      <div id="workspaceTable6"></div>
     </div>
-    <div>
-      <label>所属行业</label>
-      <input id="searchIndustry" placeholder="关键字" onkeydown="if(event.key==='Enter')loadOrgs()" />
+    <div class="result" id="workspaceDetailResult">加载完成后可直接修改并保存。</div>
+  </section>
+
+  <section class="panel">
+    <div class="section-intro">
+      <div class="section-copy">
+        <h2><i class="fas fa-box-archive"></i> 删除申请与回收站</h2>
+        <p>单位、系统分别保留删除申请和回收站，防止误删。这里只展示当前切换项，避免数据越多页面越长。</p>
+      </div>
+      <span class="section-flag">保留维护区</span>
     </div>
-    <div>
-      <label>&nbsp;</label>
-      <button onclick="loadOrgs()"><i class="fas fa-search"></i> 查询</button>
+    <div class="workspace-tabs maintenance-tabs">
+      <button class="workspace-tab is-active" type="button" data-maintenance-tab="org-requests">单位删除申请</button>
+      <button class="workspace-tab" type="button" data-maintenance-tab="sys-requests">系统删除申请</button>
+      <button class="workspace-tab" type="button" data-maintenance-tab="org-recycle">单位回收站</button>
+      <button class="workspace-tab" type="button" data-maintenance-tab="sys-recycle">系统回收站</button>
     </div>
-    <div>
-      <label>&nbsp;</label>
-      <button class="btn-lite" onclick="clearOrgSearch()"><i class="fas fa-times"></i> 清空</button>
-    </div>
-  </div>
-
-  <div class="table-wrapper">
-    <table class="table-sticky">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>单位名称</th>
-          <th>信用代码</th>
-          <th>行业</th>
-          <th>备案地区</th>
-          <th>状态</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody id="orgTable">
-        <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">加载中…</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div id="orgPager" class="pagination" style="display:none;"></div>
-</div>
-
-<!-- 单位回收站面板 -->
-<div class="panel">
-  <h2><i class="fas fa-trash-restore"></i> 单位回收站（30天）</h2>
-  <div class="panel-actions">
-    <button class="btn-lite" onclick="loadRecycleOrgs()"><i class="fas fa-sync-alt"></i> 刷新回收站</button>
-    <button class="btn-lite btn-danger" onclick="cleanupRecycleOrgs()"><i class="fas fa-broom"></i> 清理已过期</button>
-  </div>
-  <div class="table-wrapper">
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th><th>单位名称</th><th>删除人</th><th>删除时间</th><th>剩余天数</th><th>操作</th>
-        </tr>
-      </thead>
-      <tbody id="orgRecycleTable">
-        <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">暂无数据</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- 单位删除申请面板 -->
-<div class="panel">
-  <h2><i class="fas fa-clipboard-list"></i> 单位删除申请</h2>
-  <div class="panel-actions">
-    <button class="btn-lite" onclick="loadOrgDeleteRequests()"><i class="fas fa-sync-alt"></i> 刷新申请列表</button>
-  </div>
-  <div class="table-wrapper">
-    <table>
-      <thead>
-        <tr>
-          <th>申请ID</th><th>单位ID</th><th>提交信息</th><th>状态</th><th>处理结果</th><th>原因</th><th>操作</th>
-        </tr>
-      </thead>
-      <tbody id="orgDeleteReqTable">
-        <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px;">暂无数据</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- 客户采集链接面板 -->
-<div class="panel">
-  <h2><i class="fas fa-link"></i> 客户采集链接</h2>
-  <div class="row compact-row">
-    <div><label>关联单位ID（可空）</label><input id="collectionOrgId" type="number" placeholder="留空表示通用" /></div>
-    <div><label>有效天数</label><input id="collectionDays" type="number" value="7" min="1" max="90" /></div>
-    <div><label>&nbsp;</label><button class="btn-lite" onclick="createCollectionLink()"><i class="fas fa-plus"></i> 生成链接</button></div>
-  </div>
-  <div class="result" id="collectionResult">可在此查看链接生成结果。</div>
-  <div class="table-wrapper table-top-gap">
-    <table>
-      <thead>
-        <tr><th>ID</th><th>关联单位</th><th>过期时间</th><th>链接</th></tr>
-      </thead>
-      <tbody id="collectionTable">
-        <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">暂无数据</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- 客户提交审核面板 -->
-<div class="panel">
-  <h2><i class="fas fa-check-circle"></i> 客户提交审核</h2>
-  <div class="panel-actions">
-    <button class="btn-lite" onclick="loadSubmissions()"><i class="fas fa-sync-alt"></i> 刷新提交记录</button>
-  </div>
-  <div class="table-wrapper">
-    <table>
-      <thead>
-        <tr><th>ID</th><th>状态</th><th>填报人</th><th>提交时间</th><th>操作</th></tr>
-      </thead>
-      <tbody id="submissionTable">
-        <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">暂无数据</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<script>
-/* 工具函数 */
-function authHeaders() {
-  const token = localStorage.getItem('auth_token') || '';
-  return token ? {'X-Auth-Token': token} : {};
-}
-
-function apiErrorText(data) {
-  if (!data) return '请求失败';
-  if (typeof data.detail === 'string') return data.detail;
-  if (data.detail && typeof data.detail === 'object') return '请求参数不合法';
-  return data.message || '请求失败';
-}
-
-function esc(v) {
-  return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
-}
-
-function setOrgResult(text) {
-  const el = document.getElementById('orgResult');
-  el.textContent = text;
-  /* 短暂高亮提示 */
-  el.style.borderColor = 'var(--primary)';
-  setTimeout(() => { el.style.borderColor = ''; }, 1200);
-}
-
-function setCollectionResult(text) {
-  document.getElementById('collectionResult').textContent = text;
-}
-
-/* 状态徽章 */
-function statusBadge(archived) {
-  return archived
-    ? '<span class="status-badge status-archived">已归档</span>'
-    : '<span class="status-badge status-active">在用</span>';
-}
-
-function reqStatusBadge(status) {
-  const map = { pending: ['status-pending', '待审核'], approved: ['status-approved', '已通过'], rejected: ['status-rejected', '已驳回'] };
-  const [cls, label] = map[status] || ['', status];
-  return `<span class="status-badge ${cls}">${esc(label)}</span>`;
-}
-
-function formatDateTime(value) {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return esc(value);
-  return esc(parsed.toLocaleString('zh-CN', {hour12: false}));
-}
-
-function requestStatusBadge(item) {
-  const comment = String(item?.review_comment || '');
-  if (item?.status === 'approved' && comment.includes('自动结案')) {
-    return '<span class="status-badge status-active">自动结案</span>';
-  }
-  return reqStatusBadge(item?.status || '');
-}
-
-function requestReviewMeta(item) {
-  if (!item || item.status === 'pending') {
-    return '<span class="table-meta">等待管理员处理</span>';
-  }
-  const reviewer = esc(item.reviewed_by || '-');
-  const reviewedAt = formatDateTime(item.reviewed_at);
-  const comment = esc(item.review_comment || (item.status === 'approved' ? '已处理' : '-'));
-  return `
-    <div class="table-meta">
-      <strong>处理人：</strong>${reviewer}<br>
-      <span>时间：${reviewedAt}</span><br>
-      <span>说明：${comment}</span>
-    </div>
-  `;
-}
-
-/* 清空搜索 */
-function clearOrgSearch() {
-  document.getElementById('searchName').value = '';
-  document.getElementById('searchCredit').value = '';
-  document.getElementById('searchIndustry').value = '';
-  loadOrgs();
-}
-
-/* 组装表单数据 */
-function formOrgPayload() {
-  return {
-    name: document.getElementById('name').value.trim(),
-    credit_code: document.getElementById('creditCode').value.trim().toUpperCase(),
-    legal_representative: document.getElementById('legalRepresentative').value.trim(),
-    address: document.getElementById('address').value.trim(),
-    office_phone: document.getElementById('officePhone').value.trim() || null,
-    mobile_phone: document.getElementById('mobilePhone').value.trim(),
-    email: document.getElementById('email').value.trim(),
-    industry: document.getElementById('industry').value.trim(),
-    organization_type: document.getElementById('organizationType').value.trim(),
-    filing_region: document.getElementById('filingRegion').value.trim(),
-    supervising_department: document.getElementById('supervisingDepartment').value.trim() || null,
-    created_by: currentActorName()
-  };
-}
-
-async function createOrg() {
-  const payload = formOrgPayload();
-  const required = [
-    ['单位名称', payload.name],
-    ['统一社会信用代码', payload.credit_code],
-    ['单位负责人', payload.legal_representative],
-    ['单位地址', payload.address],
-    ['移动电话', payload.mobile_phone],
-    ['邮箱', payload.email],
-    ['所属行业', payload.industry],
-    ['单位类型', payload.organization_type],
-    ['备案地区', payload.filing_region]
-  ];
-  for (const [label, value] of required) {
-    if (!String(value || '').trim()) {
-      setOrgResult(`${label}为必填项，不能为空。`);
-      return;
-    }
-  }
-  if (payload.name === '/' || payload.name === '／') {
-    setOrgResult('单位名称需填写真实内容，不能仅填写"/"。');
-    return;
-  }
-  const creditPattern = /^[0-9A-Z]{18}$/;
-  const mobilePattern = /^1[3-9]\d{9}$/;
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!creditPattern.test(payload.credit_code)) {
-    setOrgResult('统一社会信用代码格式错误，应为18位大写字母或数字。');
-    return;
-  }
-  if (!mobilePattern.test(payload.mobile_phone)) {
-    setOrgResult('手机号格式错误，应为11位中国大陆手机号。');
-    return;
-  }
-  if (!emailPattern.test(payload.email)) {
-    setOrgResult('邮箱格式错误。');
-    return;
-  }
-  const res = await fetch('/api/organizations', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', ...authHeaders()},
-    body: JSON.stringify(payload)
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    setOrgResult(`保存失败：${apiErrorText(data)}`);
-    return;
-  }
-  setOrgResult(`保存成功：单位ID=${data?.data?.id || '-'}`);
-  loadOrgs();
-}
-
-async function importOrgWord() {
-  try {
-    const file = document.getElementById('orgWordFile').files[0];
-    if (!file) {
-      setOrgResult('请选择Word文件后再导入。');
-      return;
-    }
-    setOrgResult('正在导入Word，请稍候...');
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await fetch(`/api/organizations/import/word?actor=${encodeURIComponent(currentActorName())}`, {method: 'POST', headers: authHeaders(), body: fd});
-    const text = await res.text();
-    let data = {};
-    try {
-      data = text ? JSON.parse(text) : {};
-    } catch (e) {
-      data = {detail: text || '服务返回了非JSON响应'};
-    }
-    if (!res.ok) {
-      setOrgResult(`导入失败：${apiErrorText(data)}`);
-      return;
-    }
-    setOrgResult(data.message || 'Word导入成功');
-    loadOrgs();
-  } catch (e) {
-    setOrgResult(`导入失败：${e?.message || '网络异常，请稍后重试'}`);
-  }
-}
-
-async function loadOrgs() {
-  const params = new URLSearchParams();
-  const name = document.getElementById('searchName').value.trim();
-  const credit = document.getElementById('searchCredit').value.trim();
-  const industry = document.getElementById('searchIndustry').value.trim();
-  if (name) params.set('name', name);
-  if (credit) params.set('credit_code', credit);
-  if (industry) params.set('industry', industry);
-  const res = await fetch('/api/organizations?' + params.toString(), {headers: authHeaders()});
-  if (!res.ok) {
-    document.getElementById('orgTable').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:24px;">加载失败，请刷新重试</td></tr>';
-    return;
-  }
-  const data = await res.json();
-  const items = data.items || [];
-  if (!items.length) {
-    document.getElementById('orgTable').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px;">暂无数据</td></tr>';
-    return;
-  }
-  document.getElementById('orgTable').innerHTML = items.map(i => `
-    <tr>
-      <td style="color:var(--text-muted);font-size:0.82rem;">${esc(i.id)}</td>
-      <td><strong>${esc(i.name)}</strong></td>
-      <td style="font-family:monospace;font-size:0.85rem;">${esc(i.credit_code)}</td>
-      <td>${esc(i.industry)}</td>
-      <td>${esc(i.filing_region)}</td>
-      <td>${statusBadge(i.archived)}</td>
-      <td>
-        <div style="display:flex;gap:6px;">
-          <button class="btn-lite btn-sm" onclick="archiveOrg(${i.id})"><i class="fas fa-archive"></i> 归档</button>
-          <button class="btn-lite btn-sm btn-danger" onclick="deleteOrg(${i.id})"><i class="fas fa-trash"></i> 删除</button>
+    <div class="maintenance-panels">
+      <section class="maintenance-card is-active" data-maintenance-panel="org-requests">
+        <div class="panel-actions">
+          <h3>单位删除申请</h3>
+          <button class="btn-lite btn-sm" id="loadOrgDeleteRequestsBtn">刷新</button>
         </div>
-      </td>
-    </tr>
-  `).join('');
-}
-
-async function archiveOrg(id) {
-  const res = await fetch(`/api/organizations/${id}/archive?actor=${encodeURIComponent(currentActorName())}`, {method: 'POST', headers: authHeaders()});
-  const data = await res.json();
-  if (!res.ok) {
-    setOrgResult(`归档失败：${apiErrorText(data)}`);
-    return;
-  }
-  setOrgResult(`单位 #${id} 已归档。`);
-  loadOrgs();
-}
-
-async function deleteOrg(id) {
-  const reason = await window.appDialog.prompt('请输入删除原因，可留空。', '', {
-    title: '提交删除申请',
-    label: '删除原因',
-    placeholder: '例如：录入错误、重复数据',
-    confirmText: '提交申请'
-  });
-  if (reason === null) return;
-  try {
-    const res = await fetch(`/api/organizations/${id}/delete-request?actor=${encodeURIComponent(currentActorName())}&reason=${encodeURIComponent(reason)}`, {method: 'POST', headers: authHeaders()});
-    const data = await res.json();
-    if (!res.ok) {
-      setOrgResult(`提交删除申请失败：${apiErrorText(data)}`);
-      return;
-    }
-    setOrgResult('删除申请已提交，等待管理员审核。');
-    loadOrgDeleteRequests();
-  } catch(e) {
-    setOrgResult(`提交删除申请失败：${e?.message || '网络异常，请稍后重试'}`);
-  }
-}
-
-async function loadRecycleOrgs() {
-  const res = await fetch('/api/organizations/recycle-bin/list', {headers: authHeaders()});
-  if (!res.ok) {
-    document.getElementById('orgRecycleTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:24px;">加载失败</td></tr>';
-    return;
-  }
-  const data = await res.json();
-  const items = data.items || [];
-  if (!items.length) {
-    document.getElementById('orgRecycleTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">回收站为空</td></tr>';
-    return;
-  }
-  document.getElementById('orgRecycleTable').innerHTML = items.map(i => `
-    <tr>
-      <td>${esc(i.id)}</td>
-      <td>${esc(i.name)}</td>
-      <td>${esc(i.deleted_by || '-')}</td>
-      <td style="font-size:0.85rem;color:var(--text-muted);">${esc(i.deleted_at || '-')}</td>
-      <td>
-        <span style="color:${i.days_left <= 7 ? 'var(--danger)' : 'var(--text-main)'}">
-          ${esc(i.days_left)} 天
-        </span>
-      </td>
-      <td><button class="btn-lite btn-sm" onclick="restoreOrg(${i.id})"><i class="fas fa-undo"></i> 恢复</button></td>
-    </tr>
-  `).join('');
-}
-
-async function restoreOrg(id) {
-  const res = await fetch(`/api/organizations/${id}/restore?actor=${encodeURIComponent(currentActorName())}`, {method: 'POST', headers: authHeaders()});
-  const data = await res.json();
-  if (!res.ok) {
-    setOrgResult(`恢复失败：${apiErrorText(data)}`);
-    return;
-  }
-  setOrgResult('单位已从回收站恢复。');
-  loadOrgs();
-  loadRecycleOrgs();
-}
-
-async function cleanupRecycleOrgs() {
-  const confirmed = await window.appDialog.confirm('仅会清理超过 30 天且无关联系统的单位。是否继续？', '清理回收站', '开始清理');
-  if (!confirmed) return;
-  const res = await fetch(`/api/organizations/recycle-bin/cleanup?actor=${encodeURIComponent(currentActorName())}`, {method: 'POST', headers: authHeaders()});
-  const data = await res.json();
-  if (!res.ok) {
-    setOrgResult(`清理失败：${apiErrorText(data)}`);
-    return;
-  }
-  setOrgResult(`清理完成：已清理 ${data.purged || 0} 条，跳过 ${data.skipped?.length || 0} 条。`);
-  loadRecycleOrgs();
-}
-
-async function loadOrgDeleteRequests() {
-  const res = await fetch('/api/delete-requests?entity_type=organization', {headers: authHeaders()});
-  if (!res.ok) {
-    document.getElementById('orgDeleteReqTable').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:24px;">加载失败</td></tr>';
-    return;
-  }
-  const data = await res.json();
-  const items = data.items || [];
-  if (!items.length) {
-    document.getElementById('orgDeleteReqTable').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px;">暂无申请</td></tr>';
-    return;
-  }
-  document.getElementById('orgDeleteReqTable').innerHTML = items.map(i => `
-    <tr>
-      <td>${esc(i.id)}</td>
-      <td>${esc(i.entity_id)}</td>
-      <td>
-        <div class="table-meta">
-          <strong>申请人：</strong>${esc(i.requested_by || '-')}<br>
-          <span>提交：${formatDateTime(i.requested_at)}</span>
+        <div class="table-wrapper maintenance-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>申请ID</th>
+                <th>单位ID</th>
+                <th>提交信息</th>
+                <th>状态</th>
+                <th>处理结果</th>
+                <th>原因</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="orgDeleteReqTable"><tr><td colspan="7">暂无数据</td></tr></tbody>
+          </table>
         </div>
-      </td>
-      <td>${requestStatusBadge(i)}</td>
-      <td>${requestReviewMeta(i)}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${esc(i.reason || '-')}</td>
-      <td>
-        ${i.status === 'pending' ? `
-          <div style="display:flex;gap:6px;">
-            <button class="btn-lite btn-sm" onclick="reviewOrgDeleteReq(${i.id}, 'approve')"><i class="fas fa-check"></i> 通过</button>
-            <button class="btn-lite btn-sm btn-danger" onclick="reviewOrgDeleteReq(${i.id}, 'reject')"><i class="fas fa-times"></i> 驳回</button>
+      </section>
+
+      <section class="maintenance-card" data-maintenance-panel="sys-requests" hidden>
+        <div class="panel-actions">
+          <h3>系统删除申请</h3>
+          <button class="btn-lite btn-sm" id="loadSystemDeleteRequestsBtn">刷新</button>
+        </div>
+        <div class="table-wrapper maintenance-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>申请ID</th>
+                <th>系统ID</th>
+                <th>提交信息</th>
+                <th>状态</th>
+                <th>处理结果</th>
+                <th>原因</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="sysDeleteReqTable"><tr><td colspan="7">暂无数据</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="maintenance-card" data-maintenance-panel="org-recycle" hidden>
+        <div class="panel-actions">
+          <h3>单位回收站</h3>
+          <div class="action-strip">
+            <button class="btn-lite btn-sm" id="loadRecycleOrgsBtn">刷新</button>
+            <button class="btn-lite btn-sm btn-danger" id="cleanupRecycleOrgsBtn">清理过期</button>
           </div>
-        ` : '<span class="table-meta">已处理</span>'}
-      </td>
-    </tr>
-  `).join('');
-}
-
-async function reviewOrgDeleteReq(id, action) {
-  let comment = '';
-  if (action === 'reject') {
-    const input = await window.appDialog.prompt('请输入驳回原因。', '', {
-      title: '驳回删除申请',
-      label: '驳回原因',
-      placeholder: '请填写驳回原因',
-      confirmText: '确认驳回'
-    });
-    if (input === null) return;
-    comment = input || '';
-  }
-  const res = await fetch(`/api/delete-requests/${id}/review?action=${action}&actor=${encodeURIComponent(currentActorName())}&comment=${encodeURIComponent(comment)}`, {method: 'POST', headers: authHeaders()});
-  const data = await res.json();
-  if (!res.ok) {
-    setOrgResult(`审核失败：${apiErrorText(data)}`);
-    return;
-  }
-  setOrgResult('删除申请审核完成。');
-  loadOrgDeleteRequests();
-  loadOrgs();
-  loadRecycleOrgs();
-}
-
-async function createCollectionLink() {
-  const orgId = document.getElementById('collectionOrgId').value.trim();
-  const days = document.getElementById('collectionDays').value.trim() || '7';
-  const params = new URLSearchParams({expires_days: days, actor: currentActorName()});
-  if (orgId) params.set('organization_id', orgId);
-  const res = await fetch('/api/organizations/collection-links?' + params.toString(), {method: 'POST', headers: authHeaders()});
-  const data = await res.json();
-  if (!res.ok) {
-    setCollectionResult(`生成失败：${apiErrorText(data)}`);
-    return;
-  }
-  const url = data?.data?.collect_url || '';
-  setCollectionResult(url ? `生成成功：${url}` : '生成成功。');
-  loadCollectionLinks();
-}
-
-async function loadCollectionLinks() {
-  const res = await fetch('/api/organizations/collection-links', {headers: authHeaders()});
-  if (!res.ok) return;
-  const data = await res.json();
-  const items = data.items || [];
-  if (!items.length) {
-    document.getElementById('collectionTable').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">暂无链接</td></tr>';
-    return;
-  }
-  document.getElementById('collectionTable').innerHTML = items.map(i => `
-    <tr>
-      <td>${esc(i.id)}</td>
-      <td>${esc(i.organization_id || '通用')}</td>
-      <td style="font-size:0.85rem;color:var(--text-muted);">${esc(i.expires_at)}</td>
-      <td><a href="${esc(i.collect_url)}" target="_blank" style="color:var(--primary);text-decoration:none;"><i class="fas fa-external-link-alt"></i> 打开链接</a></td>
-    </tr>
-  `).join('');
-}
-
-async function reviewSubmission(id, action) {
-  let comment = '';
-  if (action === 'reject') {
-    const input = await window.appDialog.prompt('请输入驳回意见。', '', {
-      title: '审核驳回',
-      label: '驳回意见',
-      placeholder: '请填写驳回意见',
-      confirmText: '确认驳回'
-    });
-    if (input === null) return;
-    comment = input || '';
-  }
-  const params = new URLSearchParams({action, actor: currentActorName(), comment});
-  const res = await fetch(`/api/organizations/submissions/${id}/review?` + params.toString(), {method: 'POST', headers: authHeaders()});
-  const data = await res.json();
-  await window.appDialog.alert(data.message || data.detail || '操作完成', '审核结果');
-  loadSubmissions();
-  loadOrgs();
-}
-
-async function loadSubmissions() {
-  const res = await fetch('/api/organizations/submissions?status=pending', {headers: authHeaders()});
-  if (!res.ok) {
-    document.getElementById('submissionTable').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--danger);padding:24px;">加载失败</td></tr>';
-    return;
-  }
-  const data = await res.json();
-  const items = data.items || [];
-  if (!items.length) {
-    document.getElementById('submissionTable').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">暂无待审核提交</td></tr>';
-    return;
-  }
-  document.getElementById('submissionTable').innerHTML = items.map(i => `
-    <tr>
-      <td>${esc(i.id)}</td>
-      <td>${reqStatusBadge(i.status)}</td>
-      <td>${esc(i.submitter || '-')}</td>
-      <td style="font-size:0.85rem;color:var(--text-muted);">${esc(i.submitted_at)}</td>
-      <td>
-        <div style="display:flex;gap:6px;">
-          <button class="btn-lite btn-sm" onclick="reviewSubmission(${i.id}, 'approve')"><i class="fas fa-check"></i> 通过</button>
-          <button class="btn-lite btn-sm btn-danger" onclick="reviewSubmission(${i.id}, 'reject')"><i class="fas fa-times"></i> 驳回</button>
         </div>
-      </td>
-    </tr>
-  `).join('');
-}
+        <div class="table-wrapper maintenance-table-wrap">
+          <table>
+            <thead>
+              <tr><th>ID</th><th>单位名称</th><th>删除人</th><th>删除时间</th><th>剩余天数</th><th>操作</th></tr>
+            </thead>
+            <tbody id="orgRecycleTable"><tr><td colspan="6">暂无数据</td></tr></tbody>
+          </table>
+        </div>
+      </section>
 
-/* 页面初始化 */
-loadOrgs();
-loadRecycleOrgs();
-loadOrgDeleteRequests();
-loadCollectionLinks();
-loadSubmissions();
-</script>
+      <section class="maintenance-card" data-maintenance-panel="sys-recycle" hidden>
+        <div class="panel-actions">
+          <h3>系统回收站</h3>
+          <div class="action-strip">
+            <button class="btn-lite btn-sm" id="loadRecycleSystemsBtn">刷新</button>
+            <button class="btn-lite btn-sm btn-danger" id="cleanupRecycleSystemsBtn">清理过期</button>
+          </div>
+        </div>
+        <div class="table-wrapper maintenance-table-wrap">
+          <table>
+            <thead>
+              <tr><th>ID</th><th>系统名称</th><th>删除人</th><th>删除时间</th><th>剩余天数</th><th>操作</th></tr>
+            </thead>
+            <tbody id="sysRecycleTable"><tr><td colspan="6">暂无数据</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </section>
+</div>
+
+<div class="modal-overlay workspace-modal-overlay" id="workspaceCreateModal" aria-hidden="true">
+  <div class="modal-box workspace-modal-box">
+    <button class="modal-close" type="button" id="workspaceCreateModalClose" aria-label="关闭">×</button>
+    <div class="panel-actions workspace-modal-head">
+      <h2 id="workspaceCreateModalTitle"><i class="fas fa-plus"></i> 新建单位</h2>
+      <span class="table-meta" id="workspaceCreateModalHint">先建单位，再在单位下新增系统</span>
+    </div>
+    <div class="result workspace-modal-result" id="workspaceCreateModalResult">请填写信息后保存。</div>
+    <div id="workspaceCreateOrgForm">
+      <div class="form-grid form-grid-3">
+        <div><label>单位名称</label><input id="createOrgName" placeholder="例如：山西晋深交易有限公司"></div>
+        <div><label>统一社会信用代码</label><input id="createOrgCreditCode" placeholder="18位大写字母或数字"></div>
+        <div><label>备案地区</label><input id="createOrgRegion" placeholder="例如：太原"></div>
+        <div><label>行业类别</label><select id="createOrgIndustry"><option value="">请选择</option></select></div>
+        <div><label>单位类型</label><select id="createOrgType"><option value="">请选择</option></select></div>
+        <div><label>单位负责人</label><input id="createOrgLegalRepresentative" placeholder="例如：李某某"></div>
+      </div>
+      <div class="app-dialog-actions">
+        <button class="btn-lite" type="button" id="workspaceCreateOrgCancel">取消</button>
+        <button type="button" id="createOrgBtn"><i class="fas fa-plus"></i> 保存单位</button>
+      </div>
+    </div>
+    <div id="workspaceCreateSystemForm" hidden>
+      <div class="form-grid form-grid-3">
+        <div><label>所属单位</label><input id="createSystemOrgName" readonly placeholder="未选择单位"></div>
+        <div><label>系统名称</label><input id="createSystemName" placeholder="例如：山西国资供应链服务系统"></div>
+        <div><label>建议级别</label><select id="createSystemLevel"><option value="2">第二级</option><option value="3" selected>第三级</option><option value="4">第四级</option><option value="5">第五级</option></select></div>
+        <div><label>系统类型</label><input id="createSystemType" placeholder="例如：信息系统"></div>
+        <div><label>部署方式</label><input id="createSystemDeployment" placeholder="例如：云平台部署"></div>
+      </div>
+      <div class="app-dialog-actions">
+        <button class="btn-lite" type="button" id="workspaceCreateSystemCancel">取消</button>
+        <button type="button" id="createSystemBtn"><i class="fas fa-plus"></i> 保存系统</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/filing_workspace.js"></script>
 {% endblock %}
