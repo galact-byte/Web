@@ -8,8 +8,8 @@
   {% set page_desc = '集中查看单位、系统、报告与流程的整体态势，快速进入各业务模块。' %}
   {% set page_icon = 'fa-chart-line' %}
 {% elif path.startswith('/organizations') %}
-  {% set page_title = '单位管理' %}
-  {% set page_desc = '维护参评单位基础资料、采集链接与档案信息，保证口径一致。' %}
+  {% set page_title = '备案对象工作台' %}
+  {% set page_desc = '按单位归拢定级对象，直接在同页维护表一到表六、导出备案表并处理删除申请。' %}
   {% set page_icon = 'fa-building' %}
 {% elif path.startswith('/systems') %}
   {% set page_title = '系统管理' %}
@@ -134,11 +134,8 @@
         </a>
         <a href="/organizations" class="{{ 'active' if path.startswith('/organizations') else '' }}">
           <i class="fas fa-building"></i>
-          <span>单位信息</span>
-        </a>
-        <a href="/systems" class="{{ 'active' if path.startswith('/systems') else '' }}">
-          <i class="fas fa-server"></i>
-          <span>系统信息</span>
+          <span>备案对象</span>
+          <span class="nav-alert-dot" id="navOrgAlertDot" hidden></span>
         </a>
         <a href="/reports" class="{{ 'active' if path.startswith('/reports') else '' }}">
           <i class="fas fa-file-contract"></i>
@@ -321,6 +318,36 @@ function syncCurrentActorFields() {
     }
     el.textContent = actor || placeholder;
   });
+}
+
+function updateAttentionIndicators(summary) {
+  const dot = document.getElementById('navOrgAlertDot');
+  if (dot) {
+    const total = Number(summary?.total_attention_count || 0);
+    dot.hidden = total <= 0;
+    dot.textContent = total > 99 ? '99+' : String(total || '');
+  }
+  window.__attentionSummary = summary || null;
+  window.dispatchEvent(new CustomEvent('app-attention-summary', {detail: {summary: summary || null}}));
+}
+
+async function refreshAttentionSummary() {
+  const token = localStorage.getItem('auth_token') || '';
+  if (!token) {
+    updateAttentionIndicators(null);
+    return;
+  }
+  try {
+    const res = await fetch('/api/alerts/summary', {headers: {'X-Auth-Token': token}});
+    if (!res.ok) {
+      updateAttentionIndicators(null);
+      return;
+    }
+    const data = await res.json();
+    updateAttentionIndicators(data);
+  } catch (_error) {
+    updateAttentionIndicators(null);
+  }
 }
 
 function openSidebar() {
@@ -637,6 +664,7 @@ async function refreshCurrentRole() {
 
     applyRoleUI(data.role || 'guest');
     syncCurrentActorFields();
+    refreshAttentionSummary();
     if (authBtn) {
       authBtn.textContent = '退出登录';
       authBtn.href = '#';
@@ -653,6 +681,7 @@ async function refreshCurrentRole() {
 
 syncCurrentActorFields();
 refreshCurrentRole();
+refreshAttentionSummary();
 bindNavigationTransitions();
 scheduleRoutePrefetch();
 syncRouteScrollPosition();

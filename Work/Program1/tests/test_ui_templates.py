@@ -35,6 +35,7 @@ class UiTemplateTests(unittest.TestCase):
         self.assertIn('window.scrollTo(0, 0)', html)
         self.assertIn('name="view-transition"', html)
         self.assertIn('header-action', html)
+        self.assertIn('navOrgAlertDot', html)
         self.assertIn('待登录', html)
         self.assertIn('兰台清晖', html)
         self.assertIn('等保测评定级备案工作台', html)
@@ -91,6 +92,18 @@ class UiTemplateTests(unittest.TestCase):
 
         self.assertIn('section-intro', html)
         self.assertIn('dashboard-actions', html)
+        self.assertIn('dashboardAttentionPanel', html)
+
+    def test_organizations_template_uses_unified_workspace_layout(self):
+        html = self.render_template('organizations.html')
+
+        self.assertIn('备案对象工作台', html)
+        self.assertIn('workspaceList', html)
+        self.assertIn('workspaceDetailPanel', html)
+        self.assertIn('workspaceCreateModal', html)
+        self.assertIn('/static/filing_workspace.js', html)
+        self.assertNotIn('客户采集链接', html)
+        self.assertNotIn('客户提交审核', html)
 
     def test_workflow_template_uses_section_intro_layout(self):
         html = self.render_template('workflow.html')
@@ -104,6 +117,7 @@ class UiTemplateTests(unittest.TestCase):
         organizations_html = self.render_template('organizations.html')
         systems_html = self.render_template('systems.html')
         knowledge_html = self.render_template('knowledge.html')
+        workspace_js = Path('app/static/filing_workspace.js').read_text(encoding='utf-8')
 
         self.assertIn('data-current-actor', reports_html)
         self.assertIn('data-current-actor', workflow_html)
@@ -112,10 +126,10 @@ class UiTemplateTests(unittest.TestCase):
         self.assertIn('data-current-actor', knowledge_html)
         self.assertIn('currentActorName()', reports_html)
         self.assertIn('currentActorName()', workflow_html)
-        self.assertIn('currentActorName()', organizations_html)
         self.assertIn('currentActorName()', systems_html)
         self.assertIn('currentActorName()', knowledge_html)
-        self.assertIn('requestReviewMeta', organizations_html)
+        self.assertIn('requestReviewMeta', workspace_js)
+        self.assertIn('currentActorName', workspace_js)
         self.assertIn('requestReviewMeta', systems_html)
         self.assertNotIn('value="tester"', reports_html)
         self.assertNotIn('value="tester"', workflow_html)

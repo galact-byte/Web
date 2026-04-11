@@ -233,6 +233,163 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(dash_resp.status_code, 200)
         self.assertIn('totals', dash_resp.json())
 
+    def test_02a_filing_workspace_flow_and_systems_redirect(self):
+        org_resp = self.client.post('/api/organizations', json={
+            'name': '备案工作台单位',
+            'credit_code': '91350100M000100Y92',
+            'legal_representative': '赵七',
+            'address': '太原市',
+            'mobile_phone': '13900139002',
+            'email': 'workspace@example.com',
+            'industry': '能源',
+            'organization_type': '企业',
+            'filing_region': '太原',
+            'created_by': 'tester',
+        })
+        self.assertEqual(org_resp.status_code, 200, org_resp.text)
+        org_id = org_resp.json()['data']['id']
+
+        system_resp = self.client.post('/api/systems', json={
+            'organization_id': org_id,
+            'system_name': '备案工作台系统',
+            'proposed_level': 2,
+            'created_by': 'tester',
+        })
+        self.assertEqual(system_resp.status_code, 200, system_resp.text)
+        system_id = system_resp.json()['data']['id']
+
+        redirect_resp = self.client.get('/systems', follow_redirects=False)
+        self.assertEqual(redirect_resp.status_code, 307, redirect_resp.text)
+        self.assertEqual(redirect_resp.headers.get('location'), '/organizations?focus=systems')
+
+        overview_resp = self.client.get('/api/filing-workspace/overview', headers=self.admin_headers)
+        self.assertEqual(overview_resp.status_code, 200, overview_resp.text)
+        self.assertGreaterEqual(overview_resp.json().get('total', 0), 1)
+
+        detail_resp = self.client.get(f'/api/filing-workspace/systems/{system_id}', headers=self.admin_headers)
+        self.assertEqual(detail_resp.status_code, 200, detail_resp.text)
+        detail = detail_resp.json()
+        self.assertEqual(detail['organization']['id'], org_id)
+        self.assertEqual(detail['system']['id'], system_id)
+        self.assertEqual(detail['organization']['filing_detail']['table1']['unit_internet_addresses'], '无')
+
+        save_payload = {
+            'organization': {
+                'name': '备案工作台单位',
+                'credit_code': '91350100M000100Y92',
+                'filing_region': '太原',
+                'filing_detail': {
+                    'table1': {
+                        'unit_internet_addresses': 'https://example.com',
+                        'address_parts': {'province': '山西', 'city': '太原', 'district': '小店区', 'detail': '测试地址'},
+                    }
+                },
+            },
+            'system': {
+                'system_name': '备案工作台系统',
+                'filing_detail': {
+                    'table2': {
+                        'business_description': '统一工作台保存测试',
+                    },
+                    'table3': {
+                        'business_security_damage_items': ['对社会秩序和公共利益造成严重损害'],
+                        'business_security_level': 3,
+                        'service_security_damage_items': ['仅对公民、法人和其他组织的合法权益造成一般损害'],
+                        'service_security_level': 1,
+                    },
+                },
+            },
+        }
+        save_resp = self.client.put(f'/api/filing-workspace/systems/{system_id}', json=save_payload, headers=self.admin_headers)
+        self.assertEqual(save_resp.status_code, 200, save_resp.text)
+        saved = save_resp.json()['data']
+        self.assertEqual(saved['organization']['filing_detail']['table1']['unit_internet_addresses'], 'https://example.com')
+        self.assertEqual(saved['system']['filing_detail']['table2']['business_description'], '统一工作台保存测试')
+        self.assertEqual(saved['system']['filing_detail']['table3']['final_level'], 3)
+
+    def test_02b_alerts_summary_counts_pending_and_recycle_items(self):
+        org_pending_resp = self.client.post('/api/organizations', json={
+            'name': '提醒待处理单位',
+            'credit_code': '91350100M000100Y93',
+            'legal_representative': '提醒人',
+            'address': '太原市',
+            'mobile_phone': '13900139003',
+            'email': 'alert@example.com',
+            'industry': '能源',
+            'organization_type': '企业',
+            'filing_region': '太原',
+            'created_by': 'tester',
+        })
+        self.assertEqual(org_pending_resp.status_code, 200, org_pending_resp.text)
+        pending_org_id = org_pending_resp.json()['data']['id']
+        org_del = self.client.post(f'/api/organizations/{pending_org_id}/delete-request?actor=tester&reason=提醒测试', headers=self.admin_headers)
+        self.assertEqual(org_del.status_code, 200, org_del.text)
+
+        org_with_system_resp = self.client.post('/api/organizations', json={
+            'name': '提醒待处理系统所属单位',
+            'credit_code': '91350100M000100Y95',
+            'legal_representative': '提醒人',
+            'address': '太原市',
+            'mobile_phone': '13900139005',
+            'email': 'alert_system@example.com',
+            'industry': '能源',
+            'organization_type': '企业',
+            'filing_region': '太原',
+            'created_by': 'tester',
+        })
+        self.assertEqual(org_with_system_resp.status_code, 200, org_with_system_resp.text)
+        org_with_system_id = org_with_system_resp.json()['data']['id']
+
+        sys_pending_resp = self.client.post('/api/systems', json={
+            'organization_id': org_with_system_id,
+            'system_name': '提醒待处理系统',
+            'proposed_level': 2,
+            'created_by': 'tester',
+        })
+        self.assertEqual(sys_pending_resp.status_code, 200, sys_pending_resp.text)
+        pending_system_id = sys_pending_resp.json()['data']['id']
+
+        sys_del = self.client.post(f'/api/systems/{pending_system_id}/delete-request?actor=tester&reason=提醒测试', headers=self.admin_headers)
+        self.assertEqual(sys_del.status_code, 200, sys_del.text)
+
+        org_recycle_resp = self.client.post('/api/organizations', json={
+            'name': '提醒回收站单位',
+            'credit_code': '91350100M000100Y94',
+            'legal_representative': '提醒人',
+            'address': '太原市',
+            'mobile_phone': '13900139004',
+            'email': 'alert_recycle@example.com',
+            'industry': '能源',
+            'organization_type': '企业',
+            'filing_region': '太原',
+            'created_by': 'tester',
+        })
+        self.assertEqual(org_recycle_resp.status_code, 200, org_recycle_resp.text)
+        recycle_org_id = org_recycle_resp.json()['data']['id']
+
+        sys_recycle_resp = self.client.post('/api/systems', json={
+            'organization_id': recycle_org_id,
+            'system_name': '提醒回收站系统',
+            'proposed_level': 2,
+            'created_by': 'tester',
+        })
+        self.assertEqual(sys_recycle_resp.status_code, 200, sys_recycle_resp.text)
+        recycle_system_id = sys_recycle_resp.json()['data']['id']
+
+        recycle_sys_delete = self.client.delete(f'/api/systems/{recycle_system_id}', headers=self.admin_headers)
+        self.assertEqual(recycle_sys_delete.status_code, 200, recycle_sys_delete.text)
+        recycle_org_delete = self.client.delete(f'/api/organizations/{recycle_org_id}', headers=self.admin_headers)
+        self.assertEqual(recycle_org_delete.status_code, 200, recycle_org_delete.text)
+
+        summary_resp = self.client.get('/api/alerts/summary', headers=self.admin_headers)
+        self.assertEqual(summary_resp.status_code, 200, summary_resp.text)
+        summary = summary_resp.json()
+        self.assertGreaterEqual(summary['pending_org_delete_count'], 1)
+        self.assertGreaterEqual(summary['pending_sys_delete_count'], 1)
+        self.assertGreaterEqual(summary['org_recycle_count'], 1)
+        self.assertGreaterEqual(summary['sys_recycle_count'], 1)
+        self.assertTrue(summary['items'])
+
     def test_03_word_import_and_collection_review(self):
         doc = Document()
         doc.add_paragraph('单位名称: 客户填报单位')
