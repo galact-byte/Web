@@ -389,6 +389,8 @@ class ApiFlowTests(unittest.TestCase):
         self.assertGreaterEqual(summary['org_recycle_count'], 1)
         self.assertGreaterEqual(summary['sys_recycle_count'], 1)
         self.assertTrue(summary['items'])
+        self.assertEqual(len(summary.get('entries') or []), 4)
+        self.assertTrue(all((row.get('href') or '').startswith('/organizations?attention=') for row in summary['entries']))
 
     def test_03_word_import_and_collection_review(self):
         doc = Document()
@@ -880,6 +882,127 @@ class ApiFlowTests(unittest.TestCase):
         list_exact = self.client.get('/api/knowledge?keyword=精确关键字&match_mode=exact')
         self.assertEqual(list_exact.status_code, 200)
         self.assertTrue(any(i['title'] == '精确检索文档' for i in list_exact.json()['items']))
+
+    def test_09a_admin_can_purge_recycle_org_and_release_credit_code(self):
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '永久删除级联单位',
+                'credit_code': '91350100M000100Y96',
+                'legal_representative': '测试人',
+                'address': '太原市迎泽区',
+                'mobile_phone': '13100131996',
+                'email': 'purge-org@example.com',
+                'industry': '企业',
+                'organization_type': '企业',
+                'filing_region': '太原',
+                'created_by': 'tester',
+            },
+            headers=self.admin_headers,
+        )
+        self.assertEqual(org_resp.status_code, 200, org_resp.text)
+        org_id = org_resp.json()['data']['id']
+
+        sys_resp = self.client.post(
+            '/api/systems',
+            json={
+                'organization_id': org_id,
+                'system_name': '永久删除级联系统',
+                'proposed_level': 2,
+                'created_by': 'tester',
+            },
+            headers=self.admin_headers,
+        )
+        self.assertEqual(sys_resp.status_code, 200, sys_resp.text)
+        system_id = sys_resp.json()['data']['id']
+
+        report_resp = self.client.post(
+            f'/api/reports/generate?system_id={system_id}&report_type=grading_report&actor=tester',
+            headers=self.admin_headers,
+        )
+        self.assertEqual(report_resp.status_code, 200, report_resp.text)
+
+        delete_sys_resp = self.client.delete(f'/api/systems/{system_id}', headers=self.admin_headers)
+        self.assertEqual(delete_sys_resp.status_code, 200, delete_sys_resp.text)
+
+        delete_org_resp = self.client.delete(f'/api/organizations/{org_id}', headers=self.admin_headers)
+        self.assertEqual(delete_org_resp.status_code, 200, delete_org_resp.text)
+
+        purge_resp = self.client.post(f'/api/organizations/{org_id}/purge', headers=self.admin_headers)
+        self.assertEqual(purge_resp.status_code, 200, purge_resp.text)
+        self.assertIn('级联清理', purge_resp.json().get('message', ''))
+
+        db = self.__class__.db_module.SessionLocal()
+        try:
+            org = db.query(self.__class__.main_module.Organization).filter_by(id=org_id).first()
+            system = db.query(self.__class__.main_module.SystemInfo).filter_by(id=system_id).first()
+            reports = db.query(self.__class__.main_module.Report).filter_by(system_id=system_id).count()
+            workflow_instances = db.query(self.__class__.main_module.WorkflowInstance).filter_by(system_id=system_id).count()
+            self.assertIsNone(org)
+            self.assertIsNone(system)
+            self.assertEqual(reports, 0)
+            self.assertEqual(workflow_instances, 0)
+        finally:
+            db.close()
+
+        recreate_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '永久删除后重建单位',
+                'credit_code': '91350100M000100Y96',
+                'legal_representative': '测试人',
+                'address': '太原市迎泽区',
+                'mobile_phone': '13100131997',
+                'email': 'purge-org-recreate@example.com',
+                'industry': '企业',
+                'organization_type': '企业',
+                'filing_region': '太原',
+                'created_by': 'tester',
+            },
+            headers=self.admin_headers,
+        )
+        self.assertEqual(recreate_resp.status_code, 200, recreate_resp.text)
+
+    def test_09b_non_admin_cannot_purge_recycle_org(self):
+        create_user_resp = self.client.post(
+            '/api/auth/users',
+            json={
+                'username': 'purge_eval_user',
+                'password': 'purgeEval123',
+                'role': 'evaluator',
+                'require_password_change': False,
+            },
+            headers=self.admin_headers,
+        )
+        self.assertIn(create_user_resp.status_code, [200, 409], create_user_resp.text)
+        login_resp = self.client.post('/api/auth/login', json={'username': 'purge_eval_user', 'password': 'purgeEval123'})
+        self.assertEqual(login_resp.status_code, 200, login_resp.text)
+        eval_headers = {'X-Auth-Token': login_resp.json()['token']}
+
+        org_resp = self.client.post(
+            '/api/organizations',
+            json={
+                'name': '非管理员永久删除限制单位',
+                'credit_code': '91350100M000100Y97',
+                'legal_representative': '测试人',
+                'address': '限制城',
+                'mobile_phone': '13100131998',
+                'email': 'purge-limit@example.com',
+                'industry': '企业',
+                'organization_type': '企业',
+                'filing_region': '限制城',
+                'created_by': 'tester',
+            },
+            headers=self.admin_headers,
+        )
+        self.assertEqual(org_resp.status_code, 200, org_resp.text)
+        org_id = org_resp.json()['data']['id']
+
+        delete_org_resp = self.client.delete(f'/api/organizations/{org_id}', headers=self.admin_headers)
+        self.assertEqual(delete_org_resp.status_code, 200, delete_org_resp.text)
+
+        purge_resp = self.client.post(f'/api/organizations/{org_id}/purge', headers=eval_headers)
+        self.assertEqual(purge_resp.status_code, 403, purge_resp.text)
 
     def test_10_permission_boundaries(self):
         saved_cookies = dict(self.client.cookies)

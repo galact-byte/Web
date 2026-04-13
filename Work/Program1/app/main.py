@@ -1412,6 +1412,143 @@ def assert_system_deletable(db: Session, system: SystemInfo, is_admin: bool) -> 
         raise HTTPException(status_code=400, detail=f"系统已有关联报告({related_reports})，暂不可删除。")
 
 
+def purge_entity_attachments(db: Session, entity_type: str, entity_id: int) -> int:
+    rows = (
+        db.query(Attachment)
+        .filter(Attachment.entity_type == entity_type.lower(), Attachment.entity_id == entity_id)
+        .all()
+    )
+    for row in rows:
+        safe_delete_uploaded_file(row.file_path)
+        db.delete(row)
+    return len(rows)
+
+
+def purge_system_cascade(db: Session, system: SystemInfo) -> dict[str, int]:
+    system_id = system.id
+    report_ids = [row[0] for row in db.query(Report.id).filter(Report.system_id == system_id).all()]
+    workflow_instance_ids = [row[0] for row in db.query(WorkflowInstance.id).filter(WorkflowInstance.system_id == system_id).all()]
+
+    attachments_deleted = purge_entity_attachments(db, "system", system_id)
+    review_records_deleted = 0
+    reports_deleted = 0
+    workflow_actions_deleted = 0
+    workflow_reminders_deleted = 0
+    workflow_instances_deleted = 0
+
+    if report_ids:
+        review_records_deleted = (
+            db.query(ReviewRecord)
+            .filter(ReviewRecord.report_id.in_(report_ids))
+            .delete(synchronize_session=False)
+        )
+        reports_deleted = (
+            db.query(Report)
+            .filter(Report.id.in_(report_ids))
+            .delete(synchronize_session=False)
+        )
+
+    if workflow_instance_ids:
+        workflow_actions_deleted = (
+            db.query(WorkflowAction)
+            .filter(WorkflowAction.instance_id.in_(workflow_instance_ids))
+            .delete(synchronize_session=False)
+        )
+        workflow_reminders_deleted = (
+            db.query(WorkflowReminder)
+            .filter(WorkflowReminder.instance_id.in_(workflow_instance_ids))
+            .delete(synchronize_session=False)
+        )
+        workflow_instances_deleted = (
+            db.query(WorkflowInstance)
+            .filter(WorkflowInstance.id.in_(workflow_instance_ids))
+            .delete(synchronize_session=False)
+        )
+
+    histories_deleted = (
+        db.query(SystemHistory)
+        .filter(SystemHistory.system_id == system_id)
+        .delete(synchronize_session=False)
+    )
+    delete_requests_deleted = (
+        db.query(DeleteRequest)
+        .filter(DeleteRequest.entity_type == "system", DeleteRequest.entity_id == system_id)
+        .delete(synchronize_session=False)
+    )
+    db.delete(system)
+
+    return {
+        "systems_deleted": 1,
+        "reports_deleted": reports_deleted,
+        "review_records_deleted": review_records_deleted,
+        "attachments_deleted": attachments_deleted,
+        "workflow_actions_deleted": workflow_actions_deleted,
+        "workflow_reminders_deleted": workflow_reminders_deleted,
+        "workflow_instances_deleted": workflow_instances_deleted,
+        "histories_deleted": histories_deleted,
+        "delete_requests_deleted": delete_requests_deleted,
+    }
+
+
+def purge_organization_cascade(db: Session, org: Organization) -> dict[str, int]:
+    org_id = org.id
+    totals = {
+        "organizations_deleted": 1,
+        "systems_deleted": 0,
+        "reports_deleted": 0,
+        "review_records_deleted": 0,
+        "attachments_deleted": 0,
+        "workflow_actions_deleted": 0,
+        "workflow_reminders_deleted": 0,
+        "workflow_instances_deleted": 0,
+        "histories_deleted": 0,
+        "delete_requests_deleted": 0,
+        "collection_links_deleted": 0,
+        "submissions_deleted": 0,
+    }
+
+    systems = db.query(SystemInfo).filter(SystemInfo.organization_id == org_id).order_by(SystemInfo.id.asc()).all()
+    for system in systems:
+        result = purge_system_cascade(db, system)
+        for key, value in result.items():
+            totals[key] = totals.get(key, 0) + value
+
+    link_ids = [row[0] for row in db.query(OrganizationCollectionLink.id).filter(OrganizationCollectionLink.organization_id == org_id).all()]
+    submission_filters = [OrganizationSubmission.organization_id == org_id]
+    if link_ids:
+        submission_filters.append(OrganizationSubmission.link_id.in_(link_ids))
+    submission_ids = [
+        row[0]
+        for row in db.query(OrganizationSubmission.id).filter(or_(*submission_filters)).all()
+    ]
+    if submission_ids:
+        totals["submissions_deleted"] += (
+            db.query(OrganizationSubmission)
+            .filter(OrganizationSubmission.id.in_(submission_ids))
+            .delete(synchronize_session=False)
+        )
+    if link_ids:
+        totals["collection_links_deleted"] += (
+            db.query(OrganizationCollectionLink)
+            .filter(OrganizationCollectionLink.id.in_(link_ids))
+            .delete(synchronize_session=False)
+        )
+
+    totals["attachments_deleted"] += purge_entity_attachments(db, "organization", org_id)
+    totals["histories_deleted"] += (
+        db.query(OrganizationHistory)
+        .filter(OrganizationHistory.organization_id == org_id)
+        .delete(synchronize_session=False)
+    )
+    totals["delete_requests_deleted"] += (
+        db.query(DeleteRequest)
+        .filter(DeleteRequest.entity_type == "organization", DeleteRequest.entity_id == org_id)
+        .delete(synchronize_session=False)
+    )
+    db.delete(org)
+    return totals
+
+
 def record_org_history(
     db: Session,
     organization_id: int,
@@ -3671,6 +3808,27 @@ def restore_organization(request: Request, org_id: int, db: Session = Depends(ge
     return {"message": "恢复成功", "data": obj_to_dict(org, ORG_FIELDS)}
 
 
+@app.post("/api/organizations/{org_id}/purge")
+def purge_organization(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=True)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="单位不存在。")
+    if not org.deleted_at:
+        raise HTTPException(status_code=400, detail="仅可永久删除回收站中的单位。")
+    summary = purge_organization_cascade(db, org)
+    db.commit()
+    return {
+        "message": "单位已永久删除，并已级联清理关联数据。",
+        "actor": actor_name,
+        "summary": summary,
+    }
+
+
 @app.post("/api/organizations/{org_id}/delete-request")
 def create_org_delete_request(
     request: Request,
@@ -4273,6 +4431,27 @@ def restore_system(request: Request, system_id: int, db: Session = Depends(get_d
     record_system_history(db, system.id, actor, "restore", None, obj_to_dict(system, SYSTEM_FIELDS))
     db.commit()
     return {"message": "恢复成功", "data": obj_to_dict(system, SYSTEM_FIELDS)}
+
+
+@app.post("/api/systems/{system_id}/purge")
+def purge_system(
+    request: Request,
+    system_id: int,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor_name, _ = require_roles(request, db, {"admin"}, legacy_admin=True)
+    system = db.query(SystemInfo).filter(SystemInfo.id == system_id).first()
+    if not system:
+        raise HTTPException(status_code=404, detail="系统不存在。")
+    if not system.deleted_at:
+        raise HTTPException(status_code=400, detail="仅可永久删除回收站中的系统。")
+    summary = purge_system_cascade(db, system)
+    db.commit()
+    return {
+        "message": "系统已永久删除，并已级联清理关联数据。",
+        "actor": actor_name,
+        "summary": summary,
+    }
 
 
 @app.post("/api/systems/{system_id}/delete-request")
@@ -5924,15 +6103,39 @@ def alerts_summary(request: Request, db: Session = Depends(get_db)) -> dict[str,
     sys_recycle_count = sys_recycle_query.count()
     total_attention_count = pending_org_delete_count + pending_sys_delete_count + org_recycle_count + sys_recycle_count
 
-    items: list[str] = []
+    entries: list[dict[str, Any]] = []
     if pending_org_delete_count:
-        items.append(f"单位删除申请待处理 {pending_org_delete_count} 条")
+        entries.append({
+            "key": "org-requests",
+            "label": "单位删除申请待处理",
+            "count": pending_org_delete_count,
+            "href": "/organizations?attention=org-requests#workspaceMaintenanceSection",
+        })
     if pending_sys_delete_count:
-        items.append(f"系统删除申请待处理 {pending_sys_delete_count} 条")
+        entries.append({
+            "key": "sys-requests",
+            "label": "系统删除申请待处理",
+            "count": pending_sys_delete_count,
+            "href": "/organizations?attention=sys-requests#workspaceMaintenanceSection",
+        })
     if org_recycle_count:
-        items.append(f"单位回收站 {org_recycle_count} 条")
+        entries.append({
+            "key": "org-recycle",
+            "label": "单位回收站",
+            "count": org_recycle_count,
+            "href": "/organizations?attention=org-recycle#workspaceMaintenanceSection",
+        })
     if sys_recycle_count:
-        items.append(f"系统回收站 {sys_recycle_count} 条")
+        entries.append({
+            "key": "sys-recycle",
+            "label": "系统回收站",
+            "count": sys_recycle_count,
+            "href": "/organizations?attention=sys-recycle#workspaceMaintenanceSection",
+        })
+
+    items: list[str] = []
+    for entry in entries:
+        items.append(f"{entry['label']} {entry['count']} 条")
     if not items:
         items.append("当前没有待处理删除申请和回收站对象")
 
@@ -5942,6 +6145,7 @@ def alerts_summary(request: Request, db: Session = Depends(get_db)) -> dict[str,
         "pending_sys_delete_count": pending_sys_delete_count,
         "org_recycle_count": org_recycle_count,
         "sys_recycle_count": sys_recycle_count,
+        "entries": entries,
         "items": items,
     }
 

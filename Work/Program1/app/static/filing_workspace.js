@@ -205,6 +205,13 @@
     });
   }
 
+  function initialAttentionTab() {
+    const params = new URLSearchParams(window.location.search);
+    const tabName = String(params.get('attention') || '').trim();
+    const validTabs = new Set(['org-requests', 'sys-requests', 'org-recycle', 'sys-recycle']);
+    return validTabs.has(tabName) ? tabName : '';
+  }
+
   function renderTable1() {
     return sectionBlock('表一 单位基本情况', '单位信息以 Word 模板为准', `
       <div class="form-grid form-grid-4">
@@ -1163,6 +1170,21 @@
     await loadRecycleSystems();
   }
 
+  async function purgeEntity(type, id) {
+    const isOrg = type === 'organizations';
+    const entityLabel = isOrg ? '单位' : '系统';
+    const tip = isOrg
+      ? '将永久删除该单位，以及其回收站内关联系统、报告、流程、附件和历史记录。此操作不可恢复。'
+      : '将永久删除该系统，以及其关联报告、流程、附件和历史记录。此操作不可恢复。';
+    const ok = await window.appDialog.confirm(tip, `永久删除${entityLabel}`, '永久删除');
+    if (!ok) return;
+    const res = await fetch(`/api/${type}/${id}/purge?actor=${encodeURIComponent(actorName())}`, { method: 'POST', headers: authHeaders() });
+    const data = await res.json().catch(() => ({}));
+    setListResult(res.ok ? `${entityLabel}已永久删除。` : `永久删除失败：${apiErrorText(data)}`);
+    refreshAttentionIfAvailable();
+    await Promise.all([loadOverview(), loadOrgDeleteRequests(), loadSystemDeleteRequests(), loadRecycleOrgs(), loadRecycleSystems()]);
+  }
+
   async function loadOrgDeleteRequests() {
     const res = await fetch('/api/delete-requests?entity_type=organization', { headers: authHeaders() });
     const data = await res.json().catch(() => ({}));
@@ -1186,7 +1208,7 @@
     const data = await res.json().catch(() => ({}));
     const items = res.ok ? (data.items || []) : [];
     $('orgRecycleTable').innerHTML = items.length
-      ? items.map((item) => `<tr><td>${esc(item.id)}</td><td>${esc(item.name)}</td><td>${esc(item.deleted_by || '-')}</td><td>${esc(item.deleted_at || '-')}</td><td>${esc(item.days_left || 0)} 天</td><td><button class="btn-lite btn-sm" data-restore-org="${item.id}">恢复</button></td></tr>`).join('')
+      ? items.map((item) => `<tr><td>${esc(item.id)}</td><td>${esc(item.name)}</td><td>${esc(item.deleted_by || '-')}</td><td>${formatDateTime(item.deleted_at)}</td><td>${esc(item.days_left || 0)} 天</td><td><div class="table-action-group"><button class="btn-lite btn-sm" data-restore-org="${item.id}">恢复</button><button class="btn-danger btn-sm" data-purge-org="${item.id}">永久删除</button></div></td></tr>`).join('')
       : '<tr><td colspan="6">暂无数据</td></tr>';
   }
 
@@ -1195,7 +1217,7 @@
     const data = await res.json().catch(() => ({}));
     const items = res.ok ? (data.items || []) : [];
     $('sysRecycleTable').innerHTML = items.length
-      ? items.map((item) => `<tr><td>${esc(item.id)}</td><td>${esc(item.system_name)}</td><td>${esc(item.deleted_by || '-')}</td><td>${esc(item.deleted_at || '-')}</td><td>${esc(item.days_left || 0)} 天</td><td><button class="btn-lite btn-sm" data-restore-system="${item.id}">恢复</button></td></tr>`).join('')
+      ? items.map((item) => `<tr><td>${esc(item.id)}</td><td>${esc(item.system_name)}</td><td>${esc(item.deleted_by || '-')}</td><td>${formatDateTime(item.deleted_at)}</td><td>${esc(item.days_left || 0)} 天</td><td><div class="table-action-group"><button class="btn-lite btn-sm" data-restore-system="${item.id}">恢复</button><button class="btn-danger btn-sm" data-purge-system="${item.id}">永久删除</button></div></td></tr>`).join('')
       : '<tr><td colspan="6">暂无数据</td></tr>';
   }
 
@@ -1266,6 +1288,10 @@
         await restoreEntity('organizations', Number(btn.dataset.restoreOrg));
       } else if (btn.dataset.restoreSystem) {
         await restoreEntity('systems', Number(btn.dataset.restoreSystem));
+      } else if (btn.dataset.purgeOrg) {
+        await purgeEntity('organizations', Number(btn.dataset.purgeOrg));
+      } else if (btn.dataset.purgeSystem) {
+        await purgeEntity('systems', Number(btn.dataset.purgeSystem));
       }
     });
   }
@@ -1273,8 +1299,13 @@
   async function init() {
     renderShell();
     bindEvents();
-    switchMaintenanceTab('org-requests');
+    const requestedAttentionTab = initialAttentionTab();
+    const activeAttentionTab = requestedAttentionTab || 'org-requests';
+    switchMaintenanceTab(activeAttentionTab);
     await Promise.all([loadOverview(), loadOrgDeleteRequests(), loadSystemDeleteRequests(), loadRecycleOrgs(), loadRecycleSystems()]);
+    if (requestedAttentionTab) {
+      document.getElementById('workspaceMaintenanceSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     syncConditionalFields();
     updateLevelDisplays();
   }

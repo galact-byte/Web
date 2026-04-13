@@ -135,7 +135,6 @@
         <a href="/organizations" class="{{ 'active' if path.startswith('/organizations') else '' }}">
           <i class="fas fa-building"></i>
           <span>备案对象</span>
-          <span class="nav-alert-dot" id="navOrgAlertDot" hidden></span>
         </a>
         <a href="/reports" class="{{ 'active' if path.startswith('/reports') else '' }}">
           <i class="fas fa-file-contract"></i>
@@ -190,6 +189,28 @@
         </div>
 
         <div class="user-info">
+          <div class="header-notice" id="headerNoticeRoot">
+            <button
+              class="header-icon-button"
+              type="button"
+              id="attentionBellBtn"
+              aria-label="打开通知中心"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              <i class="fas fa-bell"></i>
+              <span class="header-notice-badge" id="headerNoticeBadge" hidden></span>
+            </button>
+            <div class="header-notice-panel" id="headerNoticePanel" hidden>
+              <div class="header-notice-head">
+                <div>
+                  <strong>待处理提醒</strong>
+                  <span id="headerNoticeMeta">当前没有待处理提醒</span>
+                </div>
+              </div>
+              <div class="header-notice-list" id="headerNoticeList"></div>
+            </div>
+          </div>
           <div class="user-chip">
             <span class="badge" id="currentRoleBadge">{{ initial_role_badge }}</span>
             <div class="user-meta">
@@ -287,6 +308,7 @@ function setGuestState() {
   window.__currentUserName = '';
   applyRoleUI('guest');
   syncCurrentActorFields();
+  updateAttentionIndicators(null);
 }
 
 function setPendingState() {
@@ -305,6 +327,7 @@ function setPendingState() {
   }
   window.__currentUserName = '';
   syncCurrentActorFields();
+  updateAttentionIndicators(null);
 }
 
 function syncCurrentActorFields() {
@@ -320,14 +343,60 @@ function syncCurrentActorFields() {
   });
 }
 
-function updateAttentionIndicators(summary) {
-  const dot = document.getElementById('navOrgAlertDot');
-  if (dot) {
-    const total = Number(summary?.total_attention_count || 0);
-    dot.hidden = total <= 0;
-    dot.textContent = total > 99 ? '99+' : String(total || '');
+function normalizeAttentionEntries(summary) {
+  if (Array.isArray(summary?.entries) && summary.entries.length) {
+    return summary.entries
+      .filter((entry) => entry && Number(entry.count || 0) > 0)
+      .map((entry) => ({
+        key: String(entry.key || ''),
+        label: String(entry.label || '待处理提醒'),
+        count: Number(entry.count || 0),
+        href: String(entry.href || '/organizations'),
+      }));
   }
+
+  const fallback = [
+    ['org-requests', '单位删除申请待处理', Number(summary?.pending_org_delete_count || 0), '/organizations?attention=org-requests#workspaceMaintenanceSection'],
+    ['sys-requests', '系统删除申请待处理', Number(summary?.pending_sys_delete_count || 0), '/organizations?attention=sys-requests#workspaceMaintenanceSection'],
+    ['org-recycle', '单位回收站', Number(summary?.org_recycle_count || 0), '/organizations?attention=org-recycle#workspaceMaintenanceSection'],
+    ['sys-recycle', '系统回收站', Number(summary?.sys_recycle_count || 0), '/organizations?attention=sys-recycle#workspaceMaintenanceSection'],
+  ];
+  return fallback
+    .filter(([, , count]) => count > 0)
+    .map(([key, label, count, href]) => ({ key, label, count, href }));
+}
+
+function renderAttentionDropdown(summary) {
+  const badge = document.getElementById('headerNoticeBadge');
+  const meta = document.getElementById('headerNoticeMeta');
+  const list = document.getElementById('headerNoticeList');
+  const entries = normalizeAttentionEntries(summary);
+  const total = Number(summary?.total_attention_count || 0);
+  if (!badge || !meta || !list) return;
+
+  badge.hidden = total <= 0;
+  badge.textContent = total > 99 ? '99+' : String(total || '');
+  meta.textContent = total > 0 ? `共 ${total} 条待处理提醒` : '当前没有待处理提醒';
+
+  if (!entries.length) {
+    list.innerHTML = '<div class="header-notice-empty">暂无需要处理的删除申请或回收站对象。</div>';
+    return;
+  }
+
+  list.innerHTML = entries.map((entry) => `
+    <a class="header-notice-item" href="${entry.href}" data-attention-href="${entry.href}">
+      <span class="header-notice-item-copy">
+        <strong>${entry.label}</strong>
+        <span>点击后直接定位到对应处理区域</span>
+      </span>
+      <span class="header-notice-item-count">${entry.count} 条</span>
+    </a>
+  `).join('');
+}
+
+function updateAttentionIndicators(summary) {
   window.__attentionSummary = summary || null;
+  renderAttentionDropdown(summary || null);
   window.dispatchEvent(new CustomEvent('app-attention-summary', {detail: {summary: summary || null}}));
 }
 
@@ -364,6 +433,21 @@ function closeSidebar() {
   if (!sidebar || !scrim) return;
   sidebar.classList.remove('sidebar-open');
   scrim.classList.remove('visible');
+}
+
+function setAttentionPanelOpen(nextOpen) {
+  const btn = document.getElementById('attentionBellBtn');
+  const panel = document.getElementById('headerNoticePanel');
+  if (!btn || !panel) return;
+  btn.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+  panel.hidden = !nextOpen;
+}
+
+function toggleAttentionPanel() {
+  const btn = document.getElementById('attentionBellBtn');
+  if (!btn) return;
+  const expanded = btn.getAttribute('aria-expanded') === 'true';
+  setAttentionPanelOpen(!expanded);
 }
 
 const ROUTE_TRANSITION_KEY = 'app-route-transition';
@@ -681,11 +765,33 @@ async function refreshCurrentRole() {
 
 syncCurrentActorFields();
 refreshCurrentRole();
-refreshAttentionSummary();
 bindNavigationTransitions();
 scheduleRoutePrefetch();
 syncRouteScrollPosition();
 armRouteEntrance();
+
+const attentionBellBtn = document.getElementById('attentionBellBtn');
+if (attentionBellBtn) {
+  attentionBellBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleAttentionPanel();
+  });
+}
+
+document.addEventListener('click', (event) => {
+  const noticeRoot = document.getElementById('headerNoticeRoot');
+  if (!noticeRoot || noticeRoot.contains(event.target)) return;
+  setAttentionPanelOpen(false);
+});
+
+document.addEventListener('click', (event) => {
+  const link = event.target.closest('[data-attention-href]');
+  if (!link) return;
+  event.preventDefault();
+  setAttentionPanelOpen(false);
+  navigateWithTransition(link.getAttribute('data-attention-href') || link.getAttribute('href') || '/organizations');
+});
 
 window.addEventListener('pageshow', () => {
   syncRouteScrollPosition();
@@ -696,7 +802,10 @@ window.addEventListener('pageshow', () => {
 });
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeSidebar();
+  if (event.key === 'Escape') {
+    closeSidebar();
+    setAttentionPanelOpen(false);
+  }
 });
 
 document.querySelectorAll('.sidebar-nav a').forEach((link) => {

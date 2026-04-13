@@ -35,7 +35,8 @@ class UiTemplateTests(unittest.TestCase):
         self.assertIn('window.scrollTo(0, 0)', html)
         self.assertIn('name="view-transition"', html)
         self.assertIn('header-action', html)
-        self.assertIn('navOrgAlertDot', html)
+        self.assertIn('attentionBellBtn', html)
+        self.assertIn('headerNoticePanel', html)
         self.assertIn('待登录', html)
         self.assertIn('兰台清晖', html)
         self.assertIn('等保测评定级备案工作台', html)
@@ -70,6 +71,7 @@ class UiTemplateTests(unittest.TestCase):
         self.assertNotIn('active-nav-pill', css)
         self.assertNotIn('route-pill-new', css)
         self.assertIn('inline-check', css)
+        self.assertIn('.header-notice-panel', css)
         self.assertIn('--brand-ink', css)
         self.assertIn('--font-brand', css)
         self.assertIn('--accent-cinnabar', css)
@@ -92,7 +94,7 @@ class UiTemplateTests(unittest.TestCase):
 
         self.assertIn('section-intro', html)
         self.assertIn('dashboard-actions', html)
-        self.assertIn('dashboardAttentionPanel', html)
+        self.assertNotIn('dashboardAttentionPanel', html)
 
     def test_organizations_template_uses_unified_workspace_layout(self):
         html = self.render_template('organizations.html')
