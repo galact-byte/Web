@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="workspace">
-  <section class="panel">
+  <section class="panel" id="workspaceMaintenanceSection">
     <div class="section-intro">
       <div class="section-copy">
         <h2><i class="fas fa-list-ul"></i> 备案对象工作台</h2>
@@ -75,7 +75,9 @@
       <section class="maintenance-card is-active" data-maintenance-panel="org-requests">
         <div class="panel-actions">
           <h3>单位删除申请</h3>
-          <button class="btn-lite btn-sm" id="loadOrgDeleteRequestsBtn">刷新</button>
+          <div class="maintenance-head-actions">
+            <button class="btn-lite btn-sm" id="loadOrgDeleteRequestsBtn">刷新</button>
+          </div>
         </div>
         <div class="table-wrapper maintenance-table-wrap">
           <table>
@@ -98,7 +100,9 @@
       <section class="maintenance-card" data-maintenance-panel="sys-requests" hidden>
         <div class="panel-actions">
           <h3>系统删除申请</h3>
-          <button class="btn-lite btn-sm" id="loadSystemDeleteRequestsBtn">刷新</button>
+          <div class="maintenance-head-actions">
+            <button class="btn-lite btn-sm" id="loadSystemDeleteRequestsBtn">刷新</button>
+          </div>
         </div>
         <div class="table-wrapper maintenance-table-wrap">
           <table>
@@ -121,9 +125,9 @@
       <section class="maintenance-card" data-maintenance-panel="org-recycle" hidden>
         <div class="panel-actions">
           <h3>单位回收站</h3>
-          <div class="action-strip">
+          <div class="maintenance-head-actions">
             <button class="btn-lite btn-sm" id="loadRecycleOrgsBtn">刷新</button>
-            <button class="btn-lite btn-sm btn-danger" id="cleanupRecycleOrgsBtn">清理过期</button>
+            <button class="btn-subtle-danger btn-sm" id="cleanupRecycleOrgsBtn">清理过期</button>
           </div>
         </div>
         <div class="table-wrapper maintenance-table-wrap">
@@ -139,9 +143,9 @@
       <section class="maintenance-card" data-maintenance-panel="sys-recycle" hidden>
         <div class="panel-actions">
           <h3>系统回收站</h3>
-          <div class="action-strip">
+          <div class="maintenance-head-actions">
             <button class="btn-lite btn-sm" id="loadRecycleSystemsBtn">刷新</button>
-            <button class="btn-lite btn-sm btn-danger" id="cleanupRecycleSystemsBtn">清理过期</button>
+            <button class="btn-subtle-danger btn-sm" id="cleanupRecycleSystemsBtn">清理过期</button>
           </div>
         </div>
         <div class="table-wrapper maintenance-table-wrap">
