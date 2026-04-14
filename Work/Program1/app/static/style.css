@@ -2337,6 +2337,17 @@ input[type="file"]::file-selector-button:hover {
   color: var(--text-muted);
 }
 
+.org-card-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(35, 79, 108, 0.08);
+  color: var(--brand-ink);
+}
+
 .org-card-actions,
 .system-actions,
 .table-action-group {
@@ -2398,6 +2409,11 @@ input[type="file"]::file-selector-button:hover {
   color: var(--text-muted);
 }
 
+.workspace-detail-page-head {
+  position: static;
+  margin-bottom: 0;
+}
+
 .workspace-form-stack {
   display: grid;
   gap: 18px;
@@ -2437,6 +2453,14 @@ input[type="file"]::file-selector-button:hover {
 .workspace-subsection {
   display: grid;
   gap: 12px;
+}
+
+.workspace-subsection-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .workspace-subsection h3,

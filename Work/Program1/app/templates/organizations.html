@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="workspace">
+<div id="filingWorkspaceRoot" data-mode="list">
   <section class="panel" id="workspaceMaintenanceSection">
     <div class="section-intro">
       <div class="section-copy">
         <h2><i class="fas fa-list-ul"></i> 备案对象工作台</h2>
-        <p>按单位展开查看系统，系统级完成“完善信息”和“导出 Word”。新建单位、新增系统改为弹框处理，避免把列表区撑长。</p>
+        <p>列表页只展示单位，点击单位右侧展开后查看系统；系统级“完善信息”进入独立页面，避免长表单直接摊在当前页。</p>
       </div>
       <div class="workspace-account-flag">
-        <span class="section-flag">列表 + 详情</span>
+        <span class="section-flag">单位折叠列表</span>
         <span class="mini-badge">当前账号：<strong data-current-actor data-actor-placeholder="待登录">待登录</strong></span>
       </div>
     </div>
@@ -30,31 +30,7 @@
     </div>
 
     <div class="workspace-list" id="workspaceList"></div>
-    <div class="result" id="workspaceListResult">请选择一个系统进入统一录入。</div>
-  </section>
-
-  <section class="panel workspace-detail-panel" id="workspaceDetailPanel" hidden>
-    <div class="section-intro">
-      <div class="section-copy">
-        <h2><i class="fas fa-pen-ruler"></i> 备案信息录入</h2>
-        <p id="workspaceDetailHint">按 Word 模板维护表一到表六，并同步系统最终安全保护等级。</p>
-      </div>
-      <div class="panel-actions">
-        <button class="btn-lite" id="workspaceSaveBtn"><i class="fas fa-floppy-disk"></i> 保存</button>
-        <button class="btn-lite" id="workspaceExportBtn"><i class="fas fa-file-word"></i> 导出 Word</button>
-      </div>
-    </div>
-
-    <div class="workspace-detail-head" id="workspaceDetailHead"></div>
-    <div class="workspace-form-stack">
-      <div id="workspaceTable1"></div>
-      <div id="workspaceTable2"></div>
-      <div id="workspaceTable3"></div>
-      <div id="workspaceTable4"></div>
-      <div id="workspaceTable5"></div>
-      <div id="workspaceTable6"></div>
-    </div>
-    <div class="result" id="workspaceDetailResult">加载完成后可直接修改并保存。</div>
+    <div class="result" id="workspaceListResult">请选择单位并展开系统列表，进入独立录入页继续维护。</div>
   </section>
 
   <section class="panel">

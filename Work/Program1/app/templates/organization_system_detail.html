@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="filingWorkspaceRoot" data-mode="detail" data-system-id="{{ system_id }}">
+  <section class="panel workspace-detail-page-head">
+    <div class="section-intro">
+      <div class="section-copy">
+        <h2><i class="fas fa-pen-ruler"></i> 备案信息录入</h2>
+        <p id="workspaceDetailHint">正在加载系统信息，请稍候。</p>
+      </div>
+      <div class="panel-actions">
+        <button class="btn-lite" type="button" onclick="window.location.href='/organizations?focus_system={{ system_id }}'">
+          <i class="fas fa-arrow-left"></i> 返回备案对象
+        </button>
+        <button class="btn-lite" id="workspaceSaveBtn"><i class="fas fa-floppy-disk"></i> 保存</button>
+        <button class="btn-lite" id="workspaceExportBtn"><i class="fas fa-file-word"></i> 导出 Word</button>
+      </div>
+    </div>
+    <div class="workspace-detail-head" id="workspaceDetailHead">
+      <div class="workspace-detail-summary">
+        <div><span>单位</span><strong>加载中</strong></div>
+        <div><span>系统</span><strong>加载中</strong></div>
+        <div><span>当前等级</span><strong>加载中</strong></div>
+        <div><span>状态</span><strong>加载中</strong></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel workspace-detail-panel" id="workspaceDetailPanel">
+    <div class="workspace-form-stack">
+      <div id="workspaceTable1"></div>
+      <div id="workspaceTable2"></div>
+      <div id="workspaceTable3"></div>
+      <div id="workspaceTable4"></div>
+      <div id="workspaceTable5"></div>
+      <div id="workspaceTable6"></div>
+    </div>
+    <div class="result" id="workspaceDetailResult">加载完成后可直接修改并保存。</div>
+  </section>
+</div>
+
+<script src="/static/filing_workspace.js"></script>
+{% endblock %}

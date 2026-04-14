@@ -123,6 +123,12 @@ class ProtectedPageAuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 307)
         self.assertEqual(response.headers.get('location'), '/login?next=/reports')
 
+    def test_guest_visit_workspace_detail_redirects_to_login(self):
+        response = asyncio.run(self.get('/organizations/systems/1'))
+
+        self.assertEqual(response.status_code, 307)
+        self.assertEqual(response.headers.get('location'), '/login?next=/organizations/systems/1')
+
     def test_login_page_remains_public_when_auth_enabled(self):
         response = asyncio.run(self.get('/login'))
 

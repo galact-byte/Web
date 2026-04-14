@@ -2392,6 +2392,19 @@ def organizations_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "organizations.html", {"request": request})
 
 
+@app.get("/organizations/systems/{system_id}", response_class=HTMLResponse)
+def organization_system_detail_page(system_id: int, request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "organization_system_detail.html",
+        {
+            "request": request,
+            "system_id": system_id,
+            "page_layout_variant": "management-tight",
+        },
+    )
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request) -> HTMLResponse:
     next_path = (request.query_params.get("next") or "/").strip() or "/"

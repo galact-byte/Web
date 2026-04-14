@@ -56,8 +56,29 @@
   ];
   const PERSONAL_INFO_OPTIONS = [['涉及敏感个人信息', '涉及敏感个人信息'], ['涉及未成年人的个人信息', '涉及未成年人的个人信息'], ['涉及一般个人信息', '涉及一般个人信息'], ['不涉及', '不涉及']];
   const DATA_SOURCE_OPTIONS = [['系统采集', '系统采集'], ['系统产生', '系统产生'], ['人工填报', '人工填报'], ['交易购买', '交易购买'], ['共享交换', '共享交换'], ['其他', '其他']];
+  const PROVINCE_OPTIONS = ['北京市', '天津市', '河北省', '山西省', '内蒙古自治区', '辽宁省', '吉林省', '黑龙江省', '上海市', '江苏省', '浙江省', '安徽省', '福建省', '江西省', '山东省', '河南省', '湖北省', '湖南省', '广东省', '广西壮族自治区', '海南省', '重庆市', '四川省', '贵州省', '云南省', '西藏自治区', '陕西省', '甘肃省', '青海省', '宁夏回族自治区', '新疆维吾尔自治区', '香港特别行政区', '澳门特别行政区', '台湾省'];
+  const REGION_TREE = {
+    山西省: [
+      { name: '太原市', postal_code: '030000', districts: [{ name: '小店区', district_code: '140105', postal_code: '030032' }, { name: '迎泽区', district_code: '140106', postal_code: '030001' }, { name: '杏花岭区', district_code: '140107', postal_code: '030009' }, { name: '尖草坪区', district_code: '140108', postal_code: '030023' }, { name: '万柏林区', district_code: '140109', postal_code: '030024' }, { name: '晋源区', district_code: '140110', postal_code: '030025' }, { name: '清徐县', district_code: '140121', postal_code: '030400' }, { name: '阳曲县', district_code: '140122', postal_code: '030100' }, { name: '娄烦县', district_code: '140123', postal_code: '030300' }, { name: '古交市', district_code: '140181', postal_code: '030200' }] },
+      { name: '大同市', postal_code: '037000', districts: [{ name: '平城区', district_code: '140213' }, { name: '云冈区', district_code: '140214' }, { name: '新荣区', district_code: '140212' }, { name: '云州区', district_code: '140215' }, { name: '阳高县', district_code: '140221' }, { name: '天镇县', district_code: '140222' }, { name: '广灵县', district_code: '140223' }, { name: '灵丘县', district_code: '140224' }, { name: '浑源县', district_code: '140225' }, { name: '左云县', district_code: '140226' }] },
+      { name: '阳泉市', postal_code: '045000', districts: [{ name: '城区', district_code: '140302' }, { name: '矿区', district_code: '140303' }, { name: '郊区', district_code: '140311' }, { name: '平定县', district_code: '140321' }, { name: '盂县', district_code: '140322' }] },
+      { name: '长治市', postal_code: '046000', districts: [{ name: '潞州区', district_code: '140403' }, { name: '上党区', district_code: '140404' }, { name: '屯留区', district_code: '140405' }, { name: '潞城区', district_code: '140406' }, { name: '襄垣县', district_code: '140423' }, { name: '平顺县', district_code: '140425' }, { name: '黎城县', district_code: '140426' }, { name: '壶关县', district_code: '140427' }, { name: '长子县', district_code: '140428' }, { name: '武乡县', district_code: '140429' }, { name: '沁县', district_code: '140430' }, { name: '沁源县', district_code: '140431' }] },
+      { name: '晋城市', postal_code: '048000', districts: [{ name: '城区', district_code: '140502' }, { name: '沁水县', district_code: '140521' }, { name: '阳城县', district_code: '140522' }, { name: '陵川县', district_code: '140524' }, { name: '泽州县', district_code: '140525' }, { name: '高平市', district_code: '140581' }] },
+      { name: '朔州市', postal_code: '038500', districts: [{ name: '朔城区', district_code: '140602' }, { name: '平鲁区', district_code: '140603' }, { name: '山阴县', district_code: '140621' }, { name: '应县', district_code: '140622' }, { name: '右玉县', district_code: '140623' }, { name: '怀仁市', district_code: '140681' }] },
+      { name: '晋中市', postal_code: '030600', districts: [{ name: '榆次区', district_code: '140702' }, { name: '太谷区', district_code: '140703' }, { name: '榆社县', district_code: '140721' }, { name: '左权县', district_code: '140722' }, { name: '和顺县', district_code: '140723' }, { name: '昔阳县', district_code: '140724' }, { name: '寿阳县', district_code: '140725' }, { name: '祁县', district_code: '140727' }, { name: '平遥县', district_code: '140728' }, { name: '灵石县', district_code: '140729' }, { name: '介休市', district_code: '140781' }] },
+      { name: '运城市', postal_code: '044000', districts: [{ name: '盐湖区', district_code: '140802' }, { name: '临猗县', district_code: '140821' }, { name: '万荣县', district_code: '140822' }, { name: '闻喜县', district_code: '140823' }, { name: '稷山县', district_code: '140824' }, { name: '新绛县', district_code: '140825' }, { name: '绛县', district_code: '140826' }, { name: '垣曲县', district_code: '140827' }, { name: '夏县', district_code: '140828' }, { name: '平陆县', district_code: '140829' }, { name: '芮城县', district_code: '140830' }, { name: '永济市', district_code: '140881' }, { name: '河津市', district_code: '140882' }] },
+      { name: '忻州市', postal_code: '034000', districts: [{ name: '忻府区', district_code: '140902' }, { name: '定襄县', district_code: '140921' }, { name: '五台县', district_code: '140922' }, { name: '代县', district_code: '140923' }, { name: '繁峙县', district_code: '140924' }, { name: '宁武县', district_code: '140925' }, { name: '静乐县', district_code: '140926' }, { name: '神池县', district_code: '140927' }, { name: '五寨县', district_code: '140928' }, { name: '岢岚县', district_code: '140929' }, { name: '河曲县', district_code: '140930' }, { name: '保德县', district_code: '140931' }, { name: '偏关县', district_code: '140932' }, { name: '原平市', district_code: '140981' }] },
+      { name: '临汾市', postal_code: '041000', districts: [{ name: '尧都区', district_code: '141002' }, { name: '曲沃县', district_code: '141021' }, { name: '翼城县', district_code: '141022' }, { name: '襄汾县', district_code: '141023' }, { name: '洪洞县', district_code: '141024' }, { name: '古县', district_code: '141025' }, { name: '安泽县', district_code: '141026' }, { name: '浮山县', district_code: '141027' }, { name: '吉县', district_code: '141028' }, { name: '乡宁县', district_code: '141029' }, { name: '大宁县', district_code: '141030' }, { name: '隰县', district_code: '141031' }, { name: '永和县', district_code: '141032' }, { name: '蒲县', district_code: '141033' }, { name: '汾西县', district_code: '141034' }, { name: '侯马市', district_code: '141081' }, { name: '霍州市', district_code: '141082' }] },
+      { name: '吕梁市', postal_code: '033000', districts: [{ name: '离石区', district_code: '141102' }, { name: '文水县', district_code: '141121' }, { name: '交城县', district_code: '141122' }, { name: '兴县', district_code: '141123' }, { name: '临县', district_code: '141124' }, { name: '柳林县', district_code: '141125' }, { name: '石楼县', district_code: '141126' }, { name: '岚县', district_code: '141127' }, { name: '方山县', district_code: '141128' }, { name: '中阳县', district_code: '141129' }, { name: '交口县', district_code: '141130' }, { name: '孝义市', district_code: '141181' }, { name: '汾阳市', district_code: '141182' }] },
+    ],
+  };
 
   const $ = (id) => document.getElementById(id);
+  const root = () => $('filingWorkspaceRoot');
+  const pageMode = () => root()?.dataset.mode || 'list';
+  const isDetailPage = () => pageMode() === 'detail';
+  const isListPage = () => pageMode() === 'list';
+  const initialSystemId = () => Number(root()?.dataset.systemId || 0);
 
   function authHeaders() {
     const token = localStorage.getItem('auth_token') || '';
@@ -107,11 +128,13 @@
   };
 
   function setListResult(text) {
-    $('workspaceListResult').textContent = text;
+    const el = $('workspaceListResult');
+    if (el) el.textContent = text;
   }
 
   function setDetailResult(text) {
-    $('workspaceDetailResult').textContent = text;
+    const el = $('workspaceDetailResult');
+    if (el) el.textContent = text;
   }
 
   function setCreateModalResult(text) {
@@ -139,16 +162,95 @@
     return `<details class="workspace-collapsible ${extraClass || ''}" open><summary><span>${esc(title)}</span><small>${esc(hint || '')}</small></summary><div class="workspace-collapsible-body">${body}</div></details>`;
   }
 
-  function renderShell() {
-    $('createOrgIndustry').innerHTML = `<option value="">请选择</option>${optionsHtml(INDUSTRY_OPTIONS)}`;
-    $('createOrgType').innerHTML = `<option value="">请选择</option>${optionsHtml(ORG_TYPE_OPTIONS)}`;
+  function normalizeRegionName(value) {
+    return String(value || '').replace(/\s+/g, '').replace(/特别行政区|维吾尔自治区|回族自治区|壮族自治区|自治区|自治州|省|市|盟|地区|区|县|旗$/g, '');
+  }
 
-    $('workspaceTable1').innerHTML = renderTable1();
-    $('workspaceTable2').innerHTML = renderTable2();
-    $('workspaceTable3').innerHTML = renderTable3();
-    $('workspaceTable4').innerHTML = renderTable4();
-    $('workspaceTable5').innerHTML = renderTable5();
-    $('workspaceTable6').innerHTML = renderTable6();
+  function findProvinceEntry(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const direct = Object.keys(REGION_TREE).find((item) => item === text);
+    if (direct) return direct;
+    return Object.keys(REGION_TREE).find((item) => normalizeRegionName(item) === normalizeRegionName(text)) || text;
+  }
+
+  function findCityEntry(provinceName, cityName) {
+    const cities = REGION_TREE[provinceName] || [];
+    const normalized = normalizeRegionName(cityName);
+    return cities.find((item) => normalizeRegionName(item.name) === normalized) || null;
+  }
+
+  function findDistrictEntry(provinceName, cityName, districtName) {
+    const city = findCityEntry(provinceName, cityName);
+    if (!city) return null;
+    const normalized = normalizeRegionName(districtName);
+    return (city.districts || []).find((item) => normalizeRegionName(item.name) === normalized) || null;
+  }
+
+  function renderAddressPickerOptions() {
+    if ($('orgProvince')) {
+      const current = getValue('orgProvince');
+      $('orgProvince').innerHTML = `<option value="">请选择省份</option>${PROVINCE_OPTIONS.map((item) => `<option value="${esc(item)}">${esc(item)}</option>`).join('')}`;
+      if (current) $('orgProvince').value = current;
+    }
+  }
+
+  function syncAddressPicker(preserveMeta) {
+    const provinceName = findProvinceEntry(getValue('orgProvince'));
+    const cityInput = $('orgCity');
+    const districtInput = $('orgDistrict');
+    const currentCity = cityInput ? cityInput.value : '';
+    const currentDistrict = districtInput ? districtInput.value : '';
+    const cities = REGION_TREE[provinceName] || [];
+    if (cityInput) {
+      cityInput.innerHTML = `<option value="">请选择地市</option>${cities.map((item) => `<option value="${esc(item.name)}">${esc(item.name)}</option>`).join('')}`;
+      if (currentCity && cities.some((item) => normalizeRegionName(item.name) === normalizeRegionName(currentCity))) {
+        cityInput.value = cities.find((item) => normalizeRegionName(item.name) === normalizeRegionName(currentCity)).name;
+      } else {
+        cityInput.value = '';
+      }
+    }
+    const cityEntry = findCityEntry(provinceName, cityInput ? cityInput.value : '');
+    if (districtInput) {
+      districtInput.innerHTML = `<option value="">请选择区县</option>${(cityEntry?.districts || []).map((item) => `<option value="${esc(item.name)}">${esc(item.name)}</option>`).join('')}`;
+      if (currentDistrict && cityEntry && (cityEntry.districts || []).some((item) => normalizeRegionName(item.name) === normalizeRegionName(currentDistrict))) {
+        districtInput.value = (cityEntry.districts || []).find((item) => normalizeRegionName(item.name) === normalizeRegionName(currentDistrict)).name;
+      } else {
+        districtInput.value = '';
+      }
+    }
+    const districtEntry = findDistrictEntry(provinceName, cityInput ? cityInput.value : '', districtInput ? districtInput.value : '');
+    if (!preserveMeta) {
+      if (districtEntry?.district_code) setValue('orgDistrictCode', districtEntry.district_code);
+      if (districtEntry?.postal_code) {
+        setValue('orgPostalCode', districtEntry.postal_code);
+      } else if (cityEntry?.postal_code && !getValue('orgPostalCode')) {
+        setValue('orgPostalCode', cityEntry.postal_code);
+      }
+    }
+  }
+
+  function copyCyberDeptToDataDept() {
+    setValue('dataDept', getValue('cyberDept'));
+    setValue('dataOwnerName', getValue('cyberOwnerName'));
+    setValue('dataOwnerTitle', getValue('cyberOwnerTitle'));
+    setValue('dataOwnerPhone', getValue('cyberOwnerPhone'));
+    setValue('dataOwnerMobile', getValue('cyberOwnerMobile'));
+    setValue('dataOwnerEmail', getValue('cyberOwnerEmail'));
+    setDetailResult('已复制网络安全责任部门信息到数据安全管理部门。');
+  }
+
+  function renderShell() {
+    if ($('createOrgIndustry')) $('createOrgIndustry').innerHTML = `<option value="">请选择</option>${optionsHtml(INDUSTRY_OPTIONS)}`;
+    if ($('createOrgType')) $('createOrgType').innerHTML = `<option value="">请选择</option>${optionsHtml(ORG_TYPE_OPTIONS)}`;
+
+    if ($('workspaceTable1')) $('workspaceTable1').innerHTML = renderTable1();
+    if ($('workspaceTable2')) $('workspaceTable2').innerHTML = renderTable2();
+    if ($('workspaceTable3')) $('workspaceTable3').innerHTML = renderTable3();
+    if ($('workspaceTable4')) $('workspaceTable4').innerHTML = renderTable4();
+    if ($('workspaceTable5')) $('workspaceTable5').innerHTML = renderTable5();
+    if ($('workspaceTable6')) $('workspaceTable6').innerHTML = renderTable6();
+    renderAddressPickerOptions();
   }
 
   function openCreateModal(mode, org) {
@@ -219,18 +321,24 @@
         <div><label>统一社会信用代码</label><input id="orgCreditCode"></div>
         <div><label>备案地区</label><input id="orgFilingRegion"></div>
         <div><label>单位使用互联网地址</label><input id="unitInternetAddresses" placeholder="没有请填写无"></div>
-        <div><label>省(自治区、直辖市)</label><input id="orgProvince"></div>
-        <div><label>地(区、市、州、盟)</label><input id="orgCity"></div>
-        <div><label>县(区、市、旗)</label><input id="orgDistrict"></div>
-        <div><label>详细地址</label><input id="orgDetailAddress"></div>
-        <div><label>邮政编码</label><input id="orgPostalCode"></div>
-        <div><label>行政区划代码</label><input id="orgDistrictCode"></div>
         <div><label>隶属关系</label><select id="orgAffiliationCode"><option value="">请选择</option>${optionsHtml(AFFILIATION_OPTIONS)}</select></div>
         <div id="orgAffiliationOtherWrap" hidden><label>隶属关系-其他</label><input id="orgAffiliationOther"></div>
         <div><label>单位类型</label><select id="orgTypeCode"><option value="">请选择</option>${optionsHtml(ORG_TYPE_OPTIONS)}</select></div>
         <div id="orgTypeOtherWrap" hidden><label>单位类型-其他</label><input id="orgTypeOther"></div>
         <div><label>行业类别</label><select id="orgIndustryCode"><option value="">请选择</option>${optionsHtml(INDUSTRY_OPTIONS)}</select></div>
         <div id="orgIndustryOtherWrap" hidden><label>行业类别-其他</label><input id="orgIndustryOther"></div>
+      </div>
+
+      <div class="workspace-subsection">
+        <h3>单位地址</h3>
+        <div class="form-grid form-grid-4">
+          <div><label>省(自治区、直辖市)</label><select id="orgProvince"><option value="">请选择省份</option></select></div>
+          <div><label>地(区、市、州、盟)</label><select id="orgCity"><option value="">请选择地市</option></select></div>
+          <div><label>县(区、市、旗)</label><select id="orgDistrict"><option value="">请选择区县</option></select></div>
+          <div><label>详细地址</label><input id="orgDetailAddress" placeholder="例如：太原市小店区龙城大街 88 号"></div>
+          <div><label>邮政编码</label><input id="orgPostalCode" placeholder="匹配到区县时自动回填，也可手动修改"></div>
+          <div><label>行政区划代码</label><input id="orgDistrictCode" placeholder="匹配到区县时自动回填，也可手动修改"></div>
+        </div>
       </div>
 
       <div class="workspace-subsection">
@@ -256,7 +364,10 @@
       </div>
 
       <div class="workspace-subsection">
-        <h3>数据安全管理部门</h3>
+        <div class="workspace-subsection-head">
+          <h3>数据安全管理部门</h3>
+          <button class="btn-lite btn-sm" type="button" id="copyCyberToDataBtn"><i class="fas fa-copy"></i> 复制网络安全责任部门</button>
+        </div>
         <div class="form-grid form-grid-5">
           <div><label>管理部门</label><input id="dataDept"></div>
           <div><label>联系人姓名</label><input id="dataOwnerName"></div>
@@ -548,9 +659,9 @@
     const businessLevel = computeLevelFromItems(getCheckedValues('businessDamageItems'));
     const serviceLevel = computeLevelFromItems(getCheckedValues('serviceDamageItems'));
     const finalLevel = Math.max(businessLevel, serviceLevel, 0);
-    $('businessLevelDisplay').textContent = businessLevel ? `第${businessLevel}级` : '未计算';
-    $('serviceLevelDisplay').textContent = serviceLevel ? `第${serviceLevel}级` : '未计算';
-    $('finalLevelDisplay').textContent = finalLevel ? `第${finalLevel}级` : '未计算';
+    if ($('businessLevelDisplay')) $('businessLevelDisplay').textContent = businessLevel ? `第${businessLevel}级` : '未计算';
+    if ($('serviceLevelDisplay')) $('serviceLevelDisplay').textContent = serviceLevel ? `第${serviceLevel}级` : '未计算';
+    if ($('finalLevelDisplay')) $('finalLevelDisplay').textContent = finalLevel ? `第${finalLevel}级` : '未计算';
   }
 
   function syncConditionalFields() {
@@ -615,22 +726,24 @@
     const orgType = table1.organization_type_detail || {};
     const industry = table1.industry_category || {};
 
-    $('workspaceDetailPanel').hidden = false;
-    $('workspaceDetailHead').innerHTML = `
-      <div class="workspace-detail-summary">
-        <div><span>单位</span><strong>${esc(org.name || '-')}</strong></div>
-        <div><span>系统</span><strong>${esc(system.system_name || '-')}</strong></div>
-        <div><span>当前等级</span><strong>${levelBadge(system.proposed_level)}</strong></div>
-        <div><span>状态</span><strong>${statusBadge(Boolean(system.archived))}</strong></div>
-      </div>
-    `;
-    $('workspaceDetailHint').textContent = `${org.name || '-'} / ${system.system_name || '-'} 正在编辑`;
+    if ($('workspaceDetailPanel')) $('workspaceDetailPanel').hidden = false;
+    if ($('workspaceDetailHead')) {
+      $('workspaceDetailHead').innerHTML = `
+        <div class="workspace-detail-summary">
+          <div><span>单位</span><strong>${esc(org.name || '-')}</strong></div>
+          <div><span>系统</span><strong>${esc(system.system_name || '-')}</strong></div>
+          <div><span>当前等级</span><strong>${levelBadge(system.proposed_level)}</strong></div>
+          <div><span>状态</span><strong>${statusBadge(Boolean(system.archived))}</strong></div>
+        </div>
+      `;
+    }
+    if ($('workspaceDetailHint')) $('workspaceDetailHint').textContent = `${org.name || '-'} / ${system.system_name || '-'} 正在编辑`;
 
     setValue('orgName', org.name);
     setValue('orgCreditCode', org.credit_code);
     setValue('orgFilingRegion', org.filing_region);
     setValue('unitInternetAddresses', table1.unit_internet_addresses || '无');
-    setValue('orgProvince', address.province);
+    setValue('orgProvince', findProvinceEntry(address.province));
     setValue('orgCity', address.city);
     setValue('orgDistrict', address.district);
     setValue('orgDetailAddress', address.detail);
@@ -751,6 +864,7 @@
     });
 
     renderTable6Items(table6.items);
+    syncAddressPicker(true);
     updateLevelDisplays();
     syncConditionalFields();
   }
@@ -901,7 +1015,8 @@
   }
 
   async function loadOverview() {
-    state.includeArchived = $('workspaceIncludeArchived').checked;
+    if (!$('workspaceList')) return;
+    state.includeArchived = Boolean($('workspaceIncludeArchived')?.checked);
     const keyword = getValue('workspaceKeyword');
     const params = new URLSearchParams();
     if (keyword) params.set('keyword', keyword);
@@ -917,7 +1032,19 @@
     renderOverview();
   }
 
+  function focusOrganizationBySystemId(systemId) {
+    const targetId = Number(systemId) || 0;
+    if (!targetId) return false;
+    const target = state.overview.find((item) => (item.systems || []).some((system) => Number(system.id) === targetId));
+    if (!target || !target.organization) return false;
+    state.openOrgIds.clear();
+    state.openOrgIds.add(target.organization.id);
+    renderOverview();
+    return true;
+  }
+
   function renderOverview() {
+    if (!$('workspaceList')) return;
     if (!state.overview.length) {
       $('workspaceList').innerHTML = '<div class="workspace-empty">暂无备案对象，可先新建单位。</div>';
       return;
@@ -930,7 +1057,11 @@
         <article class="org-card ${open ? 'is-open' : ''}">
           <button class="org-card-head" data-toggle-org="${org.id}">
             <div class="org-card-main"><strong>${esc(org.name || '-')}</strong><span>${esc(org.credit_code || '-')}</span></div>
-            <div class="org-card-meta">${statusBadge(Boolean(org.archived))}<span class="mini-badge">${systems.length} 个系统</span></div>
+            <div class="org-card-meta">
+              ${statusBadge(Boolean(org.archived))}
+              <span class="mini-badge">${systems.length} 个系统</span>
+              <span class="org-card-chevron" aria-hidden="true"><i class="fas fa-chevron-${open ? 'up' : 'down'}"></i></span>
+            </div>
           </button>
           <div class="org-card-actions">
             <button class="btn-lite btn-sm" data-create-system="${org.id}"><i class="fas fa-plus"></i> 新增系统</button>
@@ -942,7 +1073,7 @@
               <div class="system-row ${state.currentSystemId === system.id ? 'is-active' : ''}">
                 <div class="system-main"><strong>${esc(system.system_name || '-')}</strong><span>${esc(system.system_code || '未编号')} · ${levelBadge(system.proposed_level)}</span></div>
                 <div class="system-actions">
-                  <button class="btn-lite btn-sm" data-open-system="${system.id}">完善信息</button>
+                  <button class="btn-lite btn-sm" data-open-system="${system.id}"><i class="fas fa-arrow-up-right-from-square"></i> 完善信息</button>
                   <button class="btn-lite btn-sm" data-export-system="${system.id}">导出 Word</button>
                   <button class="btn-lite btn-sm" data-archive-system="${system.id}">归档</button>
                   <button class="btn-lite btn-sm btn-danger" data-delete-system="${system.id}">删除申请</button>
@@ -1011,6 +1142,7 @@
     state.createOrgId = data.data.id;
     setListResult(`单位已创建：${payload.name}`);
     setCreateModalResult(`单位已创建：${payload.name}`);
+    state.openOrgIds.clear();
     state.openOrgIds.add(state.createOrgId);
     closeCreateModal();
     await loadOverview();
@@ -1049,8 +1181,7 @@
     setListResult(`系统已创建：${payload.system_name}`);
     setCreateModalResult(`系统已创建：${payload.system_name}`);
     closeCreateModal();
-    await loadOverview();
-    await loadSystemDetail(data.data.id);
+    window.location.href = `/organizations/systems/${data.data.id}`;
   }
 
   async function saveWorkspace() {
@@ -1186,6 +1317,7 @@
   }
 
   async function loadOrgDeleteRequests() {
+    if (!$('orgDeleteReqTable')) return;
     const res = await fetch('/api/delete-requests?entity_type=organization', { headers: authHeaders() });
     const data = await res.json().catch(() => ({}));
     const items = res.ok ? (data.items || []) : [];
@@ -1195,6 +1327,7 @@
   }
 
   async function loadSystemDeleteRequests() {
+    if (!$('sysDeleteReqTable')) return;
     const res = await fetch('/api/delete-requests?entity_type=system', { headers: authHeaders() });
     const data = await res.json().catch(() => ({}));
     const items = res.ok ? (data.items || []) : [];
@@ -1204,6 +1337,7 @@
   }
 
   async function loadRecycleOrgs() {
+    if (!$('orgRecycleTable')) return;
     const res = await fetch('/api/organizations/recycle-bin/list', { headers: authHeaders() });
     const data = await res.json().catch(() => ({}));
     const items = res.ok ? (data.items || []) : [];
@@ -1213,6 +1347,7 @@
   }
 
   async function loadRecycleSystems() {
+    if (!$('sysRecycleTable')) return;
     const res = await fetch('/api/systems/recycle-bin/list', { headers: authHeaders() });
     const data = await res.json().catch(() => ({}));
     const items = res.ok ? (data.items || []) : [];
@@ -1222,51 +1357,64 @@
   }
 
   function bindEvents() {
-    $('workspaceReloadBtn').addEventListener('click', loadOverview);
-    $('workspaceKeyword').addEventListener('keydown', (event) => { if (event.key === 'Enter') loadOverview(); });
-    $('workspaceIncludeArchived').addEventListener('change', loadOverview);
-    $('workspaceToggleCreateBtn').addEventListener('click', () => openCreateModal('organization'));
-    $('workspaceCreateModalClose').addEventListener('click', closeCreateModal);
-    $('workspaceCreateOrgCancel').addEventListener('click', closeCreateModal);
-    $('workspaceCreateSystemCancel').addEventListener('click', closeCreateModal);
-    $('workspaceCreateModal').addEventListener('click', (event) => {
-      if (event.target === $('workspaceCreateModal')) closeCreateModal();
-    });
-    $('createOrgBtn').addEventListener('click', createOrganization);
-    $('createSystemBtn').addEventListener('click', createSystem);
-    $('workspaceSaveBtn').addEventListener('click', saveWorkspace);
-    $('workspaceExportBtn').addEventListener('click', () => { if (state.currentSystemId) window.location.href = `/api/systems/${state.currentSystemId}/export/word`; });
-    $('addDataItemBtn').addEventListener('click', () => renderTable6Items([...collectTable6Items(), {}]));
-    $('loadOrgDeleteRequestsBtn').addEventListener('click', loadOrgDeleteRequests);
-    $('loadSystemDeleteRequestsBtn').addEventListener('click', loadSystemDeleteRequests);
-    $('loadRecycleOrgsBtn').addEventListener('click', loadRecycleOrgs);
-    $('cleanupRecycleOrgsBtn').addEventListener('click', cleanupRecycleOrgs);
-    $('loadRecycleSystemsBtn').addEventListener('click', loadRecycleSystems);
-    $('cleanupRecycleSystemsBtn').addEventListener('click', cleanupRecycleSystems);
+    if ($('workspaceReloadBtn')) $('workspaceReloadBtn').addEventListener('click', loadOverview);
+    if ($('workspaceKeyword')) $('workspaceKeyword').addEventListener('keydown', (event) => { if (event.key === 'Enter') loadOverview(); });
+    if ($('workspaceIncludeArchived')) $('workspaceIncludeArchived').addEventListener('change', loadOverview);
+    if ($('workspaceToggleCreateBtn')) $('workspaceToggleCreateBtn').addEventListener('click', () => openCreateModal('organization'));
+    if ($('workspaceCreateModalClose')) $('workspaceCreateModalClose').addEventListener('click', closeCreateModal);
+    if ($('workspaceCreateOrgCancel')) $('workspaceCreateOrgCancel').addEventListener('click', closeCreateModal);
+    if ($('workspaceCreateSystemCancel')) $('workspaceCreateSystemCancel').addEventListener('click', closeCreateModal);
+    if ($('workspaceCreateModal')) {
+      $('workspaceCreateModal').addEventListener('click', (event) => {
+        if (event.target === $('workspaceCreateModal')) closeCreateModal();
+      });
+    }
+    if ($('createOrgBtn')) $('createOrgBtn').addEventListener('click', createOrganization);
+    if ($('createSystemBtn')) $('createSystemBtn').addEventListener('click', createSystem);
+    if ($('copyCyberToDataBtn')) $('copyCyberToDataBtn').addEventListener('click', copyCyberDeptToDataDept);
+    if ($('workspaceSaveBtn')) $('workspaceSaveBtn').addEventListener('click', saveWorkspace);
+    if ($('workspaceExportBtn')) $('workspaceExportBtn').addEventListener('click', () => { if (state.currentSystemId) window.location.href = `/api/systems/${state.currentSystemId}/export/word`; });
+    if ($('addDataItemBtn')) $('addDataItemBtn').addEventListener('click', () => renderTable6Items([...collectTable6Items(), {}]));
+    if ($('loadOrgDeleteRequestsBtn')) $('loadOrgDeleteRequestsBtn').addEventListener('click', loadOrgDeleteRequests);
+    if ($('loadSystemDeleteRequestsBtn')) $('loadSystemDeleteRequestsBtn').addEventListener('click', loadSystemDeleteRequests);
+    if ($('loadRecycleOrgsBtn')) $('loadRecycleOrgsBtn').addEventListener('click', loadRecycleOrgs);
+    if ($('cleanupRecycleOrgsBtn')) $('cleanupRecycleOrgsBtn').addEventListener('click', cleanupRecycleOrgs);
+    if ($('loadRecycleSystemsBtn')) $('loadRecycleSystemsBtn').addEventListener('click', loadRecycleSystems);
+    if ($('cleanupRecycleSystemsBtn')) $('cleanupRecycleSystemsBtn').addEventListener('click', cleanupRecycleSystems);
     document.querySelectorAll('[data-maintenance-tab]').forEach((btn) => {
       btn.addEventListener('click', () => switchMaintenanceTab(btn.dataset.maintenanceTab));
     });
 
-    document.addEventListener('change', (event) => {
-      if (event.target.matches('input[type="checkbox"], input[type="radio"], select')) {
-        syncConditionalFields();
-        updateLevelDisplays();
-      }
-    });
+    if (isDetailPage()) {
+      document.addEventListener('change', (event) => {
+        if (event.target.matches('input[type="checkbox"], input[type="radio"], select')) {
+          syncConditionalFields();
+          updateLevelDisplays();
+        }
+        if (event.target.matches('#orgProvince, #orgCity, #orgDistrict')) {
+          syncAddressPicker(false);
+        }
+      });
+    }
 
     document.addEventListener('click', async (event) => {
       const btn = event.target.closest('button');
       if (!btn) return;
       if (btn.dataset.toggleOrg) {
         const orgId = Number(btn.dataset.toggleOrg);
-        state.openOrgIds.has(orgId) ? state.openOrgIds.delete(orgId) : state.openOrgIds.add(orgId);
+        if (state.openOrgIds.has(orgId)) {
+          state.openOrgIds.delete(orgId);
+        } else {
+          state.openOrgIds.clear();
+          state.openOrgIds.add(orgId);
+        }
         renderOverview();
       } else if (btn.dataset.createSystem) {
         state.createOrgId = Number(btn.dataset.createSystem);
         const org = state.overview.find((item) => item.organization.id === state.createOrgId);
         openCreateModal('system', org ? org.organization : null);
       } else if (btn.dataset.openSystem) {
-        await loadSystemDetail(Number(btn.dataset.openSystem));
+        window.location.href = `/organizations/systems/${btn.dataset.openSystem}`;
       } else if (btn.dataset.exportSystem) {
         window.location.href = `/api/systems/${btn.dataset.exportSystem}/export/word`;
       } else if (btn.dataset.archiveOrg) {
@@ -1299,15 +1447,27 @@
   async function init() {
     renderShell();
     bindEvents();
+    if (isDetailPage()) {
+      const systemId = initialSystemId();
+      if (!systemId) {
+        setDetailResult('缺少系统ID，无法加载备案信息。');
+        return;
+      }
+      await loadSystemDetail(systemId);
+      syncConditionalFields();
+      updateLevelDisplays();
+      return;
+    }
+
     const requestedAttentionTab = initialAttentionTab();
     const activeAttentionTab = requestedAttentionTab || 'org-requests';
     switchMaintenanceTab(activeAttentionTab);
     await Promise.all([loadOverview(), loadOrgDeleteRequests(), loadSystemDeleteRequests(), loadRecycleOrgs(), loadRecycleSystems()]);
+    const focusSystemId = Number(new URLSearchParams(window.location.search).get('focus_system') || 0);
+    if (focusSystemId) focusOrganizationBySystemId(focusSystemId);
     if (requestedAttentionTab) {
       document.getElementById('workspaceMaintenanceSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    syncConditionalFields();
-    updateLevelDisplays();
   }
 
   init();
