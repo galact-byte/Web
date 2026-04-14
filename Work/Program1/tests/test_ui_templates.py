@@ -14,12 +14,13 @@ class UiTemplateTests(unittest.TestCase):
             show_api_docs=False,
         )
 
-    def render_template(self, name: str) -> str:
+    def render_template(self, name: str, **context) -> str:
         env = Environment(loader=FileSystemLoader('app/templates'))
         return env.get_template(name).render(
             request=SimpleNamespace(url=SimpleNamespace(path='/placeholder')),
             lite_mode=False,
             show_api_docs=False,
+            **context,
         )
 
     def test_base_template_contains_navigation_transition_hooks(self):
@@ -100,12 +101,22 @@ class UiTemplateTests(unittest.TestCase):
         html = self.render_template('organizations.html')
 
         self.assertIn('备案对象工作台', html)
+        self.assertIn('data-mode="list"', html)
         self.assertIn('workspaceList', html)
-        self.assertIn('workspaceDetailPanel', html)
         self.assertIn('workspaceCreateModal', html)
         self.assertIn('/static/filing_workspace.js', html)
+        self.assertIn('独立页面', html)
         self.assertNotIn('客户采集链接', html)
         self.assertNotIn('客户提交审核', html)
+
+    def test_organization_system_detail_template_uses_detail_mode(self):
+        html = self.render_template('organization_system_detail.html', system_id=123)
+
+        self.assertIn('data-mode="detail"', html)
+        self.assertIn('data-system-id="123"', html)
+        self.assertIn('workspaceDetailPanel', html)
+        self.assertIn('返回备案对象', html)
+        self.assertIn('/static/filing_workspace.js', html)
 
     def test_workflow_template_uses_section_intro_layout(self):
         html = self.render_template('workflow.html')
