@@ -371,11 +371,11 @@ function renderAttentionDropdown(summary) {
   const meta = document.getElementById('headerNoticeMeta');
   const list = document.getElementById('headerNoticeList');
   const entries = normalizeAttentionEntries(summary);
-  const total = Number(summary?.total_attention_count || 0);
+  const total = entries.reduce((sum, entry) => sum + Number(entry.count || 0), 0);
   if (!badge || !meta || !list) return;
 
   badge.hidden = total <= 0;
-  badge.textContent = total > 99 ? '99+' : String(total || '');
+  badge.textContent = total > 0 ? (total > 99 ? '99+' : String(total)) : '';
   meta.textContent = total > 0 ? `共 ${total} 条待处理提醒` : '当前没有待处理提醒';
 
   if (!entries.length) {
