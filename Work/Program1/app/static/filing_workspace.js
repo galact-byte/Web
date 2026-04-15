@@ -359,7 +359,7 @@
           <div><label>职务/职称</label><input id="cyberOwnerTitle"></div>
           <div><label>办公电话</label><input id="cyberOwnerPhone"></div>
           <div><label>移动电话</label><input id="cyberOwnerMobile"></div>
-          <div class="grid-span-full"><label>电子邮件</label><input id="cyberOwnerEmail"></div>
+          <div class="grid-span-2 filing-contact-email"><label>电子邮件</label><input id="cyberOwnerEmail"></div>
         </div>
       </div>
 
@@ -374,22 +374,86 @@
           <div><label>职务/职称</label><input id="dataOwnerTitle"></div>
           <div><label>办公电话</label><input id="dataOwnerPhone"></div>
           <div><label>移动电话</label><input id="dataOwnerMobile"></div>
-          <div class="grid-span-full"><label>电子邮件</label><input id="dataOwnerEmail"></div>
+          <div class="grid-span-2 filing-contact-email"><label>电子邮件</label><input id="dataOwnerEmail"></div>
         </div>
       </div>
 
-      <div class="workspace-subsection">
+      <div class="workspace-subsection filing-counts-section">
         <h3>备案数量</h3>
-        <div class="count-grid">
-          <div><label>本次备案二级</label><input id="currentCount2" type="number" min="0" value="0"></div>
-          <div><label>本次备案三级</label><input id="currentCount3" type="number" min="0" value="0"></div>
-          <div><label>本次备案四级</label><input id="currentCount4" type="number" min="0" value="0"></div>
-          <div><label>本次备案五级</label><input id="currentCount5" type="number" min="0" value="0"></div>
-          <div><label>总数一级</label><input id="totalCount1" type="number" min="0" value="0"></div>
-          <div><label>总数二级</label><input id="totalCount2" type="number" min="0" value="0"></div>
-          <div><label>总数三级</label><input id="totalCount3" type="number" min="0" value="0"></div>
-          <div><label>总数四级</label><input id="totalCount4" type="number" min="0" value="0"></div>
-          <div><label>总数五级</label><input id="totalCount5" type="number" min="0" value="0"></div>
+        <div class="filing-counts-board">
+          <section class="filing-count-group">
+            <div class="filing-count-group-title">本次备案的定级对象数量</div>
+            <div class="filing-count-table filing-count-table-even">
+              <label class="filing-count-cell">
+                <span class="filing-count-label">第二级定级对象数</span>
+                <span class="filing-count-input-wrap">
+                  <input id="currentCount2" type="number" min="0" value="0">
+                  <span class="filing-count-unit">个</span>
+                </span>
+              </label>
+              <label class="filing-count-cell">
+                <span class="filing-count-label">第三级定级对象数</span>
+                <span class="filing-count-input-wrap">
+                  <input id="currentCount3" type="number" min="0" value="0">
+                  <span class="filing-count-unit">个</span>
+                </span>
+              </label>
+              <label class="filing-count-cell">
+                <span class="filing-count-label">第四级定级对象数</span>
+                <span class="filing-count-input-wrap">
+                  <input id="currentCount4" type="number" min="0" value="0">
+                  <span class="filing-count-unit">个</span>
+                </span>
+              </label>
+              <label class="filing-count-cell">
+                <span class="filing-count-label">第五级定级对象数</span>
+                <span class="filing-count-input-wrap">
+                  <input id="currentCount5" type="number" min="0" value="0">
+                  <span class="filing-count-unit">个</span>
+                </span>
+              </label>
+            </div>
+          </section>
+          <section class="filing-count-group">
+            <div class="filing-count-group-title">定级对象总数（含本次备案）</div>
+            <div class="filing-count-table filing-count-table-total">
+              <label class="filing-count-cell">
+                <span class="filing-count-label">第一级定级对象数</span>
+                <span class="filing-count-input-wrap">
+                  <input id="totalCount1" type="number" min="0" value="0">
+                  <span class="filing-count-unit">个</span>
+                </span>
+              </label>
+              <label class="filing-count-cell">
+                <span class="filing-count-label">第二级定级对象数</span>
+                <span class="filing-count-input-wrap">
+                  <input id="totalCount2" type="number" min="0" value="0">
+                  <span class="filing-count-unit">个</span>
+                </span>
+              </label>
+              <label class="filing-count-cell">
+                <span class="filing-count-label">第三级定级对象数</span>
+                <span class="filing-count-input-wrap">
+                  <input id="totalCount3" type="number" min="0" value="0">
+                  <span class="filing-count-unit">个</span>
+                </span>
+              </label>
+              <label class="filing-count-cell">
+                <span class="filing-count-label">第四级定级对象数</span>
+                <span class="filing-count-input-wrap">
+                  <input id="totalCount4" type="number" min="0" value="0">
+                  <span class="filing-count-unit">个</span>
+                </span>
+              </label>
+              <label class="filing-count-cell filing-count-cell-full">
+                <span class="filing-count-label">第五级定级对象数</span>
+                <span class="filing-count-input-wrap">
+                  <input id="totalCount5" type="number" min="0" value="0">
+                  <span class="filing-count-unit">个</span>
+                </span>
+              </label>
+            </div>
+          </section>
         </div>
       </div>
     `);
