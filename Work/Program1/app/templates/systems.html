@@ -157,10 +157,7 @@ function esc(v) {
 }
 
 function setSysResult(text) {
-  const el = document.getElementById('sysResult');
-  el.textContent = text;
-  el.style.borderColor = 'var(--primary)';
-  setTimeout(() => { el.style.borderColor = ''; }, 1200);
+  window.setPageResult('sysResult', text);
 }
 
 /* 等级徽章 */

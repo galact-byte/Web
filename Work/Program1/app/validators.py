@@ -105,6 +105,8 @@ def validate_office_phone(value: str) -> bool:
     if not value:
         return True
     clean = value.strip()
+    if clean in {"/", "／"}:
+        return True
     return bool(OFFICE_PHONE_PATTERN.fullmatch(clean))
 
 

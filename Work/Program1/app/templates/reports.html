@@ -256,11 +256,7 @@ function reportStatusBadge(status) {
 }
 
 function setResult(id, text) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = text;
-  el.style.borderColor = 'var(--primary)';
-  setTimeout(() => { el.style.borderColor = ''; }, 1200);
+  window.setPageResult(id, text);
 }
 
 async function generateReport() {
