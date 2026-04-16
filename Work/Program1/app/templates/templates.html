@@ -135,10 +135,7 @@ function messageFrom(data, fallback='操作失败') {
 }
 
 function setTplResult(text) {
-  const el = document.getElementById('tplResult');
-  el.textContent = text;
-  el.style.borderColor = 'var(--primary)';
-  setTimeout(() => { el.style.borderColor = ''; }, 1200);
+  window.setPageResult('tplResult', text);
 }
 
 function tplStatusBadge(status, isDefault) {

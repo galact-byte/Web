@@ -66,10 +66,7 @@ function authHeaders() {
 }
 
 function setResult(text) {
-  const el = document.getElementById('backupResult');
-  el.textContent = text;
-  el.style.borderColor = 'var(--primary)';
-  setTimeout(() => { el.style.borderColor = ''; }, 1500);
+  window.setPageResult('backupResult', text, { timeout: 1500 });
 }
 
 function esc(v) {

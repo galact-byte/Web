@@ -7,6 +7,9 @@
     includeArchived: false,
     createMode: false,
     createOrgId: null,
+    draftRestoreDone: false,
+    draftSuspend: false,
+    draftTimer: null,
   };
 
   const INDUSTRY_OPTIONS = [
@@ -56,6 +59,11 @@
   ];
   const PERSONAL_INFO_OPTIONS = [['涉及敏感个人信息', '涉及敏感个人信息'], ['涉及未成年人的个人信息', '涉及未成年人的个人信息'], ['涉及一般个人信息', '涉及一般个人信息'], ['不涉及', '不涉及']];
   const DATA_SOURCE_OPTIONS = [['系统采集', '系统采集'], ['系统产生', '系统产生'], ['人工填报', '人工填报'], ['交易购买', '交易购买'], ['共享交换', '共享交换'], ['其他', '其他']];
+  const DATA_LEVEL_OPTIONS = [['1', '一般数据'], ['2', '重要及以上数据']];
+  const INTERACTION_OPTIONS = [['1', '对外提供给'], ['2', '委托处理'], ['3', '共同处理'], ['4', '无交互']];
+  const STORAGE_CLOUD_OPTIONS = [['1', '私有云'], ['2', '公有云'], ['3', '混合云'], ['4', '政务云'], ['5', '非云计算平台']];
+  const STORAGE_ROOM_OPTIONS = [['1', '本单位机房'], ['2', '外单位机房'], ['3', '国内第三方托管机房']];
+  const STORAGE_REGION_OPTIONS = [['1', '境内'], ['2', '境外']];
   const PROVINCE_OPTIONS = ['北京市', '天津市', '河北省', '山西省', '内蒙古自治区', '辽宁省', '吉林省', '黑龙江省', '上海市', '江苏省', '浙江省', '安徽省', '福建省', '江西省', '山东省', '河南省', '湖北省', '湖南省', '广东省', '广西壮族自治区', '海南省', '重庆市', '四川省', '贵州省', '云南省', '西藏自治区', '陕西省', '甘肃省', '青海省', '宁夏回族自治区', '新疆维吾尔自治区', '香港特别行政区', '澳门特别行政区', '台湾省'];
   const REGION_TREE = {
     山西省: [
@@ -127,19 +135,41 @@
     return `<div class="table-meta"><strong>处理人：</strong>${esc(item.reviewed_by || '-')}<br><span>时间：${formatDateTime(item.reviewed_at)}</span><br><span>说明：${esc(item.review_comment || (item.status === 'approved' ? '已处理' : '-'))}</span></div>`;
   };
 
-  function setListResult(text) {
-    const el = $('workspaceListResult');
-    if (el) el.textContent = text;
+  function isErrorText(text) {
+    const content = String(text || '');
+    return /失败|错误|异常|不存在|不合法|请先|缺少|无法|不可|冲突|超限|未找到|禁止/.test(content);
   }
 
-  function setDetailResult(text) {
-    const el = $('workspaceDetailResult');
-    if (el) el.textContent = text;
+  function flashResult(el) {
+    if (!el) return;
+    el.style.borderColor = 'var(--primary)';
+    window.setTimeout(() => {
+      el.style.borderColor = '';
+    }, 1400);
   }
 
-  function setCreateModalResult(text) {
-    const el = $('workspaceCreateModalResult');
-    if (el) el.textContent = text;
+  function showPageResult(elementId, text, options = {}) {
+    const el = $(elementId);
+    if (el) {
+      el.textContent = text;
+      flashResult(el);
+    }
+    const popup = options.popup !== undefined ? options.popup : isErrorText(text);
+    if (popup && window.appDialog) {
+      window.appDialog.alert(text, options.title || '提示');
+    }
+  }
+
+  function setListResult(text, options) {
+    showPageResult('workspaceListResult', text, options);
+  }
+
+  function setDetailResult(text, options) {
+    showPageResult('workspaceDetailResult', text, options);
+  }
+
+  function setCreateModalResult(text, options) {
+    showPageResult('workspaceCreateModalResult', text, options);
   }
 
   function boolSelect(id, trueLabel, falseLabel) {
@@ -150,12 +180,36 @@
     return items.map(([code, label]) => `<option value="${esc(code)}">${esc(label)}</option>`).join('');
   }
 
-  function checkboxGroupHtml(name, items) {
-    return `<div class="choice-grid">${items.map(([value, label]) => `<label class="choice-chip"><input type="checkbox" name="${name}" value="${esc(value)}"><span>${esc(label)}</span></label>`).join('')}</div>`;
+  function choiceGroupHtml(name, items, config = {}) {
+    const type = config.type || 'checkbox';
+    const layoutClass = config.layoutClass || '';
+    return `<div class="choice-grid ${layoutClass}">${items.map(([value, label]) => `<label class="choice-chip ${config.chipClass || ''}"><input type="${type}" name="${name}" value="${esc(value)}"><span>${esc(label)}</span></label>`).join('')}</div>`;
   }
 
-  function radioGroupHtml(name, items) {
-    return `<div class="choice-grid compact-check-grid">${items.map(([value, label]) => `<label class="choice-chip"><input type="radio" name="${name}" value="${esc(value)}"><span>${esc(label)}</span></label>`).join('')}</div>`;
+  function checkboxGroupHtml(name, items, layoutClass = '') {
+    return choiceGroupHtml(name, items, { type: 'checkbox', layoutClass });
+  }
+
+  function radioGroupHtml(name, items, layoutClass = 'choice-row') {
+    return choiceGroupHtml(name, items, { type: 'radio', layoutClass, chipClass: 'choice-chip-sm' });
+  }
+
+  function boolRadioHtml(name, trueLabel = '是', falseLabel = '否') {
+    return radioGroupHtml(name, [['true', trueLabel], ['false', falseLabel]]);
+  }
+
+  function uploadFieldHtml(label, inputId, slotKey, accept, attachmentId, hint = '选择文件后自动上传，未上传按无处理。') {
+    return `
+      <div class="upload-inline-field">
+        <label>${esc(label)}</label>
+        <div class="upload-inline-box">
+          <input id="${inputId}" type="file" accept="${esc(accept)}" data-auto-upload-slot="${esc(slotKey)}">
+          <div class="table-meta">${esc(hint)}</div>
+          <div class="attachment-list" id="${attachmentId}"></div>
+          <div class="table-meta" id="${attachmentId}Status"></div>
+        </div>
+      </div>
+    `;
   }
 
   function sectionBlock(title, hint, body, extraClass) {
@@ -316,17 +370,11 @@
 
   function renderTable1() {
     return sectionBlock('表一 单位基本情况', '单位信息以 Word 模板为准', `
-      <div class="form-grid form-grid-4">
+      <div class="form-grid form-grid-3">
         <div><label>单位名称</label><input id="orgName"></div>
         <div><label>统一社会信用代码</label><input id="orgCreditCode"></div>
         <div><label>备案地区</label><input id="orgFilingRegion"></div>
-        <div><label>单位使用互联网地址</label><input id="unitInternetAddresses" placeholder="没有请填写无"></div>
-        <div><label>隶属关系</label><select id="orgAffiliationCode"><option value="">请选择</option>${optionsHtml(AFFILIATION_OPTIONS)}</select></div>
-        <div id="orgAffiliationOtherWrap" hidden><label>隶属关系-其他</label><input id="orgAffiliationOther"></div>
-        <div><label>单位类型</label><select id="orgTypeCode"><option value="">请选择</option>${optionsHtml(ORG_TYPE_OPTIONS)}</select></div>
-        <div id="orgTypeOtherWrap" hidden><label>单位类型-其他</label><input id="orgTypeOther"></div>
-        <div><label>行业类别</label><select id="orgIndustryCode"><option value="">请选择</option>${optionsHtml(INDUSTRY_OPTIONS)}</select></div>
-        <div id="orgIndustryOtherWrap" hidden><label>行业类别-其他</label><input id="orgIndustryOther"></div>
+        <div class="grid-span-3"><label>单位使用互联网地址</label><input id="unitInternetAddresses" placeholder="没有请填写无"></div>
       </div>
 
       <div class="workspace-subsection">
@@ -346,7 +394,7 @@
         <div class="form-grid form-grid-4">
           <div><label>姓名</label><input id="orgLeaderName"></div>
           <div><label>职务/职称</label><input id="orgLeaderTitle"></div>
-          <div><label>办公电话</label><input id="orgLeaderPhone"></div>
+          <div><label>办公电话</label><input id="orgLeaderPhone" placeholder="可填写 /"></div>
           <div><label>电子邮件</label><input id="orgLeaderEmail"></div>
         </div>
       </div>
@@ -357,7 +405,7 @@
           <div><label>责任部门</label><input id="cyberDept"></div>
           <div><label>联系人姓名</label><input id="cyberOwnerName"></div>
           <div><label>职务/职称</label><input id="cyberOwnerTitle"></div>
-          <div><label>办公电话</label><input id="cyberOwnerPhone"></div>
+          <div><label>办公电话</label><input id="cyberOwnerPhone" placeholder="可填写 /"></div>
           <div><label>移动电话</label><input id="cyberOwnerMobile"></div>
           <div class="grid-span-2 filing-contact-email"><label>电子邮件</label><input id="cyberOwnerEmail"></div>
         </div>
@@ -372,9 +420,29 @@
           <div><label>管理部门</label><input id="dataDept"></div>
           <div><label>联系人姓名</label><input id="dataOwnerName"></div>
           <div><label>职务/职称</label><input id="dataOwnerTitle"></div>
-          <div><label>办公电话</label><input id="dataOwnerPhone"></div>
+          <div><label>办公电话</label><input id="dataOwnerPhone" placeholder="可填写 /"></div>
           <div><label>移动电话</label><input id="dataOwnerMobile"></div>
           <div class="grid-span-2 filing-contact-email"><label>电子邮件</label><input id="dataOwnerEmail"></div>
+        </div>
+      </div>
+
+      <div class="workspace-subsection">
+        <h3>隶属关系</h3>
+        ${radioGroupHtml('orgAffiliationCode', AFFILIATION_OPTIONS, 'choice-row')}
+        <div id="orgAffiliationOtherWrap" class="inline-field" hidden><label>隶属关系-其他</label><input id="orgAffiliationOther"></div>
+      </div>
+
+      <div class="workspace-subsection">
+        <h3>单位类型</h3>
+        ${radioGroupHtml('orgTypeCode', ORG_TYPE_OPTIONS, 'choice-row')}
+        <div id="orgTypeOtherWrap" class="inline-field" hidden><label>单位类型-其他</label><input id="orgTypeOther"></div>
+      </div>
+
+      <div class="workspace-subsection">
+        <h3>行业类别</h3>
+        <div class="form-grid form-grid-3">
+          <div class="grid-span-2"><label>行业类别</label><select id="orgIndustryCode"><option value="">请选择</option>${optionsHtml(INDUSTRY_OPTIONS)}</select></div>
+          <div id="orgIndustryOtherWrap" hidden><label>行业类别-其他</label><input id="orgIndustryOther"></div>
         </div>
       </div>
 
@@ -384,6 +452,13 @@
           <section class="filing-count-group">
             <div class="filing-count-group-title">本次备案的定级对象数量</div>
             <div class="filing-count-table filing-count-table-even">
+              <label class="filing-count-cell">
+                <span class="filing-count-label">本次备案总数</span>
+                <span class="filing-count-input-wrap">
+                  <input id="currentCountTotal" type="number" min="0" value="0">
+                  <span class="filing-count-unit">个</span>
+                </span>
+              </label>
               <label class="filing-count-cell">
                 <span class="filing-count-label">第二级定级对象数</span>
                 <span class="filing-count-input-wrap">
@@ -418,6 +493,13 @@
             <div class="filing-count-group-title">定级对象总数（含本次备案）</div>
             <div class="filing-count-table filing-count-table-total">
               <label class="filing-count-cell">
+                <span class="filing-count-label">定级对象总数</span>
+                <span class="filing-count-input-wrap">
+                  <input id="totalCountTotal" type="number" min="0" value="0">
+                  <span class="filing-count-unit">个</span>
+                </span>
+              </label>
+              <label class="filing-count-cell">
                 <span class="filing-count-label">第一级定级对象数</span>
                 <span class="filing-count-input-wrap">
                   <input id="totalCount1" type="number" min="0" value="0">
@@ -445,7 +527,7 @@
                   <span class="filing-count-unit">个</span>
                 </span>
               </label>
-              <label class="filing-count-cell filing-count-cell-full">
+              <label class="filing-count-cell">
                 <span class="filing-count-label">第五级定级对象数</span>
                 <span class="filing-count-input-wrap">
                   <input id="totalCount5" type="number" min="0" value="0">
@@ -460,158 +542,212 @@
   }
 
   function renderTable2() {
-    return sectionBlock('表二 定级对象情况', '表二不展示“定级对象编号”', `
-      <div class="form-grid form-grid-4">
-        <div><label>系统名称</label><input id="systemName"></div>
-        <div><label>系统类型</label><input id="systemType"></div>
-        <div><label>部署方式</label><input id="systemDeploymentMode"></div>
-        <div><label>投入运行时间</label><input id="systemGoLiveDate" type="date"></div>
+    return sectionBlock('表二 定级对象情况', '按备案表原顺序填写', `
+      <div class="form-grid form-grid-3">
+        <div><label>定级对象</label><input id="systemName"></div>
+        <div><label>定级对象编号</label><input id="systemCode" readonly></div>
+        <div><label>运行状态</label>${radioGroupHtml('systemRunningStatus', [['在建设', '在建设'], ['已运行', '已运行']], 'choice-row')}</div>
       </div>
-      <div class="workspace-subsection"><h3>定级对象类型</h3>${checkboxGroupHtml('objectTypes', OBJECT_TYPE_OPTIONS)}</div>
-      <div class="workspace-subsection"><h3>采用技术类型</h3>${checkboxGroupHtml('technologyTypes', TECHNOLOGY_OPTIONS)}<div id="technologyOtherWrap" class="inline-field" hidden><label>其他技术</label><input id="technologyOther"></div></div>
-      <div class="workspace-subsection"><h3>业务类型</h3>${checkboxGroupHtml('businessTypes', BUSINESS_TYPE_OPTIONS)}<div id="businessOtherWrap" class="inline-field" hidden><label>其他业务类型</label><input id="businessOther"></div><label>业务描述</label><textarea id="businessDescription"></textarea></div>
       <div class="workspace-subsection">
-        <h3>05 网络服务情况</h3>
-        <div class="form-grid form-grid-4">
-          <div><label>服务范围</label><select id="serviceScopeCode"><option value="">请选择</option>${optionsHtml(SERVICE_SCOPE_OPTIONS)}</select></div>
-          <div id="crossProvinceWrap" hidden><label>跨省数量</label><input id="crossProvinceCount" type="number" min="0"></div>
-          <div id="crossCityWrap" hidden><label>跨地(市、区)数量</label><input id="crossCityCount" type="number" min="0"></div>
+        <h3>定级对象类型（可多选）</h3>
+        ${checkboxGroupHtml('objectTypes', OBJECT_TYPE_OPTIONS, 'choice-row')}
+        <div id="technologyTypesWrap" class="inline-field">
+          <label>信息系统采用技术类型（可多选）</label>
+          ${checkboxGroupHtml('technologyTypes', TECHNOLOGY_OPTIONS, 'choice-row')}
+          <div id="technologyOtherWrap" class="inline-field" hidden><label>其他技术</label><input id="technologyOther"></div>
+        </div>
+      </div>
+      <div class="workspace-subsection">
+        <h3>承载业务情况</h3>
+        <label>业务类型</label>
+        ${checkboxGroupHtml('businessTypes', BUSINESS_TYPE_OPTIONS, 'choice-row')}
+        <div id="businessOtherWrap" class="inline-field" hidden><label>其他业务类型</label><input id="businessOther"></div>
+        <label>业务描述</label>
+        <textarea id="businessDescription"></textarea>
+      </div>
+      <div class="workspace-subsection">
+        <h3>网络服务情况</h3>
+        <label>服务范围</label>
+        ${radioGroupHtml('serviceScopeCode', SERVICE_SCOPE_OPTIONS, 'choice-row')}
+        <div class="form-grid form-grid-3">
+          <div id="crossProvinceWrap" hidden><label>跨省（区、市）数量</label><input id="crossProvinceCount" type="number" min="0"></div>
+          <div id="crossCityWrap" hidden><label>跨地（市、区）数量</label><input id="crossCityCount" type="number" min="0"></div>
           <div id="serviceScopeOtherWrap" hidden><label>服务范围-其他</label><input id="serviceScopeOther"></div>
         </div>
-        ${checkboxGroupHtml('serviceTargets', SERVICE_TARGET_OPTIONS)}
+      </div>
+      <div class="workspace-subsection">
+        <h3>服务对象</h3>
+        ${radioGroupHtml('serviceTargetCode', SERVICE_TARGET_OPTIONS, 'choice-row')}
         <div id="serviceTargetOtherWrap" class="inline-field" hidden><label>服务对象-其他</label><input id="serviceTargetOther"></div>
       </div>
       <div class="workspace-subsection">
-        <h3>06 网络平台</h3>
-        <div class="form-grid form-grid-4">
-          <div><label>部署范围</label><select id="coverageCode"><option value="">请选择</option>${optionsHtml(COVERAGE_OPTIONS)}</select></div>
-          <div id="coverageOtherWrap" hidden><label>部署范围-其他</label><input id="coverageOther"></div>
-          <div><label>网络性质</label><select id="networkNatureCode"><option value="">请选择</option>${optionsHtml(NETWORK_NATURE_OPTIONS)}</select></div>
+        <h3>网络平台</h3>
+        <label>部署范围</label>
+        ${radioGroupHtml('coverageCode', COVERAGE_OPTIONS, 'choice-row')}
+        <div id="coverageOtherWrap" class="inline-field" hidden><label>部署范围-其他</label><input id="coverageOther"></div>
+        <label>网络性质</label>
+        ${radioGroupHtml('networkNatureCode', NETWORK_NATURE_OPTIONS, 'choice-row')}
+        <div class="form-grid form-grid-3">
           <div id="networkNatureOtherWrap" hidden><label>网络性质-其他</label><input id="networkNatureOther"></div>
-        </div>
-        <div class="form-grid form-grid-3" id="internetFieldsWrap" hidden>
-          <div><label>源站 IP 地址范围</label><input id="sourceIpRange"></div>
-          <div><label>域名</label><input id="sourceDomain"></div>
-          <div><label>主要协议/端口</label><input id="sourceProtocolPorts"></div>
+          <div class="grid-span-3" id="internetFieldsWrap" hidden>
+            <div class="form-grid form-grid-3">
+              <div><label>源站 IP 地址范围</label><input id="sourceIpRange"></div>
+              <div><label>域名</label><input id="sourceDomain"></div>
+              <div><label>主要协议/端口</label><input id="sourceProtocolPorts"></div>
+            </div>
+          </div>
         </div>
         <h4>网络互联情况</h4>
-        ${checkboxGroupHtml('interconnectionItems', INTERCONNECTION_OPTIONS)}
+        ${checkboxGroupHtml('interconnectionItems', INTERCONNECTION_OPTIONS, 'choice-row')}
         <div id="interconnectionOtherWrap" class="inline-field" hidden><label>网络互联-其他</label><input id="interconnectionOther"></div>
       </div>
-      <div class="workspace-subsection">
-        <h3>分系统情况</h3>
-        <div class="form-grid form-grid-4">
-          <div><label>是否为分系统</label>${boolSelect('isSubSystem', '是', '否')}</div>
+      <div class="form-grid form-grid-3">
+          <div><label>何时投入运行使用</label><input id="systemGoLiveDate" type="date"></div>
+          <div class="grid-span-2"><label>是否是分系统</label>${boolRadioHtml('isSubSystem', '是', '否')}</div>
           <div id="parentSystemWrap" hidden><label>上级系统名称</label><input id="parentSystemName"></div>
           <div id="parentOrgWrap" hidden><label>上级系统所属单位名称</label><input id="parentOrganizationName"></div>
-          <div><label>定级依据补充</label><input id="systemLevelBasis"></div>
-        </div>
       </div>
     `);
   }
 
+  function damageLevelTableHtml(name, title) {
+    return `
+      <section class="level-card">
+        <h3>${esc(title)}</h3>
+        <div class="damage-level-table">
+          ${DAMAGE_LEVEL_OPTIONS.map((item) => `
+            <label class="damage-level-row">
+              <span class="damage-level-control"><input type="radio" name="${name}" value="${esc(item.label)}"></span>
+              <span class="damage-level-text">${esc(item.label)}</span>
+              <span class="damage-level-badge">第${item.level}级</span>
+            </label>
+          `).join('')}
+        </div>
+        <div class="level-display">同步级别：<strong id="${name === 'businessDamageLevel' ? 'businessLevelDisplay' : 'serviceLevelDisplay'}">未计算</strong></div>
+      </section>
+    `;
+  }
+
   function renderTable3() {
-    return sectionBlock('表三 定级情况', '左侧多选，右侧级别自动同步', `
+    return sectionBlock('表三 定级情况', '逐条选择损害程度，系统自动同步保护等级', `
       <div class="level-layout">
-        <section class="level-card">
-          <h3>业务信息安全保护等级</h3>
-          <div id="businessDamageOptions">${checkboxGroupHtml('businessDamageItems', DAMAGE_LEVEL_OPTIONS.map(item => [item.label, item.label]))}</div>
-          <div class="level-display">同步级别：<strong id="businessLevelDisplay">未计算</strong></div>
-        </section>
-        <section class="level-card">
-          <h3>系统服务安全保护等级</h3>
-          <div id="serviceDamageOptions">${checkboxGroupHtml('serviceDamageItems', DAMAGE_LEVEL_OPTIONS.map(item => [item.label, item.label]))}</div>
-          <div class="level-display">同步级别：<strong id="serviceLevelDisplay">未计算</strong></div>
-        </section>
+        ${damageLevelTableHtml('businessDamageLevel', '确定业务信息安全保护等级')}
+        ${damageLevelTableHtml('serviceDamageLevel', '确定系统服务安全保护等级')}
       </div>
-      <div class="final-level-box">信息系统安全保护等级：<strong id="finalLevelDisplay">未计算</strong></div>
-      <div class="form-grid form-grid-4">
+      <div class="final-level-box">定级对象安全保护等级：<strong id="finalLevelDisplay">未计算</strong></div>
+      <div class="form-grid form-grid-3">
         <div><label>定级时间</label><input id="gradingDate" type="date"></div>
+      </div>
+      <div class="workspace-subsection">
+        <h3>定级报告</h3>
+        ${radioGroupHtml('gradingReportStatus', [['has', '有'], ['none', '无']], 'choice-row')}
+        <div id="gradingReportUploadWrap" hidden>
+          ${uploadFieldHtml('定级报告附件', 'uploadTable3GradingReport', 'table3.grading_report', '.doc,.docx,.pdf', 'attachmentTable3GradingReport')}
+        </div>
+      </div>
+      <div class="workspace-subsection">
+        <h3>专家评审情况</h3>
+        ${radioGroupHtml('expertReviewStatus', [['reviewed', '已评审'], ['unreviewed', '未评审']], 'choice-row')}
+        <div id="expertReviewUploadWrap" hidden>
+          ${uploadFieldHtml('专家评审附件', 'uploadTable3ExpertReview', 'table3.expert_review', '.doc,.docx,.pdf', 'attachmentTable3ExpertReview')}
+        </div>
+      </div>
+      <div class="workspace-subsection">
+        <h3>上级行业主管部门</h3>
+        ${boolRadioHtml('hasSupervisor', '有', '无')}
+        <div id="supervisorNameWrap" hidden><label>上级行业主管部门名称</label><input id="supervisorName"></div>
+        <div id="supervisorReviewWrap" hidden>
+          <label>上级行业主管部门审核定级情况</label>
+          ${radioGroupHtml('supervisorReviewStatus', [['reviewed', '已审核'], ['unreviewed', '未审核']], 'choice-row')}
+        </div>
+        <div id="supervisorReviewUploadWrap" hidden>
+          ${uploadFieldHtml('上级行业主管部门审核附件', 'uploadTable3SupervisorReview', 'table3.supervisor_review', '.doc,.docx,.pdf', 'attachmentTable3SupervisorReview')}
+        </div>
+      </div>
+      <div class="form-grid form-grid-3">
         <div><label>填表人</label><input id="fillerName"></div>
         <div><label>填表日期</label><input id="filledDate" type="date"></div>
-        <div><label>是否有上级行业主管部门</label>${boolSelect('hasSupervisor', '有', '无')}</div>
-        <div id="supervisorNameWrap" hidden><label>上级行业主管部门名称</label><input id="supervisorName"></div>
-        <div><label>定级报告</label>${radioGroupHtml('gradingReportStatus', [['has', '有'], ['none', '无']])}</div>
-        <div><label>专家评审情况</label>${radioGroupHtml('expertReviewStatus', [['reviewed', '已评审'], ['unreviewed', '未评审']])}</div>
-        <div id="supervisorReviewWrap" hidden><label>主管部门审核情况</label>${radioGroupHtml('supervisorReviewStatus', [['reviewed', '已审核'], ['unreviewed', '未审核']])}</div>
-      </div>
-      <div class="upload-grid">
-        <div class="material-slot"><label>定级报告附件</label><input id="uploadTable3GradingReport" type="file" accept=".doc,.docx,.pdf"><button class="btn-lite btn-sm" data-upload-slot="table3.grading_report" data-upload-input="uploadTable3GradingReport">上传</button><div class="attachment-list" id="attachmentTable3GradingReport"></div></div>
-        <div class="material-slot" id="expertReviewUploadWrap" hidden><label>专家评审附件</label><input id="uploadTable3ExpertReview" type="file" accept=".doc,.docx,.pdf"><button class="btn-lite btn-sm" data-upload-slot="table3.expert_review" data-upload-input="uploadTable3ExpertReview">上传</button><div class="attachment-list" id="attachmentTable3ExpertReview"></div></div>
-        <div class="material-slot" id="supervisorReviewUploadWrap" hidden><label>主管部门审核附件</label><input id="uploadTable3SupervisorReview" type="file" accept=".doc,.docx,.pdf"><button class="btn-lite btn-sm" data-upload-slot="table3.supervisor_review" data-upload-input="uploadTable3SupervisorReview">上传</button><div class="attachment-list" id="attachmentTable3SupervisorReview"></div></div>
       </div>
     `);
   }
 
   function sceneBlock(key, title, enabledHtml, body) {
-    return `<details class="workspace-collapsible workspace-scene" open><summary><span>${esc(title)}</span><small>支持展开/折叠</small></summary><div class="workspace-collapsible-body"><div class="inline-field">${enabledHtml}</div><div id="${key}DetailWrap">${body}</div></div></details>`;
+    return `<details class="workspace-collapsible workspace-scene" open><summary><span>${esc(title)}</span><small>按实际采用情况填写</small></summary><div class="workspace-collapsible-body"><div class="inline-field">${enabledHtml}</div><div id="${key}DetailWrap">${body}</div></div></details>`;
   }
 
   function renderTable4() {
-    return sectionBlock('表四 新技术新应用场景', '按实际采用情况填写，选否时直接隐藏下方字段', `
-      ${sceneBlock('cloudScene', '云计算应用场景补充信息', `<label>是否采用云计算技术</label>${boolSelect('cloudEnabled', '是', '否')}`, `
-        <div class="workspace-subsection"><h4>责任主体类型</h4>${checkboxGroupHtml('cloudResponsibilityTypes', CLOUD_RESPONSIBILITY_OPTIONS)}</div>
-        <div class="workspace-subsection"><h4>云计算服务模式</h4>${checkboxGroupHtml('cloudServiceModes', CLOUD_SERVICE_MODE_OPTIONS)}<div id="cloudServiceModeOtherWrap" class="inline-field" hidden><label>其他服务模式</label><input id="cloudServiceModeOther"></div></div>
-        <div class="workspace-subsection"><h4>云计算部署模式</h4>${checkboxGroupHtml('cloudDeploymentModes', CLOUD_DEPLOYMENT_OPTIONS)}<div id="cloudDeploymentOtherWrap" class="inline-field" hidden><label>其他部署模式</label><input id="cloudDeploymentOther"></div></div>
-        <div class="form-grid form-grid-4">
-          <div><label>云服务客户数量</label><input id="cloudCustomerCount"></div>
-          <div><label>云平台基础设施地点</label><input id="cloudInfraLocation"></div>
-          <div><label>云平台运维地点</label><input id="cloudOpsLocation"></div>
-          <div><label>云服务客户运维地点</label><input id="cloudCustomerOpsLocation"></div>
-          <div><label>云服务商</label><input id="cloudProviderName"></div>
-          <div><label>平台安全等级</label><input id="cloudProviderLevel"></div>
-          <div><label>平台名称</label><input id="cloudProviderPlatformName"></div>
-          <div><label>平台备案编号</label><input id="cloudProviderRecordNo"></div>
+    return sectionBlock('表四 新技术新应用场景', '选“否”时不显示对应补充项', `
+      ${sceneBlock('cloudScene', '云计算应用场景补充信息', `<label>是否采用云计算技术</label>${boolRadioHtml('cloudEnabled', '是', '否')}`, `
+        <div class="workspace-subsection"><h4>责任主体类型</h4>${checkboxGroupHtml('cloudResponsibilityTypes', CLOUD_RESPONSIBILITY_OPTIONS, 'choice-row')}</div>
+        <div class="workspace-subsection"><h4>云计算服务模式</h4>${checkboxGroupHtml('cloudServiceModes', CLOUD_SERVICE_MODE_OPTIONS, 'choice-row')}<div id="cloudServiceModeOtherWrap" class="inline-field" hidden><label>其他服务模式</label><input id="cloudServiceModeOther"></div></div>
+        <div class="workspace-subsection"><h4>云计算部署模式</h4>${checkboxGroupHtml('cloudDeploymentModes', CLOUD_DEPLOYMENT_OPTIONS, 'choice-row')}<div id="cloudDeploymentOtherWrap" class="inline-field" hidden><label>其他部署模式</label><input id="cloudDeploymentOther"></div></div>
+        <div id="cloudProviderSectionWrap" class="workspace-subsection" hidden>
+          <h4>云服务商填写</h4>
+          <div class="form-grid form-grid-3">
+            <div><label>云服务客户数量</label><input id="cloudCustomerCount"></div>
+            <div><label>云平台基础设施地点</label><input id="cloudInfraLocation"></div>
+            <div><label>云平台运维地点</label><input id="cloudOpsLocation"></div>
+          </div>
         </div>
-        <div class="material-slot"><label>云平台备案证明</label><input id="uploadTable4Cloud" type="file" accept=".doc,.docx,.pdf"><button class="btn-lite btn-sm" data-upload-slot="table4.cloud" data-upload-input="uploadTable4Cloud">上传</button><div class="attachment-list" id="attachmentTable4Cloud"></div></div>
+        <div id="cloudCustomerSectionWrap" class="workspace-subsection" hidden>
+          <h4>云服务客户填写</h4>
+          <div class="form-grid form-grid-3">
+            <div><label>云服务商</label><input id="cloudProviderName"></div>
+            <div><label>平台安全等级</label><input id="cloudProviderLevel"></div>
+            <div><label>平台名称</label><input id="cloudProviderPlatformName"></div>
+            <div><label>平台备案编号</label><input id="cloudProviderRecordNo"></div>
+            <div class="grid-span-2"><label>云服务客户运维地点</label><input id="cloudCustomerOpsLocation"></div>
+          </div>
+          ${uploadFieldHtml('云平台备案证明', 'uploadTable4Cloud', 'table4.cloud', '.doc,.docx,.pdf', 'attachmentTable4Cloud')}
+        </div>
       `)}
-      ${sceneBlock('mobileScene', '移动互联应用场景补充信息', `<label>是否采用移动互联技术</label>${boolSelect('mobileEnabled', '是', '否')}`, `
+      ${sceneBlock('mobileScene', '移动互联应用场景补充信息', `<label>是否采用移动互联技术</label>${boolRadioHtml('mobileEnabled', '是', '否')}`, `
         <div class="form-grid form-grid-3">
-          <div><label>移动应用软件名称/小程序名称</label><input id="mobileAppName"></div>
+          <div class="grid-span-3"><label>移动应用软件名称、小程序名称等</label><input id="mobileAppName"></div>
         </div>
-        <div class="workspace-subsection"><h4>无线通道情况</h4>${checkboxGroupHtml('mobileWirelessChannels', MOBILE_CHANNEL_OPTIONS)}</div>
-        <div class="workspace-subsection"><h4>移动终端情况</h4>${checkboxGroupHtml('mobileTerminalTypes', MOBILE_TERMINAL_OPTIONS)}</div>
+        <div class="workspace-subsection"><h4>无线通道情况</h4>${checkboxGroupHtml('mobileWirelessChannels', MOBILE_CHANNEL_OPTIONS, 'choice-row')}</div>
+        <div class="workspace-subsection"><h4>移动终端情况</h4>${checkboxGroupHtml('mobileTerminalTypes', MOBILE_TERMINAL_OPTIONS, 'choice-row')}</div>
       `)}
-      ${sceneBlock('iotScene', '物联网应用场景补充信息', `<label>是否为物联网系统</label>${boolSelect('iotEnabled', '是', '否')}`, `
-        <div class="workspace-subsection"><h4>系统感知层</h4>${checkboxGroupHtml('iotPerceptionLayers', IOT_PERCEPTION_OPTIONS)}<div id="iotPerceptionOtherWrap" class="inline-field" hidden><label>感知层-其他</label><input id="iotPerceptionOther"></div></div>
-        <div class="workspace-subsection"><h4>系统网络传输层</h4>${checkboxGroupHtml('iotTransportLayers', IOT_TRANSPORT_OPTIONS)}<div id="iotTransportOtherWrap" class="inline-field" hidden><label>传输层-其他</label><input id="iotTransportOther"></div></div>
+      ${sceneBlock('iotScene', '物联网应用场景补充信息', `<label>是否为物联网系统</label>${boolRadioHtml('iotEnabled', '是', '否')}`, `
+        <div class="workspace-subsection"><h4>系统感知层（可多选）</h4>${checkboxGroupHtml('iotPerceptionLayers', IOT_PERCEPTION_OPTIONS, 'choice-row')}<div id="iotPerceptionOtherWrap" class="inline-field" hidden><label>感知层-其他</label><input id="iotPerceptionOther"></div></div>
+        <div class="workspace-subsection"><h4>系统网络传输层（可多选）</h4>${checkboxGroupHtml('iotTransportLayers', IOT_TRANSPORT_OPTIONS, 'choice-row')}<div id="iotTransportOtherWrap" class="inline-field" hidden><label>传输层-其他</label><input id="iotTransportOther"></div></div>
       `)}
-      ${sceneBlock('industrialScene', '工业控制系统应用场景补充信息', `<label>是否为工业控制系统</label>${boolSelect('industrialEnabled', '是', '否')}`, `
-        <div class="workspace-subsection"><h4>系统功能层次</h4>${checkboxGroupHtml('industrialFunctionLayers', INDUSTRIAL_LAYER_OPTIONS)}</div>
-        <div class="workspace-subsection"><h4>工业控制系统组成</h4>${checkboxGroupHtml('industrialComponents', INDUSTRIAL_COMPONENT_OPTIONS)}<div id="industrialComponentOtherWrap" class="inline-field" hidden><label>系统组成-其他</label><input id="industrialComponentOther"></div></div>
+      ${sceneBlock('industrialScene', '工业控制系统应用场景补充信息', `<label>是否为工业控制系统</label>${boolRadioHtml('industrialEnabled', '是', '否')}`, `
+        <div class="workspace-subsection"><h4>系统功能层次（可多选）</h4>${checkboxGroupHtml('industrialFunctionLayers', INDUSTRIAL_LAYER_OPTIONS, 'choice-row')}</div>
+        <div class="workspace-subsection"><h4>工业控制系统组成（可多选）</h4>${checkboxGroupHtml('industrialComponents', INDUSTRIAL_COMPONENT_OPTIONS, 'choice-row')}<div id="industrialComponentOtherWrap" class="inline-field" hidden><label>系统组成-其他</label><input id="industrialComponentOther"></div></div>
       `)}
-      ${sceneBlock('bigDataScene', '大数据应用场景补充信息', `<label>是否采用大数据技术</label>${boolSelect('bigDataEnabled', '是', '否')}`, `
-        <div class="workspace-subsection"><h4>大数据系统组成</h4>${checkboxGroupHtml('bigDataComponents', BIG_DATA_COMPONENT_OPTIONS)}</div>
-        <div class="form-grid form-grid-4">
-          <div><label>大数据出境情况</label><input id="bigDataCrossBorderStatus" placeholder="无出境需求/有出境需求"></div>
-          <div><label>大数据应用数量</label><input id="bigDataApplicationCount"></div>
-          <div><label>大数据平台基础设施地点</label><input id="bigDataInfraLocation"></div>
-          <div><label>大数据平台运维地点</label><input id="bigDataOpsLocation"></div>
-          <div><label>平台服务商</label><input id="bigDataProviderName"></div>
-          <div><label>平台安全等级</label><input id="bigDataProviderLevel"></div>
-          <div><label>平台名称</label><input id="bigDataProviderPlatformName"></div>
-          <div><label>平台备案编号</label><input id="bigDataProviderRecordNo"></div>
+      ${sceneBlock('bigDataScene', '大数据应用场景补充信息', `<label>是否采用大数据技术</label>${boolRadioHtml('bigDataEnabled', '是', '否')}`, `
+        <div class="workspace-subsection"><h4>大数据系统组成（可多选）</h4>${checkboxGroupHtml('bigDataComponents', BIG_DATA_COMPONENT_OPTIONS, 'choice-row')}</div>
+        <div class="workspace-subsection"><h4>大数据出境情况</h4>${radioGroupHtml('bigDataCrossBorderStatus', [['无出境需求', '无出境需求'], ['有出境需求', '有出境需求']], 'choice-row')}</div>
+        <div id="bigDataPlatformWrap" class="workspace-subsection" hidden>
+          <h4>大数据平台填写</h4>
+          <div class="form-grid form-grid-3">
+            <div><label>大数据应用数量</label><input id="bigDataApplicationCount"></div>
+            <div><label>大数据平台基础设施地点</label><input id="bigDataInfraLocation"></div>
+            <div><label>大数据平台运维地点</label><input id="bigDataOpsLocation"></div>
+          </div>
         </div>
-        <div class="material-slot"><label>大数据平台备案证明</label><input id="uploadTable4BigData" type="file" accept=".doc,.docx,.pdf"><button class="btn-lite btn-sm" data-upload-slot="table4.big_data" data-upload-input="uploadTable4BigData">上传</button><div class="attachment-list" id="attachmentTable4BigData"></div></div>
+        <div id="bigDataConsumerWrap" class="workspace-subsection" hidden>
+          <h4>大数据应用、大数据资源填写</h4>
+          <div class="form-grid form-grid-3">
+            <div><label>平台服务商</label><input id="bigDataProviderName"></div>
+            <div><label>平台安全等级</label><input id="bigDataProviderLevel"></div>
+            <div><label>平台名称</label><input id="bigDataProviderPlatformName"></div>
+            <div><label>平台备案编号</label><input id="bigDataProviderRecordNo"></div>
+          </div>
+          ${uploadFieldHtml('大数据平台备案证明', 'uploadTable4BigData', 'table4.big_data', '.doc,.docx,.pdf', 'attachmentTable4BigData')}
+        </div>
       `)}
     `);
   }
 
   function renderTable5() {
-    return sectionBlock('表五 提交材料情况', '材料状态与附件名称一并维护', `
+    return sectionBlock('表五 提交材料情况', '选择文件后自动上传，未上传即按无处理', `
       <div class="materials-stack">
         ${MATERIAL_SLOTS.map(([key, label]) => `
           <div class="material-slot material-slot-row">
             <div class="material-slot-head"><strong>${esc(label)}</strong></div>
-            <div class="material-slot-controls">
-              <select id="materialStatus_${key}">
-                <option value="none">无</option>
-                <option value="has">有</option>
-              </select>
-              <input id="upload_${key}" type="file" accept=".doc,.docx,.pdf,.jpg,.jpeg,.png,.vsd,.vsdx">
-              <button class="btn-lite btn-sm" data-upload-slot="table5.${key}" data-upload-input="upload_${key}">上传</button>
-            </div>
-            <div class="attachment-list" id="attachment_${key}"></div>
+            ${uploadFieldHtml(label, `upload_${key}`, `table5.${key}`, '.doc,.docx,.pdf,.jpg,.jpeg,.png,.vsd,.vsdx', `attachment_${key}`)}
           </div>
         `).join('')}
       </div>
@@ -619,7 +755,7 @@
   }
 
   function renderTable6() {
-    return sectionBlock('表六 数据摸底调查表', '支持添加多条数据项，导出 Word 先取第一条', `
+    return sectionBlock('表六 数据摸底调查表', '支持新增多条数据项，导出 Word 默认使用第一条', `
       <div class="panel-actions">
         <button class="btn-lite btn-sm" id="addDataItemBtn"><i class="fas fa-plus"></i> 新增数据项</button>
       </div>
@@ -627,33 +763,90 @@
     `);
   }
 
+  function table6CardRadioHtml(field, items, currentValue, index, layoutClass = 'choice-row') {
+    const groupName = `table6_${field}_${index}`;
+    return `<div class="choice-grid ${layoutClass}">${items.map(([value, label]) => `<label class="choice-chip choice-chip-sm"><input type="radio" name="${groupName}" data-radio-field="${field}" value="${esc(value)}" ${String(currentValue || '') === String(value) ? 'checked' : ''}><span>${esc(label)}</span></label>`).join('')}</div>`;
+  }
+
   function dataItemCard(item, index) {
     const value = (key) => esc(item && item[key] ? item[key] : '');
     const checked = (key, target) => Array.isArray(item && item[key]) && item[key].includes(target) ? 'checked' : '';
+    const radioValue = (key) => {
+      if (!item) return '';
+      if (key === 'data_level_code' && !item[key] && item.data_level) {
+        return DATA_LEVEL_OPTIONS.find((option) => option[1] === item.data_level)?.[0] || '';
+      }
+      return String(item[key] || '');
+    };
     return `
       <article class="data-item-card" data-index="${index}">
         <div class="card-head">
           <strong>数据项 ${index + 1}</strong>
           <button type="button" class="btn-lite btn-sm btn-danger" data-remove-data-index="${index}">删除</button>
         </div>
-        <div class="form-grid form-grid-4">
+        <div class="form-grid form-grid-3">
           <div><label>数据名称</label><input data-field="data_name" value="${value('data_name')}"></div>
-          <div><label>拟定数据级别</label><input data-field="data_level" value="${value('data_level')}" placeholder="一般数据/重要及以上数据"></div>
+          <div class="grid-span-2"><label>拟定数据级别</label>${table6CardRadioHtml('data_level_code', DATA_LEVEL_OPTIONS, radioValue('data_level_code'), index)}</div>
           <div><label>数据类别</label><input data-field="data_category" value="${value('data_category')}"></div>
           <div><label>数据安全责任部门</label><input data-field="data_security_dept" value="${value('data_security_dept')}"></div>
           <div><label>数据安全负责人</label><input data-field="data_security_owner" value="${value('data_security_owner')}"></div>
-          <div><label>数据总量</label><input data-field="data_total" value="${value('data_total')}" placeholder="如：3.35GB / 0.5万条"></div>
-          <div><label>数据月增长量</label><input data-field="monthly_growth" value="${value('monthly_growth')}" placeholder="如：0.6GB"></div>
-          <div><label>与其他数据处理者的交互情况</label><input data-field="interaction" value="${value('interaction')}"></div>
-          <div class="grid-span-full"><label>来源单位</label><textarea data-field="source_units">${value('source_units')}</textarea></div>
-          <div class="grid-span-full"><label>流出单位</label><textarea data-field="target_units">${value('target_units')}</textarea></div>
-          <div><label>数据存储位置（云平台/名称）</label><input data-field="storage_platform" value="${value('storage_platform')}"></div>
-          <div><label>数据存储机房</label><input data-field="storage_machine_room" value="${value('storage_machine_room')}"></div>
-          <div><label>数据存储地域</label><input data-field="storage_location" value="${value('storage_location')}"></div>
-          <div><label>数据来源-其他</label><input data-field="data_source_other" value="${value('data_source_other')}"></div>
         </div>
-        <div class="workspace-subsection"><h4>个人信息涉及情况</h4><div class="choice-grid">${PERSONAL_INFO_OPTIONS.map(([val, label]) => `<label class="choice-chip"><input type="checkbox" data-array-field="personal_info_flags" value="${esc(val)}" ${checked('personal_info_flags', val)}><span>${esc(label)}</span></label>`).join('')}</div></div>
-        <div class="workspace-subsection"><h4>数据来源</h4><div class="choice-grid">${DATA_SOURCE_OPTIONS.map(([val, label]) => `<label class="choice-chip"><input type="checkbox" data-array-field="data_sources" value="${esc(val)}" ${checked('data_sources', val)}><span>${esc(label)}</span></label>`).join('')}</div></div>
+        <div class="workspace-subsection">
+          <h4>个人信息涉及情况</h4>
+          <div class="choice-grid choice-row">${PERSONAL_INFO_OPTIONS.map(([val, label]) => `<label class="choice-chip choice-chip-sm"><input type="checkbox" data-array-field="personal_info_flags" value="${esc(val)}" ${checked('personal_info_flags', val)}><span>${esc(label)}</span></label>`).join('')}</div>
+        </div>
+        <div class="workspace-subsection">
+          <h4>数据总量</h4>
+          <div class="form-grid form-grid-3">
+            <div><label>GB</label><input data-field="data_total_gb" value="${value('data_total_gb')}"></div>
+            <div><label>TB</label><input data-field="data_total_tb" value="${value('data_total_tb')}"></div>
+            <div><label>条数（万条）</label><input data-field="data_total_records" value="${value('data_total_records')}"></div>
+          </div>
+        </div>
+        <div class="workspace-subsection">
+          <h4>数据月增长量</h4>
+          <div class="form-grid form-grid-3">
+            <div><label>GB</label><input data-field="monthly_growth_gb" value="${value('monthly_growth_gb')}"></div>
+            <div><label>TB</label><input data-field="monthly_growth_tb" value="${value('monthly_growth_tb')}"></div>
+          </div>
+        </div>
+        <div class="workspace-subsection">
+          <h4>数据来源（可多选）</h4>
+          <div class="choice-grid choice-row">${DATA_SOURCE_OPTIONS.map(([val, label]) => `<label class="choice-chip choice-chip-sm"><input type="checkbox" data-array-field="data_sources" value="${esc(val)}" ${checked('data_sources', val)}><span>${esc(label)}</span></label>`).join('')}</div>
+          <div data-source-other-wrap hidden><label>数据来源-其他</label><input data-field="data_source_other" value="${value('data_source_other')}"></div>
+        </div>
+        <div class="workspace-subsection">
+          <h4>单位间数据流转情况</h4>
+          <div class="form-grid form-grid-3">
+            <div><label>数据来源单位1</label><input data-field="source_unit_1" value="${value('source_unit_1')}"></div>
+            <div><label>数据来源单位2</label><input data-field="source_unit_2" value="${value('source_unit_2')}"></div>
+            <div><label>数据来源单位3</label><input data-field="source_unit_3" value="${value('source_unit_3')}"></div>
+            <div><label>数据流出单位1</label><input data-field="target_unit_1" value="${value('target_unit_1')}"></div>
+            <div><label>数据流出单位2</label><input data-field="target_unit_2" value="${value('target_unit_2')}"></div>
+            <div><label>数据流出单位3</label><input data-field="target_unit_3" value="${value('target_unit_3')}"></div>
+          </div>
+        </div>
+        <div class="workspace-subsection">
+          <h4>与其他数据处理者的交互情况</h4>
+          <div class="choice-grid choice-row">${INTERACTION_OPTIONS.map(([val, label]) => `<label class="choice-chip choice-chip-sm"><input type="checkbox" data-array-field="interaction_types" value="${esc(val)}" ${checked('interaction_types', val)}><span>${esc(label)}</span></label>`).join('')}</div>
+          <div class="form-grid form-grid-3">
+            <div data-interaction-provide-wrap hidden><label>对外提供给</label><input data-field="interaction_provide_to" value="${value('interaction_provide_to')}"></div>
+            <div data-interaction-entrust-wrap hidden><label>委托处理方</label><input data-field="interaction_entrust_to" value="${value('interaction_entrust_to')}"></div>
+            <div data-interaction-share-wrap hidden><label>共同处理方</label><input data-field="interaction_shared_with" value="${value('interaction_shared_with')}"></div>
+          </div>
+        </div>
+        <div class="workspace-subsection">
+          <h4>数据存储位置（名称）</h4>
+          <label>云平台类型</label>
+          ${table6CardRadioHtml('storage_cloud_type', STORAGE_CLOUD_OPTIONS, radioValue('storage_cloud_type'), index)}
+          <div data-storage-cloud-wrap hidden><label>云平台名称</label><input data-field="storage_cloud_name" value="${value('storage_cloud_name')}"></div>
+          <label>机房类型</label>
+          ${table6CardRadioHtml('storage_room_type', STORAGE_ROOM_OPTIONS, radioValue('storage_room_type'), index)}
+          <div data-storage-room-wrap hidden><label>机房名称</label><input data-field="storage_room_name" value="${value('storage_room_name')}"></div>
+          <label>地域</label>
+          ${table6CardRadioHtml('storage_region_type', STORAGE_REGION_OPTIONS, radioValue('storage_region_type'), index)}
+          <div data-storage-region-wrap hidden><label>地域名称</label><input data-field="storage_region_name" value="${value('storage_region_name')}"></div>
+        </div>
       </article>
     `;
   }
@@ -720,8 +913,8 @@
   }
 
   function updateLevelDisplays() {
-    const businessLevel = computeLevelFromItems(getCheckedValues('businessDamageItems'));
-    const serviceLevel = computeLevelFromItems(getCheckedValues('serviceDamageItems'));
+    const businessLevel = computeLevelFromItems([getRadioValue('businessDamageLevel')].filter(Boolean));
+    const serviceLevel = computeLevelFromItems([getRadioValue('serviceDamageLevel')].filter(Boolean));
     const finalLevel = Math.max(businessLevel, serviceLevel, 0);
     if ($('businessLevelDisplay')) $('businessLevelDisplay').textContent = businessLevel ? `第${businessLevel}级` : '未计算';
     if ($('serviceLevelDisplay')) $('serviceLevelDisplay').textContent = serviceLevel ? `第${serviceLevel}级` : '未计算';
@@ -729,40 +922,95 @@
   }
 
   function syncConditionalFields() {
-    const serviceScope = getValue('serviceScopeCode');
+    const serviceScope = getRadioValue('serviceScopeCode');
     show('crossProvinceWrap', serviceScope === '11');
     show('crossCityWrap', serviceScope === '21');
     show('serviceScopeOtherWrap', serviceScope === '99');
-    show('serviceTargetOtherWrap', getCheckedValues('serviceTargets').includes('其他'));
+    show('serviceTargetOtherWrap', getRadioValue('serviceTargetCode') === '其他');
+    show('technologyTypesWrap', getCheckedValues('objectTypes').includes('信息系统'));
     show('technologyOtherWrap', getCheckedValues('technologyTypes').includes('其他'));
     show('businessOtherWrap', getCheckedValues('businessTypes').includes('其他'));
-    show('coverageOtherWrap', getValue('coverageCode') === '9');
-    show('networkNatureOtherWrap', getValue('networkNatureCode') === '9');
-    show('internetFieldsWrap', getValue('networkNatureCode') === '2');
+    show('coverageOtherWrap', getRadioValue('coverageCode') === '9');
+    show('networkNatureOtherWrap', getRadioValue('networkNatureCode') === '9');
+    show('internetFieldsWrap', getRadioValue('networkNatureCode') === '2');
     show('interconnectionOtherWrap', getCheckedValues('interconnectionItems').includes('其他'));
-    show('parentSystemWrap', getValue('isSubSystem') === 'true');
-    show('parentOrgWrap', getValue('isSubSystem') === 'true');
-    show('orgAffiliationOtherWrap', getValue('orgAffiliationCode') === '9');
-    show('orgTypeOtherWrap', getValue('orgTypeCode') === '9');
+    show('parentSystemWrap', getRadioValue('isSubSystem') === 'true');
+    show('parentOrgWrap', getRadioValue('isSubSystem') === 'true');
+    show('orgAffiliationOtherWrap', getRadioValue('orgAffiliationCode') === '9');
+    show('orgTypeOtherWrap', getRadioValue('orgTypeCode') === '9');
     show('orgIndustryOtherWrap', getValue('orgIndustryCode') === '99');
+    show('gradingReportUploadWrap', getRadioValue('gradingReportStatus') === 'has');
     show('expertReviewUploadWrap', getRadioValue('expertReviewStatus') === 'reviewed');
-    show('supervisorNameWrap', getValue('hasSupervisor') === 'true');
-    show('supervisorReviewWrap', getValue('hasSupervisor') === 'true');
-    show('supervisorReviewUploadWrap', getValue('hasSupervisor') === 'true' && getRadioValue('supervisorReviewStatus') === 'reviewed');
+    show('supervisorNameWrap', getRadioValue('hasSupervisor') === 'true');
+    show('supervisorReviewWrap', getRadioValue('hasSupervisor') === 'true');
+    show('supervisorReviewUploadWrap', getRadioValue('hasSupervisor') === 'true' && getRadioValue('supervisorReviewStatus') === 'reviewed');
     show('cloudServiceModeOtherWrap', getCheckedValues('cloudServiceModes').includes('其他'));
     show('cloudDeploymentOtherWrap', getCheckedValues('cloudDeploymentModes').includes('其他'));
     show('iotPerceptionOtherWrap', getCheckedValues('iotPerceptionLayers').includes('其他'));
     show('iotTransportOtherWrap', getCheckedValues('iotTransportLayers').includes('其他'));
     show('industrialComponentOtherWrap', getCheckedValues('industrialComponents').includes('其他'));
-    show('cloudSceneDetailWrap', getValue('cloudEnabled') === 'true');
-    show('mobileSceneDetailWrap', getValue('mobileEnabled') === 'true');
-    show('iotSceneDetailWrap', getValue('iotEnabled') === 'true');
-    show('industrialSceneDetailWrap', getValue('industrialEnabled') === 'true');
-    show('bigDataSceneDetailWrap', getValue('bigDataEnabled') === 'true');
+    show('cloudSceneDetailWrap', getRadioValue('cloudEnabled') === 'true');
+    show('mobileSceneDetailWrap', getRadioValue('mobileEnabled') === 'true');
+    show('iotSceneDetailWrap', getRadioValue('iotEnabled') === 'true');
+    show('industrialSceneDetailWrap', getRadioValue('industrialEnabled') === 'true');
+    show('bigDataSceneDetailWrap', getRadioValue('bigDataEnabled') === 'true');
+    const cloudRoles = getCheckedValues('cloudResponsibilityTypes');
+    show('cloudProviderSectionWrap', cloudRoles.includes('云服务商'));
+    show('cloudCustomerSectionWrap', cloudRoles.includes('云服务客户'));
+    const bigDataComponents = getCheckedValues('bigDataComponents');
+    show('bigDataPlatformWrap', bigDataComponents.includes('大数据平台'));
+    show('bigDataConsumerWrap', bigDataComponents.includes('大数据应用') || bigDataComponents.includes('大数据资源'));
+    syncTable6ConditionalFields();
+  }
+
+  function syncTable6ConditionalFields() {
+    document.querySelectorAll('.data-item-card').forEach((card) => {
+      const personalInfoChecks = Array.from(card.querySelectorAll('[data-array-field="personal_info_flags"]'));
+      const personalInfoValues = personalInfoChecks.filter((field) => field.checked).map((field) => field.value);
+      if (personalInfoValues.includes('不涉及')) {
+        personalInfoChecks.forEach((field) => {
+          field.checked = field.value === '不涉及';
+        });
+      }
+      const hasOtherDataSource = Array.from(card.querySelectorAll('[data-array-field="data_sources"]:checked')).some((field) => field.value === '其他');
+      card.querySelectorAll('[data-source-other-wrap]').forEach((element) => {
+        element.hidden = !hasOtherDataSource;
+      });
+      const interactionChecks = Array.from(card.querySelectorAll('[data-array-field="interaction_types"]'));
+      let interactionValues = interactionChecks.filter((field) => field.checked).map((field) => field.value);
+      if (interactionValues.includes('4')) {
+        interactionChecks.forEach((field) => {
+          field.checked = field.value === '4';
+        });
+        interactionValues = ['4'];
+      }
+      card.querySelectorAll('[data-interaction-provide-wrap]').forEach((element) => {
+        element.hidden = !interactionValues.includes('1');
+      });
+      card.querySelectorAll('[data-interaction-entrust-wrap]').forEach((element) => {
+        element.hidden = !interactionValues.includes('2');
+      });
+      card.querySelectorAll('[data-interaction-share-wrap]').forEach((element) => {
+        element.hidden = !interactionValues.includes('3');
+      });
+      const storageCloudType = card.querySelector('[data-radio-field="storage_cloud_type"]:checked')?.value || '';
+      const storageRoomType = card.querySelector('[data-radio-field="storage_room_type"]:checked')?.value || '';
+      const storageRegionType = card.querySelector('[data-radio-field="storage_region_type"]:checked')?.value || '';
+      card.querySelectorAll('[data-storage-cloud-wrap]').forEach((element) => {
+        element.hidden = !storageCloudType;
+      });
+      card.querySelectorAll('[data-storage-room-wrap]').forEach((element) => {
+        element.hidden = !storageRoomType;
+      });
+      card.querySelectorAll('[data-storage-region-wrap]').forEach((element) => {
+        element.hidden = !storageRegionType;
+      });
+    });
   }
 
   function renderTable6Items(items) {
     $('table6Items').innerHTML = ensureDataItems(items).map((item, index) => dataItemCard(item, index)).join('');
+    syncTable6ConditionalFields();
   }
 
   function renderAttachmentList(elementId, attachments) {
@@ -772,9 +1020,73 @@
     el.innerHTML = items.length
       ? items.map((item) => `<a href="/api/attachment-files/${item.id}/download" target="_blank">${esc(item.file_name || `附件${item.id}`)}</a>`).join('')
       : '<span class="table-meta">未上传</span>';
+    const statusEl = $(`${elementId}Status`);
+    if (statusEl) statusEl.textContent = items.length ? `已上传 ${items.length} 个文件` : '暂未上传';
+  }
+
+  function draftStorageKey(systemId) {
+    return `filing_workspace_draft_${Number(systemId) || 0}`;
+  }
+
+  function readDraft(systemId) {
+    const raw = localStorage.getItem(draftStorageKey(systemId));
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (_error) {
+      localStorage.removeItem(draftStorageKey(systemId));
+      return null;
+    }
+  }
+
+  function clearDraft(systemId) {
+    localStorage.removeItem(draftStorageKey(systemId));
+  }
+
+  function saveDraftSnapshot() {
+    if (!state.currentSystemId || !state.detail || state.draftSuspend) return;
+    const payload = buildSavePayload();
+    localStorage.setItem(draftStorageKey(state.currentSystemId), JSON.stringify({
+      saved_at: new Date().toISOString(),
+      payload,
+    }));
+  }
+
+  function queueDraftSave() {
+    if (!isDetailPage() || !state.currentSystemId || !state.detail || state.draftSuspend) return;
+    window.clearTimeout(state.draftTimer);
+    state.draftTimer = window.setTimeout(saveDraftSnapshot, 300);
+  }
+
+  async function restoreDraftIfNeeded(detail) {
+    if (!state.currentSystemId || state.draftRestoreDone) return detail;
+    state.draftRestoreDone = true;
+    const draft = readDraft(state.currentSystemId);
+    if (!draft || !draft.payload) return detail;
+    const ok = await window.appDialog.confirm(
+      `检测到本机草稿，保存时间：${formatDateTime(draft.saved_at)}。是否恢复？`,
+      '恢复草稿',
+      '恢复草稿',
+      '忽略'
+    );
+    if (!ok) return detail;
+    const payload = draft.payload;
+    return {
+      organization: {
+        ...(detail.organization || {}),
+        ...(payload.organization || {}),
+        filing_detail: (payload.organization || {}).filing_detail || (detail.organization || {}).filing_detail || {},
+      },
+      system: {
+        ...(detail.system || {}),
+        ...(payload.system || {}),
+        filing_detail: (payload.system || {}).filing_detail || (detail.system || {}).filing_detail || {},
+      },
+    };
   }
 
   function fillWorkspace(detail) {
+    state.draftSuspend = true;
     state.detail = detail;
     const org = detail.organization || {};
     const system = detail.system || {};
@@ -806,6 +1118,7 @@
     setValue('orgName', org.name);
     setValue('orgCreditCode', org.credit_code);
     setValue('orgFilingRegion', org.filing_region);
+    setValue('systemCode', system.system_code);
     setValue('unitInternetAddresses', table1.unit_internet_addresses || '无');
     setValue('orgProvince', findProvinceEntry(address.province));
     setValue('orgCity', address.city);
@@ -813,9 +1126,9 @@
     setValue('orgDetailAddress', address.detail);
     setValue('orgPostalCode', table1.postal_code);
     setValue('orgDistrictCode', table1.district_code);
-    setValue('orgAffiliationCode', affiliation.code);
+    setRadioValue('orgAffiliationCode', affiliation.code);
     setValue('orgAffiliationOther', affiliation.other);
-    setValue('orgTypeCode', orgType.code);
+    setRadioValue('orgTypeCode', orgType.code);
     setValue('orgTypeOther', orgType.other);
     setValue('orgIndustryCode', industry.code);
     setValue('orgIndustryOther', industry.other);
@@ -835,12 +1148,13 @@
     setValue('dataOwnerPhone', org.data_security_owner_phone);
     setValue('dataOwnerMobile', org.mobile_phone);
     setValue('dataOwnerEmail', org.data_security_owner_email);
+    setValue('currentCountTotal', (table1.current_filing_counts || {}).total || 0);
     ['2', '3', '4', '5'].forEach((key) => setValue(`currentCount${key}`, (table1.current_filing_counts || {})[key] || 0));
+    setValue('totalCountTotal', (table1.total_filing_counts || {}).total || 0);
     ['1', '2', '3', '4', '5'].forEach((key) => setValue(`totalCount${key}`, (table1.total_filing_counts || {})[key] || 0));
 
     setValue('systemName', system.system_name);
-    setValue('systemType', system.system_type);
-    setValue('systemDeploymentMode', system.deployment_mode);
+    setRadioValue('systemRunningStatus', table2.running_status || '');
     setValue('systemGoLiveDate', table2.go_live_date);
     setCheckedValues('objectTypes', table2.object_types);
     setCheckedValues('technologyTypes', table2.technology_types);
@@ -848,32 +1162,31 @@
     setCheckedValues('businessTypes', table2.business_types);
     setValue('businessOther', table2.business_other);
     setValue('businessDescription', table2.business_description || system.business_description);
-    setValue('serviceScopeCode', (table2.network_service || {}).scope_code);
+    setRadioValue('serviceScopeCode', (table2.network_service || {}).scope_code);
     setValue('crossProvinceCount', (table2.network_service || {}).cross_province_count);
     setValue('crossCityCount', (table2.network_service || {}).cross_city_count);
     setValue('serviceScopeOther', (table2.network_service || {}).other);
-    setCheckedValues('serviceTargets', (table2.network_service || {}).service_targets);
+    setRadioValue('serviceTargetCode', ((table2.network_service || {}).service_targets || [])[0] || '');
     setValue('serviceTargetOther', (table2.network_service || {}).service_target_other);
-    setValue('coverageCode', ((table2.network_platform || {}).coverage || {}).code);
+    setRadioValue('coverageCode', ((table2.network_platform || {}).coverage || {}).code);
     setValue('coverageOther', ((table2.network_platform || {}).coverage || {}).other);
-    setValue('networkNatureCode', ((table2.network_platform || {}).network_nature || {}).code);
+    setRadioValue('networkNatureCode', ((table2.network_platform || {}).network_nature || {}).code);
     setValue('networkNatureOther', ((table2.network_platform || {}).network_nature || {}).other);
     setValue('sourceIpRange', ((table2.network_platform || {}).network_nature || {}).source_ip_range);
     setValue('sourceDomain', ((table2.network_platform || {}).network_nature || {}).domain);
     setValue('sourceProtocolPorts', ((table2.network_platform || {}).network_nature || {}).protocol_ports);
     setCheckedValues('interconnectionItems', ((table2.network_platform || {}).interconnection || {}).items);
     setValue('interconnectionOther', ((table2.network_platform || {}).interconnection || {}).other);
-    setValue('isSubSystem', table2.is_sub_system ? 'true' : 'false');
+    setRadioValue('isSubSystem', table2.is_sub_system ? 'true' : 'false');
     setValue('parentSystemName', table2.parent_system_name);
     setValue('parentOrganizationName', table2.parent_organization_name);
-    setValue('systemLevelBasis', system.level_basis);
 
-    setCheckedValues('businessDamageItems', table3.business_security_damage_items);
-    setCheckedValues('serviceDamageItems', table3.service_security_damage_items);
+    setRadioValue('businessDamageLevel', (table3.business_security_damage_items || [])[0] || '');
+    setRadioValue('serviceDamageLevel', (table3.service_security_damage_items || [])[0] || '');
     setValue('gradingDate', table3.grading_date);
     setValue('fillerName', table3.filler_name);
     setValue('filledDate', table3.filled_date);
-    setValue('hasSupervisor', table3.has_supervisor ? 'true' : 'false');
+    setRadioValue('hasSupervisor', table3.has_supervisor ? 'true' : 'false');
     setValue('supervisorName', table3.supervisor_name);
     setRadioValue('gradingReportStatus', (table3.grading_report || {}).has_file ? 'has' : 'none');
     setRadioValue('expertReviewStatus', (table3.expert_review || {}).status || 'unreviewed');
@@ -882,7 +1195,7 @@
     renderAttachmentList('attachmentTable3ExpertReview', (table3.expert_review || {}).attachments);
     renderAttachmentList('attachmentTable3SupervisorReview', (table3.supervisor_review || {}).attachments);
 
-    setValue('cloudEnabled', table4.cloud && table4.cloud.enabled ? 'true' : 'false');
+    setRadioValue('cloudEnabled', table4.cloud && table4.cloud.enabled ? 'true' : 'false');
     setCheckedValues('cloudResponsibilityTypes', (table4.cloud || {}).responsibility_types);
     setCheckedValues('cloudServiceModes', (table4.cloud || {}).service_modes);
     setValue('cloudServiceModeOther', (table4.cloud || {}).service_mode_other);
@@ -897,22 +1210,22 @@
     setValue('cloudProviderPlatformName', (table4.cloud || {}).provider_platform_name);
     setValue('cloudProviderRecordNo', (table4.cloud || {}).provider_record_no);
     renderAttachmentList('attachmentTable4Cloud', (table4.cloud || {}).attachments);
-    setValue('mobileEnabled', table4.mobile && table4.mobile.enabled ? 'true' : 'false');
+    setRadioValue('mobileEnabled', table4.mobile && table4.mobile.enabled ? 'true' : 'false');
     setValue('mobileAppName', (table4.mobile || {}).app_name);
     setCheckedValues('mobileWirelessChannels', (table4.mobile || {}).wireless_channels);
     setCheckedValues('mobileTerminalTypes', (table4.mobile || {}).terminal_types);
-    setValue('iotEnabled', table4.iot && table4.iot.enabled ? 'true' : 'false');
+    setRadioValue('iotEnabled', table4.iot && table4.iot.enabled ? 'true' : 'false');
     setCheckedValues('iotPerceptionLayers', (table4.iot || {}).perception_layers);
     setValue('iotPerceptionOther', (table4.iot || {}).perception_other);
     setCheckedValues('iotTransportLayers', (table4.iot || {}).transport_layers);
     setValue('iotTransportOther', (table4.iot || {}).transport_other);
-    setValue('industrialEnabled', table4.industrial_control && table4.industrial_control.enabled ? 'true' : 'false');
+    setRadioValue('industrialEnabled', table4.industrial_control && table4.industrial_control.enabled ? 'true' : 'false');
     setCheckedValues('industrialFunctionLayers', (table4.industrial_control || {}).function_layers);
     setCheckedValues('industrialComponents', (table4.industrial_control || {}).components);
     setValue('industrialComponentOther', (table4.industrial_control || {}).component_other);
-    setValue('bigDataEnabled', table4.big_data && table4.big_data.enabled ? 'true' : 'false');
+    setRadioValue('bigDataEnabled', table4.big_data && table4.big_data.enabled ? 'true' : 'false');
     setCheckedValues('bigDataComponents', (table4.big_data || {}).system_components);
-    setValue('bigDataCrossBorderStatus', (table4.big_data || {}).cross_border_status);
+    setRadioValue('bigDataCrossBorderStatus', (table4.big_data || {}).cross_border_status);
     setValue('bigDataApplicationCount', (table4.big_data || {}).application_count);
     setValue('bigDataInfraLocation', (table4.big_data || {}).infra_location);
     setValue('bigDataOpsLocation', (table4.big_data || {}).ops_location);
@@ -922,15 +1235,13 @@
     setValue('bigDataProviderRecordNo', (table4.big_data || {}).provider_record_no);
     renderAttachmentList('attachmentTable4BigData', (table4.big_data || {}).attachments);
 
-    MATERIAL_SLOTS.forEach(([key]) => {
-      setValue(`materialStatus_${key}`, (table5[key] || {}).status || 'none');
-      renderAttachmentList(`attachment_${key}`, (table5[key] || {}).attachments);
-    });
+    MATERIAL_SLOTS.forEach(([key]) => renderAttachmentList(`attachment_${key}`, (table5[key] || {}).attachments));
 
     renderTable6Items(table6.items);
     syncAddressPicker(true);
     updateLevelDisplays();
     syncConditionalFields();
+    state.draftSuspend = false;
   }
 
   function collectTable6Items() {
@@ -939,6 +1250,9 @@
       card.querySelectorAll('[data-field]').forEach((field) => {
         item[field.dataset.field] = String(field.value || '').trim();
       });
+      card.querySelectorAll('[data-radio-field]:checked').forEach((field) => {
+        item[field.dataset.radioField] = String(field.value || '').trim();
+      });
       const arrays = {};
       card.querySelectorAll('[data-array-field]:checked').forEach((field) => {
         const key = field.dataset.arrayField;
@@ -946,16 +1260,62 @@
         arrays[key].push(field.value);
       });
       Object.assign(item, arrays);
+      if (!Array.isArray(item.personal_info_flags)) item.personal_info_flags = [];
+      if (item.personal_info_flags.includes('不涉及')) item.personal_info_flags = ['不涉及'];
+      if (!Array.isArray(item.data_sources)) item.data_sources = [];
+      if (!item.data_sources.includes('其他')) item.data_source_other = '';
+      if (!Array.isArray(item.interaction_types)) item.interaction_types = [];
+      if (item.interaction_types.includes('4')) item.interaction_types = ['4'];
+      if (!item.interaction_types.includes('1')) item.interaction_provide_to = '';
+      if (!item.interaction_types.includes('2')) item.interaction_entrust_to = '';
+      if (!item.interaction_types.includes('3')) item.interaction_shared_with = '';
+      if (!item.storage_cloud_type) item.storage_cloud_name = '';
+      if (!item.storage_room_type) item.storage_room_name = '';
+      if (!item.storage_region_type) item.storage_region_name = '';
+      item.data_level = selectedLabel(DATA_LEVEL_OPTIONS, item.data_level_code);
       return item;
     });
   }
 
+  function attachmentRefs(slot, fileNameKey = 'file_name') {
+    const safe = { attachment_ids: Array.isArray(slot && slot.attachment_ids) ? slot.attachment_ids : [] };
+    if (fileNameKey) safe[fileNameKey] = String((slot && slot[fileNameKey]) || '').trim();
+    return safe;
+  }
+
   function buildSavePayload() {
     const orgIndustryCode = getValue('orgIndustryCode');
-    const orgTypeCode = getValue('orgTypeCode');
-    const affiliationCode = getValue('orgAffiliationCode');
-    const businessLevel = computeLevelFromItems(getCheckedValues('businessDamageItems'));
-    const serviceLevel = computeLevelFromItems(getCheckedValues('serviceDamageItems'));
+    const orgTypeCode = getRadioValue('orgTypeCode');
+    const affiliationCode = getRadioValue('orgAffiliationCode');
+    const businessDamageItem = getRadioValue('businessDamageLevel');
+    const serviceDamageItem = getRadioValue('serviceDamageLevel');
+    const objectTypes = getCheckedValues('objectTypes');
+    const technologyTypes = objectTypes.includes('信息系统') ? getCheckedValues('technologyTypes') : [];
+    const businessTypes = getCheckedValues('businessTypes');
+    const serviceScopeCode = getRadioValue('serviceScopeCode');
+    const serviceTargetCode = getRadioValue('serviceTargetCode');
+    const coverageCode = getRadioValue('coverageCode');
+    const networkNatureCode = getRadioValue('networkNatureCode');
+    const isSubSystem = getRadioValue('isSubSystem') === 'true';
+    const gradingReportStatus = getRadioValue('gradingReportStatus');
+    const expertReviewStatus = getRadioValue('expertReviewStatus') || 'unreviewed';
+    const hasSupervisor = getRadioValue('hasSupervisor') === 'true';
+    const supervisorReviewStatus = hasSupervisor ? (getRadioValue('supervisorReviewStatus') || 'unreviewed') : 'unreviewed';
+    const cloudEnabled = getRadioValue('cloudEnabled') === 'true';
+    const cloudResponsibilityTypes = cloudEnabled ? getCheckedValues('cloudResponsibilityTypes') : [];
+    const cloudServiceModes = cloudEnabled ? getCheckedValues('cloudServiceModes') : [];
+    const cloudDeploymentModes = cloudEnabled ? getCheckedValues('cloudDeploymentModes') : [];
+    const cloudIsProvider = cloudResponsibilityTypes.includes('云服务商');
+    const cloudIsCustomer = cloudResponsibilityTypes.includes('云服务客户');
+    const mobileEnabled = getRadioValue('mobileEnabled') === 'true';
+    const iotEnabled = getRadioValue('iotEnabled') === 'true';
+    const industrialEnabled = getRadioValue('industrialEnabled') === 'true';
+    const bigDataEnabled = getRadioValue('bigDataEnabled') === 'true';
+    const bigDataComponents = bigDataEnabled ? getCheckedValues('bigDataComponents') : [];
+    const bigDataHasPlatform = bigDataComponents.includes('大数据平台');
+    const bigDataHasConsumer = bigDataComponents.includes('大数据应用') || bigDataComponents.includes('大数据资源');
+    const businessLevel = computeLevelFromItems([businessDamageItem].filter(Boolean));
+    const serviceLevel = computeLevelFromItems([serviceDamageItem].filter(Boolean));
     const finalLevel = Math.max(businessLevel, serviceLevel, 0);
     const baseOrgDetail = ((state.detail || {}).organization || {}).filing_detail || {};
     const baseSystemDetail = ((state.detail || {}).system || {}).filing_detail || {};
@@ -997,79 +1357,138 @@
             affiliation: { code: affiliationCode, label: selectedLabel(AFFILIATION_OPTIONS, affiliationCode), other: getValue('orgAffiliationOther') },
             organization_type_detail: { code: orgTypeCode, label: selectedLabel(ORG_TYPE_OPTIONS, orgTypeCode), other: getValue('orgTypeOther') },
             industry_category: { code: orgIndustryCode, label: selectedLabel(INDUSTRY_OPTIONS, orgIndustryCode), other: getValue('orgIndustryOther') },
-            current_filing_counts: { '2': numberValue('currentCount2'), '3': numberValue('currentCount3'), '4': numberValue('currentCount4'), '5': numberValue('currentCount5') },
-            total_filing_counts: { '1': numberValue('totalCount1'), '2': numberValue('totalCount2'), '3': numberValue('totalCount3'), '4': numberValue('totalCount4'), '5': numberValue('totalCount5') },
+            current_filing_counts: { total: numberValue('currentCountTotal'), '2': numberValue('currentCount2'), '3': numberValue('currentCount3'), '4': numberValue('currentCount4'), '5': numberValue('currentCount5') },
+            total_filing_counts: { total: numberValue('totalCountTotal'), '1': numberValue('totalCount1'), '2': numberValue('totalCount2'), '3': numberValue('totalCount3'), '4': numberValue('totalCount4'), '5': numberValue('totalCount5') },
           },
         },
       },
       system: {
         id: state.detail.system.id,
         system_name: getValue('systemName'),
-        system_type: getValue('systemType'),
-        deployment_mode: getValue('systemDeploymentMode'),
-        level_basis: getValue('systemLevelBasis'),
+        level_basis: state.detail.system.level_basis || '',
         business_description: getValue('businessDescription'),
         filing_detail: {
           ...baseSystemDetail,
           table2: {
             ...baseSystemDetail.table2,
-            object_types: getCheckedValues('objectTypes'),
-            technology_types: getCheckedValues('technologyTypes'),
-            technology_other: getValue('technologyOther'),
-            business_types: getCheckedValues('businessTypes'),
-            business_other: getValue('businessOther'),
+            running_status: getRadioValue('systemRunningStatus'),
+            object_types: objectTypes,
+            technology_types: technologyTypes,
+            technology_other: technologyTypes.includes('其他') ? getValue('technologyOther') : '',
+            business_types: businessTypes,
+            business_other: businessTypes.includes('其他') ? getValue('businessOther') : '',
             business_description: getValue('businessDescription'),
             network_service: {
-              scope_code: selectedLabel(SERVICE_SCOPE_OPTIONS, getValue('serviceScopeCode')) || getValue('serviceScopeCode'),
-              cross_province_count: getValue('crossProvinceCount'),
-              cross_city_count: getValue('crossCityCount'),
-              other: getValue('serviceScopeOther'),
-              service_targets: getCheckedValues('serviceTargets'),
-              service_target_other: getValue('serviceTargetOther'),
+              scope_code: serviceScopeCode,
+              scope_label: selectedLabel(SERVICE_SCOPE_OPTIONS, serviceScopeCode),
+              cross_province_count: serviceScopeCode === '11' ? getValue('crossProvinceCount') : '',
+              cross_city_count: serviceScopeCode === '21' ? getValue('crossCityCount') : '',
+              other: serviceScopeCode === '99' ? getValue('serviceScopeOther') : '',
+              service_targets: [serviceTargetCode].filter(Boolean),
+              service_target_other: serviceTargetCode === '其他' ? getValue('serviceTargetOther') : '',
             },
             network_platform: {
-              coverage: { code: getValue('coverageCode'), label: selectedLabel(COVERAGE_OPTIONS, getValue('coverageCode')), other: getValue('coverageOther') },
+              coverage: {
+                code: coverageCode,
+                label: selectedLabel(COVERAGE_OPTIONS, coverageCode),
+                other: coverageCode === '9' ? getValue('coverageOther') : '',
+              },
               network_nature: {
-                code: getValue('networkNatureCode'),
-                label: selectedLabel(NETWORK_NATURE_OPTIONS, getValue('networkNatureCode')),
-                other: getValue('networkNatureOther'),
-                source_ip_range: getValue('sourceIpRange'),
-                domain: getValue('sourceDomain'),
-                protocol_ports: getValue('sourceProtocolPorts'),
+                code: networkNatureCode,
+                label: selectedLabel(NETWORK_NATURE_OPTIONS, networkNatureCode),
+                other: networkNatureCode === '9' ? getValue('networkNatureOther') : '',
+                source_ip_range: networkNatureCode === '2' ? getValue('sourceIpRange') : '',
+                domain: networkNatureCode === '2' ? getValue('sourceDomain') : '',
+                protocol_ports: networkNatureCode === '2' ? getValue('sourceProtocolPorts') : '',
               },
               interconnection: { items: getCheckedValues('interconnectionItems'), other: getValue('interconnectionOther') },
             },
             go_live_date: getValue('systemGoLiveDate'),
-            is_sub_system: getValue('isSubSystem') === 'true',
-            parent_system_name: getValue('parentSystemName'),
-            parent_organization_name: getValue('parentOrganizationName'),
+            is_sub_system: isSubSystem,
+            parent_system_name: isSubSystem ? getValue('parentSystemName') : '',
+            parent_organization_name: isSubSystem ? getValue('parentOrganizationName') : '',
           },
           table3: {
             ...prevTable3,
-            business_security_damage_items: getCheckedValues('businessDamageItems'),
+            business_security_damage_items: [businessDamageItem].filter(Boolean),
             business_security_level: businessLevel,
-            service_security_damage_items: getCheckedValues('serviceDamageItems'),
+            service_security_damage_items: [serviceDamageItem].filter(Boolean),
             service_security_level: serviceLevel,
             final_level: finalLevel,
             grading_date: getValue('gradingDate'),
-            grading_report: { ...(prevTable3.grading_report || {}), has_file: getRadioValue('gradingReportStatus') === 'has' },
-            expert_review: { ...(prevTable3.expert_review || {}), status: getRadioValue('expertReviewStatus') || 'unreviewed' },
-            has_supervisor: getValue('hasSupervisor') === 'true',
-            supervisor_name: getValue('supervisorName'),
-            supervisor_review: { ...(prevTable3.supervisor_review || {}), status: getRadioValue('supervisorReviewStatus') || 'unreviewed' },
+            grading_report: gradingReportStatus === 'has'
+              ? { ...attachmentRefs(prevTable3.grading_report), has_file: true }
+              : { ...attachmentRefs({}, 'file_name'), has_file: false },
+            expert_review: expertReviewStatus === 'reviewed'
+              ? { ...attachmentRefs(prevTable3.expert_review), status: 'reviewed' }
+              : { ...attachmentRefs({}, 'file_name'), status: 'unreviewed' },
+            has_supervisor: hasSupervisor,
+            supervisor_name: hasSupervisor ? getValue('supervisorName') : '',
+            supervisor_review: supervisorReviewStatus === 'reviewed'
+              ? { ...attachmentRefs(prevTable3.supervisor_review), status: 'reviewed' }
+              : { ...attachmentRefs({}, 'file_name'), status: 'unreviewed' },
             filler_name: getValue('fillerName'),
             filled_date: getValue('filledDate'),
           },
           table4: {
             ...prevTable4,
-            cloud: { ...(prevTable4.cloud || {}), enabled: getValue('cloudEnabled') === 'true', responsibility_types: getCheckedValues('cloudResponsibilityTypes'), service_modes: getCheckedValues('cloudServiceModes'), service_mode_other: getValue('cloudServiceModeOther'), deployment_modes: getCheckedValues('cloudDeploymentModes'), deployment_mode_other: getValue('cloudDeploymentOther'), customer_count: getValue('cloudCustomerCount'), infra_location: getValue('cloudInfraLocation'), ops_location: getValue('cloudOpsLocation'), provider_name: getValue('cloudProviderName'), provider_level: getValue('cloudProviderLevel'), provider_platform_name: getValue('cloudProviderPlatformName'), provider_record_no: getValue('cloudProviderRecordNo'), customer_ops_location: getValue('cloudCustomerOpsLocation') },
-            mobile: { ...(prevTable4.mobile || {}), enabled: getValue('mobileEnabled') === 'true', app_name: getValue('mobileAppName'), wireless_channels: getCheckedValues('mobileWirelessChannels'), terminal_types: getCheckedValues('mobileTerminalTypes') },
-            iot: { ...(prevTable4.iot || {}), enabled: getValue('iotEnabled') === 'true', perception_layers: getCheckedValues('iotPerceptionLayers'), perception_other: getValue('iotPerceptionOther'), transport_layers: getCheckedValues('iotTransportLayers'), transport_other: getValue('iotTransportOther') },
-            industrial_control: { ...(prevTable4.industrial_control || {}), enabled: getValue('industrialEnabled') === 'true', function_layers: getCheckedValues('industrialFunctionLayers'), components: getCheckedValues('industrialComponents'), component_other: getValue('industrialComponentOther') },
-            big_data: { ...(prevTable4.big_data || {}), enabled: getValue('bigDataEnabled') === 'true', system_components: getCheckedValues('bigDataComponents'), cross_border_status: getValue('bigDataCrossBorderStatus'), application_count: getValue('bigDataApplicationCount'), infra_location: getValue('bigDataInfraLocation'), ops_location: getValue('bigDataOpsLocation'), provider_name: getValue('bigDataProviderName'), provider_level: getValue('bigDataProviderLevel'), provider_platform_name: getValue('bigDataProviderPlatformName'), provider_record_no: getValue('bigDataProviderRecordNo') },
+            cloud: {
+              ...attachmentRefs(cloudEnabled && cloudIsCustomer ? prevTable4.cloud : {}, 'record_file_name'),
+              enabled: cloudEnabled,
+              responsibility_types: cloudResponsibilityTypes,
+              service_modes: cloudServiceModes,
+              service_mode_other: cloudServiceModes.includes('其他') ? getValue('cloudServiceModeOther') : '',
+              deployment_modes: cloudDeploymentModes,
+              deployment_mode_other: cloudDeploymentModes.includes('其他') ? getValue('cloudDeploymentOther') : '',
+              customer_count: cloudEnabled && cloudIsProvider ? getValue('cloudCustomerCount') : '',
+              infra_location: cloudEnabled && cloudIsProvider ? getValue('cloudInfraLocation') : '',
+              ops_location: cloudEnabled && cloudIsProvider ? getValue('cloudOpsLocation') : '',
+              provider_name: cloudEnabled && cloudIsCustomer ? getValue('cloudProviderName') : '',
+              provider_level: cloudEnabled && cloudIsCustomer ? getValue('cloudProviderLevel') : '',
+              provider_platform_name: cloudEnabled && cloudIsCustomer ? getValue('cloudProviderPlatformName') : '',
+              provider_record_no: cloudEnabled && cloudIsCustomer ? getValue('cloudProviderRecordNo') : '',
+              customer_ops_location: cloudEnabled && cloudIsCustomer ? getValue('cloudCustomerOpsLocation') : '',
+            },
+            mobile: {
+              ...(prevTable4.mobile || {}),
+              enabled: mobileEnabled,
+              app_name: mobileEnabled ? getValue('mobileAppName') : '',
+              wireless_channels: mobileEnabled ? getCheckedValues('mobileWirelessChannels') : [],
+              terminal_types: mobileEnabled ? getCheckedValues('mobileTerminalTypes') : [],
+            },
+            iot: {
+              ...(prevTable4.iot || {}),
+              enabled: iotEnabled,
+              perception_layers: iotEnabled ? getCheckedValues('iotPerceptionLayers') : [],
+              perception_other: iotEnabled && getCheckedValues('iotPerceptionLayers').includes('其他') ? getValue('iotPerceptionOther') : '',
+              transport_layers: iotEnabled ? getCheckedValues('iotTransportLayers') : [],
+              transport_other: iotEnabled && getCheckedValues('iotTransportLayers').includes('其他') ? getValue('iotTransportOther') : '',
+            },
+            industrial_control: {
+              ...(prevTable4.industrial_control || {}),
+              enabled: industrialEnabled,
+              function_layers: industrialEnabled ? getCheckedValues('industrialFunctionLayers') : [],
+              components: industrialEnabled ? getCheckedValues('industrialComponents') : [],
+              component_other: industrialEnabled && getCheckedValues('industrialComponents').includes('其他') ? getValue('industrialComponentOther') : '',
+            },
+            big_data: {
+              ...attachmentRefs(bigDataEnabled && bigDataHasConsumer ? prevTable4.big_data : {}, 'record_file_name'),
+              enabled: bigDataEnabled,
+              system_components: bigDataComponents,
+              cross_border_status: bigDataEnabled ? getRadioValue('bigDataCrossBorderStatus') : '',
+              application_count: bigDataEnabled && bigDataHasPlatform ? getValue('bigDataApplicationCount') : '',
+              infra_location: bigDataEnabled && bigDataHasPlatform ? getValue('bigDataInfraLocation') : '',
+              ops_location: bigDataEnabled && bigDataHasPlatform ? getValue('bigDataOpsLocation') : '',
+              provider_name: bigDataEnabled && bigDataHasConsumer ? getValue('bigDataProviderName') : '',
+              provider_level: bigDataEnabled && bigDataHasConsumer ? getValue('bigDataProviderLevel') : '',
+              provider_platform_name: bigDataEnabled && bigDataHasConsumer ? getValue('bigDataProviderPlatformName') : '',
+              provider_record_no: bigDataEnabled && bigDataHasConsumer ? getValue('bigDataProviderRecordNo') : '',
+            },
           },
           table5: MATERIAL_SLOTS.reduce((acc, [key]) => {
-            acc[key] = { ...((prevTable5[key]) || {}), status: getValue(`materialStatus_${key}`) || 'none' };
+            const prevSlot = prevTable5[key] || {};
+            const hasFile = Boolean(prevSlot.file_name || (prevSlot.attachments || []).length || (prevSlot.attachment_ids || []).length);
+            acc[key] = { ...attachmentRefs(prevSlot), status: hasFile ? 'has' : 'none' };
             return acc;
           }, {}),
           table6: { items: collectTable6Items() },
@@ -1158,7 +1577,7 @@
       return;
     }
     state.currentSystemId = systemId;
-    fillWorkspace(data);
+    fillWorkspace(await restoreDraftIfNeeded(data));
     renderOverview();
   }
 
@@ -1261,6 +1680,7 @@
       return;
     }
     fillWorkspace(data.data);
+    clearDraft(state.currentSystemId);
     setDetailResult('备案信息已保存。');
     await loadOverview();
   }
@@ -1276,21 +1696,52 @@
       setDetailResult('请先选择附件。');
       return;
     }
+    const statusEl = $(`${(input.closest('.upload-inline-field')?.querySelector('.attachment-list') || {}).id || ''}Status`);
+    if (statusEl) statusEl.textContent = `上传中 0% · ${file.name}`;
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch(`/api/filing-workspace/systems/${state.currentSystemId}/attachments/${slotKey}`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setDetailResult(`附件上传失败：${apiErrorText(data)}`);
+    let responseData;
+    try {
+      responseData = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `/api/filing-workspace/systems/${state.currentSystemId}/attachments/${slotKey}`);
+        Object.entries(authHeaders()).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+        xhr.upload.addEventListener('progress', (event) => {
+          if (!statusEl) return;
+          if (!event.lengthComputable) {
+            statusEl.textContent = `上传中 · ${file.name}`;
+            return;
+          }
+          const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
+          statusEl.textContent = `上传中 ${percent}% · ${file.name}`;
+        });
+        xhr.addEventListener('load', () => {
+          let data = {};
+          try {
+            data = JSON.parse(xhr.responseText || '{}');
+          } catch (_error) {
+            data = {};
+          }
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(data);
+            return;
+          }
+          reject({ status: xhr.status, data });
+        });
+        xhr.addEventListener('error', () => reject({ status: 0, data: { detail: '网络异常，上传失败。' } }));
+        xhr.send(fd);
+      });
+    } catch (error) {
+      const message = apiErrorText((error && error.data) || {});
+      if (statusEl) statusEl.textContent = `上传失败 · ${file.name}`;
+      setDetailResult(`附件上传失败：${message}`);
       return;
     }
-    fillWorkspace(data.data);
+    fillWorkspace(responseData.data);
     input.value = '';
-    setDetailResult('附件上传成功。');
+    saveDraftSnapshot();
+    if (statusEl) statusEl.textContent = `上传完成 · ${file.name}`;
+    setDetailResult('附件上传成功。', { popup: false });
   }
 
   async function archiveEntity(type, id) {
@@ -1438,7 +1889,10 @@
     if ($('copyCyberToDataBtn')) $('copyCyberToDataBtn').addEventListener('click', copyCyberDeptToDataDept);
     if ($('workspaceSaveBtn')) $('workspaceSaveBtn').addEventListener('click', saveWorkspace);
     if ($('workspaceExportBtn')) $('workspaceExportBtn').addEventListener('click', () => { if (state.currentSystemId) window.location.href = `/api/systems/${state.currentSystemId}/export/word`; });
-    if ($('addDataItemBtn')) $('addDataItemBtn').addEventListener('click', () => renderTable6Items([...collectTable6Items(), {}]));
+    if ($('addDataItemBtn')) $('addDataItemBtn').addEventListener('click', () => {
+      renderTable6Items([...collectTable6Items(), {}]);
+      queueDraftSave();
+    });
     if ($('loadOrgDeleteRequestsBtn')) $('loadOrgDeleteRequestsBtn').addEventListener('click', loadOrgDeleteRequests);
     if ($('loadSystemDeleteRequestsBtn')) $('loadSystemDeleteRequestsBtn').addEventListener('click', loadSystemDeleteRequests);
     if ($('loadRecycleOrgsBtn')) $('loadRecycleOrgsBtn').addEventListener('click', loadRecycleOrgs);
@@ -1454,9 +1908,18 @@
         if (event.target.matches('input[type="checkbox"], input[type="radio"], select')) {
           syncConditionalFields();
           updateLevelDisplays();
+          queueDraftSave();
         }
         if (event.target.matches('#orgProvince, #orgCity, #orgDistrict')) {
           syncAddressPicker(false);
+        }
+        if (event.target.matches('input[type="file"][data-auto-upload-slot]')) {
+          uploadSlot(event.target.dataset.autoUploadSlot, event.target.id);
+        }
+      });
+      document.addEventListener('input', (event) => {
+        if (event.target.matches('input:not([type="file"]), textarea, select')) {
+          queueDraftSave();
         }
       });
     }
@@ -1494,6 +1957,7 @@
       } else if (btn.dataset.removeDataIndex !== undefined) {
         const items = collectTable6Items().filter((_, index) => index !== Number(btn.dataset.removeDataIndex));
         renderTable6Items(items.length ? items : [{}]);
+        queueDraftSave();
       } else if (btn.dataset.reviewDeleteRequest) {
         await reviewDeleteRequest(Number(btn.dataset.reviewDeleteRequest), btn.dataset.reviewAction, btn.dataset.entityType);
       } else if (btn.dataset.restoreOrg) {

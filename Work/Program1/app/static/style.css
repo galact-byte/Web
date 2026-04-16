@@ -1980,6 +1980,10 @@ body.page-enter-ready .workspace > *:nth-child(4) {
   grid-column: span 2;
 }
 
+.grid-span-3 {
+  grid-column: span 3;
+}
+
 @media (max-width: 720px) {
   .section-intro,
   .action-strip,
@@ -2502,8 +2506,14 @@ input[type="file"]::file-selector-button:hover {
 
 .choice-grid {
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .filing-contact-email {
@@ -2603,13 +2613,19 @@ input[type="file"]::file-selector-button:hover {
 
 .choice-chip {
   display: inline-flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
-  min-height: 46px;
-  padding: 12px 14px;
-  border-radius: 16px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.choice-chip-sm {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 0.88rem;
 }
 
 .choice-chip input {
@@ -2619,7 +2635,17 @@ input[type="file"]::file-selector-button:hover {
   padding: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .inline-field {
+  display: grid;
+  gap: 8px;
+}
+
+.upload-inline-field,
+.upload-inline-box {
   display: grid;
   gap: 8px;
 }
@@ -2628,6 +2654,39 @@ input[type="file"]::file-selector-button:hover {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.damage-level-table {
+  display: grid;
+  gap: 8px;
+}
+
+.damage-level-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(104, 119, 137, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.damage-level-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.damage-level-text {
+  line-height: 1.5;
+}
+
+.damage-level-badge {
+  color: var(--brand-ink);
+  font-size: 0.84rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .level-card,
@@ -2794,6 +2853,10 @@ input[type="file"]::file-selector-button:hover {
   }
 
   .grid-span-2 {
+    grid-column: auto;
+  }
+
+  .grid-span-3 {
     grid-column: auto;
   }
 

@@ -114,10 +114,7 @@ function esc(v) {
 }
 
 function setResult(text) {
-  const el = document.getElementById('knowledgeResult');
-  el.textContent = text;
-  el.style.borderColor = 'var(--primary)';
-  setTimeout(() => { el.style.borderColor = ''; }, 1200);
+  window.setPageResult('knowledgeResult', text);
 }
 
 function docStatusBadge(status) {

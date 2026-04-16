@@ -253,6 +253,7 @@ class ApiFlowTests(unittest.TestCase):
             'organization_id': org_id,
             'system_name': '备案工作台系统',
             'proposed_level': 2,
+            'go_live_date': '2024-01-15',
             'created_by': 'tester',
         })
         self.assertEqual(system_resp.status_code, 200, system_resp.text)
@@ -272,6 +273,7 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(detail['organization']['id'], org_id)
         self.assertEqual(detail['system']['id'], system_id)
         self.assertEqual(detail['organization']['filing_detail']['table1']['unit_internet_addresses'], '无')
+        self.assertEqual(detail['system']['filing_detail']['table2']['running_status'], '已运行')
 
         save_payload = {
             'organization': {
@@ -289,13 +291,35 @@ class ApiFlowTests(unittest.TestCase):
                 'system_name': '备案工作台系统',
                 'filing_detail': {
                     'table2': {
+                        'running_status': '在建设',
+                        'object_types': ['信息系统', '数据资源'],
+                        'technology_types': ['云计算技术'],
+                        'business_types': ['公众服务'],
                         'business_description': '统一工作台保存测试',
+                        'network_service': {
+                            'scope_code': '10',
+                            'scope_label': '全国',
+                            'service_targets': ['两者均包括'],
+                        },
+                        'network_platform': {
+                            'coverage': {'code': '3', 'label': '广域网'},
+                            'interconnection': {'items': ['与本单位其他系统连接']},
+                        },
                     },
                     'table3': {
                         'business_security_damage_items': ['对社会秩序和公共利益造成严重损害'],
                         'business_security_level': 3,
                         'service_security_damage_items': ['仅对公民、法人和其他组织的合法权益造成一般损害'],
                         'service_security_level': 1,
+                    },
+                    'table6': {
+                        'items': [
+                            {
+                                'data_name': '交易数据',
+                                'data_level_code': '2',
+                                'data_category': '业务数据',
+                            }
+                        ]
                     },
                 },
             },
@@ -304,8 +328,17 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(save_resp.status_code, 200, save_resp.text)
         saved = save_resp.json()['data']
         self.assertEqual(saved['organization']['filing_detail']['table1']['unit_internet_addresses'], 'https://example.com')
+        self.assertEqual(saved['system']['filing_detail']['table2']['running_status'], '在建设')
         self.assertEqual(saved['system']['filing_detail']['table2']['business_description'], '统一工作台保存测试')
         self.assertEqual(saved['system']['filing_detail']['table3']['final_level'], 3)
+        self.assertEqual(saved['system']['service_scope'], '全国')
+        self.assertEqual(saved['system']['service_object'], '两者均包括')
+        self.assertEqual(saved['system']['deployment_mode'], '广域网')
+        self.assertEqual(saved['system']['boundary'], '与本单位其他系统连接')
+        self.assertEqual(saved['system']['system_type'], '信息系统（采用：云计算技术） / 数据资源')
+        self.assertEqual(saved['system']['data_name'], '交易数据')
+        self.assertEqual(saved['system']['data_level'], '重要及以上数据')
+        self.assertEqual(saved['system']['data_category'], '业务数据')
 
     def test_02b_alerts_summary_counts_pending_and_recycle_items(self):
         org_pending_resp = self.client.post('/api/organizations', json={

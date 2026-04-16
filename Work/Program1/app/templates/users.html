@@ -88,10 +88,7 @@ function resultText(data, fallback='操作失败') {
 }
 
 function setUserResult(text) {
-  const el = document.getElementById('userResult');
-  el.textContent = text;
-  el.style.borderColor = 'var(--primary)';
-  setTimeout(() => { el.style.borderColor = ''; }, 1200);
+  window.setPageResult('userResult', text);
 }
 
 function escapeHtml(value) {

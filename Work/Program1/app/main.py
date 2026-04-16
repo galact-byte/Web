@@ -1104,8 +1104,8 @@ def default_org_filing_detail() -> dict[str, Any]:
             "affiliation": {"code": "", "other": ""},
             "organization_type_detail": {"code": "", "other": ""},
             "industry_category": {"code": "", "label": "", "other": ""},
-            "current_filing_counts": {"2": 0, "3": 0, "4": 0, "5": 0},
-            "total_filing_counts": {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0},
+            "current_filing_counts": {"total": 0, "2": 0, "3": 0, "4": 0, "5": 0},
+            "total_filing_counts": {"total": 0, "1": 0, "2": 0, "3": 0, "4": 0, "5": 0},
         }
     }
 
@@ -1113,6 +1113,7 @@ def default_org_filing_detail() -> dict[str, Any]:
 def default_system_filing_detail() -> dict[str, Any]:
     return {
         "table2": {
+            "running_status": "",
             "object_types": [],
             "technology_types": [],
             "technology_other": "",
@@ -1121,6 +1122,7 @@ def default_system_filing_detail() -> dict[str, Any]:
             "business_description": "",
             "network_service": {
                 "scope_code": "",
+                "scope_label": "",
                 "cross_province_count": "",
                 "cross_city_count": "",
                 "other": "",
@@ -1606,9 +1608,13 @@ def format_workspace_date(raw_value: Any) -> str:
 
 
 def summarize_table6_item(item: dict[str, Any]) -> dict[str, Any]:
+    data_level = str(item.get("data_level") or "").strip()
+    if not data_level:
+        data_level_code = str(item.get("data_level_code") or "").strip()
+        data_level = {"1": "一般数据", "2": "重要及以上数据"}.get(data_level_code, "")
     return {
         "data_name": str(item.get("data_name") or "").strip(),
-        "data_level": str(item.get("data_level") or "").strip(),
+        "data_level": data_level,
         "data_category": str(item.get("data_category") or "").strip(),
     }
 
@@ -1701,6 +1707,20 @@ def sync_system_from_workspace(system: SystemInfo, payload: dict[str, Any]) -> t
     merged_detail = deep_merge_dicts(merged_system_filing_detail(system), incoming_detail)
     table2 = merged_detail.get("table2", {})
     table3 = merged_detail.get("table3", {})
+    network_service = table2.get("network_service") if isinstance(table2.get("network_service"), dict) else {}
+    network_platform = table2.get("network_platform") if isinstance(table2.get("network_platform"), dict) else {}
+    coverage_meta = network_platform.get("coverage") if isinstance(network_platform.get("coverage"), dict) else {}
+    interconnection_meta = network_platform.get("interconnection") if isinstance(network_platform.get("interconnection"), dict) else {}
+    object_types = [str(item).strip() for item in table2.get("object_types", []) if str(item).strip()] if isinstance(table2, dict) else []
+    technology_types = [str(item).strip() for item in table2.get("technology_types", []) if str(item).strip()] if isinstance(table2, dict) else []
+    technology_other = str(table2.get("technology_other") or "").strip() if isinstance(table2, dict) else ""
+    object_type_texts: list[str] = []
+    for item in object_types:
+        if item == "信息系统":
+            technology_text = joined_text(technology_types, empty_text="", other_value=technology_other)
+            object_type_texts.append(f"信息系统（采用：{technology_text}）" if technology_text else "信息系统")
+        else:
+            object_type_texts.append(item)
     table6 = merged_detail.get("table6", {})
     final_level = to_int_or_zero(table3.get("final_level")) or max(
         to_int_or_zero(table3.get("business_security_level")),
@@ -1717,12 +1737,39 @@ def sync_system_from_workspace(system: SystemInfo, payload: dict[str, Any]) -> t
         "system_name": str(payload.get("system_name") or system.system_name).strip(),
         "proposed_level": min(max(final_level or 1, 1), 5),
         "business_description": str(table2.get("business_description") or payload.get("business_description") or "").strip() or None,
-        "system_type": str(payload.get("system_type") or system.system_type or "").strip() or None,
-        "deployment_mode": str(payload.get("deployment_mode") or system.deployment_mode or "").strip() or None,
+        "system_type": str(
+            joined_text(object_type_texts, empty_text="")
+            or payload.get("system_type")
+            or system.system_type
+            or ""
+        ).strip() or None,
+        "deployment_mode": str(
+            (coverage_meta.get("label") or coverage_meta.get("code") or "")
+            or payload.get("deployment_mode")
+            or system.deployment_mode
+            or ""
+        ).strip() or None,
         "go_live_date": parse_workspace_date(go_live) or system.go_live_date,
-        "service_scope": str(payload.get("service_scope") or system.service_scope or "").strip() or None,
-        "service_object": str(payload.get("service_object") or system.service_object or "").strip() or None,
-        "boundary": str(payload.get("boundary") or system.boundary or "").strip() or None,
+        "service_scope": str(
+            (
+                network_service.get("scope_label")
+                if isinstance(network_service, dict)
+                else ""
+            )
+            or payload.get("service_scope")
+            or system.service_scope
+            or ""
+        ).strip() or None,
+        "service_object": str(
+            joined_text(network_service.get("service_targets"), empty_text="", other_value=str(network_service.get("service_target_other") or ""))
+            if isinstance(network_service, dict)
+            else payload.get("service_object") or system.service_object or ""
+        ).strip() or None,
+        "boundary": str(
+            joined_text(interconnection_meta.get("items"), empty_text="", other_value=str(interconnection_meta.get("other") or ""))
+            if isinstance(interconnection_meta, dict)
+            else payload.get("boundary") or system.boundary or ""
+        ).strip() or None,
         "network_topology": str(payload.get("network_topology") or system.network_topology or "").strip() or None,
         "data_name": str(first_data_item.get("data_name") or payload.get("data_name") or system.data_name or "").strip() or None,
         "data_level": str(first_data_item.get("data_level") or payload.get("data_level") or system.data_level or "").strip() or None,
@@ -1785,6 +1832,7 @@ def build_workspace_detail_response(db: Session, org: Organization, system: Syst
     table2 = system_detail.get("table2", {})
     if isinstance(table2, dict):
         table2["go_live_date"] = format_workspace_date(table2.get("go_live_date") or system.go_live_date)
+        table2["running_status"] = str(table2.get("running_status") or "").strip() or ("已运行" if table2["go_live_date"] else "")
     table3 = system_detail.get("table3", {})
     if isinstance(table3, dict):
         table3["final_level"] = to_int_or_zero(table3.get("final_level")) or system.proposed_level
@@ -4069,6 +4117,10 @@ async def upload_filing_workspace_attachment(
         if isinstance(target, dict):
             target["file_name"] = slot_item["file_name"]
             target["attachment_ids"] = slot_item["attachment_ids"]
+            if name == "grading_report":
+                target["has_file"] = True
+            elif name in {"expert_review", "supervisor_review"}:
+                target["status"] = "reviewed"
     elif slot_key.startswith("table4.cloud"):
         target = detail.setdefault("table4", {}).setdefault("cloud", {})
         if isinstance(target, dict):
@@ -4083,6 +4135,7 @@ async def upload_filing_workspace_attachment(
         name = slot_key.split(".", 1)[1]
         target = detail.setdefault("table5", {}).setdefault(name, {})
         if isinstance(target, dict):
+            target["status"] = "has"
             target["file_name"] = slot_item["file_name"]
             target["attachment_ids"] = slot_item["attachment_ids"]
     system.filing_detail = detail
@@ -4637,6 +4690,89 @@ def joined_text(values: Any, *, empty_text: str = "无", sep: str = " / ", other
     return text or empty_text
 
 
+def marked_choice_text(options: list[tuple[str, str]], selected_values: list[str] | set[str] | tuple[str, ...]) -> str:
+    picked = {str(item).strip() for item in selected_values if str(item).strip()}
+    return "  ".join([f"{'√' if value in picked else '□'}{label}" for value, label in options])
+
+
+def format_yes_no_choice(is_yes: bool) -> str:
+    return marked_choice_text([("yes", "是"), ("no", "否")], {"yes"} if is_yes else {"no"})
+
+
+def format_table2_object_types(table2: dict[str, Any]) -> str:
+    object_types = [str(item).strip() for item in table2.get("object_types", []) if str(item).strip()]
+    technology_types = [str(item).strip() for item in table2.get("technology_types", []) if str(item).strip()]
+    technology_other = str(table2.get("technology_other") or "").strip()
+    technology_text = render_marked_choices(
+        ["云计算技术", "移动互联技术", "物联网技术", "工业控制技术", "大数据技术"],
+        technology_types,
+        other_value=technology_other,
+    )
+    parts: list[str] = []
+    parts.append(f"{'√' if '通信网络设施' in object_types else '□'}通信网络设施")
+    if "信息系统" in object_types:
+        parts.append(f"√信息系统（采用：{technology_text}）")
+    else:
+        parts.append("□信息系统")
+    parts.append(f"{'√' if '数据资源' in object_types else '□'}数据资源")
+    return "  ".join(parts)
+
+
+def format_table2_service_scope(network_service: dict[str, Any]) -> str:
+    scope_code = str(network_service.get("scope_code") or "").strip()
+    scope_other = str(network_service.get("other") or "").strip()
+    options = [
+        ("10", "全国"),
+        ("11", f"跨省（区、市） 跨 {str(network_service.get('cross_province_count') or '').strip()} 个".strip()),
+        ("20", "全省（区、市）"),
+        ("21", f"跨地（市、区） 跨 {str(network_service.get('cross_city_count') or '').strip()} 个".strip()),
+        ("30", "地（市、区）内"),
+    ]
+    text = marked_choice_text(options, {scope_code} if scope_code else set())
+    if scope_other:
+        text = f"{text}  {'√' if scope_code == '99' else '□'}其他 {scope_other}".strip()
+    elif scope_code == "99":
+        text = f"{text}  √其他".strip()
+    return text.strip()
+
+
+def format_table2_network_nature(network_nature: dict[str, Any]) -> str:
+    code = str(network_nature.get("code") or "").strip()
+    parts = [
+        f"{'√' if code == '1' else '□'}业务专网",
+        f"{'√' if code == '2' else '□'}互联网",
+    ]
+    if code == "2":
+        parts.append(f"源站IP地址范围 {str(network_nature.get('source_ip_range') or '').strip()}".strip())
+        parts.append(f"域名 {str(network_nature.get('domain') or '').strip()}".strip())
+        parts.append(f"主要协议/端口 {str(network_nature.get('protocol_ports') or '').strip()}".strip())
+    other_text = str(network_nature.get("other") or "").strip()
+    if other_text:
+        parts.append(f"{'√' if code == '9' else '□'}其他 {other_text}".strip())
+    elif code == "9":
+        parts.append("√其他")
+    return "  ".join([part for part in parts if part])
+
+
+def format_table6_interactions(item: dict[str, Any]) -> str:
+    interaction_types = {str(val).strip() for val in item.get("interaction_types", []) if str(val).strip()}
+    options = [
+        ("1", f"对外提供给 {str(item.get('interaction_provide_to') or '').strip()}".strip()),
+        ("2", f"委托 {str(item.get('interaction_entrust_to') or '').strip()} 处理".strip()),
+        ("3", f"与 {str(item.get('interaction_shared_with') or '').strip()} 共同处理".strip()),
+        ("4", "无交互"),
+    ]
+    return marked_choice_text(options, interaction_types or {"4"})
+
+
+def format_marked_storage(options: list[tuple[str, str]], selected: str, selected_name: str) -> str:
+    parts: list[str] = []
+    for value, label in options:
+        suffix = f" {selected_name}".rstrip() if value == selected and selected_name else ""
+        parts.append(f"{'√' if value == selected else '□'}{label}{suffix}".strip())
+    return "  ".join(parts)
+
+
 def extract_workspace_export_context(org: Organization, system: SystemInfo) -> dict[str, Any]:
     org_detail = merged_org_filing_detail(org)
     sys_detail = merged_system_filing_detail(system)
@@ -4732,12 +4868,18 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
         t1.rows[16].cells[1],
         str(industry.get("label") or org.industry or "").strip(),
     )
-    replace_cell_text(t1.rows[17].cells[1], f"{to_int_or_zero(sum(current_counts.values()))} 个")
+    current_total = to_int_or_zero(current_counts.get("total")) or sum(
+        to_int_or_zero(current_counts.get(key)) for key in ("2", "3", "4", "5")
+    )
+    total_total = to_int_or_zero(total_counts.get("total")) or sum(
+        to_int_or_zero(total_counts.get(key)) for key in ("1", "2", "3", "4", "5")
+    )
+    replace_cell_text(t1.rows[17].cells[1], f"{current_total} 个")
     replace_cell_text(t1.rows[17].cells[3], str(to_int_or_zero(current_counts.get("2"))))
     replace_cell_text(t1.rows[17].cells[7], str(to_int_or_zero(current_counts.get("3"))))
     replace_cell_text(t1.rows[18].cells[3], str(to_int_or_zero(current_counts.get("4"))))
     replace_cell_text(t1.rows[18].cells[7], str(to_int_or_zero(current_counts.get("5"))))
-    replace_cell_text(t1.rows[19].cells[1], f"{to_int_or_zero(sum(total_counts.values()))} 个")
+    replace_cell_text(t1.rows[19].cells[1], f"{total_total} 个")
     replace_cell_text(t1.rows[19].cells[3], str(to_int_or_zero(total_counts.get("1"))))
     replace_cell_text(t1.rows[19].cells[7], str(to_int_or_zero(total_counts.get("2"))))
     replace_cell_text(t1.rows[20].cells[3], str(to_int_or_zero(total_counts.get("3"))))
@@ -4745,33 +4887,53 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
     replace_cell_text(t1.rows[21].cells[3], str(to_int_or_zero(total_counts.get("5"))))
 
     t2 = doc.tables[2]
+    object_code = re.sub(r"[^0-9A-Z]", "", str(system.system_code or "").upper())[-5:].rjust(5, "0")
     replace_cell_text(t2.rows[0].cells[2], system.system_name)
-    replace_cell_text(t2.rows[1].cells[2], joined_text(table2.get("object_types"), empty_text="信息系统"))
-    replace_cell_text(t2.rows[2].cells[2], joined_text(table2.get("business_types")))
+    for idx, cell_index in enumerate((4, 5, 6, 7, 8)):
+        replace_cell_text(t2.rows[0].cells[cell_index], object_code[idx])
+    replace_cell_text(t2.rows[1].cells[2], format_table2_object_types(table2))
+    replace_cell_text(
+        t2.rows[2].cells[2],
+        render_marked_choices(
+            ["生产作业", "指挥调度", "内部办公", "公众服务"],
+            table2.get("business_types"),
+            other_value=str(table2.get("business_other") or "").strip(),
+        ),
+    )
     replace_cell_text(t2.rows[3].cells[2], str(table2.get("business_description") or system.business_description or ""))
     network_service = table2.get("network_service") if isinstance(table2.get("network_service"), dict) else {}
     network_platform = table2.get("network_platform") if isinstance(table2.get("network_platform"), dict) else {}
-    service_scope_text = str(network_service.get("scope_code") or "").strip()
-    if network_service.get("other"):
-        service_scope_text = f"{service_scope_text} / 其他 {network_service.get('other')}".strip()
-    replace_cell_text(t2.rows[4].cells[2], service_scope_text)
-    replace_cell_text(t2.rows[5].cells[2], joined_text(network_service.get("service_targets")))
+    replace_cell_text(t2.rows[4].cells[2], format_table2_service_scope(network_service))
+    replace_cell_text(
+        t2.rows[5].cells[2],
+        render_marked_choices(
+            ["单位内部人员", "社会公众人员", "两者均包括"],
+            network_service.get("service_targets"),
+            other_value=str(network_service.get("service_target_other") or "").strip(),
+        ),
+    )
     coverage = network_platform.get("coverage") if isinstance(network_platform.get("coverage"), dict) else {}
-    replace_cell_text(t2.rows[6].cells[2], str(coverage.get("label") or coverage.get("code") or ""))
+    replace_cell_text(
+        t2.rows[6].cells[2],
+        render_marked_choices(
+            ["局域网", "城域网", "广域网"],
+            [str(coverage.get("label") or coverage.get("code") or "").strip()],
+            other_value=str(coverage.get("other") or "").strip(),
+        ),
+    )
     network_nature = network_platform.get("network_nature") if isinstance(network_platform.get("network_nature"), dict) else {}
-    network_nature_text = str(network_nature.get("label") or network_nature.get("code") or "").strip()
-    if str(network_nature.get("label") or network_nature.get("code") or "").strip() == "互联网":
-        network_nature_text = (
-            f"{network_nature_text}  源站IP地址范围 {str(network_nature.get('source_ip_range') or '')}  "
-            f"域名 {str(network_nature.get('domain') or '')}  主要协议/端口 {str(network_nature.get('protocol_ports') or '')}"
-        ).strip()
-    elif network_nature.get("other"):
-        network_nature_text = f"{network_nature_text} / 其他 {network_nature.get('other')}".strip()
-    replace_cell_text(t2.rows[7].cells[2], network_nature_text)
+    replace_cell_text(t2.rows[7].cells[2], format_table2_network_nature(network_nature))
     interconnection = network_platform.get("interconnection") if isinstance(network_platform.get("interconnection"), dict) else {}
-    replace_cell_text(t2.rows[8].cells[2], joined_text(interconnection.get("items"), other_value=str(interconnection.get("other") or "")))
+    replace_cell_text(
+        t2.rows[8].cells[2],
+        render_marked_choices(
+            ["与其他行业系统连接", "与本行业其他单位系统连接", "与本单位其他系统连接"],
+            interconnection.get("items"),
+            other_value=str(interconnection.get("other") or "").strip(),
+        ),
+    )
     replace_cell_text(t2.rows[9].cells[2], format_workspace_date(table2.get("go_live_date") or system.go_live_date))
-    replace_cell_text(t2.rows[10].cells[2], "是" if coerce_bool(table2.get("is_sub_system")) else "否")
+    replace_cell_text(t2.rows[10].cells[2], format_yes_no_choice(coerce_bool(table2.get("is_sub_system"))))
     replace_cell_text(t2.rows[11].cells[2], str(table2.get("parent_system_name") or "无"))
     replace_cell_text(t2.rows[12].cells[2], str(table2.get("parent_organization_name") or ""))
 
@@ -4788,63 +4950,104 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
     replace_cell_text(t3.rows[11].cells[2], render_marked_choices(["第二级", "第三级", "第四级", "第五级"], [f"第{final_level}级"]))
     replace_cell_text(t3.rows[12].cells[2], format_workspace_date(table3.get("grading_date")))
     grading_report = table3.get("grading_report") if isinstance(table3.get("grading_report"), dict) else {}
-    replace_cell_text(t3.rows[13].cells[2], f"{'有' if coerce_bool(grading_report.get('has_file')) else '无'}    附件名称 {grading_report.get('file_name') or ''}", bold=True)
+    replace_cell_text(
+        t3.rows[13].cells[2],
+        f"{marked_choice_text([('has', '有'), ('none', '无')], {'has'} if coerce_bool(grading_report.get('has_file')) else {'none'})}    附件名称 {grading_report.get('file_name') or ''}",
+        bold=True,
+    )
     expert_review = table3.get("expert_review") if isinstance(table3.get("expert_review"), dict) else {}
-    replace_cell_text(t3.rows[14].cells[2], f"{'已评审' if expert_review.get('status') == 'reviewed' else '未评审'}    附件名称 {expert_review.get('file_name') or ''}", bold=True)
+    replace_cell_text(
+        t3.rows[14].cells[2],
+        f"{marked_choice_text([('reviewed', '已评审'), ('unreviewed', '未评审')], {str(expert_review.get('status') or 'unreviewed')})}    附件名称 {expert_review.get('file_name') or ''}",
+        bold=True,
+    )
     has_supervisor = coerce_bool(table3.get("has_supervisor"))
-    replace_cell_text(t3.rows[15].cells[2], "有" if has_supervisor else "无")
+    replace_cell_text(t3.rows[15].cells[2], format_yes_no_choice(has_supervisor))
     replace_cell_text(t3.rows[16].cells[2], str(table3.get("supervisor_name") or "无"))
     supervisor_review = table3.get("supervisor_review") if isinstance(table3.get("supervisor_review"), dict) else {}
-    replace_cell_text(t3.rows[17].cells[2], f"{'已审核' if supervisor_review.get('status') == 'reviewed' else '未审核'}    附件名称 {supervisor_review.get('file_name') or ''}", bold=True)
+    replace_cell_text(
+        t3.rows[17].cells[2],
+        "" if not has_supervisor else f"{marked_choice_text([('reviewed', '已审核'), ('unreviewed', '未审核')], {str(supervisor_review.get('status') or 'unreviewed')})}    附件名称 {supervisor_review.get('file_name') or ''}",
+        bold=True,
+    )
     replace_cell_text(t3.rows[18].cells[0], f"填表人： {str(table3.get('filler_name') or '').strip()}")
     replace_cell_text(t3.rows[18].cells[3], f"填表日期：{format_workspace_date(table3.get('filled_date'))}")
 
     t4 = doc.tables[4]
     cloud = table4.get("cloud") if isinstance(table4.get("cloud"), dict) else {}
-    replace_cell_text(t4.rows[0].cells[2], "是" if coerce_bool(cloud.get("enabled")) else "否")
-    replace_cell_text(t4.rows[1].cells[2], joined_text(cloud.get("responsibility_types")))
-    replace_cell_text(t4.rows[2].cells[2], joined_text(cloud.get("service_modes"), other_value=str(cloud.get("service_mode_other") or "")))
-    replace_cell_text(t4.rows[3].cells[2], joined_text(cloud.get("deployment_modes"), other_value=str(cloud.get("deployment_mode_other") or "")))
-    replace_cell_text(t4.rows[5].cells[2], str(cloud.get("customer_count") or ""))
-    replace_cell_text(t4.rows[6].cells[2], str(cloud.get("infra_location") or ""))
-    replace_cell_text(t4.rows[7].cells[2], str(cloud.get("ops_location") or ""))
+    cloud_roles = {str(item).strip() for item in cloud.get("responsibility_types", []) if str(item).strip()}
+    replace_cell_text(t4.rows[0].cells[2], format_yes_no_choice(coerce_bool(cloud.get("enabled"))))
+    replace_cell_text(
+        t4.rows[1].cells[2],
+        marked_choice_text([("云服务商", "云服务商"), ("云服务客户", "云服务客户")], cloud_roles),
+    )
+    replace_cell_text(
+        t4.rows[2].cells[2],
+        render_marked_choices(
+            ["基础设施即服务IaaS", "平台即服务PaaS", "软件即服务SaaS"],
+            cloud.get("service_modes"),
+            other_value=str(cloud.get("service_mode_other") or "").strip(),
+        ),
+    )
+    replace_cell_text(
+        t4.rows[3].cells[2],
+        render_marked_choices(
+            ["私有云", "公有云", "混合云", "政务云"],
+            cloud.get("deployment_modes"),
+            other_value=str(cloud.get("deployment_mode_other") or "").strip(),
+        ),
+    )
+    replace_cell_text(t4.rows[5].cells[2], str(cloud.get("customer_count") or "") if "云服务商" in cloud_roles else "")
+    replace_cell_text(t4.rows[6].cells[2], str(cloud.get("infra_location") or "") if "云服务商" in cloud_roles else "")
+    replace_cell_text(t4.rows[7].cells[2], str(cloud.get("ops_location") or "") if "云服务商" in cloud_roles else "")
     replace_cell_text(
         t4.rows[9].cells[2],
         (
             f"云服务商为 {str(cloud.get('provider_name') or '')} / 平台安全等级 {str(cloud.get('provider_level') or '')} / "
             f"平台名称 {str(cloud.get('provider_platform_name') or '')} / 平台备案编号 {str(cloud.get('provider_record_no') or '')}"
-        ).strip(),
+        ).strip() if "云服务客户" in cloud_roles else "",
     )
-    replace_cell_text(t4.rows[10].cells[2], str(cloud.get("customer_ops_location") or ""))
-    replace_cell_text(t4.rows[11].cells[2], str(cloud.get("record_file_name") or ""))
+    replace_cell_text(t4.rows[10].cells[2], str(cloud.get("customer_ops_location") or "") if "云服务客户" in cloud_roles else "")
+    replace_cell_text(t4.rows[11].cells[2], str(cloud.get("record_file_name") or "") if "云服务客户" in cloud_roles else "")
     mobile = table4.get("mobile") if isinstance(table4.get("mobile"), dict) else {}
-    replace_cell_text(t4.rows[12].cells[2], "是" if coerce_bool(mobile.get("enabled")) else "否")
+    replace_cell_text(t4.rows[12].cells[2], format_yes_no_choice(coerce_bool(mobile.get("enabled"))))
     replace_cell_text(t4.rows[13].cells[2], str(mobile.get("app_name") or ""))
-    replace_cell_text(t4.rows[14].cells[2], joined_text(mobile.get("wireless_channels")))
-    replace_cell_text(t4.rows[15].cells[2], joined_text(mobile.get("terminal_types")))
+    replace_cell_text(t4.rows[14].cells[2], render_marked_choices(["公共WIFI", "专用WIFI", "移动通信网"], mobile.get("wireless_channels")))
+    replace_cell_text(t4.rows[15].cells[2], render_marked_choices(["通用终端", "专用终端"], mobile.get("terminal_types")))
     iot = table4.get("iot") if isinstance(table4.get("iot"), dict) else {}
-    replace_cell_text(t4.rows[16].cells[2], "是" if coerce_bool(iot.get("enabled")) else "否")
-    replace_cell_text(t4.rows[17].cells[2], joined_text(iot.get("perception_layers"), other_value=str(iot.get("perception_other") or "")))
-    replace_cell_text(t4.rows[18].cells[2], joined_text(iot.get("transport_layers"), other_value=str(iot.get("transport_other") or "")))
+    replace_cell_text(t4.rows[16].cells[2], format_yes_no_choice(coerce_bool(iot.get("enabled"))))
+    replace_cell_text(t4.rows[17].cells[2], render_marked_choices(["感知节点", "感知网关", "RFID标签", "RFID读写器"], iot.get("perception_layers"), other_value=str(iot.get("perception_other") or "").strip()))
+    replace_cell_text(t4.rows[18].cells[2], render_marked_choices(["互联网", "专用网", "移动通信网"], iot.get("transport_layers"), other_value=str(iot.get("transport_other") or "").strip()))
     industrial = table4.get("industrial_control") if isinstance(table4.get("industrial_control"), dict) else {}
-    replace_cell_text(t4.rows[19].cells[2], "是" if coerce_bool(industrial.get("enabled")) else "否")
-    replace_cell_text(t4.rows[20].cells[2], joined_text(industrial.get("function_layers")))
-    replace_cell_text(t4.rows[21].cells[2], joined_text(industrial.get("components"), other_value=str(industrial.get("component_other") or "")))
+    replace_cell_text(t4.rows[19].cells[2], format_yes_no_choice(coerce_bool(industrial.get("enabled"))))
+    replace_cell_text(t4.rows[20].cells[2], render_marked_choices(["生产管理层", "过程监控层", "现场控制层", "现场设备层"], industrial.get("function_layers")))
+    replace_cell_text(
+        t4.rows[21].cells[2],
+        render_marked_choices(
+            ["数据采集与监视控制系统（SCADA）", "分布式控制系统（DCS）", "可编程逻辑控制器（PLC）", "远程终端单元（RTU）", "主终端单元（MTU）", "上位机（SC）"],
+            industrial.get("components"),
+            other_value=str(industrial.get("component_other") or "").strip(),
+        ),
+    )
     big_data = table4.get("big_data") if isinstance(table4.get("big_data"), dict) else {}
-    replace_cell_text(t4.rows[22].cells[2], "是" if coerce_bool(big_data.get("enabled")) else "否")
-    replace_cell_text(t4.rows[23].cells[2], joined_text(big_data.get("system_components")))
-    replace_cell_text(t4.rows[24].cells[2], str(big_data.get("cross_border_status") or ""))
-    replace_cell_text(t4.rows[26].cells[2], str(big_data.get("application_count") or ""))
-    replace_cell_text(t4.rows[27].cells[2], str(big_data.get("infra_location") or ""))
-    replace_cell_text(t4.rows[28].cells[2], str(big_data.get("ops_location") or ""))
+    big_data_components = {str(item).strip() for item in big_data.get("system_components", []) if str(item).strip()}
+    replace_cell_text(t4.rows[22].cells[2], format_yes_no_choice(coerce_bool(big_data.get("enabled"))))
+    replace_cell_text(t4.rows[23].cells[2], marked_choice_text([("大数据平台", "大数据平台"), ("大数据应用", "大数据应用"), ("大数据资源", "大数据资源")], big_data_components))
+    replace_cell_text(
+        t4.rows[24].cells[2],
+        marked_choice_text([("无出境需求", "无出境需求"), ("有出境需求", "有出境需求")], {str(big_data.get("cross_border_status") or "").strip()}),
+    )
+    replace_cell_text(t4.rows[26].cells[2], str(big_data.get("application_count") or "") if "大数据平台" in big_data_components else "")
+    replace_cell_text(t4.rows[27].cells[2], str(big_data.get("infra_location") or "") if "大数据平台" in big_data_components else "")
+    replace_cell_text(t4.rows[28].cells[2], str(big_data.get("ops_location") or "") if "大数据平台" in big_data_components else "")
     replace_cell_text(
         t4.rows[30].cells[2],
         (
             f"大数据平台服务商 {str(big_data.get('provider_name') or '')} 平台安全等级 {str(big_data.get('provider_level') or '')} / "
             f"平台名称 {str(big_data.get('provider_platform_name') or '')} 平台备案编号 {str(big_data.get('provider_record_no') or '')}"
-        ).strip(),
+        ).strip() if ("大数据应用" in big_data_components or "大数据资源" in big_data_components) else "",
     )
-    replace_cell_text(t4.rows[31].cells[2], str(big_data.get("record_file_name") or ""))
+    replace_cell_text(t4.rows[31].cells[2], str(big_data.get("record_file_name") or "") if ("大数据应用" in big_data_components or "大数据资源" in big_data_components) else "")
 
     t5 = doc.tables[5]
     table5_rows = [
@@ -4858,28 +5061,69 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
     for slot_name, row_index in table5_rows:
         slot = table5.get(slot_name) if isinstance(table5.get(slot_name), dict) else {}
         status = str(slot.get("status") or "none").strip()
-        label = "有" if status == "has" else "无"
-        replace_cell_text(t5.rows[row_index].cells[1], f"{label}    附件名称  {str(slot.get('file_name') or '')}")
+        replace_cell_text(
+            t5.rows[row_index].cells[1],
+            f"{marked_choice_text([('has', '有'), ('none', '无')], {status or 'none'})}    附件名称  {str(slot.get('file_name') or '')}",
+        )
 
     t6 = doc.tables[6]
     items = table6.get("items") if isinstance(table6.get("items"), list) else []
     if items and isinstance(items[0], dict):
         item = items[0]
+        data_level_text = str(item.get("data_level") or "").strip()
+        if not data_level_text:
+            data_level_text = {"1": "一般数据", "2": "重要及以上数据"}.get(str(item.get("data_level_code") or "").strip(), "")
+        data_total_text = (
+            f"1_{str(item.get('data_total_gb') or '').strip()}_GB/{str(item.get('data_total_tb') or '').strip()}_TB"
+            f" / 2 {str(item.get('data_total_records') or '').strip()} 万条"
+        ).strip()
+        monthly_growth_text = (
+            f"{str(item.get('monthly_growth_gb') or '').strip()} GB/{str(item.get('monthly_growth_tb') or '').strip()} TB"
+        ).strip(" /")
+        source_units_text = " / ".join(
+            [
+                f"数据来源单位1 {str(item.get('source_unit_1') or '').strip()}",
+                f"数据来源单位2 {str(item.get('source_unit_2') or '').strip()}",
+                f"数据来源单位3 {str(item.get('source_unit_3') or '').strip()}",
+            ]
+        ).strip()
+        target_units_text = " / ".join(
+            [
+                f"数据流出单位1 {str(item.get('target_unit_1') or '').strip()}",
+                f"数据流出单位2 {str(item.get('target_unit_2') or '').strip()}",
+                f"数据流出单位3 {str(item.get('target_unit_3') or '').strip()}",
+            ]
+        ).strip()
+        storage_cloud_text = format_marked_storage(
+            [("1", "私有云"), ("2", "公有云"), ("3", "混合云"), ("4", "政务云"), ("5", "非云计算平台")],
+            str(item.get("storage_cloud_type") or "").strip(),
+            str(item.get("storage_cloud_name") or "").strip(),
+        )
+        storage_room_text = format_marked_storage(
+            [("1", "本单位机房"), ("2", "外单位机房"), ("3", "国内第三方托管机房")],
+            str(item.get("storage_room_type") or "").strip(),
+            str(item.get("storage_room_name") or "").strip(),
+        )
+        storage_region_text = format_marked_storage(
+            [("1", "境内"), ("2", "境外")],
+            str(item.get("storage_region_type") or "").strip(),
+            str(item.get("storage_region_name") or "").strip(),
+        )
         replace_cell_text(t6.rows[0].cells[1], str(item.get("data_name") or ""))
-        replace_cell_text(t6.rows[0].cells[3], str(item.get("data_level") or ""))
+        replace_cell_text(t6.rows[0].cells[3], data_level_text)
         replace_cell_text(t6.rows[1].cells[1], str(item.get("data_category") or ""))
         replace_cell_text(t6.rows[2].cells[1], str(item.get("data_security_dept") or ""))
         replace_cell_text(t6.rows[2].cells[3], str(item.get("data_security_owner") or ""))
-        replace_cell_text(t6.rows[3].cells[1], joined_text(item.get("personal_info_flags")))
-        replace_cell_text(t6.rows[4].cells[1], str(item.get("data_total") or ""))
-        replace_cell_text(t6.rows[5].cells[1], str(item.get("monthly_growth") or ""))
-        replace_cell_text(t6.rows[6].cells[1], joined_text(item.get("data_sources"), other_value=str(item.get("data_source_other") or "")))
-        replace_cell_text(t6.rows[7].cells[1], str(item.get("source_units") or ""))
-        replace_cell_text(t6.rows[8].cells[1], str(item.get("target_units") or ""))
-        replace_cell_text(t6.rows[9].cells[1], str(item.get("interaction") or ""))
-        replace_cell_text(t6.rows[10].cells[1], str(item.get("storage_platform") or ""))
-        replace_cell_text(t6.rows[11].cells[1], str(item.get("storage_machine_room") or ""))
-        replace_cell_text(t6.rows[12].cells[1], str(item.get("storage_location") or ""))
+        replace_cell_text(t6.rows[3].cells[1], render_marked_choices(["涉及敏感个人信息", "涉及未成年人的个人信息", "涉及一般个人信息", "不涉及"], item.get("personal_info_flags")))
+        replace_cell_text(t6.rows[4].cells[1], data_total_text)
+        replace_cell_text(t6.rows[5].cells[1], monthly_growth_text)
+        replace_cell_text(t6.rows[6].cells[1], render_marked_choices(["系统采集", "系统产生", "人工填报", "交易购买", "共享交换"], item.get("data_sources"), other_value=str(item.get("data_source_other") or "").strip()))
+        replace_cell_text(t6.rows[7].cells[1], source_units_text)
+        replace_cell_text(t6.rows[8].cells[1], target_units_text)
+        replace_cell_text(t6.rows[9].cells[1], format_table6_interactions(item))
+        replace_cell_text(t6.rows[10].cells[1], storage_cloud_text)
+        replace_cell_text(t6.rows[11].cells[1], storage_room_text)
+        replace_cell_text(t6.rows[12].cells[1], storage_region_text)
 
 
 @app.get("/api/systems/{system_id}/export/word")
