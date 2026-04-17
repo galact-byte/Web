@@ -204,11 +204,43 @@ DEFAULT_BOOTSTRAP_ACCOUNTS = (
     ("tester", "DEFAULT_TESTER_PASSWORD", "evaluator", "tester123"),
     ("leader", "DEFAULT_LEADER_PASSWORD", "reviewer", "leader123"),
 )
+DAMAGE_LEVEL_TEMPLATE_ALIASES: dict[str, set[str]] = {
+    "仅对公民、法人和其他组织的合法权益造成一般损害": {
+        "仅对公民、法人和其他组织的合法权益造成一般损害",
+    },
+    "对公民、法人和其他组织的合法权益造成严重损害 / 对公民、法人和其他组织的合法权益造成特别严重损害 / 对社会秩序和公共利益造成一般损害": {
+        "对公民、法人和其他组织的合法权益造成严重损害 / 对公民、法人和其他组织的合法权益造成特别严重损害 / 对社会秩序和公共利益造成一般损害",
+        "对公民、法人和其他组织的合法权益造成严重损害",
+        "对公民、法人和其他组织的合法权益造成特别严重损害",
+        "对社会秩序和公共利益造成一般损害",
+    },
+    "对社会秩序和公共利益造成严重损害": {
+        "对社会秩序和公共利益造成严重损害",
+    },
+    "对社会秩序和公共利益造成特别严重损害 / 对国家安全或地区安全、国计民生造成一般损害": {
+        "对社会秩序和公共利益造成特别严重损害 / 对国家安全或地区安全、国计民生造成一般损害",
+        "对社会秩序和公共利益造成特别严重损害",
+        "对国家安全或地区安全、国计民生造成一般损害",
+    },
+    "对国家安全或地区安全、国计民生造成严重损害 / 对国家安全或地区安全、国计民生造成特别严重损害": {
+        "对国家安全或地区安全、国计民生造成严重损害 / 对国家安全或地区安全、国计民生造成特别严重损害",
+        "对国家安全或地区安全、国计民生造成严重损害",
+        "对国家安全或地区安全、国计民生造成特别严重损害",
+    },
+}
 
 
 def escape_like(value: str) -> str:
     """转义 SQL LIKE 通配符，防止用户输入中的 % 和 _ 被当作通配符。"""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def damage_level_row_selected(row_label: str, selected_items: set[str]) -> bool:
+    normalized_label = str(row_label or "").strip()
+    if not normalized_label or not selected_items:
+        return False
+    aliases = DAMAGE_LEVEL_TEMPLATE_ALIASES.get(normalized_label, {normalized_label})
+    return bool(aliases & selected_items)
 
 
 def _cleanup_export_file(path: Path) -> None:
@@ -4942,10 +4974,10 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
     service_items = {str(item).strip() for item in table3.get("service_security_damage_items", []) if str(item).strip()}
     for idx in range(1, 6):
         label = t3.rows[idx].cells[1].text.replace("\n", " / ").strip()
-        replace_cell_text(t3.rows[idx].cells[2], f"{'√' if label in business_items else '□'} {label}")
+        replace_cell_text(t3.rows[idx].cells[2], f"{'√' if damage_level_row_selected(label, business_items) else '□'} {label}")
     for idx in range(6, 11):
         label = t3.rows[idx].cells[1].text.replace("\n", " / ").strip()
-        replace_cell_text(t3.rows[idx].cells[2], f"{'√' if label in service_items else '□'} {label}")
+        replace_cell_text(t3.rows[idx].cells[2], f"{'√' if damage_level_row_selected(label, service_items) else '□'} {label}")
     final_level = to_int_or_zero(table3.get("final_level")) or system.proposed_level
     replace_cell_text(t3.rows[11].cells[2], render_marked_choices(["第二级", "第三级", "第四级", "第五级"], [f"第{final_level}级"]))
     replace_cell_text(t3.rows[12].cells[2], format_workspace_date(table3.get("grading_date")))
