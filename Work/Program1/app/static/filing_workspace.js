@@ -33,12 +33,58 @@
   const NETWORK_NATURE_OPTIONS = [['1', '业务专网'], ['2', '互联网'], ['9', '其他']];
   const INTERCONNECTION_OPTIONS = [['与其他行业系统连接', '与其他行业系统连接'], ['与本行业其他单位系统连接', '与本行业其他单位系统连接'], ['与本单位其他系统连接', '与本单位其他系统连接'], ['其他', '其他']];
   const DAMAGE_LEVEL_OPTIONS = [
-    { label: '仅对公民、法人和其他组织的合法权益造成一般损害', level: 1 },
-    { label: '对公民、法人和其他组织的合法权益造成严重损害 / 对公民、法人和其他组织的合法权益造成特别严重损害 / 对社会秩序和公共利益造成一般损害', level: 2 },
-    { label: '对社会秩序和公共利益造成严重损害', level: 3 },
-    { label: '对社会秩序和公共利益造成特别严重损害 / 对国家安全或地区安全、国计民生造成一般损害', level: 4 },
-    { label: '对国家安全或地区安全、国计民生造成严重损害 / 对国家安全或地区安全、国计民生造成特别严重损害', level: 5 },
+    { label: '仅对公民、法人和其他组织的合法权益造成一般损害', level: 1, legacyLabel: '仅对公民、法人和其他组织的合法权益造成一般损害' },
+    {
+      label: '对公民、法人和其他组织的合法权益造成严重损害',
+      level: 2,
+      legacyLabel: '对公民、法人和其他组织的合法权益造成严重损害 / 对公民、法人和其他组织的合法权益造成特别严重损害 / 对社会秩序和公共利益造成一般损害',
+    },
+    {
+      label: '对公民、法人和其他组织的合法权益造成特别严重损害',
+      level: 2,
+      legacyLabel: '对公民、法人和其他组织的合法权益造成严重损害 / 对公民、法人和其他组织的合法权益造成特别严重损害 / 对社会秩序和公共利益造成一般损害',
+    },
+    {
+      label: '对社会秩序和公共利益造成一般损害',
+      level: 2,
+      legacyLabel: '对公民、法人和其他组织的合法权益造成严重损害 / 对公民、法人和其他组织的合法权益造成特别严重损害 / 对社会秩序和公共利益造成一般损害',
+    },
+    { label: '对社会秩序和公共利益造成严重损害', level: 3, legacyLabel: '对社会秩序和公共利益造成严重损害' },
+    {
+      label: '对社会秩序和公共利益造成特别严重损害',
+      level: 4,
+      legacyLabel: '对社会秩序和公共利益造成特别严重损害 / 对国家安全或地区安全、国计民生造成一般损害',
+    },
+    {
+      label: '对国家安全或地区安全、国计民生造成一般损害',
+      level: 4,
+      legacyLabel: '对社会秩序和公共利益造成特别严重损害 / 对国家安全或地区安全、国计民生造成一般损害',
+    },
+    {
+      label: '对国家安全或地区安全、国计民生造成严重损害',
+      level: 5,
+      legacyLabel: '对国家安全或地区安全、国计民生造成严重损害 / 对国家安全或地区安全、国计民生造成特别严重损害',
+    },
+    {
+      label: '对国家安全或地区安全、国计民生造成特别严重损害',
+      level: 5,
+      legacyLabel: '对国家安全或地区安全、国计民生造成严重损害 / 对国家安全或地区安全、国计民生造成特别严重损害',
+    },
   ];
+  const DAMAGE_LEVEL_OPTION_MAP = new Map(DAMAGE_LEVEL_OPTIONS.map((option) => [option.label, option]));
+  const DAMAGE_LEVEL_LEGACY_MAP = new Map();
+  const DAMAGE_LEVEL_GROUPS = [];
+  DAMAGE_LEVEL_OPTIONS.forEach((option) => {
+    if (option.legacyLabel && !DAMAGE_LEVEL_LEGACY_MAP.has(option.legacyLabel)) {
+      DAMAGE_LEVEL_LEGACY_MAP.set(option.legacyLabel, option);
+    }
+    const currentGroup = DAMAGE_LEVEL_GROUPS[DAMAGE_LEVEL_GROUPS.length - 1];
+    if (!currentGroup || currentGroup.level !== option.level) {
+      DAMAGE_LEVEL_GROUPS.push({ level: option.level, items: [option] });
+    } else {
+      currentGroup.items.push(option);
+    }
+  });
   const CLOUD_RESPONSIBILITY_OPTIONS = [['云服务商', '云服务商'], ['云服务客户', '云服务客户']];
   const CLOUD_SERVICE_MODE_OPTIONS = [['基础设施即服务IaaS', '基础设施即服务IaaS'], ['平台即服务PaaS', '平台即服务PaaS'], ['软件即服务SaaS', '软件即服务SaaS'], ['其他', '其他']];
   const CLOUD_DEPLOYMENT_OPTIONS = [['私有云', '私有云'], ['公有云', '公有云'], ['混合云', '混合云'], ['政务云', '政务云'], ['其他', '其他']];
@@ -451,14 +497,16 @@
         <div class="filing-counts-board">
           <section class="filing-count-group">
             <div class="filing-count-group-title">本次备案的定级对象数量</div>
-            <div class="filing-count-table filing-count-table-even">
-              <label class="filing-count-cell">
+            <div class="filing-count-summary">
+              <label class="filing-count-cell filing-count-cell-summary">
                 <span class="filing-count-label">本次备案总数</span>
                 <span class="filing-count-input-wrap">
                   <input id="currentCountTotal" type="number" min="0" value="0">
                   <span class="filing-count-unit">个</span>
                 </span>
               </label>
+            </div>
+            <div class="filing-count-table filing-count-table-even">
               <label class="filing-count-cell">
                 <span class="filing-count-label">第二级定级对象数</span>
                 <span class="filing-count-input-wrap">
@@ -491,14 +539,16 @@
           </section>
           <section class="filing-count-group">
             <div class="filing-count-group-title">定级对象总数（含本次备案）</div>
-            <div class="filing-count-table filing-count-table-total">
-              <label class="filing-count-cell">
+            <div class="filing-count-summary">
+              <label class="filing-count-cell filing-count-cell-summary">
                 <span class="filing-count-label">定级对象总数</span>
                 <span class="filing-count-input-wrap">
                   <input id="totalCountTotal" type="number" min="0" value="0">
                   <span class="filing-count-unit">个</span>
                 </span>
               </label>
+            </div>
+            <div class="filing-count-table filing-count-table-total">
               <label class="filing-count-cell">
                 <span class="filing-count-label">第一级定级对象数</span>
                 <span class="filing-count-input-wrap">
@@ -545,7 +595,6 @@
     return sectionBlock('表二 定级对象情况', '按备案表原顺序填写', `
       <div class="form-grid form-grid-3">
         <div><label>定级对象</label><input id="systemName"></div>
-        <div><label>定级对象编号</label><input id="systemCode" readonly></div>
         <div><label>运行状态</label>${radioGroupHtml('systemRunningStatus', [['在建设', '在建设'], ['已运行', '已运行']], 'choice-row')}</div>
       </div>
       <div class="workspace-subsection">
@@ -615,12 +664,21 @@
       <section class="level-card">
         <h3>${esc(title)}</h3>
         <div class="damage-level-table">
-          ${DAMAGE_LEVEL_OPTIONS.map((item) => `
-            <label class="damage-level-row">
-              <span class="damage-level-control"><input type="radio" name="${name}" value="${esc(item.label)}"></span>
-              <span class="damage-level-text">${esc(item.label)}</span>
-              <span class="damage-level-badge">第${item.level}级</span>
-            </label>
+          ${DAMAGE_LEVEL_GROUPS.map((group) => `
+            <section class="damage-level-group">
+              <div class="damage-level-group-head">
+                <strong class="damage-level-group-title">第${group.level}级</strong>
+                <span class="damage-level-group-meta">${group.items.length}种情形</span>
+              </div>
+              <div class="damage-level-group-body">
+                ${group.items.map((item) => `
+                  <label class="damage-level-row">
+                    <span class="damage-level-control"><input type="radio" name="${damageLevelGroupName(name, group.level)}" value="${esc(item.label)}"></span>
+                    <span class="damage-level-text">${esc(item.label)}</span>
+                  </label>
+                `).join('')}
+              </div>
+            </section>
           `).join('')}
         </div>
         <div class="level-display">同步级别：<strong id="${name === 'businessDamageLevel' ? 'businessLevelDisplay' : 'serviceLevelDisplay'}">未计算</strong></div>
@@ -629,7 +687,7 @@
   }
 
   function renderTable3() {
-    return sectionBlock('表三 定级情况', '逐条选择损害程度，系统自动同步保护等级', `
+    return sectionBlock('表三 定级情况', '同级单选、可跨级多选，系统自动同步保护等级', `
       <div class="level-layout">
         ${damageLevelTableHtml('businessDamageLevel', '确定业务信息安全保护等级')}
         ${damageLevelTableHtml('serviceDamageLevel', '确定系统服务安全保护等级')}
@@ -903,18 +961,51 @@
     return Array.isArray(items) && items.length ? items : [{}];
   }
 
+  function resolveDamageLevelOption(item) {
+    const text = String(item || '').trim();
+    if (!text) return null;
+    return DAMAGE_LEVEL_OPTION_MAP.get(text) || DAMAGE_LEVEL_LEGACY_MAP.get(text) || null;
+  }
+
+  function normalizeDamageLevelSelection(item) {
+    return resolveDamageLevelOption(item)?.label || String(item || '').trim();
+  }
+
+  function damageLevelGroupName(baseName, level) {
+    return `${baseName}_level_${level}`;
+  }
+
+  function setDamageLevelSelections(baseName, items) {
+    const selectedByLevel = new Map();
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const option = resolveDamageLevelOption(item);
+      if (option && !selectedByLevel.has(option.level)) {
+        selectedByLevel.set(option.level, option.label);
+      }
+    });
+    DAMAGE_LEVEL_GROUPS.forEach((group) => {
+      setRadioValue(damageLevelGroupName(baseName, group.level), selectedByLevel.get(group.level) || '');
+    });
+  }
+
+  function getDamageLevelSelections(baseName) {
+    return DAMAGE_LEVEL_GROUPS
+      .map((group) => getRadioValue(damageLevelGroupName(baseName, group.level)))
+      .filter(Boolean);
+  }
+
   function computeLevelFromItems(items) {
     let level = 0;
     (Array.isArray(items) ? items : []).forEach((item) => {
-      const found = DAMAGE_LEVEL_OPTIONS.find((option) => option.label === item);
+      const found = resolveDamageLevelOption(item);
       if (found && found.level > level) level = found.level;
     });
     return level;
   }
 
   function updateLevelDisplays() {
-    const businessLevel = computeLevelFromItems([getRadioValue('businessDamageLevel')].filter(Boolean));
-    const serviceLevel = computeLevelFromItems([getRadioValue('serviceDamageLevel')].filter(Boolean));
+    const businessLevel = computeLevelFromItems(getDamageLevelSelections('businessDamageLevel'));
+    const serviceLevel = computeLevelFromItems(getDamageLevelSelections('serviceDamageLevel'));
     const finalLevel = Math.max(businessLevel, serviceLevel, 0);
     if ($('businessLevelDisplay')) $('businessLevelDisplay').textContent = businessLevel ? `第${businessLevel}级` : '未计算';
     if ($('serviceLevelDisplay')) $('serviceLevelDisplay').textContent = serviceLevel ? `第${serviceLevel}级` : '未计算';
@@ -1118,7 +1209,6 @@
     setValue('orgName', org.name);
     setValue('orgCreditCode', org.credit_code);
     setValue('orgFilingRegion', org.filing_region);
-    setValue('systemCode', system.system_code);
     setValue('unitInternetAddresses', table1.unit_internet_addresses || '无');
     setValue('orgProvince', findProvinceEntry(address.province));
     setValue('orgCity', address.city);
@@ -1181,8 +1271,8 @@
     setValue('parentSystemName', table2.parent_system_name);
     setValue('parentOrganizationName', table2.parent_organization_name);
 
-    setRadioValue('businessDamageLevel', (table3.business_security_damage_items || [])[0] || '');
-    setRadioValue('serviceDamageLevel', (table3.service_security_damage_items || [])[0] || '');
+    setDamageLevelSelections('businessDamageLevel', (table3.business_security_damage_items || []).map(normalizeDamageLevelSelection));
+    setDamageLevelSelections('serviceDamageLevel', (table3.service_security_damage_items || []).map(normalizeDamageLevelSelection));
     setValue('gradingDate', table3.grading_date);
     setValue('fillerName', table3.filler_name);
     setValue('filledDate', table3.filled_date);
@@ -1287,8 +1377,8 @@
     const orgIndustryCode = getValue('orgIndustryCode');
     const orgTypeCode = getRadioValue('orgTypeCode');
     const affiliationCode = getRadioValue('orgAffiliationCode');
-    const businessDamageItem = getRadioValue('businessDamageLevel');
-    const serviceDamageItem = getRadioValue('serviceDamageLevel');
+    const businessDamageItems = getDamageLevelSelections('businessDamageLevel');
+    const serviceDamageItems = getDamageLevelSelections('serviceDamageLevel');
     const objectTypes = getCheckedValues('objectTypes');
     const technologyTypes = objectTypes.includes('信息系统') ? getCheckedValues('technologyTypes') : [];
     const businessTypes = getCheckedValues('businessTypes');
@@ -1314,8 +1404,8 @@
     const bigDataComponents = bigDataEnabled ? getCheckedValues('bigDataComponents') : [];
     const bigDataHasPlatform = bigDataComponents.includes('大数据平台');
     const bigDataHasConsumer = bigDataComponents.includes('大数据应用') || bigDataComponents.includes('大数据资源');
-    const businessLevel = computeLevelFromItems([businessDamageItem].filter(Boolean));
-    const serviceLevel = computeLevelFromItems([serviceDamageItem].filter(Boolean));
+    const businessLevel = computeLevelFromItems(businessDamageItems);
+    const serviceLevel = computeLevelFromItems(serviceDamageItems);
     const finalLevel = Math.max(businessLevel, serviceLevel, 0);
     const baseOrgDetail = ((state.detail || {}).organization || {}).filing_detail || {};
     const baseSystemDetail = ((state.detail || {}).system || {}).filing_detail || {};
@@ -1410,9 +1500,9 @@
           },
           table3: {
             ...prevTable3,
-            business_security_damage_items: [businessDamageItem].filter(Boolean),
+            business_security_damage_items: businessDamageItems,
             business_security_level: businessLevel,
-            service_security_damage_items: [serviceDamageItem].filter(Boolean),
+            service_security_damage_items: serviceDamageItems,
             service_security_level: serviceLevel,
             final_level: finalLevel,
             grading_date: getValue('gradingDate'),

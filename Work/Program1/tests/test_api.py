@@ -233,6 +233,27 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(dash_resp.status_code, 200)
         self.assertIn('totals', dash_resp.json())
 
+    def test_02a_damage_level_row_selected_accepts_detailed_items(self):
+        helper = self.main_module.damage_level_row_selected
+        self.assertTrue(
+            helper(
+                '对公民、法人和其他组织的合法权益造成严重损害 / 对公民、法人和其他组织的合法权益造成特别严重损害 / 对社会秩序和公共利益造成一般损害',
+                {'对社会秩序和公共利益造成一般损害'},
+            )
+        )
+        self.assertTrue(
+            helper(
+                '对国家安全或地区安全、国计民生造成严重损害 / 对国家安全或地区安全、国计民生造成特别严重损害',
+                {'对国家安全或地区安全、国计民生造成特别严重损害'},
+            )
+        )
+        self.assertFalse(
+            helper(
+                '对社会秩序和公共利益造成严重损害',
+                {'仅对公民、法人和其他组织的合法权益造成一般损害'},
+            )
+        )
+
     def test_02a_filing_workspace_flow_and_systems_redirect(self):
         org_resp = self.client.post('/api/organizations', json={
             'name': '备案工作台单位',

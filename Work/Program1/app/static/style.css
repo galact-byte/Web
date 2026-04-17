@@ -2545,6 +2545,11 @@ input[type="file"]::file-selector-button:hover {
   font-weight: 700;
 }
 
+.filing-count-summary {
+  padding: 0;
+  background: rgba(255, 255, 255, 0.94);
+}
+
 .filing-count-table {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2561,6 +2566,12 @@ input[type="file"]::file-selector-button:hover {
   border-right: 1px solid rgba(104, 119, 137, 0.14);
   border-bottom: 1px solid rgba(104, 119, 137, 0.14);
   background: rgba(255, 255, 255, 0.88);
+}
+
+.filing-count-cell-summary {
+  border-right: none;
+  border-bottom: 1px solid rgba(104, 119, 137, 0.14);
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .filing-count-table .filing-count-cell:nth-child(2n) {
@@ -2658,35 +2669,79 @@ input[type="file"]::file-selector-button:hover {
 
 .damage-level-table {
   display: grid;
-  gap: 8px;
+  gap: 12px;
+}
+
+.damage-level-group {
+  border: 1px solid rgba(104, 119, 137, 0.14);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.9);
+  overflow: hidden;
+}
+
+.damage-level-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(241, 245, 249, 0.92);
+  border-bottom: 1px solid rgba(104, 119, 137, 0.12);
+}
+
+.damage-level-group-title {
+  color: var(--brand-ink);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.damage-level-group-meta {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.damage-level-group-body {
+  display: grid;
 }
 
 .damage-level-row {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 12px;
-  border: 1px solid rgba(104, 119, 137, 0.14);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.88);
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  min-height: 52px;
+  cursor: pointer;
+  transition: background-color 180ms ease, border-color 180ms ease;
 }
 
-.damage-level-control {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.damage-level-group-body .damage-level-row + .damage-level-row {
+  border-top: 1px solid rgba(104, 119, 137, 0.12);
+}
+
+.damage-level-row:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.damage-level-row:has(input:checked) {
+  background: rgba(35, 79, 108, 0.08);
+}
+
+.damage-level-row:has(input:focus-visible) {
+  outline: 2px solid rgba(35, 79, 108, 0.24);
+  outline-offset: -2px;
+}
+
+.damage-level-control input {
+  margin-top: 2px;
 }
 
 .damage-level-text {
-  line-height: 1.5;
-}
-
-.damage-level-badge {
-  color: var(--brand-ink);
-  font-size: 0.84rem;
-  font-weight: 700;
-  white-space: nowrap;
+  line-height: 1.65;
+  font-weight: 600;
+  color: var(--text-main);
 }
 
 .level-card,
