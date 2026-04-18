@@ -53,7 +53,7 @@
   {% set page_icon = 'fa-bars-progress' %}
 {% endif %}
 {% set page_layout_variant = page_layout_variant|default('standard', true) %}
-{% set asset_version = '20260416-filing-refresh' %}
+{% set asset_version = '20260419-hengjian-flat' %}
 {% set request_state = request|attr('state')|default(none, true) %}
 {% set server_user_name = request_state|attr('current_user')|default('', true) %}
 {% set server_user_role = request_state|attr('current_user_role')|default('', true) %}
@@ -74,7 +74,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light" />
   <meta name="view-transition" content="same-origin" />
-  <title>{{ page_title }} - 兰台清晖</title>
+  <title>{{ page_title }} · 衡鉴</title>
   <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -112,14 +112,16 @@
       <div class="sidebar-header">
         <div class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 64 64" class="brand-emblem" aria-hidden="true" focusable="false">
-            <rect x="11" y="10" width="42" height="44" rx="13" fill="none" stroke="rgba(255,245,226,0.86)" stroke-width="2.8" />
-            <path d="M23 20.5h18" fill="none" stroke="#fff5e2" stroke-linecap="round" stroke-width="2.8" />
-            <path d="M24 25.5v14.5M32 23.5v18.5M40 25.5v14.5" fill="none" stroke="#fff5e2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8" />
-            <path d="M21.5 43.5h21" fill="none" stroke="#fff5e2" stroke-linecap="round" stroke-width="2.8" />
+            <path d="M32 12v40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+            <path d="M14 22h36" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+            <path d="M22 52h20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+            <path d="M9 32q5 10 10 0" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M45 32q5 10 10 0" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M14 22v-3M50 22v-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
           </svg>
         </div>
         <div class="brand-copy">
-          <strong>兰台清晖</strong>
+          <strong>衡鉴</strong>
           <span>等保测评定级备案工作台</span>
         </div>
         <button class="sidebar-close" type="button" onclick="closeSidebar()" aria-label="关闭导航">
@@ -227,22 +229,11 @@
         {% if page_layout_variant != 'management-tight' %}
         <section class="page-hero">
           <div class="page-hero-copy">
-            <span class="page-eyebrow">等保测评定级备案工作台</span>
             <h1>
               <i class="fas {{ page_icon }}"></i>
               <span>{{ page_title }}</span>
             </h1>
             <p>{{ page_desc }}</p>
-          </div>
-          <div class="page-hero-side">
-            <div class="hero-chip">
-              <span>平台状态</span>
-              <strong>{% if lite_mode %}精简交付版{% else %}标准工作台{% endif %}</strong>
-            </div>
-            <div class="hero-chip">
-              <span>模块视图</span>
-              <strong>业务工作区</strong>
-            </div>
           </div>
         </section>
         {% endif %}

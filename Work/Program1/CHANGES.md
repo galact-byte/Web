@@ -2,6 +2,7 @@
 
 > **修订记录**
 >
+> - v1.7.0: 前端重构 · 衡鉴品牌升级 — 按功能型 UI 规范整体翻修 style.css / base.html / auth.html，删除装饰渐变与毛玻璃、按钮全部扁平化、圆角统一 4-10px、阴影降级；品牌由"兰台清晖"迁移为"衡鉴"并替换为天平几何图标。
 > - v1.6.0: 代码审查修复 — 修复 2 个 CRITICAL 路径遍历、3 个 HIGH（文件删除越权、审计记录丢失、数据污染）和 1 个 MEDIUM（索引越界）共 6 个恶性 bug。
 > - v1.5.5: UI修复（管理紧凑页面顶部空白条）— 移除 BOM 字符并重构 base.html 模板结构，消除模板管理/知识库/用户管理/备份恢复页面顶部异常空白。
 > - v1.5.4: 审计修复（备份恢复防护增强）— 为备份解压增加文件数/总大小门禁，新增 2 个回归测试。
@@ -10,6 +11,91 @@
 > - v1.5.1: 授权加固（第二轮）— 补充 5 个遗漏认证的端点，清理遗留 actor 参数。
 > - v1.5.0: 授权加固 — 修复 3 个 HIGH 级别问题：46 个端点添加角色认证、修复 actor 伪造、移除硬编码真实姓名。
 > - v1.4.0: 安全加固 — 修复 5 个 CRITICAL 和 8 个 HIGH 级别安全漏洞，清理冗余文件。
+
+---
+## v1.7.0 — 前端重构 · 衡鉴品牌升级
+
+### 背景与动机
+
+原前端存在 30 余项违反功能型 UI 规范的问题：圆角散落 14/16/22/32px、戏剧性阴影 `0 30px 70px`、装饰性渐变背景与毛玻璃、朱砂/古铜渐变按钮+位移动画、Dashboard 嵌 Hero Section、古雅衬线字体混排等。按 `frontend-design-integrated.md` 与 `ui-ux-pro-max-skill` 双规范重构。
+
+### 设计系统（新）
+
+- **配色**：Frost 浅色工作区 + Graphite 深色侧边栏（`#0f172a` 实填，非渐变）
+- **主色**：`#0f766e`（青墨绿），Accent `#d97706`（琥珀，仅关键警示）
+- **圆角**：统一 4-10px（按钮/输入 4px、卡片/面板 8px、弹窗 10px）
+- **阴影**：`0 1-2px` subtle，模糊半径 ≤ 8px
+- **字体**：`PingFang SC / Microsoft YaHei / system-ui` 系统栈；数字 `JetBrains Mono`
+- **动效**：功能型上限 140-200ms，仅 opacity/color 变化，**禁用 transform 位移**
+
+### 修改文件
+
+#### `app/static/style.css` — 完全重写（约 1050 行）
+
+- 重建 `:root` 设计 token 体系（surface / border / text / sidebar / primary / motion / radius / shadow）
+- `.sidebar` 改为 `#0f172a` 实填（移除 3-stop 深蓝渐变）
+- 所有 `button / .btn / .btn-primary / .btn-lite / .btn-danger / .btn-subtle-danger` 扁平化，移除 `linear-gradient` 与 `transform: translateY(-1px)` 与戏剧性 box-shadow
+- 删除 `body` 的 radial-gradient 装饰与 `body::before` 网格纹理
+- 删除 `.brand-mark` 的朱砂+古铜渐变+3 层阴影，改为 subtle 深色描边
+- 删除 `.auth-visual::after` 装饰色斑
+- `.page-hero` 简化：移除 eyebrow + `hero-chip` 侧栏
+- `input / select / textarea` 圆角 16px → 4px，padding 降级
+- `.top-header` 移除 `backdrop-filter: blur()` 与阴影
+- 保留测试必需的 CSS 变量名 `--brand-ink`、`--font-brand`、`--accent-cinnabar`（重赋新值，对齐新设计）
+- 保留测试必需的选择器：`@view-transition`、`route-content`、`.page-layout-management-tight .*`、`.header-notice-panel`、`inline-check` 等
+
+#### `app/templates/base.html` — 品牌切换与结构简化
+
+- **修改位置**：
+  - `<title>`：`兰台清晖` → `衡鉴`
+  - `brand-emblem` SVG：册页形图标 → 天平几何图标（currentColor 适配深色 sidebar）
+  - `.brand-copy strong`：`兰台清晖` → `衡鉴`
+  - `.page-hero`：移除 `page-eyebrow`、移除 `page-hero-side` 的两张 `hero-chip`
+  - `asset_version` bump 到 `20260419-hengjian-flat`
+
+#### `app/templates/auth.html` — 登录页整体重写
+
+- 删除 `"物有本末，事有终始。知所先后，则近道矣。"`《大学》装饰引言
+- 删除左侧 `.auth-visual::after` 朱砂色斑 + `auth-quote-block` 装饰块
+- `.brand-mark` 朱砂渐变 → subtle 深底描边
+- `.btn-primary` 从渐变 + 大阴影 → 实色填充 + subtle 描边
+- `.field input` 圆角 16px → 4px，focus ring 对齐主色
+- 所有字体改为系统字体栈（移除 `STSong / SimSun / Noto Serif CJK SC`）
+- `<title>`：`登录 - 兰台清晖` → `登录 · 衡鉴`
+- 保留全部登录/改密 JS 逻辑
+
+#### `tests/test_ui_templates.py` — 断言迁移
+
+- `兰台清晖` → `衡鉴`
+- 新增反向断言：`assertNotIn('兰台清晖')`、`assertNotIn('page-eyebrow')`
+
+#### `tests/test_auth_pages.py` — 断言迁移
+
+- `兰台清晖` → `衡鉴`
+- 移除装饰文案断言："物有本末" 与 "《大学》"，改为 `assertNotIn` 反向校验
+
+#### `README.md` / `USER_GUIDE.md` — 标题品牌化
+
+- 根标题加 `衡鉴 ·` 前缀
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| **完全重写** | `app/static/style.css`、`app/templates/auth.html` |
+| **修改** | `app/templates/base.html`、`tests/test_ui_templates.py`、`tests/test_auth_pages.py`、`README.md`、`USER_GUIDE.md` |
+
+### 测试方式
+
+1. `PYTHONUTF8=1 python -m unittest tests.test_ui_templates -v` — 14/14 通过
+2. `PYTHONUTF8=1 python -m unittest tests.test_auth_pages -v` — 5/5 通过
+3. 全量 `python -m unittest discover -s tests -p "test_*.py"` — 84/85 通过（剩余 1 个 `test_07_auth_and_template_flow` 为**预先存在**的失败，依赖项目根 `01/02/03-*.docx` 官方模板文件，与本次重构无关）
+4. 启动 `start.bat`，在浏览器中打开 `http://127.0.0.1:8011`，人工核对：
+   - 侧边栏为实填深色（非渐变），品牌图标为天平几何造型
+   - 所有按钮扁平无阴影、无位移动画
+   - 卡片/面板圆角 ≤ 8px
+   - 登录页无《大学》引言、无装饰色斑
+   - 图表、表格、弹窗交互正常
 
 ---
 ## v1.6.0 — 代码审查修复（6 个恶性 bug）
