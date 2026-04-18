@@ -81,9 +81,10 @@ class AuthPageTests(unittest.TestCase):
         response = asyncio.run(self.get('/login'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('兰台清晖', response.text)
+        self.assertIn('衡鉴', response.text)
         self.assertIn('brand-emblem', response.text)
-        self.assertIn('“物有本末，事有终始。知所先后，则近道矣。”', response.text)
+        self.assertNotIn('兰台清晖', response.text)
+        self.assertIn('物有本末', response.text)
         self.assertIn('《大学》', response.text)
         self.assertNotIn('登录 / 改密', response.text)
         self.assertNotIn('登录成功后自动进入目标页面，不改变现有鉴权与跳转逻辑。', response.text)
