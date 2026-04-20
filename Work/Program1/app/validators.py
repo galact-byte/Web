@@ -115,10 +115,12 @@ def validate_office_phone(value: str) -> bool:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def validate_email(value: str) -> bool:
-    """校验电子邮箱地址基本格式。"""
+    """校验电子邮箱地址基本格式。占位符（/、／）视为合法。"""
     if not value:
         return False
     clean = value.strip()
+    if clean in {"/", "／"}:
+        return True
     return bool(EMAIL_PATTERN.fullmatch(clean))
 
 

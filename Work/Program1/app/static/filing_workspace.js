@@ -87,7 +87,7 @@
   });
   const CLOUD_RESPONSIBILITY_OPTIONS = [['云服务商', '云服务商'], ['云服务客户', '云服务客户']];
   const CLOUD_SERVICE_MODE_OPTIONS = [['基础设施即服务IaaS', '基础设施即服务IaaS'], ['平台即服务PaaS', '平台即服务PaaS'], ['软件即服务SaaS', '软件即服务SaaS'], ['其他', '其他']];
-  const CLOUD_DEPLOYMENT_OPTIONS = [['私有云', '私有云'], ['公有云', '公有云'], ['混合云', '混合云'], ['政务云', '政务云'], ['其他', '其他']];
+  const CLOUD_DEPLOYMENT_OPTIONS = [['私有云', '私有云'], ['公有云', '公有云'], ['混合云', '混合云'], ['其他', '其他']];
   const MOBILE_CHANNEL_OPTIONS = [['公共WIFI', '公共WIFI'], ['专用WIFI', '专用WIFI'], ['移动通信网', '移动通信网']];
   const MOBILE_TERMINAL_OPTIONS = [['通用终端', '通用终端'], ['专用终端', '专用终端']];
   const IOT_PERCEPTION_OPTIONS = [['感知节点', '感知节点'], ['感知网关', '感知网关'], ['RFID标签', 'RFID标签'], ['RFID读写器', 'RFID读写器'], ['其他', '其他']];
@@ -800,12 +800,20 @@
   }
 
   function renderTable5() {
-    return sectionBlock('表五 提交材料情况', '选择文件后自动上传，未上传即按无处理', `
+    return sectionBlock('表五 提交材料情况', '选"有"后上传附件，选"无"则跳过', `
       <div class="materials-stack">
         ${MATERIAL_SLOTS.map(([key, label]) => `
           <div class="material-slot material-slot-row">
-            <div class="material-slot-head"><strong>${esc(label)}</strong></div>
-            ${uploadFieldHtml(label, `upload_${key}`, `table5.${key}`, '.doc,.docx,.pdf,.jpg,.jpeg,.png,.vsd,.vsdx', `attachment_${key}`)}
+            <div class="material-slot-head">
+              <strong>${esc(label)}</strong>
+              <div class="choice-grid choice-row" style="margin-top:6px">
+                <label class="choice-chip choice-chip-sm"><input type="radio" name="table5_status_${key}" value="has"><span>有</span></label>
+                <label class="choice-chip choice-chip-sm"><input type="radio" name="table5_status_${key}" value="none" checked><span>无</span></label>
+              </div>
+            </div>
+            <div class="material-slot-upload" id="table5Upload_${key}" hidden>
+              ${uploadFieldHtml(label, `upload_${key}`, `table5.${key}`, '.doc,.docx,.pdf,.jpg,.jpeg,.png,.vsd,.vsdx', `attachment_${key}`)}
+            </div>
           </div>
         `).join('')}
       </div>
@@ -855,17 +863,26 @@
         </div>
         <div class="workspace-subsection">
           <h4>数据总量</h4>
-          <div class="form-grid form-grid-3">
-            <div><label>GB</label><input data-field="data_total_gb" value="${value('data_total_gb')}"></div>
-            <div><label>TB</label><input data-field="data_total_tb" value="${value('data_total_tb')}"></div>
-            <div><label>条数（万条）</label><input data-field="data_total_records" value="${value('data_total_records')}"></div>
+          <div class="data-quantity-inline">
+            <label class="choice-chip choice-chip-sm"><input type="radio" data-radio-field="data_total_unit" name="table6_data_total_unit_${index}" value="gb" ${(item && item.data_total_unit === 'gb') || (item && item.data_total_gb) ? 'checked' : ''}><span>GB</span></label>
+            <label class="choice-chip choice-chip-sm"><input type="radio" data-radio-field="data_total_unit" name="table6_data_total_unit_${index}" value="tb" ${(item && item.data_total_unit === 'tb') || (item && !item.data_total_gb && item.data_total_tb) ? 'checked' : ''}><span>TB</span></label>
+            <span data-qty-input-gb class="data-qty-input-toggle" hidden><input data-field="data_total_gb" value="${value('data_total_gb')}"></span>
+            <span data-qty-input-tb class="data-qty-input-toggle" hidden><input data-field="data_total_tb" value="${value('data_total_tb')}"></span>
+            <span class="data-qty-hint">根据数据量级选择后填写</span>
+          </div>
+          <div class="data-quantity-inline" style="margin-top:8px">
+            <label class="data-qty-item"><input data-field="data_total_records" value="${value('data_total_records')}"><span class="data-qty-unit">万条</span></label>
+            <span class="data-qty-hint">若为个人信息，填写涉及的个人信息条数</span>
           </div>
         </div>
         <div class="workspace-subsection">
           <h4>数据月增长量</h4>
-          <div class="form-grid form-grid-3">
-            <div><label>GB</label><input data-field="monthly_growth_gb" value="${value('monthly_growth_gb')}"></div>
-            <div><label>TB</label><input data-field="monthly_growth_tb" value="${value('monthly_growth_tb')}"></div>
+          <div class="data-quantity-inline">
+            <label class="choice-chip choice-chip-sm"><input type="radio" data-radio-field="monthly_growth_unit" name="table6_monthly_growth_unit_${index}" value="gb" ${(item && item.monthly_growth_unit === 'gb') || (item && item.monthly_growth_gb) ? 'checked' : ''}><span>GB</span></label>
+            <label class="choice-chip choice-chip-sm"><input type="radio" data-radio-field="monthly_growth_unit" name="table6_monthly_growth_unit_${index}" value="tb" ${(item && item.monthly_growth_unit === 'tb') || (item && !item.monthly_growth_gb && item.monthly_growth_tb) ? 'checked' : ''}><span>TB</span></label>
+            <span data-qty-input-growth-gb class="data-qty-input-toggle" hidden><input data-field="monthly_growth_gb" value="${value('monthly_growth_gb')}"></span>
+            <span data-qty-input-growth-tb class="data-qty-input-toggle" hidden><input data-field="monthly_growth_tb" value="${value('monthly_growth_tb')}"></span>
+            <span class="data-qty-hint">根据数据量级选择后填写</span>
           </div>
         </div>
         <div class="workspace-subsection">
@@ -1051,6 +1068,9 @@
     const bigDataComponents = getCheckedValues('bigDataComponents');
     show('bigDataPlatformWrap', bigDataComponents.includes('大数据平台'));
     show('bigDataConsumerWrap', bigDataComponents.includes('大数据应用') || bigDataComponents.includes('大数据资源'));
+    MATERIAL_SLOTS.forEach(([key]) => {
+      show(`table5Upload_${key}`, getRadioValue(`table5_status_${key}`) === 'has');
+    });
     syncTable6ConditionalFields();
   }
 
@@ -1096,6 +1116,12 @@
       card.querySelectorAll('[data-storage-region-wrap]').forEach((element) => {
         element.hidden = !storageRegionType;
       });
+      const dataTotalUnit = card.querySelector('[data-radio-field="data_total_unit"]:checked')?.value || '';
+      card.querySelectorAll('[data-qty-input-gb]').forEach((el) => { el.hidden = dataTotalUnit !== 'gb'; });
+      card.querySelectorAll('[data-qty-input-tb]').forEach((el) => { el.hidden = dataTotalUnit !== 'tb'; });
+      const monthlyGrowthUnit = card.querySelector('[data-radio-field="monthly_growth_unit"]:checked')?.value || '';
+      card.querySelectorAll('[data-qty-input-growth-gb]').forEach((el) => { el.hidden = monthlyGrowthUnit !== 'gb'; });
+      card.querySelectorAll('[data-qty-input-growth-tb]').forEach((el) => { el.hidden = monthlyGrowthUnit !== 'tb'; });
     });
   }
 
@@ -1325,7 +1351,12 @@
     setValue('bigDataProviderRecordNo', (table4.big_data || {}).provider_record_no);
     renderAttachmentList('attachmentTable4BigData', (table4.big_data || {}).attachments);
 
-    MATERIAL_SLOTS.forEach(([key]) => renderAttachmentList(`attachment_${key}`, (table5[key] || {}).attachments));
+    MATERIAL_SLOTS.forEach(([key]) => {
+      const slotData = table5[key] || {};
+      const hasFile = slotData.status === 'has' || Boolean(slotData.file_name || (slotData.attachments || []).length || (slotData.attachment_ids || []).length);
+      setRadioValue(`table5_status_${key}`, hasFile ? 'has' : 'none');
+      renderAttachmentList(`attachment_${key}`, slotData.attachments);
+    });
 
     renderTable6Items(table6.items);
     syncAddressPicker(true);
@@ -1577,8 +1608,9 @@
           },
           table5: MATERIAL_SLOTS.reduce((acc, [key]) => {
             const prevSlot = prevTable5[key] || {};
-            const hasFile = Boolean(prevSlot.file_name || (prevSlot.attachments || []).length || (prevSlot.attachment_ids || []).length);
-            acc[key] = { ...attachmentRefs(prevSlot), status: hasFile ? 'has' : 'none' };
+            const radioStatus = getRadioValue(`table5_status_${key}`);
+            const isHas = radioStatus === 'has';
+            acc[key] = { ...attachmentRefs(isHas ? prevSlot : {}), status: isHas ? 'has' : 'none' };
             return acc;
           }, {}),
           table6: { items: collectTable6Items() },
@@ -1771,7 +1803,7 @@
     }
     fillWorkspace(data.data);
     clearDraft(state.currentSystemId);
-    setDetailResult('备案信息已保存。');
+    setDetailResult('备案信息已保存。', { popup: true });
     await loadOverview();
   }
 
@@ -1786,6 +1818,7 @@
       setDetailResult('请先选择附件。');
       return;
     }
+
     const statusEl = $(`${(input.closest('.upload-inline-field')?.querySelector('.attachment-list') || {}).id || ''}Status`);
     if (statusEl) statusEl.textContent = `上传中 0% · ${file.name}`;
     const fd = new FormData();
@@ -1827,7 +1860,36 @@
       setDetailResult(`附件上传失败：${message}`);
       return;
     }
-    fillWorkspace(responseData.data);
+
+    // Only update attachment info locally, do NOT overwrite the entire form
+    const serverDetail = responseData.data || {};
+    const serverSystem = serverDetail.system || {};
+    const serverFiling = serverSystem.filing_detail || {};
+
+    // Update state.detail with new attachment data only
+    if (state.detail) {
+      const parts = slotKey.split('.');
+      if (parts[0] === 'table5' && parts[1]) {
+        const t5 = (state.detail.system || {}).filing_detail || {};
+        if (!t5.table5) t5.table5 = {};
+        t5.table5[parts[1]] = (serverFiling.table5 || {})[parts[1]] || t5.table5[parts[1]];
+        const listId = `attachment_${parts[1]}`;
+        renderAttachmentList(listId, ((serverFiling.table5 || {})[parts[1]] || {}).attachments);
+      } else if (parts[0] === 'table3' && parts[1]) {
+        const t3 = ((state.detail.system || {}).filing_detail || {}).table3 || {};
+        if (serverFiling.table3 && serverFiling.table3[parts[1]]) {
+          t3[parts[1]] = { ...t3[parts[1]], ...serverFiling.table3[parts[1]] };
+        }
+        renderAttachmentList(`attachmentTable3${parts[1].replace(/(^|_)(\w)/g, (_, _p, c) => c.toUpperCase())}`, ((serverFiling.table3 || {})[parts[1]] || {}).attachments);
+      } else if (parts[0] === 'table4' && parts[1]) {
+        const t4 = ((state.detail.system || {}).filing_detail || {}).table4 || {};
+        if (serverFiling.table4 && serverFiling.table4[parts[1]]) {
+          t4[parts[1]] = { ...t4[parts[1]], ...serverFiling.table4[parts[1]] };
+        }
+        renderAttachmentList(`attachmentTable4${parts[1].replace(/(^|_)(\w)/g, (_, _p, c) => c.toUpperCase())}`, ((serverFiling.table4 || {})[parts[1]] || {}).attachments);
+      }
+    }
+
     input.value = '';
     saveDraftSnapshot();
     if (statusEl) statusEl.textContent = `上传完成 · ${file.name}`;
