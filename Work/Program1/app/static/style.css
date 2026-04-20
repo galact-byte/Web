@@ -1612,3 +1612,1180 @@ tbody tr:hover td {
     padding: 12px 14px;
   }
 }
+
+/* =========================================================================
+   Filing Workspace — Component Styles
+   filing_workspace.js 生成的全部组件样式
+   ========================================================================= */
+
+/* ----- Form Grid ----- */
+.form-grid {
+  display: grid;
+  gap: 14px 16px;
+}
+
+.form-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.form-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.form-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.form-grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+.grid-span-2 { grid-column: span 2; }
+.grid-span-3 { grid-column: span 3; }
+.grid-span-4 { grid-column: span 4; }
+.grid-span-5 { grid-column: span 5; }
+
+/* ----- Choice Grid / Chip (radio & checkbox options) ----- */
+.choice-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.choice-row {
+  flex-direction: row;
+}
+
+.choice-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-body);
+  transition: border-color var(--motion), background-color var(--motion), color var(--motion), box-shadow var(--motion);
+  user-select: none;
+  line-height: 1.4;
+}
+
+.choice-chip:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+}
+
+.choice-chip input[type="radio"],
+.choice-chip input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+
+.choice-chip:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--primary-tint);
+  color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary-soft);
+}
+
+.choice-chip-sm {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+/* ----- Workspace Collapsible (<details>) ----- */
+.workspace-collapsible {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.workspace-collapsible + .workspace-collapsible {
+  margin-top: 12px;
+}
+
+.workspace-collapsible > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  transition: background-color var(--motion);
+  user-select: none;
+}
+
+.workspace-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.workspace-collapsible > summary::before {
+  content: '\f078';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform var(--motion-slow);
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  order: -1;
+}
+
+.workspace-collapsible[open] > summary::before {
+  transform: rotate(0deg);
+}
+
+.workspace-collapsible:not([open]) > summary::before {
+  transform: rotate(-90deg);
+}
+
+.workspace-collapsible:not([open]) > summary {
+  border-bottom-color: transparent;
+}
+
+.workspace-collapsible > summary:hover {
+  background: var(--surface-sunk);
+}
+
+.workspace-collapsible > summary > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.workspace-collapsible > summary > small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.workspace-collapsible-body {
+  padding: 18px 16px 20px;
+}
+
+/* ----- Workspace Subsection ----- */
+.workspace-subsection {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.workspace-subsection:first-child {
+  margin-top: 14px;
+  padding-top: 0;
+  border-top: none;
+}
+
+.workspace-subsection h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.workspace-subsection h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-body);
+}
+
+.workspace-subsection-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.workspace-subsection-head h3 {
+  margin: 0;
+}
+
+/* ----- Inline Field ----- */
+.inline-field {
+  margin-top: 10px;
+}
+
+.inline-field > label {
+  margin-bottom: 4px;
+}
+
+/* ----- Detail Page Head / Summary Card ----- */
+.workspace-detail-page-head {
+  border-left: 3px solid var(--primary);
+}
+
+.workspace-detail-head {
+  margin-top: 12px;
+}
+
+.workspace-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.workspace-detail-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.workspace-detail-summary > div:last-child {
+  border-right: none;
+}
+
+.workspace-detail-summary > div > span {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.workspace-detail-summary > div > strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.workspace-detail-panel {
+  background: var(--surface);
+}
+
+.workspace-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ----- Damage Level Table (表三 定级) ----- */
+.level-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.level-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.level-card > h3 {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.damage-level-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.damage-level-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.damage-level-group:last-child {
+  border-bottom: none;
+}
+
+.damage-level-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.damage-level-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.damage-level-group-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.damage-level-group-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.damage-level-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background-color var(--motion);
+  font-size: 12px;
+  color: var(--text-body);
+  line-height: 1.5;
+  margin: 0;
+  font-weight: 400;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+}
+
+.damage-level-row:last-child {
+  border-bottom: none;
+}
+
+.damage-level-row:hover {
+  background: var(--primary-tint);
+}
+
+.damage-level-row:has(input:checked) {
+  background: var(--primary-tint);
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.damage-level-control {
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.damage-level-control input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.damage-level-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.level-display {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+  border-top: 1px solid var(--border);
+}
+
+.level-display strong {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.final-level-box {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: var(--r-sm);
+  background: var(--primary-tint);
+  border: 1px solid var(--primary-soft);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.final-level-box strong {
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+/* ----- Filing Counts Board (表一 备案数量) ----- */
+.filing-counts-section h3 {
+  margin-bottom: 12px;
+}
+
+.filing-counts-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.filing-count-group {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.filing-count-group-title {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.filing-count-summary {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filing-count-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  cursor: default;
+  margin: 0;
+  font-weight: 400;
+}
+
+.filing-count-cell-summary {
+  padding: 0;
+}
+
+.filing-count-label {
+  font-size: 12px;
+  color: var(--text-body);
+}
+
+.filing-count-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filing-count-input-wrap input[type="number"] {
+  width: 72px;
+  padding: 4px 8px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.filing-count-unit {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.filing-count-table {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.filing-count-table .filing-count-cell {
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+.filing-count-table .filing-count-cell:nth-child(2n) {
+  border-right: none;
+}
+
+.filing-count-table .filing-count-cell:nth-last-child(-n+2) {
+  border-bottom: none;
+}
+
+.filing-count-table-even .filing-count-cell:nth-child(odd) {
+  background: var(--surface-muted);
+}
+
+.filing-count-table-total .filing-count-cell:nth-child(odd) {
+  background: var(--surface-muted);
+}
+
+/* ----- Filing Contact Email ----- */
+.filing-contact-email {
+  max-width: 360px;
+}
+
+/* ----- Upload Inline Field (表五 materials) ----- */
+.upload-inline-field {
+  margin-top: 10px;
+}
+
+.upload-inline-field > label {
+  display: none;
+}
+
+.upload-inline-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.upload-inline-box input[type="file"] {
+  max-width: 400px;
+}
+
+.upload-inline-box .table-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attachment-list:empty {
+  display: none;
+}
+
+/* ----- Materials Stack (表五) ----- */
+.materials-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.material-slot {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 0;
+}
+
+.material-slot:first-child {
+  padding-top: 0;
+}
+
+.material-slot:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.material-slot-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.material-slot-head {
+  margin-bottom: 4px;
+}
+
+.material-slot-head strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ----- Data Item Stack + Card (表六) ----- */
+.data-item-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.data-item-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  background: var(--surface);
+  position: relative;
+}
+
+.data-item-card .card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-item-card .card-head strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+  margin: 0;
+  font-family: var(--font-sans);
+}
+
+.data-item-card .card-head i {
+  display: none;
+}
+
+/* ----- Mini Badge ----- */
+.mini-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.mini-badge-level {
+  background: var(--primary-tint);
+  border-color: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ----- Table Meta (inline secondary text) ----- */
+.table-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.table-meta strong {
+  color: var(--text-body);
+  font-weight: 600;
+}
+
+/* ----- Workspace List Page ---- */
+.workspace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.workspace-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.workspace-toolbar > div {
+  flex: 1;
+  min-width: 180px;
+}
+
+.workspace-toolbar-check {
+  flex: 0 0 auto !important;
+  min-width: auto !important;
+  align-self: center;
+  padding-bottom: 2px;
+}
+
+.workspace-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto !important;
+  min-width: auto !important;
+}
+
+.workspace-account-flag {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ----- Workspace Tabs ----- */
+.workspace-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 0;
+  overflow-x: auto;
+}
+
+.workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  min-height: 36px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--motion), border-color var(--motion), background-color var(--motion);
+  border-radius: 0;
+}
+
+.workspace-tab:hover {
+  color: var(--text);
+  background: var(--surface-muted);
+  border-color: transparent;
+}
+
+.workspace-tab.is-active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+  background: transparent;
+}
+
+.maintenance-tabs {
+  margin-bottom: 0;
+}
+
+.maintenance-panels {
+  padding-top: 0;
+}
+
+.maintenance-card {
+  display: none;
+  padding-top: 14px;
+}
+
+.maintenance-card.is-active {
+  display: block;
+}
+
+.maintenance-card h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.maintenance-table-wrap {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* ----- Workspace Modal ----- */
+.workspace-modal-overlay .modal-box,
+.workspace-modal-box {
+  width: min(100%, 640px);
+}
+
+.workspace-modal-head {
+  margin-bottom: 8px;
+}
+
+.workspace-modal-head h2 {
+  margin-bottom: 4px;
+}
+
+.workspace-modal-result {
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+/* ----- Workspace Scene (表四 sub-blocks) ----- */
+.workspace-scene {
+  border-color: var(--border);
+}
+
+.workspace-scene > summary {
+  background: var(--surface);
+}
+
+.workspace-scene > summary:hover {
+  background: var(--surface-muted);
+}
+
+/* =========================================================================
+   Filing Workspace — Responsive overrides
+   ========================================================================= */
+@media (max-width: 1024px) {
+  .form-grid-3,
+  .form-grid-4,
+  .form-grid-5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid-span-3,
+  .grid-span-4,
+  .grid-span-5 {
+    grid-column: 1 / -1;
+  }
+
+  .level-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .filing-counts-board {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-detail-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-detail-summary > div:nth-child(2n) {
+    border-right: none;
+  }
+
+  .workspace-detail-summary > div:nth-child(n+3) {
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 640px) {
+  .form-grid-2,
+  .form-grid-3,
+  .form-grid-4,
+  .form-grid-5 {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-span-2,
+  .grid-span-3,
+  .grid-span-4,
+  .grid-span-5 {
+    grid-column: 1 / -1;
+  }
+
+  .choice-grid {
+    flex-direction: column;
+  }
+
+  .workspace-detail-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-detail-summary > div {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .workspace-detail-summary > div:last-child {
+    border-bottom: none;
+  }
+
+  .filing-count-table {
+    grid-template-columns: 1fr;
+  }
+
+  .filing-count-table .filing-count-cell {
+    border-right: none;
+  }
+
+  .workspace-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workspace-toolbar > div {
+    min-width: 0;
+  }
+
+  .workspace-toolbar-actions {
+    flex-wrap: wrap;
+  }
+
+  .workspace-account-flag {
+    align-items: flex-start;
+  }
+
+  .level-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* =========================================================================
+   Workspace List — Organization Cards & System Rows
+   ========================================================================= */
+
+/* ----- Organization Card ----- */
+.org-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+  transition: box-shadow var(--motion);
+}
+
+.org-card + .org-card {
+  margin-top: 10px;
+}
+
+.org-card:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.org-card.is-open {
+  box-shadow: var(--shadow-sm);
+}
+
+/* --- Card Head (toggle trigger) --- */
+.org-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 16px;
+  background: linear-gradient(90deg, var(--primary-tint) 0%, var(--surface) 100%);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  cursor: pointer;
+  transition: background-color var(--motion);
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  border-radius: 0;
+}
+
+.org-card-head:hover {
+  background: var(--primary-tint);
+}
+
+.org-card-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.org-card-main strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.org-card-main span {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.org-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.org-card-chevron {
+  color: var(--text-muted);
+  font-size: 12px;
+  width: 20px;
+  text-align: center;
+  transition: transform var(--motion);
+}
+
+/* --- Card Actions (add/archive/delete buttons for org) --- */
+.org-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+/* --- Card Body (system list) --- */
+.org-card-body {
+  padding: 0;
+}
+
+/* ----- System Row ----- */
+.system-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px 10px 28px;
+  border-bottom: 1px solid var(--border);
+  transition: background-color var(--motion);
+}
+
+.system-row:last-child {
+  border-bottom: none;
+}
+
+.system-row:hover {
+  background: var(--surface-muted);
+}
+
+.system-row.is-active {
+  background: var(--primary-tint);
+  border-left: 3px solid var(--primary);
+  padding-left: 25px;
+}
+
+.system-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.system-main strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.system-main span {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.system-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.system-row-empty {
+  padding: 18px 28px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ----- Workspace Empty ----- */
+.workspace-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* =========================================================================
+   Table 6 — Compact Data Quantity Inline Layout
+   ========================================================================= */
+.data-quantity-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.data-quantity-inline .data-qty-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.data-quantity-inline .data-qty-item input {
+  width: 100px;
+  padding: 5px 8px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.data-quantity-inline .data-qty-unit {
+  font-size: 12px;
+  color: var(--text-body);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.data-qty-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.data-qty-sep {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 400;
+  padding: 0 2px;
+}
+
+.data-qty-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ----- Material Slot Upload (toggle area) ----- */
+.material-slot-upload {
+  margin-top: 8px;
+  padding-left: 4px;
+}
+
+.material-slot-head .choice-grid {
+  display: inline-flex;
+  margin-left: 12px;
+  vertical-align: middle;
+}
+
+.data-qty-input-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.data-qty-input-toggle[hidden] {
+  display: none;
+}
+
+.data-qty-input-toggle input {
+  width: 100px;
+  padding: 5px 8px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/* ---- responsive for org cards ---- */
+@media (max-width: 640px) {
+  .org-card-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .org-card-meta {
+    flex-wrap: wrap;
+  }
+
+  .org-card-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .system-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding-left: 16px;
+  }
+
+  .system-actions {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+}
+

@@ -4142,7 +4142,7 @@ async def upload_filing_workspace_attachment(
         slot_item = {"file_name": "", "attachment_ids": []}
         slot_map[slot_key] = slot_item
     slot_item["file_name"] = Path(file.filename).name
-    slot_item["attachment_ids"] = normalize_attachment_refs(slot_item.get("attachment_ids")) + [row.id]
+    slot_item["attachment_ids"] = [row.id]
     if slot_key.startswith("table3."):
         name = slot_key.split(".", 1)[1]
         target = detail.setdefault("table3", {}).setdefault(name, {})
@@ -4805,6 +4805,203 @@ def format_marked_storage(options: list[tuple[str, str]], selected: str, selecte
     return "  ".join(parts)
 
 
+# ==== 模板保真导出：XML 级别辅助函数 ====
+_WML_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_WINGDINGS_UNCHECKED = "0030"
+_WINGDINGS_CHECKED = "0052"
+
+
+def _iter_cell_runs(cell: Any):
+    for paragraph in cell.paragraphs:
+        for run in paragraph.runs:
+            yield run
+
+
+def _iter_cell_wingdings_syms(cell: Any):
+    """按出现顺序 yield 单元格中 Wingdings 2 复选框符号元素。"""
+    for run in _iter_cell_runs(cell):
+        for sym in run._element.findall(f"{_WML_NS}sym"):
+            font = sym.get(f"{_WML_NS}font") or ""
+            if "Wingdings" in font:
+                yield sym
+
+
+def set_cell_check_by_index(cell: Any, selected_indices) -> None:
+    """按 0-based 索引集合，切换单元格内所有 Wingdings 复选框的勾选状态。"""
+    try:
+        indices = {int(i) for i in selected_indices if i is not None and str(i) != ""}
+    except (TypeError, ValueError):
+        indices = set()
+    for idx, sym in enumerate(_iter_cell_wingdings_syms(cell)):
+        sym.set(f"{_WML_NS}char", _WINGDINGS_CHECKED if idx in indices else _WINGDINGS_UNCHECKED)
+
+
+def clear_cell_checks(cell: Any) -> None:
+    set_cell_check_by_index(cell, [])
+
+
+def label_to_index(label: Any, options: list[str]) -> int | None:
+    text = str(label or "").strip()
+    if not text:
+        return None
+    for idx, option in enumerate(options):
+        if text == option:
+            return idx
+    for idx, option in enumerate(options):
+        if text in option or option in text:
+            return idx
+    return None
+
+
+def labels_to_indices(labels: Any, options: list[str]) -> set[int]:
+    result: set[int] = set()
+    if labels is None:
+        return result
+    iterable = labels if isinstance(labels, (list, set, tuple)) else [labels]
+    for item in iterable:
+        idx = label_to_index(item, options)
+        if idx is not None:
+            result.add(idx)
+    return result
+
+
+def set_fangsong_run_values(cell: Any, values: list[str]) -> None:
+    """按顺序替换单元格中所有 font='仿宋' 的 run 文本；保留原前后空白。"""
+    runs = [run for run in _iter_cell_runs(cell) if (run.font.name or "") == "仿宋"]
+    for idx, value in enumerate(values):
+        if idx < len(runs):
+            original = runs[idx].text
+            lead = re.match(r"^\s*", original).group(0)
+            trail = re.search(r"\s*$", original).group(0)
+            runs[idx].text = f"{lead}{value}{trail}" if value else f"{lead}{trail}"
+
+
+def set_first_fangsong_run(cell: Any, value: str) -> None:
+    for run in _iter_cell_runs(cell):
+        if (run.font.name or "") == "仿宋":
+            original = run.text
+            lead = re.match(r"^\s*", original).group(0)
+            trail = re.search(r"\s*$", original).group(0)
+            run.text = f"{lead}{value}{trail}" if value else f"{lead}{trail}"
+            return
+
+
+def replace_cell_preserve_symbols(cell: Any, text: str) -> None:
+    """清空单元格中非 Wingdings 符号 run 的文本，并把新值写入第一个非符号 run。"""
+    non_sym_runs: list[Any] = []
+    for run in _iter_cell_runs(cell):
+        sym_elements = run._element.findall(f"{_WML_NS}sym")
+        has_wingdings = any("Wingdings" in (s.get(f"{_WML_NS}font") or "") for s in sym_elements)
+        if not has_wingdings:
+            non_sym_runs.append(run)
+    if not non_sym_runs:
+        replace_cell_text(cell, text)
+        return
+    non_sym_runs[0].text = str(text or "")
+    for run in non_sym_runs[1:]:
+        run.text = ""
+
+
+def replace_attachment_name_in_cell(cell: Any, new_name: str) -> None:
+    """把单元格中的 《...》 附件名文字替换为新值；new_name 为空则清空为若干空格。"""
+    all_runs = list(_iter_cell_runs(cell))
+    start_idx: int | None = None
+    end_idx: int | None = None
+    for idx, run in enumerate(all_runs):
+        if "《" in run.text and start_idx is None:
+            start_idx = idx
+        if "》" in run.text:
+            end_idx = idx
+    if start_idx is None or end_idx is None or end_idx < start_idx:
+        return
+    if new_name:
+        all_runs[start_idx].text = f"《{new_name}》"
+    else:
+        all_runs[start_idx].text = " " * 24
+    for idx in range(start_idx + 1, end_idx + 1):
+        all_runs[idx].text = ""
+
+
+def replace_date_runs_in_cell(cell: Any, raw_value: Any) -> None:
+    """把单元格中紧邻"年/月/日"标签的数字 run 替换为 raw_value 对应日期的年月日。
+    未指定时清空数字。"""
+    parsed: date | None
+    if isinstance(raw_value, date):
+        parsed = raw_value
+    else:
+        parsed = parse_workspace_date(raw_value)
+    year = str(parsed.year) if parsed else ""
+    month = str(parsed.month) if parsed else ""
+    day = str(parsed.day) if parsed else ""
+    for paragraph in cell.paragraphs:
+        runs = paragraph.runs
+        for i, run in enumerate(runs):
+            text = run.text
+            if "年" in text:
+                _set_date_part_backwards(runs, i, year, ("年", "月", "日"))
+            elif "月" in text:
+                _set_date_part_backwards(runs, i, month, ("年", "月", "日"))
+            elif "日" in text:
+                _set_date_part_backwards(runs, i, day, ("年", "月", "日"))
+
+
+def _set_date_part_backwards(runs: list, label_index: int, value: str, boundary_labels: tuple[str, ...]) -> None:
+    """从 label_index 往前查找最近的可替换数字 run，写入 value。遇到另一个日期标签则停止。"""
+    # 先找含数字的 run
+    for j in range(label_index - 1, -1, -1):
+        rt = runs[j].text
+        if j != label_index - 1 and any(lbl in rt for lbl in boundary_labels):
+            break
+        if re.search(r"\d", rt):
+            if value:
+                runs[j].text = re.sub(r"\d+", value, rt, count=1)
+            else:
+                runs[j].text = re.sub(r"\d+", "    ", rt, count=1)
+            return
+    # 没找到数字 run，则向前找空白 run 写入（仅当 value 非空）
+    if not value:
+        return
+    for j in range(label_index - 1, -1, -1):
+        rt = runs[j].text
+        if any(lbl in rt for lbl in boundary_labels):
+            break
+        if rt.strip() == "" and rt:
+            lead = re.match(r"^\s*", rt).group(0)
+            trail = re.search(r"\s*$", rt).group(0) or " "
+            runs[j].text = f"{lead}{value}{trail}"
+            return
+
+
+def find_run_in_cell(cell: Any, keyword: str):
+    for run in _iter_cell_runs(cell):
+        if keyword in run.text:
+            return run
+    return None
+
+
+def sanitize_filename_component(value: str, fallback: str = "导出") -> str:
+    clean = re.sub(r'[\\/:*?"<>|\r\n\t]', "", str(value or "").strip())
+    clean = re.sub(r"\s+", " ", clean).strip()
+    return clean or fallback
+
+
+def _resolve_attachment_name(raw_name: Any, prefix: str, default_suffix: str) -> str:
+    """根据已存的附件名和目标单位+系统前缀、默认后缀，决定模板最终显示的附件名。
+    - 为空：使用 "{prefix}-{default_suffix}"
+    - 已包含 prefix：去掉书名号后保留
+    - 旧默认格式（如 "01-xxx.docx"/"02-xxx.docx"/"03-xxx.docx"）：替换为新格式
+    - 其他用户自定义：保留
+    """
+    text = str(raw_name or "").strip().strip("《》")
+    if not text:
+        return f"{prefix}-{default_suffix}"
+    if prefix and prefix in text:
+        return text
+    if re.match(r"^\d{1,2}-.+\.docx?$", text, flags=re.IGNORECASE):
+        return f"{prefix}-{default_suffix}"
+    return text
+
+
 def extract_workspace_export_context(org: Organization, system: SystemInfo) -> dict[str, Any]:
     org_detail = merged_org_filing_detail(org)
     sys_detail = merged_system_filing_detail(system)
@@ -4824,6 +5021,77 @@ def extract_workspace_export_context(org: Organization, system: SystemInfo) -> d
     }
 
 
+def _fill_paragraph_run_value(paragraph: Any, label_keywords: set[str], new_value: str, *, blank_fill: bool = False) -> None:
+    """在段落 runs 中，跳过标签字符，把最后一个非标签 run 替换为 new_value。blank_fill=True 则清空为空格。"""
+    candidates: list[Any] = []
+    for run in paragraph.runs:
+        s = run.text.strip()
+        if not s:
+            continue
+        if s in label_keywords:
+            continue
+        candidates.append(run)
+    if not candidates:
+        return
+    target = candidates[-1]
+    if blank_fill:
+        target.text = " " * max(len(target.text), 6)
+    else:
+        target.text = str(new_value or "")
+
+
+def _set_numeric_count_run(cell: Any, value: int) -> None:
+    """在单元格中找到含数字的 run，替换数字为 value；若未找到，兜底替换首个 run。"""
+    value_str = str(value)
+    for run in _iter_cell_runs(cell):
+        if re.search(r"\d", run.text):
+            run.text = re.sub(r"\d+", value_str, run.text, count=1)
+            return
+    for run in _iter_cell_runs(cell):
+        if run.text.strip() == "" and run.text:
+            run.text = f" {value_str} "
+            return
+    replace_cell_preserve_symbols(cell, f"{value_str}个")
+
+
+def _replace_keyword_suffix(cell: Any, keyword: str, new_value: str) -> None:
+    """找到包含 keyword 的 run，把其后第一个非标签 run 文本替换为 new_value。保留空白/下划线格式。"""
+    runs = list(_iter_cell_runs(cell))
+    for i, run in enumerate(runs):
+        if keyword in run.text and i + 1 < len(runs):
+            target = runs[i + 1]
+            original = target.text
+            if new_value:
+                lead = re.match(r"^\s*", original).group(0) or " "
+                trail = re.search(r"\s*$", original).group(0) or " "
+                target.text = f"{lead}{new_value}{trail}"
+            else:
+                if "_" in original:
+                    return
+                target.text = original if not original.strip() else ""
+            return
+
+
+def _set_filler_name(cell: Any, filler_name: str) -> None:
+    """替换 T3 R18 C0 填表人姓名。模板 runs: ['填表人：', ' ', '张宇阳', ' ']"""
+    runs = list(_iter_cell_runs(cell))
+    for i, run in enumerate(runs):
+        if "填表人" in run.text and i + 2 < len(runs):
+            runs[i + 2].text = str(filler_name or "")
+            return
+
+
+def _normalize_person_info_value(value: Any) -> str:
+    s = str(value or "").strip()
+    mapping = {
+        "sensitive": "涉及敏感个人信息",
+        "minor": "涉及未成年人的个人信息",
+        "general": "涉及一般个人信息",
+        "none": "不涉及",
+    }
+    return mapping.get(s, s)
+
+
 def fill_filing_template_document(doc: Document, org: Organization, system: SystemInfo) -> None:
     ctx = extract_workspace_export_context(org, system)
     table1 = ctx["table1"]
@@ -4839,323 +5107,437 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
     industry = table1.get("industry_category") if isinstance(table1.get("industry_category"), dict) else {}
     current_counts = table1.get("current_filing_counts") if isinstance(table1.get("current_filing_counts"), dict) else {}
     total_counts = table1.get("total_filing_counts") if isinstance(table1.get("total_filing_counts"), dict) else {}
-    date_text = datetime.now().strftime("%Y-%m-%d")
 
+    attachment_prefix = f"{str(org.name or '').strip()}-{str(system.system_name or '').strip()}".strip("-")
+
+    # === 封面：备案单位填入；备案日期留空（由备案单位手填） ===
+    COVER_LABELS = {"备", "案", "单", "位：", "日", "期："}
     for paragraph in doc.paragraphs:
         text = paragraph.text.strip()
         if text.startswith("备 案 单 位："):
-            paragraph.text = f"备 案 单 位：    {org.name}"
+            _fill_paragraph_run_value(paragraph, COVER_LABELS, str(org.name or ""))
         elif text.startswith("备 案 日 期："):
-            paragraph.text = f"备 案 日 期：    {date_text}"
+            _fill_paragraph_run_value(paragraph, COVER_LABELS, "", blank_fill=True)
 
     if len(doc.tables) < 7:
         raise HTTPException(status_code=500, detail="备案模板结构不完整。")
 
+    # ============ 表一 单位基本情况 ============
     t1 = doc.tables[1]
-    replace_cell_text(t1.rows[0].cells[1], org.name)
-    replace_cell_text(t1.rows[1].cells[1], org.credit_code)
-    address_text = (
-        f"{str(address_parts.get('province') or '').strip()} "
-        f"省(自治区、直辖市)    {str(address_parts.get('city') or '').strip()} 地(区、市、州、盟)\n"
-        f"{str(address_parts.get('district') or '').strip()} 县(区、市、旗)  详细地址 {str(address_parts.get('detail') or org.address).strip()}"
-    ).strip()
-    replace_cell_text(t1.rows[2].cells[1], address_text)
-    replace_cell_text(t1.rows[3].cells[1], str(table1.get("postal_code") or ""))
-    replace_cell_text(t1.rows[3].cells[6], str(table1.get("district_code") or ""))
-    replace_cell_text(t1.rows[4].cells[2], str(responsible_person.get("name") or org.legal_representative or ""))
-    replace_cell_text(t1.rows[4].cells[6], str(responsible_person.get("title") or ""))
-    replace_cell_text(t1.rows[5].cells[2], str(responsible_person.get("office_phone") or org.office_phone or "/"))
-    replace_cell_text(t1.rows[5].cells[6], str(responsible_person.get("email") or org.email or "/"))
-    replace_cell_text(t1.rows[6].cells[1], str(org.cybersecurity_dept or ""))
-    replace_cell_text(t1.rows[7].cells[2], str(org.cybersecurity_owner_name or ""))
-    replace_cell_text(t1.rows[7].cells[6], str(org.cybersecurity_owner_title or ""))
-    replace_cell_text(t1.rows[8].cells[2], str(org.cybersecurity_owner_phone or "/"))
-    replace_cell_text(t1.rows[8].cells[6], str(org.cybersecurity_owner_email or "/"))
-    replace_cell_text(t1.rows[9].cells[2], str(org.mobile_phone or "/"))
-    replace_cell_text(t1.rows[9].cells[6], str(org.cybersecurity_owner_email or org.email or "/"))
-    replace_cell_text(t1.rows[10].cells[1], str(org.data_security_dept or ""))
-    replace_cell_text(t1.rows[11].cells[2], str(org.data_security_owner_name or ""))
-    replace_cell_text(t1.rows[11].cells[6], str(org.data_security_owner_title or ""))
-    replace_cell_text(t1.rows[12].cells[2], str(org.data_security_owner_phone or "/"))
-    replace_cell_text(t1.rows[12].cells[6], str(org.data_security_owner_email or "/"))
-    replace_cell_text(t1.rows[13].cells[2], str(org.mobile_phone or "/"))
-    replace_cell_text(t1.rows[13].cells[6], str(org.data_security_owner_email or org.email or "/"))
-    replace_cell_text(
-        t1.rows[14].cells[1],
-        render_marked_choices(
-            ["中央", "省(自治区、直辖市)", "地(区、市、州、盟)", "县（区、市、旗）"],
-            [str(affiliation.get("label") or "").strip()],
-            other_value=str(affiliation.get("other") or "").strip(),
-        ),
-    )
-    replace_cell_text(
-        t1.rows[15].cells[1],
-        render_marked_choices(
-            ["党委机关", "政府机关", "事业单位", "企业"],
-            [str(org_type.get("label") or org.organization_type or "").strip()],
-            other_value=str(org_type.get("other") or "").strip(),
-        ),
-    )
-    replace_cell_text(
-        t1.rows[16].cells[1],
-        str(industry.get("label") or org.industry or "").strip(),
-    )
+    replace_cell_preserve_symbols(t1.rows[0].cells[1], str(org.name or ""))
+    replace_cell_preserve_symbols(t1.rows[1].cells[1], str(org.credit_code or ""))
+    # R2 地址 —— 4 段仿宋 run：[省, 市, 区县, 详细地址]
+    set_fangsong_run_values(t1.rows[2].cells[1], [
+        str(address_parts.get("province") or "").strip(),
+        str(address_parts.get("city") or "").strip(),
+        str(address_parts.get("district") or "").strip(),
+        str(address_parts.get("detail") or org.address or "").strip(),
+    ])
+    set_first_fangsong_run(t1.rows[3].cells[1], str(table1.get("postal_code") or ""))
+    set_first_fangsong_run(t1.rows[3].cells[6], str(table1.get("district_code") or ""))
+    set_first_fangsong_run(t1.rows[4].cells[2], str(responsible_person.get("name") or org.legal_representative or ""))
+    set_first_fangsong_run(t1.rows[4].cells[6], str(responsible_person.get("title") or ""))
+    set_first_fangsong_run(t1.rows[5].cells[2], str(responsible_person.get("office_phone") or org.office_phone or "/"))
+    set_first_fangsong_run(t1.rows[5].cells[6], str(responsible_person.get("email") or org.email or "/"))
+    replace_cell_preserve_symbols(t1.rows[6].cells[1], str(org.cybersecurity_dept or ""))
+    set_first_fangsong_run(t1.rows[7].cells[2], str(org.cybersecurity_owner_name or ""))
+    set_first_fangsong_run(t1.rows[7].cells[6], str(org.cybersecurity_owner_title or ""))
+    set_first_fangsong_run(t1.rows[8].cells[2], str(org.cybersecurity_owner_phone or "/"))
+    set_first_fangsong_run(t1.rows[8].cells[6], str(org.cybersecurity_owner_email or "/"))
+    set_first_fangsong_run(t1.rows[9].cells[2], str(org.mobile_phone or "/"))
+    set_first_fangsong_run(t1.rows[9].cells[6], str(org.cybersecurity_owner_email or org.email or "/"))
+    replace_cell_preserve_symbols(t1.rows[10].cells[1], str(org.data_security_dept or ""))
+    set_first_fangsong_run(t1.rows[11].cells[2], str(org.data_security_owner_name or ""))
+    set_first_fangsong_run(t1.rows[11].cells[6], str(org.data_security_owner_title or ""))
+    set_first_fangsong_run(t1.rows[12].cells[2], str(org.data_security_owner_phone or "/"))
+    set_first_fangsong_run(t1.rows[12].cells[6], str(org.data_security_owner_email or "/"))
+    set_first_fangsong_run(t1.rows[13].cells[2], str(org.mobile_phone or "/"))
+    set_first_fangsong_run(t1.rows[13].cells[6], str(org.data_security_owner_email or org.email or "/"))
+
+    # R14-R16 选项字段：只改 Wingdings 勾选状态
+    AFFILIATION_OPTIONS = ["中央", "省(自治区、直辖市)", "地(区、市、州、盟)", "县（区、市、旗）", "其他"]
+    set_cell_check_by_index(t1.rows[14].cells[1], labels_to_indices(affiliation.get("label"), AFFILIATION_OPTIONS))
+    ORG_TYPE_OPTIONS = ["党委机关", "政府机关", "事业单位", "企业", "其他"]
+    set_cell_check_by_index(t1.rows[15].cells[1], labels_to_indices(org_type.get("label") or org.organization_type, ORG_TYPE_OPTIONS))
+    INDUSTRY_OPTIONS = [
+        "海关", "税务", "市场监督管理", "广播电视", "体育", "统计",
+        "国际发展合作", "医疗保障", "参事", "机关事务管理", "外交", "国防科技工业",
+        "发展和改革", "教育", "科学技术", "工业和信息化", "民族事务", "公安",
+        "安全", "民政", "司法", "财政", "人力资源和社会保障", "自然资源",
+        "生态环境", "住房和城乡建设", "交通运输", "水利", "农业农村", "商务",
+        "文化和旅游", "卫生健康", "退役军人事务", "应急管理", "银行", "审计",
+        "铁路", "电信", "经营性公众互联网", "保险", "证券", "气象",
+        "民航", "电力", "能源", "邮政", "宣传", "数据管理", "电子政务", "其他",
+    ]
+    set_cell_check_by_index(t1.rows[16].cells[1], labels_to_indices(industry.get("label") or org.industry, INDUSTRY_OPTIONS))
+
+    # R17-R21 数量矩阵
     current_total = to_int_or_zero(current_counts.get("total")) or sum(
         to_int_or_zero(current_counts.get(key)) for key in ("2", "3", "4", "5")
     )
     total_total = to_int_or_zero(total_counts.get("total")) or sum(
         to_int_or_zero(total_counts.get(key)) for key in ("1", "2", "3", "4", "5")
     )
-    replace_cell_text(t1.rows[17].cells[1], f"{current_total} 个")
-    replace_cell_text(t1.rows[17].cells[3], str(to_int_or_zero(current_counts.get("2"))))
-    replace_cell_text(t1.rows[17].cells[7], str(to_int_or_zero(current_counts.get("3"))))
-    replace_cell_text(t1.rows[18].cells[3], str(to_int_or_zero(current_counts.get("4"))))
-    replace_cell_text(t1.rows[18].cells[7], str(to_int_or_zero(current_counts.get("5"))))
-    replace_cell_text(t1.rows[19].cells[1], f"{total_total} 个")
-    replace_cell_text(t1.rows[19].cells[3], str(to_int_or_zero(total_counts.get("1"))))
-    replace_cell_text(t1.rows[19].cells[7], str(to_int_or_zero(total_counts.get("2"))))
-    replace_cell_text(t1.rows[20].cells[3], str(to_int_or_zero(total_counts.get("3"))))
-    replace_cell_text(t1.rows[20].cells[7], str(to_int_or_zero(total_counts.get("4"))))
-    replace_cell_text(t1.rows[21].cells[3], str(to_int_or_zero(total_counts.get("5"))))
+    _set_numeric_count_run(t1.rows[17].cells[1], current_total)
+    _set_numeric_count_run(t1.rows[17].cells[3], to_int_or_zero(current_counts.get("2")))
+    _set_numeric_count_run(t1.rows[17].cells[7], to_int_or_zero(current_counts.get("3")))
+    _set_numeric_count_run(t1.rows[18].cells[3], to_int_or_zero(current_counts.get("4")))
+    _set_numeric_count_run(t1.rows[18].cells[7], to_int_or_zero(current_counts.get("5")))
+    _set_numeric_count_run(t1.rows[19].cells[1], total_total)
+    _set_numeric_count_run(t1.rows[19].cells[3], to_int_or_zero(total_counts.get("1")))
+    _set_numeric_count_run(t1.rows[19].cells[7], to_int_or_zero(total_counts.get("2")))
+    _set_numeric_count_run(t1.rows[20].cells[3], to_int_or_zero(total_counts.get("3")))
+    _set_numeric_count_run(t1.rows[20].cells[7], to_int_or_zero(total_counts.get("4")))
+    _set_numeric_count_run(t1.rows[21].cells[3], to_int_or_zero(total_counts.get("5")))
 
+    # ============ 表二 定级对象情况 ============
     t2 = doc.tables[2]
-    object_code = re.sub(r"[^0-9A-Z]", "", str(system.system_code or "").upper())[-5:].rjust(5, "0")
-    replace_cell_text(t2.rows[0].cells[2], system.system_name)
-    for idx, cell_index in enumerate((4, 5, 6, 7, 8)):
-        replace_cell_text(t2.rows[0].cells[cell_index], object_code[idx])
-    replace_cell_text(t2.rows[1].cells[2], format_table2_object_types(table2))
-    replace_cell_text(
-        t2.rows[2].cells[2],
-        render_marked_choices(
-            ["生产作业", "指挥调度", "内部办公", "公众服务"],
-            table2.get("business_types"),
-            other_value=str(table2.get("business_other") or "").strip(),
-        ),
-    )
-    replace_cell_text(t2.rows[3].cells[2], str(table2.get("business_description") or system.business_description or ""))
+    replace_cell_preserve_symbols(t2.rows[0].cells[2], str(system.system_name or ""))
+    # 定级对象编号：5 位，由公安机关填，全部留空（或前 2 位填当前年份后两位）
+    for cell_index in (4, 5, 6, 7, 8):
+        replace_cell_preserve_symbols(t2.rows[0].cells[cell_index], "")
+
+    # R1 定级对象类型 + 技术类型（模板 sym 顺序：通信网络、信息系统、5技术、9其他、数据资源）
+    OBJECT_TYPE_SYMS = {"通信网络设施": 0, "信息系统": 1, "数据资源": 8}
+    TECHNOLOGY_SYMS = {"云计算技术": 2, "移动互联技术": 3, "物联网技术": 4, "工业控制技术": 5, "大数据技术": 6}
+    object_types_list = table2.get("object_types") if isinstance(table2.get("object_types"), list) else []
+    technology_types_list = table2.get("technology_types") if isinstance(table2.get("technology_types"), list) else []
+    combined_r1: set[int] = set()
+    for label in object_types_list:
+        key = str(label).strip()
+        if key in OBJECT_TYPE_SYMS:
+            combined_r1.add(OBJECT_TYPE_SYMS[key])
+    for label in technology_types_list:
+        key = str(label).strip()
+        if key in TECHNOLOGY_SYMS:
+            combined_r1.add(TECHNOLOGY_SYMS[key])
+    if str(table2.get("technology_other") or "").strip():
+        combined_r1.add(7)
+    set_cell_check_by_index(t2.rows[1].cells[2], combined_r1)
+
+    # R2 业务类型
+    BUSINESS_TYPES = ["生产作业", "指挥调度", "内部办公", "公众服务", "其他"]
+    biz_idx = labels_to_indices(table2.get("business_types"), BUSINESS_TYPES)
+    if str(table2.get("business_other") or "").strip():
+        biz_idx.add(4)
+    set_cell_check_by_index(t2.rows[2].cells[2], biz_idx)
+
+    replace_cell_preserve_symbols(t2.rows[3].cells[2], str(table2.get("business_description") or system.business_description or ""))
+
     network_service = table2.get("network_service") if isinstance(table2.get("network_service"), dict) else {}
     network_platform = table2.get("network_platform") if isinstance(table2.get("network_platform"), dict) else {}
-    replace_cell_text(t2.rows[4].cells[2], format_table2_service_scope(network_service))
-    replace_cell_text(
-        t2.rows[5].cells[2],
-        render_marked_choices(
-            ["单位内部人员", "社会公众人员", "两者均包括"],
-            network_service.get("service_targets"),
-            other_value=str(network_service.get("service_target_other") or "").strip(),
-        ),
-    )
-    coverage = network_platform.get("coverage") if isinstance(network_platform.get("coverage"), dict) else {}
-    replace_cell_text(
-        t2.rows[6].cells[2],
-        render_marked_choices(
-            ["局域网", "城域网", "广域网"],
-            [str(coverage.get("label") or coverage.get("code") or "").strip()],
-            other_value=str(coverage.get("other") or "").strip(),
-        ),
-    )
-    network_nature = network_platform.get("network_nature") if isinstance(network_platform.get("network_nature"), dict) else {}
-    replace_cell_text(t2.rows[7].cells[2], format_table2_network_nature(network_nature))
-    interconnection = network_platform.get("interconnection") if isinstance(network_platform.get("interconnection"), dict) else {}
-    replace_cell_text(
-        t2.rows[8].cells[2],
-        render_marked_choices(
-            ["与其他行业系统连接", "与本行业其他单位系统连接", "与本单位其他系统连接"],
-            interconnection.get("items"),
-            other_value=str(interconnection.get("other") or "").strip(),
-        ),
-    )
-    replace_cell_text(t2.rows[9].cells[2], format_workspace_date(table2.get("go_live_date") or system.go_live_date))
-    replace_cell_text(t2.rows[10].cells[2], format_yes_no_choice(coerce_bool(table2.get("is_sub_system"))))
-    replace_cell_text(t2.rows[11].cells[2], str(table2.get("parent_system_name") or "无"))
-    replace_cell_text(t2.rows[12].cells[2], str(table2.get("parent_organization_name") or ""))
 
+    # R4 服务范围
+    SCOPE_CODES = ["10", "11", "20", "21", "30", "99"]
+    scope_code = str(network_service.get("scope_code") or "").strip()
+    scope_indices: set[int] = {SCOPE_CODES.index(scope_code)} if scope_code in SCOPE_CODES else set()
+    set_cell_check_by_index(t2.rows[4].cells[2], scope_indices)
+    # 填跨省/跨地数量（如果有）
+    if scope_code == "11":
+        _replace_keyword_suffix(t2.rows[4].cells[2], "跨省", str(network_service.get("cross_province_count") or ""))
+    if scope_code == "21":
+        _replace_keyword_suffix(t2.rows[4].cells[2], "跨地", str(network_service.get("cross_city_count") or ""))
+
+    # R5 服务对象
+    SERVICE_TARGETS = ["单位内部人员", "社会公众人员", "两者均包括", "其他"]
+    service_targets_idx = labels_to_indices(network_service.get("service_targets"), SERVICE_TARGETS)
+    if str(network_service.get("service_target_other") or "").strip():
+        service_targets_idx.add(3)
+    set_cell_check_by_index(t2.rows[5].cells[2], service_targets_idx)
+
+    # R6 部署范围
+    COVERAGE_OPTIONS = ["局域网", "城域网", "广域网", "其他"]
+    coverage = network_platform.get("coverage") if isinstance(network_platform.get("coverage"), dict) else {}
+    cov_idx = labels_to_indices(coverage.get("label") or coverage.get("code"), COVERAGE_OPTIONS)
+    if str(coverage.get("other") or "").strip():
+        cov_idx.add(3)
+    set_cell_check_by_index(t2.rows[6].cells[2], cov_idx)
+
+    # R7 网络性质（业务专网/互联网/其他）+ IP/域名/端口
+    network_nature = network_platform.get("network_nature") if isinstance(network_platform.get("network_nature"), dict) else {}
+    code = str(network_nature.get("code") or "").strip()
+    nature_indices: set[int] = set()
+    if code == "1":
+        nature_indices = {0}
+    elif code == "2":
+        nature_indices = {1}
+    elif code == "9":
+        nature_indices = {2}
+    set_cell_check_by_index(t2.rows[7].cells[2], nature_indices)
+    if code == "2":
+        _replace_keyword_suffix(t2.rows[7].cells[2], "地址范围", str(network_nature.get("source_ip_range") or ""))
+        _replace_keyword_suffix(t2.rows[7].cells[2], "域名", str(network_nature.get("domain") or ""))
+        _replace_keyword_suffix(t2.rows[7].cells[2], "端口", str(network_nature.get("protocol_ports") or ""))
+
+    # R8 网络互联
+    INTERCONNECTION_OPTIONS = ["与其他行业系统连接", "与本行业其他单位系统连接", "与本单位其他系统连接", "其他"]
+    interconnection = network_platform.get("interconnection") if isinstance(network_platform.get("interconnection"), dict) else {}
+    ic_idx = labels_to_indices(interconnection.get("items"), INTERCONNECTION_OPTIONS)
+    if str(interconnection.get("other") or "").strip():
+        ic_idx.add(3)
+    set_cell_check_by_index(t2.rows[8].cells[2], ic_idx)
+
+    # R9 投入运行日期（年月日分 runs）
+    replace_date_runs_in_cell(t2.rows[9].cells[2], table2.get("go_live_date") or system.go_live_date)
+
+    # R10 是否分系统
+    is_sub = coerce_bool(table2.get("is_sub_system"))
+    set_cell_check_by_index(t2.rows[10].cells[2], {0 if is_sub else 1})
+    replace_cell_preserve_symbols(t2.rows[11].cells[2], str(table2.get("parent_system_name") or ("" if is_sub else "无")))
+    replace_cell_preserve_symbols(t2.rows[12].cells[2], str(table2.get("parent_organization_name") or ""))
+
+    # ============ 表三 定级情况 ============
     t3 = doc.tables[3]
     business_items = {str(item).strip() for item in table3.get("business_security_damage_items", []) if str(item).strip()}
     service_items = {str(item).strip() for item in table3.get("service_security_damage_items", []) if str(item).strip()}
-    for idx in range(1, 6):
-        label = t3.rows[idx].cells[1].text.replace("\n", " / ").strip()
-        replace_cell_text(t3.rows[idx].cells[2], f"{'√' if damage_level_row_selected(label, business_items) else '□'} {label}")
-    for idx in range(6, 11):
-        label = t3.rows[idx].cells[1].text.replace("\n", " / ").strip()
-        replace_cell_text(t3.rows[idx].cells[2], f"{'√' if damage_level_row_selected(label, service_items) else '□'} {label}")
-    final_level = to_int_or_zero(table3.get("final_level")) or system.proposed_level
-    replace_cell_text(t3.rows[11].cells[2], render_marked_choices(["第二级", "第三级", "第四级", "第五级"], [f"第{final_level}级"]))
-    replace_cell_text(t3.rows[12].cells[2], format_workspace_date(table3.get("grading_date")))
+    # R1-R5 业务信息损害
+    for row_idx in range(1, 6):
+        label = t3.rows[row_idx].cells[1].text.replace("\n", " / ").strip()
+        selected = damage_level_row_selected(label, business_items)
+        set_cell_check_by_index(t3.rows[row_idx].cells[1], {0} if selected else set())
+        set_cell_check_by_index(t3.rows[row_idx].cells[4], {0} if selected else set())
+    # R6-R10 系统服务损害
+    for row_idx in range(6, 11):
+        label = t3.rows[row_idx].cells[1].text.replace("\n", " / ").strip()
+        selected = damage_level_row_selected(label, service_items)
+        set_cell_check_by_index(t3.rows[row_idx].cells[1], {0} if selected else set())
+        set_cell_check_by_index(t3.rows[row_idx].cells[4], {0} if selected else set())
+    # R11 最终级别（模板选项用中文数字：第二级/第三级/第四级/第五级）
+    LEVEL_OPTIONS = ["第二级", "第三级", "第四级", "第五级"]
+    CN_LEVEL_NUMS = {2: "二", 3: "三", 4: "四", 5: "五"}
+    final_level = to_int_or_zero(table3.get("final_level")) or system.proposed_level or 0
+    level_label = f"第{CN_LEVEL_NUMS[final_level]}级" if final_level in CN_LEVEL_NUMS else ""
+    set_cell_check_by_index(t3.rows[11].cells[2], labels_to_indices(level_label, LEVEL_OPTIONS))
+    # R12 定级时间
+    replace_date_runs_in_cell(t3.rows[12].cells[2], table3.get("grading_date"))
+    # R13 定级报告
     grading_report = table3.get("grading_report") if isinstance(table3.get("grading_report"), dict) else {}
-    replace_cell_text(
-        t3.rows[13].cells[2],
-        f"{marked_choice_text([('has', '有'), ('none', '无')], {'has'} if coerce_bool(grading_report.get('has_file')) else {'none'})}    附件名称 {grading_report.get('file_name') or ''}",
-        bold=True,
-    )
+    has_grading = coerce_bool(grading_report.get("has_file"))
+    set_cell_check_by_index(t3.rows[13].cells[2], {0 if has_grading else 1})
+    grading_name = _resolve_attachment_name(grading_report.get("file_name"), attachment_prefix, "系统定级报告") if has_grading else ""
+    replace_attachment_name_in_cell(t3.rows[13].cells[2], grading_name)
+    # R14 专家评审
     expert_review = table3.get("expert_review") if isinstance(table3.get("expert_review"), dict) else {}
-    replace_cell_text(
-        t3.rows[14].cells[2],
-        f"{marked_choice_text([('reviewed', '已评审'), ('unreviewed', '未评审')], {str(expert_review.get('status') or 'unreviewed')})}    附件名称 {expert_review.get('file_name') or ''}",
-        bold=True,
-    )
+    reviewed = str(expert_review.get("status") or "unreviewed") == "reviewed"
+    set_cell_check_by_index(t3.rows[14].cells[2], {0 if reviewed else 1})
+    expert_name = _resolve_attachment_name(expert_review.get("file_name"), attachment_prefix, "专家评审意见表") if reviewed else ""
+    replace_attachment_name_in_cell(t3.rows[14].cells[2], expert_name)
+    # R15 是否有上级行业主管部门
     has_supervisor = coerce_bool(table3.get("has_supervisor"))
-    replace_cell_text(t3.rows[15].cells[2], format_yes_no_choice(has_supervisor))
-    replace_cell_text(t3.rows[16].cells[2], str(table3.get("supervisor_name") or "无"))
+    set_cell_check_by_index(t3.rows[15].cells[2], {0 if has_supervisor else 1})
+    replace_cell_preserve_symbols(t3.rows[16].cells[2], str(table3.get("supervisor_name") or ("" if has_supervisor else "无")))
+    # R17 上级审核
     supervisor_review = table3.get("supervisor_review") if isinstance(table3.get("supervisor_review"), dict) else {}
-    replace_cell_text(
-        t3.rows[17].cells[2],
-        "" if not has_supervisor else f"{marked_choice_text([('reviewed', '已审核'), ('unreviewed', '未审核')], {str(supervisor_review.get('status') or 'unreviewed')})}    附件名称 {supervisor_review.get('file_name') or ''}",
-        bold=True,
-    )
-    replace_cell_text(t3.rows[18].cells[0], f"填表人： {str(table3.get('filler_name') or '').strip()}")
-    replace_cell_text(t3.rows[18].cells[3], f"填表日期：{format_workspace_date(table3.get('filled_date'))}")
+    if has_supervisor:
+        sup_reviewed = str(supervisor_review.get("status") or "unreviewed") == "reviewed"
+        set_cell_check_by_index(t3.rows[17].cells[2], {0 if sup_reviewed else 1})
+        sup_name = _resolve_attachment_name(supervisor_review.get("file_name"), attachment_prefix, "上级主管定级审核文件") if sup_reviewed else ""
+        replace_attachment_name_in_cell(t3.rows[17].cells[2], sup_name)
+    else:
+        clear_cell_checks(t3.rows[17].cells[2])
+        replace_attachment_name_in_cell(t3.rows[17].cells[2], "")
+    # R18 填表人/日期
+    _set_filler_name(t3.rows[18].cells[0], str(table3.get("filler_name") or "").strip())
+    replace_date_runs_in_cell(t3.rows[18].cells[3], table3.get("filled_date"))
 
+    # ============ 表四 新技术应用场景 ============
     t4 = doc.tables[4]
     cloud = table4.get("cloud") if isinstance(table4.get("cloud"), dict) else {}
+    cloud_enabled = coerce_bool(cloud.get("enabled"))
+    set_cell_check_by_index(t4.rows[0].cells[2], {0 if cloud_enabled else 1})
     cloud_roles = {str(item).strip() for item in cloud.get("responsibility_types", []) if str(item).strip()}
-    replace_cell_text(t4.rows[0].cells[2], format_yes_no_choice(coerce_bool(cloud.get("enabled"))))
-    replace_cell_text(
-        t4.rows[1].cells[2],
-        marked_choice_text([("云服务商", "云服务商"), ("云服务客户", "云服务客户")], cloud_roles),
-    )
-    replace_cell_text(
-        t4.rows[2].cells[2],
-        render_marked_choices(
-            ["基础设施即服务IaaS", "平台即服务PaaS", "软件即服务SaaS"],
-            cloud.get("service_modes"),
-            other_value=str(cloud.get("service_mode_other") or "").strip(),
-        ),
-    )
-    replace_cell_text(
-        t4.rows[3].cells[2],
-        render_marked_choices(
-            ["私有云", "公有云", "混合云", "政务云"],
-            cloud.get("deployment_modes"),
-            other_value=str(cloud.get("deployment_mode_other") or "").strip(),
-        ),
-    )
-    replace_cell_text(t4.rows[5].cells[2], str(cloud.get("customer_count") or "") if "云服务商" in cloud_roles else "")
-    replace_cell_text(t4.rows[6].cells[2], str(cloud.get("infra_location") or "") if "云服务商" in cloud_roles else "")
-    replace_cell_text(t4.rows[7].cells[2], str(cloud.get("ops_location") or "") if "云服务商" in cloud_roles else "")
-    replace_cell_text(
-        t4.rows[9].cells[2],
-        (
-            f"云服务商为 {str(cloud.get('provider_name') or '')} / 平台安全等级 {str(cloud.get('provider_level') or '')} / "
-            f"平台名称 {str(cloud.get('provider_platform_name') or '')} / 平台备案编号 {str(cloud.get('provider_record_no') or '')}"
-        ).strip() if "云服务客户" in cloud_roles else "",
-    )
-    replace_cell_text(t4.rows[10].cells[2], str(cloud.get("customer_ops_location") or "") if "云服务客户" in cloud_roles else "")
-    replace_cell_text(t4.rows[11].cells[2], str(cloud.get("record_file_name") or "") if "云服务客户" in cloud_roles else "")
+    role_indices: set[int] = set()
+    if "云服务商" in cloud_roles:
+        role_indices.add(0)
+    if "云服务客户" in cloud_roles:
+        role_indices.add(1)
+    set_cell_check_by_index(t4.rows[1].cells[2], role_indices)
+    SERVICE_MODES = ["基础设施即服务IaaS", "平台即服务PaaS", "软件即服务SaaS", "其他"]
+    sm_idx = labels_to_indices(cloud.get("service_modes"), SERVICE_MODES)
+    if str(cloud.get("service_mode_other") or "").strip():
+        sm_idx.add(3)
+    set_cell_check_by_index(t4.rows[2].cells[2], sm_idx)
+    # R3 部署模式：4 选（私有/公有/混合/其他）政务云填在"其他"后
+    deploy_list = {str(x).strip() for x in (cloud.get("deployment_modes") or [])}
+    deploy_idx: set[int] = set()
+    if "私有云" in deploy_list:
+        deploy_idx.add(0)
+    if "公有云" in deploy_list:
+        deploy_idx.add(1)
+    if "混合云" in deploy_list:
+        deploy_idx.add(2)
+    deploy_other = str(cloud.get("deployment_mode_other") or "").strip() or ("政务云" if "政务云" in deploy_list else "")
+    if deploy_other:
+        deploy_idx.add(3)
+    set_cell_check_by_index(t4.rows[3].cells[2], deploy_idx)
+    if deploy_other:
+        _replace_keyword_suffix(t4.rows[3].cells[2], "其他", deploy_other)
+    # 云服务商侧字段
+    if "云服务商" in cloud_roles:
+        _replace_keyword_suffix(t4.rows[5].cells[2], "客户数量", str(cloud.get("customer_count") or ""))
+        replace_cell_preserve_symbols(t4.rows[6].cells[2], str(cloud.get("infra_location") or ""))
+        replace_cell_preserve_symbols(t4.rows[7].cells[2], str(cloud.get("ops_location") or ""))
+    # 云服务客户侧字段
+    if "云服务客户" in cloud_roles:
+        _replace_keyword_suffix(t4.rows[9].cells[2], "云服务商为", str(cloud.get("provider_name") or ""))
+        _replace_keyword_suffix(t4.rows[9].cells[2], "平台安全等级", str(cloud.get("provider_level") or ""))
+        _replace_keyword_suffix(t4.rows[9].cells[2], "平台名称", str(cloud.get("provider_platform_name") or ""))
+        _replace_keyword_suffix(t4.rows[9].cells[2], "平台备案编号", str(cloud.get("provider_record_no") or ""))
+        replace_cell_preserve_symbols(t4.rows[10].cells[2], str(cloud.get("customer_ops_location") or ""))
+        record_name = _resolve_attachment_name(cloud.get("record_file_name"), attachment_prefix, "云平台备案证明") if cloud_enabled else ""
+        replace_attachment_name_in_cell(t4.rows[11].cells[2], record_name)
+    # R12-R15 移动
     mobile = table4.get("mobile") if isinstance(table4.get("mobile"), dict) else {}
-    replace_cell_text(t4.rows[12].cells[2], format_yes_no_choice(coerce_bool(mobile.get("enabled"))))
-    replace_cell_text(t4.rows[13].cells[2], str(mobile.get("app_name") or ""))
-    replace_cell_text(t4.rows[14].cells[2], render_marked_choices(["公共WIFI", "专用WIFI", "移动通信网"], mobile.get("wireless_channels")))
-    replace_cell_text(t4.rows[15].cells[2], render_marked_choices(["通用终端", "专用终端"], mobile.get("terminal_types")))
+    set_cell_check_by_index(t4.rows[12].cells[2], {0 if coerce_bool(mobile.get("enabled")) else 1})
+    replace_cell_preserve_symbols(t4.rows[13].cells[2], str(mobile.get("app_name") or ""))
+    WIFI_OPTIONS = ["公共WIFI", "专用WIFI", "移动通信网"]
+    set_cell_check_by_index(t4.rows[14].cells[2], labels_to_indices(mobile.get("wireless_channels"), WIFI_OPTIONS))
+    TERMINAL_OPTIONS = ["通用终端", "专用终端"]
+    set_cell_check_by_index(t4.rows[15].cells[2], labels_to_indices(mobile.get("terminal_types"), TERMINAL_OPTIONS))
+    # R16-R18 物联网
     iot = table4.get("iot") if isinstance(table4.get("iot"), dict) else {}
-    replace_cell_text(t4.rows[16].cells[2], format_yes_no_choice(coerce_bool(iot.get("enabled"))))
-    replace_cell_text(t4.rows[17].cells[2], render_marked_choices(["感知节点", "感知网关", "RFID标签", "RFID读写器"], iot.get("perception_layers"), other_value=str(iot.get("perception_other") or "").strip()))
-    replace_cell_text(t4.rows[18].cells[2], render_marked_choices(["互联网", "专用网", "移动通信网"], iot.get("transport_layers"), other_value=str(iot.get("transport_other") or "").strip()))
+    set_cell_check_by_index(t4.rows[16].cells[2], {0 if coerce_bool(iot.get("enabled")) else 1})
+    PERCEPTION_OPTIONS = ["感知节点", "感知网关", "RFID标签", "RFID读写器", "其他"]
+    pi_idx = labels_to_indices(iot.get("perception_layers"), PERCEPTION_OPTIONS)
+    if str(iot.get("perception_other") or "").strip():
+        pi_idx.add(4)
+    set_cell_check_by_index(t4.rows[17].cells[2], pi_idx)
+    TRANSPORT_OPTIONS = ["互联网", "专用网", "移动通信网", "其他"]
+    tr_idx = labels_to_indices(iot.get("transport_layers"), TRANSPORT_OPTIONS)
+    if str(iot.get("transport_other") or "").strip():
+        tr_idx.add(3)
+    set_cell_check_by_index(t4.rows[18].cells[2], tr_idx)
+    # R19-R21 工控
     industrial = table4.get("industrial_control") if isinstance(table4.get("industrial_control"), dict) else {}
-    replace_cell_text(t4.rows[19].cells[2], format_yes_no_choice(coerce_bool(industrial.get("enabled"))))
-    replace_cell_text(t4.rows[20].cells[2], render_marked_choices(["生产管理层", "过程监控层", "现场控制层", "现场设备层"], industrial.get("function_layers")))
-    replace_cell_text(
-        t4.rows[21].cells[2],
-        render_marked_choices(
-            ["数据采集与监视控制系统（SCADA）", "分布式控制系统（DCS）", "可编程逻辑控制器（PLC）", "远程终端单元（RTU）", "主终端单元（MTU）", "上位机（SC）"],
-            industrial.get("components"),
-            other_value=str(industrial.get("component_other") or "").strip(),
-        ),
-    )
-    big_data = table4.get("big_data") if isinstance(table4.get("big_data"), dict) else {}
-    big_data_components = {str(item).strip() for item in big_data.get("system_components", []) if str(item).strip()}
-    replace_cell_text(t4.rows[22].cells[2], format_yes_no_choice(coerce_bool(big_data.get("enabled"))))
-    replace_cell_text(t4.rows[23].cells[2], marked_choice_text([("大数据平台", "大数据平台"), ("大数据应用", "大数据应用"), ("大数据资源", "大数据资源")], big_data_components))
-    replace_cell_text(
-        t4.rows[24].cells[2],
-        marked_choice_text([("无出境需求", "无出境需求"), ("有出境需求", "有出境需求")], {str(big_data.get("cross_border_status") or "").strip()}),
-    )
-    replace_cell_text(t4.rows[26].cells[2], str(big_data.get("application_count") or "") if "大数据平台" in big_data_components else "")
-    replace_cell_text(t4.rows[27].cells[2], str(big_data.get("infra_location") or "") if "大数据平台" in big_data_components else "")
-    replace_cell_text(t4.rows[28].cells[2], str(big_data.get("ops_location") or "") if "大数据平台" in big_data_components else "")
-    replace_cell_text(
-        t4.rows[30].cells[2],
-        (
-            f"大数据平台服务商 {str(big_data.get('provider_name') or '')} 平台安全等级 {str(big_data.get('provider_level') or '')} / "
-            f"平台名称 {str(big_data.get('provider_platform_name') or '')} 平台备案编号 {str(big_data.get('provider_record_no') or '')}"
-        ).strip() if ("大数据应用" in big_data_components or "大数据资源" in big_data_components) else "",
-    )
-    replace_cell_text(t4.rows[31].cells[2], str(big_data.get("record_file_name") or "") if ("大数据应用" in big_data_components or "大数据资源" in big_data_components) else "")
-
-    t5 = doc.tables[5]
-    table5_rows = [
-        ("network_topology", 0),
-        ("security_org_and_rules", 1),
-        ("security_design_plan", 2),
-        ("security_products", 3),
-        ("security_services", 4),
-        ("supervisor_guidance", 5),
+    set_cell_check_by_index(t4.rows[19].cells[2], {0 if coerce_bool(industrial.get("enabled")) else 1})
+    FUNC_LAYERS = ["生产管理层", "过程监控层", "现场控制层", "现场设备层"]
+    set_cell_check_by_index(t4.rows[20].cells[2], labels_to_indices(industrial.get("function_layers"), FUNC_LAYERS))
+    COMPONENT_OPTIONS = [
+        "数据采集与监视控制系统（SCADA）", "分布式控制系统（DCS）", "可编程逻辑控制器（PLC）",
+        "远程终端单元（RTU）", "主终端单元（MTU）", "上位机（SC）", "其他",
     ]
-    for slot_name, row_index in table5_rows:
+    cp_idx = labels_to_indices(industrial.get("components"), COMPONENT_OPTIONS)
+    if str(industrial.get("component_other") or "").strip():
+        cp_idx.add(6)
+    set_cell_check_by_index(t4.rows[21].cells[2], cp_idx)
+    # R22-R31 大数据
+    big_data = table4.get("big_data") if isinstance(table4.get("big_data"), dict) else {}
+    big_enabled = coerce_bool(big_data.get("enabled"))
+    set_cell_check_by_index(t4.rows[22].cells[2], {0 if big_enabled else 1})
+    BIG_COMPONENTS = ["大数据平台", "大数据应用", "大数据资源"]
+    bd_components = {str(item).strip() for item in big_data.get("system_components", []) if str(item).strip()}
+    set_cell_check_by_index(t4.rows[23].cells[2], labels_to_indices(list(bd_components), BIG_COMPONENTS))
+    CROSS_BORDER = ["无出境需求", "有出境需求"]
+    set_cell_check_by_index(t4.rows[24].cells[2], labels_to_indices(big_data.get("cross_border_status"), CROSS_BORDER))
+    if "大数据平台" in bd_components:
+        _replace_keyword_suffix(t4.rows[26].cells[2], "应用数量", str(big_data.get("application_count") or ""))
+        replace_cell_preserve_symbols(t4.rows[27].cells[2], str(big_data.get("infra_location") or ""))
+        replace_cell_preserve_symbols(t4.rows[28].cells[2], str(big_data.get("ops_location") or ""))
+    if "大数据应用" in bd_components or "大数据资源" in bd_components:
+        _replace_keyword_suffix(t4.rows[30].cells[2], "服务商", str(big_data.get("provider_name") or ""))
+        _replace_keyword_suffix(t4.rows[30].cells[2], "平台安全等级", str(big_data.get("provider_level") or ""))
+        _replace_keyword_suffix(t4.rows[30].cells[2], "平台名称", str(big_data.get("provider_platform_name") or ""))
+        _replace_keyword_suffix(t4.rows[30].cells[2], "平台备案编号", str(big_data.get("provider_record_no") or ""))
+        replace_attachment_name_in_cell(t4.rows[31].cells[2], str(big_data.get("record_file_name") or ""))
+
+    # ============ 表五 提交材料 ============
+    t5 = doc.tables[5]
+    T5_SLOTS = [
+        ("network_topology", "系统拓扑结构及说明", 0),
+        ("security_org_and_rules", "系统安全组织机构及管理制度", 1),
+        ("security_design_plan", "系统安全保护设施设计实施方案或改建实施方案", 2),
+        ("security_products", "系统使用的安全产品清单及认证、销售许可证明", 3),
+        ("security_services", "安全服务清单", 4),
+        ("supervisor_guidance", "行业主管部门指导定级文件", 5),
+    ]
+    for slot_name, default_suffix, row_index in T5_SLOTS:
         slot = table5.get(slot_name) if isinstance(table5.get(slot_name), dict) else {}
         status = str(slot.get("status") or "none").strip()
-        replace_cell_text(
-            t5.rows[row_index].cells[1],
-            f"{marked_choice_text([('has', '有'), ('none', '无')], {status or 'none'})}    附件名称  {str(slot.get('file_name') or '')}",
-        )
+        has = (status == "has")
+        set_cell_check_by_index(t5.rows[row_index].cells[1], {0 if has else 1})
+        file_name = _resolve_attachment_name(slot.get("file_name"), attachment_prefix, default_suffix) if has else ""
+        replace_attachment_name_in_cell(t5.rows[row_index].cells[1], file_name)
 
+    # ============ 表六 数据摸底 ============
     t6 = doc.tables[6]
     items = table6.get("items") if isinstance(table6.get("items"), list) else []
     if items and isinstance(items[0], dict):
         item = items[0]
-        data_level_text = str(item.get("data_level") or "").strip()
-        if not data_level_text:
-            data_level_text = {"1": "一般数据", "2": "重要及以上数据"}.get(str(item.get("data_level_code") or "").strip(), "")
-        data_total_text = (
-            f"1_{str(item.get('data_total_gb') or '').strip()}_GB/{str(item.get('data_total_tb') or '').strip()}_TB"
-            f" / 2 {str(item.get('data_total_records') or '').strip()} 万条"
-        ).strip()
-        monthly_growth_text = (
-            f"{str(item.get('monthly_growth_gb') or '').strip()} GB/{str(item.get('monthly_growth_tb') or '').strip()} TB"
-        ).strip(" /")
-        source_units_text = " / ".join(
-            [
-                f"数据来源单位1 {str(item.get('source_unit_1') or '').strip()}",
-                f"数据来源单位2 {str(item.get('source_unit_2') or '').strip()}",
-                f"数据来源单位3 {str(item.get('source_unit_3') or '').strip()}",
-            ]
-        ).strip()
-        target_units_text = " / ".join(
-            [
-                f"数据流出单位1 {str(item.get('target_unit_1') or '').strip()}",
-                f"数据流出单位2 {str(item.get('target_unit_2') or '').strip()}",
-                f"数据流出单位3 {str(item.get('target_unit_3') or '').strip()}",
-            ]
-        ).strip()
-        storage_cloud_text = format_marked_storage(
-            [("1", "私有云"), ("2", "公有云"), ("3", "混合云"), ("4", "政务云"), ("5", "非云计算平台")],
-            str(item.get("storage_cloud_type") or "").strip(),
-            str(item.get("storage_cloud_name") or "").strip(),
+        replace_cell_preserve_symbols(t6.rows[0].cells[1], str(item.get("data_name") or ""))
+        # R0 C3 数据级别（一般/重要及以上）
+        data_level_code = str(item.get("data_level_code") or "").strip()
+        if not data_level_code:
+            dl = str(item.get("data_level") or "").strip()
+            data_level_code = "1" if "一般" in dl else ("2" if "重要" in dl else "")
+        dl_indices: set[int] = set()
+        if data_level_code == "1":
+            dl_indices = {0}
+        elif data_level_code == "2":
+            dl_indices = {1}
+        set_cell_check_by_index(t6.rows[0].cells[3], dl_indices)
+        replace_cell_preserve_symbols(t6.rows[1].cells[1], str(item.get("data_category") or ""))
+        replace_cell_preserve_symbols(t6.rows[2].cells[1], str(item.get("data_security_dept") or ""))
+        replace_cell_preserve_symbols(t6.rows[2].cells[3], str(item.get("data_security_owner") or ""))
+        # R3 个人信息涉及情况
+        PI_OPTIONS = ["涉及敏感个人信息", "涉及未成年人的个人信息", "涉及一般个人信息", "不涉及"]
+        pi_values = item.get("personal_info_flags")
+        if isinstance(pi_values, (list, tuple, set)):
+            pi_values = [_normalize_person_info_value(v) for v in pi_values]
+        else:
+            pi_values = _normalize_person_info_value(pi_values)
+        set_cell_check_by_index(t6.rows[3].cells[1], labels_to_indices(pi_values, PI_OPTIONS))
+        # R4 数据总量
+        gb = str(item.get("data_total_gb") or "").strip()
+        tb = str(item.get("data_total_tb") or "").strip()
+        records = str(item.get("data_total_records") or "").strip()
+        replace_cell_preserve_symbols(
+            t6.rows[4].cells[1],
+            f"1 {gb} GB/ {tb} TB  2 {records} 万条".strip(),
         )
-        storage_room_text = format_marked_storage(
-            [("1", "本单位机房"), ("2", "外单位机房"), ("3", "国内第三方托管机房")],
-            str(item.get("storage_room_type") or "").strip(),
-            str(item.get("storage_room_name") or "").strip(),
+        # R5 月增长
+        m_gb = str(item.get("monthly_growth_gb") or "").strip()
+        m_tb = str(item.get("monthly_growth_tb") or "").strip()
+        replace_cell_preserve_symbols(
+            t6.rows[5].cells[1],
+            f"{m_gb} GB/ {m_tb} TB".strip(),
         )
-        storage_region_text = format_marked_storage(
-            [("1", "境内"), ("2", "境外")],
-            str(item.get("storage_region_type") or "").strip(),
-            str(item.get("storage_region_name") or "").strip(),
+        # R6 数据来源
+        DATA_SOURCES = ["系统采集", "系统产生", "人工填报", "交易购买", "共享交换", "其他"]
+        ds_idx = labels_to_indices(item.get("data_sources"), DATA_SOURCES)
+        if str(item.get("data_source_other") or "").strip():
+            ds_idx.add(5)
+        set_cell_check_by_index(t6.rows[6].cells[1], ds_idx)
+        # R7/R8 数据来源/流出单位（简化：直接文本替换）
+        source_text = "  ".join(
+            f"数据来源单位{i+1} {str(item.get(f'source_unit_{i+1}') or '').strip()}" for i in range(3)
         )
-        replace_cell_text(t6.rows[0].cells[1], str(item.get("data_name") or ""))
-        replace_cell_text(t6.rows[0].cells[3], data_level_text)
-        replace_cell_text(t6.rows[1].cells[1], str(item.get("data_category") or ""))
-        replace_cell_text(t6.rows[2].cells[1], str(item.get("data_security_dept") or ""))
-        replace_cell_text(t6.rows[2].cells[3], str(item.get("data_security_owner") or ""))
-        replace_cell_text(t6.rows[3].cells[1], render_marked_choices(["涉及敏感个人信息", "涉及未成年人的个人信息", "涉及一般个人信息", "不涉及"], item.get("personal_info_flags")))
-        replace_cell_text(t6.rows[4].cells[1], data_total_text)
-        replace_cell_text(t6.rows[5].cells[1], monthly_growth_text)
-        replace_cell_text(t6.rows[6].cells[1], render_marked_choices(["系统采集", "系统产生", "人工填报", "交易购买", "共享交换"], item.get("data_sources"), other_value=str(item.get("data_source_other") or "").strip()))
-        replace_cell_text(t6.rows[7].cells[1], source_units_text)
-        replace_cell_text(t6.rows[8].cells[1], target_units_text)
-        replace_cell_text(t6.rows[9].cells[1], format_table6_interactions(item))
-        replace_cell_text(t6.rows[10].cells[1], storage_cloud_text)
-        replace_cell_text(t6.rows[11].cells[1], storage_room_text)
-        replace_cell_text(t6.rows[12].cells[1], storage_region_text)
+        target_text = "  ".join(
+            f"数据流出单位{i+1} {str(item.get(f'target_unit_{i+1}') or '').strip()}" for i in range(3)
+        )
+        replace_cell_preserve_symbols(t6.rows[7].cells[1], source_text)
+        replace_cell_preserve_symbols(t6.rows[8].cells[1], target_text)
+        # R9 交互
+        INTERACTION_OPTIONS = ["对外提供给", "委托", "与", "无交互"]
+        it_types = {str(x).strip() for x in (item.get("interaction_types") or [])}
+        it_indices: set[int] = set()
+        for i, opt in enumerate(INTERACTION_OPTIONS):
+            for v in it_types:
+                if v and (v in opt or opt in v):
+                    it_indices.add(i)
+                    break
+        if not it_indices:
+            it_indices = {3}
+        set_cell_check_by_index(t6.rows[9].cells[1], it_indices)
+        # R10-R12 存储
+        STORAGE_CLOUD = ["1", "2", "3", "4", "5"]
+        cloud_type = str(item.get("storage_cloud_type") or "").strip()
+        set_cell_check_by_index(t6.rows[10].cells[1], {STORAGE_CLOUD.index(cloud_type)} if cloud_type in STORAGE_CLOUD else set())
+        STORAGE_ROOM = ["1", "2", "3"]
+        room_type = str(item.get("storage_room_type") or "").strip()
+        set_cell_check_by_index(t6.rows[11].cells[1], {STORAGE_ROOM.index(room_type)} if room_type in STORAGE_ROOM else set())
+        STORAGE_REGION = ["1", "2"]
+        region_type = str(item.get("storage_region_type") or "").strip()
+        set_cell_check_by_index(t6.rows[12].cells[1], {STORAGE_REGION.index(region_type)} if region_type in STORAGE_REGION else set())
 
 
 @app.get("/api/systems/{system_id}/export/word")
@@ -5166,7 +5548,12 @@ def export_system_word(request: Request, system_id: int, db: Session = Depends(g
     template_path = DESKTOP_FILING_TEMPLATE_PATH if DESKTOP_FILING_TEMPLATE_PATH.exists() else find_latest_docx_by_pattern("01-*.docx")
     if not template_path or not Path(template_path).exists():
         raise HTTPException(status_code=404, detail="备案表模板不存在，无法导出。")
-    path = EXPORT_DIR / f"filing_{system.id}_{datetime.now():%Y%m%d%H%M%S}.docx"
+    safe_org = sanitize_filename_component(org.name, fallback=f"org{org.id}")
+    safe_sys = sanitize_filename_component(system.system_name, fallback=f"system{system.id}")
+    base_name = f"{safe_org}-{safe_sys}-网络安全等级保护定级备案表"
+    path = EXPORT_DIR / f"{base_name}.docx"
+    if path.exists():
+        path = EXPORT_DIR / f"{base_name}_{datetime.now():%Y%m%d%H%M%S}.docx"
     doc = Document(str(template_path))
     fill_filing_template_document(doc, org, system)
     doc.save(path)
