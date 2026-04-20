@@ -4986,20 +4986,8 @@ def sanitize_filename_component(value: str, fallback: str = "导出") -> str:
 
 
 def _resolve_attachment_name(raw_name: Any, prefix: str, default_suffix: str) -> str:
-    """根据已存的附件名和目标单位+系统前缀、默认后缀，决定模板最终显示的附件名。
-    - 为空：使用 "{prefix}-{default_suffix}"
-    - 已包含 prefix：去掉书名号后保留
-    - 旧默认格式（如 "01-xxx.docx"/"02-xxx.docx"/"03-xxx.docx"）：替换为新格式
-    - 其他用户自定义：保留
-    """
-    text = str(raw_name or "").strip().strip("《》")
-    if not text:
-        return f"{prefix}-{default_suffix}"
-    if prefix and prefix in text:
-        return text
-    if re.match(r"^\d{1,2}-.+\.docx?$", text, flags=re.IGNORECASE):
-        return f"{prefix}-{default_suffix}"
-    return text
+    """备案表附件名称统一按"{单位}-{系统}-{类型}"生成；不再读取数据库 file_name（不依赖实际上传）。"""
+    return f"{prefix}-{default_suffix}"
 
 
 def extract_workspace_export_context(org: Organization, system: SystemInfo) -> dict[str, Any]:
@@ -5054,8 +5042,15 @@ def _set_numeric_count_run(cell: Any, value: int) -> None:
     replace_cell_preserve_symbols(cell, f"{value_str}个")
 
 
+_FIELD_LABEL_KEYWORDS = (
+    "地址范围", "域名", "端口", "协议", "IP", "名称", "编号", "数量", "等级",
+    "服务商", "服务客户", "地点", "客户", "运维", "规模", "平台", "数据",
+    "月增长", "总量", "单位", "期", "报告", "评审", "审核", "备案",
+)
+
+
 def _replace_keyword_suffix(cell: Any, keyword: str, new_value: str) -> None:
-    """找到包含 keyword 的 run，把其后第一个非标签 run 文本替换为 new_value。保留空白/下划线格式。"""
+    """找到包含 keyword 的 run，把其后第一个非标签 run 文本替换为 new_value，并清理紧随其后可能遗留的旧数据 run。"""
     runs = list(_iter_cell_runs(cell))
     for i, run in enumerate(runs):
         if keyword in run.text and i + 1 < len(runs):
@@ -5065,10 +5060,23 @@ def _replace_keyword_suffix(cell: Any, keyword: str, new_value: str) -> None:
                 lead = re.match(r"^\s*", original).group(0) or " "
                 trail = re.search(r"\s*$", original).group(0) or " "
                 target.text = f"{lead}{new_value}{trail}"
+                # 清空紧随其后的"旧数据" run（非空、不含下划线/分隔符、非已知标签）
+                for j in range(i + 2, len(runs)):
+                    nxt = runs[j]
+                    nt = nxt.text
+                    if not nt.strip():
+                        continue
+                    if "_" in nt:
+                        break
+                    if any(lbl in nt for lbl in _FIELD_LABEL_KEYWORDS):
+                        break
+                    if nt.strip() in {"/", "(", ")", "（", "）", ",", "，", "、"}:
+                        continue
+                    nxt.text = ""
+                    break
             else:
-                if "_" in original:
-                    return
-                target.text = original if not original.strip() else ""
+                if "_" not in original:
+                    target.text = original if not original.strip() else ""
             return
 
 
@@ -5090,6 +5098,87 @@ def _normalize_person_info_value(value: Any) -> str:
         "none": "不涉及",
     }
     return mapping.get(s, s)
+
+
+def _fill_t6_data_total(cell: Any, gb: str, tb: str, records: str) -> None:
+    """T6 R4 数据总量：保留 '1_X_GB/___TB' 和 '2 X 万条（...）' 双行格式与下划线占位。"""
+    paragraphs = cell.paragraphs
+    if paragraphs:
+        for r in paragraphs[0].runs:
+            if "GB" in r.text and "TB" in r.text:
+                text = r.text
+                text = re.sub(r"1_[^_]*_GB", f"1_{gb}_GB" if gb else "1_____GB", text)
+                text = re.sub(r"_+TB", f"_{tb}_TB" if tb else "_____TB", text)
+                r.text = text
+                break
+    if len(paragraphs) >= 2:
+        # P1 结构: [sym, '2'(编号), '  X  '(记录数占位), '万条（...）']
+        # 匹配"带前后空格的数字 run"（排除纯编号 '1'/'2'）
+        for r in paragraphs[1].runs:
+            if re.fullmatch(r"\s+[\d.]+\s+", r.text):
+                r.text = f"  {records}  " if records else "       "
+                return
+        # 兜底：匹配含多个空格的 run（可能是空白占位）
+        for r in paragraphs[1].runs:
+            if re.fullmatch(r"\s{3,}", r.text):
+                r.text = f"  {records}  " if records else "       "
+                return
+
+
+def _fill_t6_monthly_growth(cell: Any, gb: str, tb: str) -> None:
+    """T6 R5 月增长：runs 结构 ['____', 'X', '__GB/__________TB', '（...）']"""
+    for p in cell.paragraphs:
+        runs = p.runs
+        # 先替换纯数字 run
+        replaced_gb = False
+        for r in runs:
+            s = r.text.strip()
+            if s and re.fullmatch(r"[\d.]+", s):
+                r.text = gb if gb else ""
+                replaced_gb = True
+                break
+        # 替换含 GB/TB 的 run 中 TB 前的下划线
+        for r in runs:
+            if "GB" in r.text and "TB" in r.text:
+                new_text = re.sub(r"_+TB", f"_{tb}_TB" if tb else "__________TB", r.text)
+                if not replaced_gb and gb:
+                    new_text = re.sub(r"^_+", gb, new_text)
+                r.text = new_text
+                break
+
+
+def _fill_t6_flow_units(cell: Any, values: list[str]) -> None:
+    """T6 R7/R8 数据来源/流出单位：3 段落分别对应单位 1/2/3。保留模板的下划线占位与'（可根据实际情况添加）'注释。"""
+    paragraphs = cell.paragraphs
+    for i in range(min(len(paragraphs), 3)):
+        value = str(values[i] if i < len(values) else "" or "").strip()
+        paragraph = paragraphs[i]
+        runs = paragraph.runs
+        if not runs:
+            continue
+        if i == 0:
+            # 段落 0：runs 形如 ['数据来源单位', '1', '   ', <用户数据或下划线...>, '注释/空白']
+            # 清空索引 2 以后的所有非"（可根据..."标签 run，然后把值写到索引 2
+            note_indices: set[int] = set()
+            for idx in range(2, len(runs)):
+                if "（" in runs[idx].text or "可根据" in runs[idx].text:
+                    note_indices.add(idx)
+            for idx in range(2, len(runs)):
+                if idx in note_indices:
+                    continue
+                runs[idx].text = ""
+            if len(runs) >= 3:
+                runs[2].text = f"   {value}   " if value else "   _____________________   "
+        else:
+            # 段落 1/2：runs 形如 ['数据来源单位', 'N_____________________', '（可根据...）']
+            if len(runs) >= 2:
+                old = runs[1].text
+                m = re.match(r"^(\d+)", old)
+                num = m.group(1) if m else str(i + 1)
+                if value:
+                    runs[1].text = f"{num}   {value}   "
+                else:
+                    runs[1].text = f"{num}_____________________"
 
 
 def fill_filing_template_document(doc: Document, org: Organization, system: SystemInfo) -> None:
@@ -5438,7 +5527,7 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
         _replace_keyword_suffix(t4.rows[30].cells[2], "平台安全等级", str(big_data.get("provider_level") or ""))
         _replace_keyword_suffix(t4.rows[30].cells[2], "平台名称", str(big_data.get("provider_platform_name") or ""))
         _replace_keyword_suffix(t4.rows[30].cells[2], "平台备案编号", str(big_data.get("provider_record_no") or ""))
-        replace_attachment_name_in_cell(t4.rows[31].cells[2], str(big_data.get("record_file_name") or ""))
+        replace_attachment_name_in_cell(t4.rows[31].cells[2], _resolve_attachment_name(big_data.get("record_file_name"), attachment_prefix, "大数据平台备案证明"))
 
     # ============ 表五 提交材料 ============
     t5 = doc.tables[5]
@@ -5486,20 +5575,18 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
         else:
             pi_values = _normalize_person_info_value(pi_values)
         set_cell_check_by_index(t6.rows[3].cells[1], labels_to_indices(pi_values, PI_OPTIONS))
-        # R4 数据总量
-        gb = str(item.get("data_total_gb") or "").strip()
-        tb = str(item.get("data_total_tb") or "").strip()
-        records = str(item.get("data_total_records") or "").strip()
-        replace_cell_preserve_symbols(
+        # R4 数据总量（保留下划线占位与双段结构）
+        _fill_t6_data_total(
             t6.rows[4].cells[1],
-            f"1 {gb} GB/ {tb} TB  2 {records} 万条".strip(),
+            str(item.get("data_total_gb") or "").strip(),
+            str(item.get("data_total_tb") or "").strip(),
+            str(item.get("data_total_records") or "").strip(),
         )
-        # R5 月增长
-        m_gb = str(item.get("monthly_growth_gb") or "").strip()
-        m_tb = str(item.get("monthly_growth_tb") or "").strip()
-        replace_cell_preserve_symbols(
+        # R5 月增长（保留下划线占位）
+        _fill_t6_monthly_growth(
             t6.rows[5].cells[1],
-            f"{m_gb} GB/ {m_tb} TB".strip(),
+            str(item.get("monthly_growth_gb") or "").strip(),
+            str(item.get("monthly_growth_tb") or "").strip(),
         )
         # R6 数据来源
         DATA_SOURCES = ["系统采集", "系统产生", "人工填报", "交易购买", "共享交换", "其他"]
@@ -5507,15 +5594,17 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
         if str(item.get("data_source_other") or "").strip():
             ds_idx.add(5)
         set_cell_check_by_index(t6.rows[6].cells[1], ds_idx)
-        # R7/R8 数据来源/流出单位（简化：直接文本替换）
-        source_text = "  ".join(
-            f"数据来源单位{i+1} {str(item.get(f'source_unit_{i+1}') or '').strip()}" for i in range(3)
-        )
-        target_text = "  ".join(
-            f"数据流出单位{i+1} {str(item.get(f'target_unit_{i+1}') or '').strip()}" for i in range(3)
-        )
-        replace_cell_preserve_symbols(t6.rows[7].cells[1], source_text)
-        replace_cell_preserve_symbols(t6.rows[8].cells[1], target_text)
+        # R7/R8 数据流转单位（保留 3 段结构与下划线占位）
+        _fill_t6_flow_units(t6.rows[7].cells[1], [
+            str(item.get("source_unit_1") or "").strip(),
+            str(item.get("source_unit_2") or "").strip(),
+            str(item.get("source_unit_3") or "").strip(),
+        ])
+        _fill_t6_flow_units(t6.rows[8].cells[1], [
+            str(item.get("target_unit_1") or "").strip(),
+            str(item.get("target_unit_2") or "").strip(),
+            str(item.get("target_unit_3") or "").strip(),
+        ])
         # R9 交互
         INTERACTION_OPTIONS = ["对外提供给", "委托", "与", "无交互"]
         it_types = {str(x).strip() for x in (item.get("interaction_types") or [])}
