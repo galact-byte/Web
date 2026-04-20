@@ -96,12 +96,12 @@
   const INDUSTRIAL_COMPONENT_OPTIONS = [['数据采集与监视控制系统（SCADA）', '数据采集与监视控制系统（SCADA）'], ['分布式控制系统（DCS）', '分布式控制系统（DCS）'], ['可编程逻辑控制器（PLC）', '可编程逻辑控制器（PLC）'], ['远程终端单元（RTU）', '远程终端单元（RTU）'], ['主终端单元（MTU）', '主终端单元（MTU）'], ['上位机（SC）', '上位机（SC）'], ['其他', '其他']];
   const BIG_DATA_COMPONENT_OPTIONS = [['大数据平台', '大数据平台'], ['大数据应用', '大数据应用'], ['大数据资源', '大数据资源']];
   const MATERIAL_SLOTS = [
-    ['network_topology', '网络拓扑结构及说明'],
-    ['security_org_and_rules', '网络安全组织架构及管理制度清单'],
-    ['security_design_plan', '网络安全建设设计方案或整改设计方案'],
-    ['security_products', '网络安全专用产品清单及相关证明'],
-    ['security_services', '使用的安全服务清单'],
-    ['supervisor_guidance', '行业主管部门指导定级文件'],
+    ['network_topology', '网络拓扑结构及说明', '系统拓扑结构及说明'],
+    ['security_org_and_rules', '网络安全组织架构及管理制度清单', '系统安全组织机构及管理制度'],
+    ['security_design_plan', '网络安全建设设计方案或整改设计方案', '系统安全保护设施设计实施方案或改建实施方案'],
+    ['security_products', '网络安全专用产品清单及相关证明', '系统使用的安全产品清单及认证、销售许可证明'],
+    ['security_services', '使用的安全服务清单', '安全服务清单'],
+    ['supervisor_guidance', '行业主管部门指导定级文件', '行业主管部门指导定级文件'],
   ];
   const PERSONAL_INFO_OPTIONS = [['涉及敏感个人信息', '涉及敏感个人信息'], ['涉及未成年人的个人信息', '涉及未成年人的个人信息'], ['涉及一般个人信息', '涉及一般个人信息'], ['不涉及', '不涉及']];
   const DATA_SOURCE_OPTIONS = [['系统采集', '系统采集'], ['系统产生', '系统产生'], ['人工填报', '人工填报'], ['交易购买', '交易购买'], ['共享交换', '共享交换'], ['其他', '其他']];
@@ -244,16 +244,15 @@
     return radioGroupHtml(name, [['true', trueLabel], ['false', falseLabel]]);
   }
 
-  function uploadFieldHtml(label, inputId, slotKey, accept, attachmentId, hint = '选择文件后自动上传，未上传按无处理。') {
+  function uploadFieldHtml(label, inputId, slotKey, accept, attachmentId, defaultSuffix = '') {
+    const orgName = ((state.detail || {}).organization || {}).name || '单位名称';
+    const sysName = ((state.detail || {}).system || {}).system_name || '系统名称';
+    const previewName = defaultSuffix ? `《${orgName}-${sysName}-${defaultSuffix}》` : `《${orgName}-${sysName}-${esc(label)}》`;
     return `
       <div class="upload-inline-field">
-        <label>${esc(label)}</label>
-        <div class="upload-inline-box">
-          <input id="${inputId}" type="file" accept="${esc(accept)}" data-auto-upload-slot="${esc(slotKey)}">
-          <div class="table-meta">${esc(hint)}</div>
-          <div class="attachment-list" id="${attachmentId}"></div>
-          <div class="table-meta" id="${attachmentId}Status"></div>
-        </div>
+        <div class="table-meta">选"有"时，导出 Word 将自动写入：<strong>${esc(previewName)}</strong></div>
+        <div class="attachment-list" id="${attachmentId}" hidden></div>
+        <div class="table-meta" id="${attachmentId}Status" hidden></div>
       </div>
     `;
   }
@@ -700,14 +699,14 @@
         <h3>定级报告</h3>
         ${radioGroupHtml('gradingReportStatus', [['has', '有'], ['none', '无']], 'choice-row')}
         <div id="gradingReportUploadWrap" hidden>
-          ${uploadFieldHtml('定级报告附件', 'uploadTable3GradingReport', 'table3.grading_report', '.doc,.docx,.pdf', 'attachmentTable3GradingReport')}
+          ${uploadFieldHtml('定级报告附件', 'uploadTable3GradingReport', 'table3.grading_report', '.doc,.docx,.pdf', 'attachmentTable3GradingReport', '系统定级报告')}
         </div>
       </div>
       <div class="workspace-subsection">
         <h3>专家评审情况</h3>
         ${radioGroupHtml('expertReviewStatus', [['reviewed', '已评审'], ['unreviewed', '未评审']], 'choice-row')}
         <div id="expertReviewUploadWrap" hidden>
-          ${uploadFieldHtml('专家评审附件', 'uploadTable3ExpertReview', 'table3.expert_review', '.doc,.docx,.pdf', 'attachmentTable3ExpertReview')}
+          ${uploadFieldHtml('专家评审附件', 'uploadTable3ExpertReview', 'table3.expert_review', '.doc,.docx,.pdf', 'attachmentTable3ExpertReview', '专家评审意见表')}
         </div>
       </div>
       <div class="workspace-subsection">
@@ -719,7 +718,7 @@
           ${radioGroupHtml('supervisorReviewStatus', [['reviewed', '已审核'], ['unreviewed', '未审核']], 'choice-row')}
         </div>
         <div id="supervisorReviewUploadWrap" hidden>
-          ${uploadFieldHtml('上级行业主管部门审核附件', 'uploadTable3SupervisorReview', 'table3.supervisor_review', '.doc,.docx,.pdf', 'attachmentTable3SupervisorReview')}
+          ${uploadFieldHtml('上级行业主管部门审核附件', 'uploadTable3SupervisorReview', 'table3.supervisor_review', '.doc,.docx,.pdf', 'attachmentTable3SupervisorReview', '上级主管定级审核文件')}
         </div>
       </div>
       <div class="form-grid form-grid-3">
@@ -756,7 +755,7 @@
             <div><label>平台备案编号</label><input id="cloudProviderRecordNo"></div>
             <div class="grid-span-2"><label>云服务客户运维地点</label><input id="cloudCustomerOpsLocation"></div>
           </div>
-          ${uploadFieldHtml('云平台备案证明', 'uploadTable4Cloud', 'table4.cloud', '.doc,.docx,.pdf', 'attachmentTable4Cloud')}
+          ${uploadFieldHtml('云平台备案证明', 'uploadTable4Cloud', 'table4.cloud', '.doc,.docx,.pdf', 'attachmentTable4Cloud', '云平台备案证明')}
         </div>
       `)}
       ${sceneBlock('mobileScene', '移动互联应用场景补充信息', `<label>是否采用移动互联技术</label>${boolRadioHtml('mobileEnabled', '是', '否')}`, `
@@ -793,16 +792,16 @@
             <div><label>平台名称</label><input id="bigDataProviderPlatformName"></div>
             <div><label>平台备案编号</label><input id="bigDataProviderRecordNo"></div>
           </div>
-          ${uploadFieldHtml('大数据平台备案证明', 'uploadTable4BigData', 'table4.big_data', '.doc,.docx,.pdf', 'attachmentTable4BigData')}
+          ${uploadFieldHtml('大数据平台备案证明', 'uploadTable4BigData', 'table4.big_data', '.doc,.docx,.pdf', 'attachmentTable4BigData', '大数据平台备案证明')}
         </div>
       `)}
     `);
   }
 
   function renderTable5() {
-    return sectionBlock('表五 提交材料情况', '选"有"后上传附件，选"无"则跳过', `
+    return sectionBlock('表五 提交材料情况', '选"有"则在备案表中标注该附件；选"无"则跳过', `
       <div class="materials-stack">
-        ${MATERIAL_SLOTS.map(([key, label]) => `
+        ${MATERIAL_SLOTS.map(([key, label, exportSuffix]) => `
           <div class="material-slot material-slot-row">
             <div class="material-slot-head">
               <strong>${esc(label)}</strong>
@@ -812,7 +811,7 @@
               </div>
             </div>
             <div class="material-slot-upload" id="table5Upload_${key}" hidden>
-              ${uploadFieldHtml(label, `upload_${key}`, `table5.${key}`, '.doc,.docx,.pdf,.jpg,.jpeg,.png,.vsd,.vsdx', `attachment_${key}`)}
+              ${uploadFieldHtml(label, `upload_${key}`, `table5.${key}`, '.doc,.docx,.pdf,.jpg,.jpeg,.png,.vsd,.vsdx', `attachment_${key}`, exportSuffix || label)}
             </div>
           </div>
         `).join('')}
