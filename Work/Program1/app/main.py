@@ -77,6 +77,8 @@ from .models import (
     ReviewRecord,
     SystemHistory,
     SystemInfo,
+    ExpertReviewForm,
+    GradingReport,
     UserAccount,
     WorkflowAction,
     WorkflowConfig,
@@ -93,6 +95,9 @@ from .schemas import (
     WorkflowConfigUpdate,
 )
 from .services.reporting import (
+    export_expert_review_docx,
+    export_expert_review_merged_docx,
+    export_grading_report_docx,
     export_report_docx,
     export_report_docx_with_template,
     export_report_pdf,
@@ -2482,6 +2487,26 @@ def organization_system_detail_page(system_id: int, request: Request) -> HTMLRes
             "system_id": system_id,
             "page_layout_variant": "management-tight",
         },
+    )
+
+
+@app.get("/systems/{system_id}/grading-report", response_class=HTMLResponse)
+def system_grading_report_page(system_id: int, request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "system_grading_report.html",
+        {"request": request, "system_id": system_id, "page_layout_variant": "management-tight"},
+    )
+
+
+@app.get("/systems/{system_id}/expert-review", response_class=HTMLResponse)
+def system_expert_review_page(system_id: int, request: Request, variant: str = Query("city")) -> HTMLResponse:
+    if variant not in {"city", "department"}:
+        variant = "city"
+    return templates.TemplateResponse(
+        request,
+        "system_expert_review.html",
+        {"request": request, "system_id": system_id, "variant": variant, "page_layout_variant": "management-tight"},
     )
 
 
@@ -5646,6 +5671,401 @@ def export_system_word(request: Request, system_id: int, db: Session = Depends(g
     doc = Document(str(template_path))
     fill_filing_template_document(doc, org, system)
     doc.save(path)
+    return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
+
+
+GRADING_REPORT_DEFAULTS: dict[str, str] = {
+    "responsible_subject": "",
+    "object_composition": "",
+    "carried_business": "",
+    "carried_data": "",
+    "security_responsibility": "",
+    "business_info_description": "",
+    "business_info_damage_object": "",
+    "business_info_damage_degree": "",
+    "business_info_conclusion": "",
+    "service_description": "",
+    "service_damage_object": "",
+    "service_damage_degree": "",
+    "service_conclusion": "",
+    "final_conclusion": "",
+    "fill_date": "",
+}
+
+EXPERT_REVIEW_CITY_DEFAULTS: dict[str, Any] = {
+    "unit_name": "",
+    "project_owner": "",
+    "contact_phone": "",
+    "system_name": "",
+    "self_level": "",
+    "experts": "",
+    "review_date": "",
+    "review_opinion": "",
+    "leader_signature": "",
+    "member_signatures": "",
+}
+
+EXPERT_REVIEW_DEPARTMENT_DEFAULTS: dict[str, Any] = {
+    "unit_name": "",
+    "unit_address": "",
+    "project_owner": "",
+    "contact_phone": "",
+    "email": "",
+    "system_name": "",
+    "self_level": "",
+    "review_opinion": "",
+    "review_date": "",
+    "expert_members": [],
+    "attachment_systems": [],
+}
+
+
+def _matrix_cells_from_labels(labels: list[str]) -> list[list[int]]:
+    """根据备案表表三选中的 label 列表，返回 3x3 矩阵（行=客体, 列=程度, 1=命中）。"""
+    rows_keys = [
+        ("合法权益",),
+        ("社会秩序", "公共利益"),
+        ("国家安全", "地区安全", "国计民生"),
+    ]
+    cols_keys = [("一般损害",), ("严重损害",), ("特别严重损害",)]
+    matrix = [[0, 0, 0] for _ in range(3)]
+    for raw in labels or []:
+        text = str(raw or "")
+        if not text:
+            continue
+        segments = re.split(r"\s*/\s*", text)
+        for seg in segments:
+            seg = seg.strip()
+            if not seg:
+                continue
+            # 特殊：特别严重损害 要比 严重损害 优先匹配
+            if "特别严重损害" in seg:
+                col = 2
+            elif "严重损害" in seg:
+                col = 1
+            elif "一般损害" in seg:
+                col = 0
+            else:
+                continue
+            for ri, keys in enumerate(rows_keys):
+                if all(k in seg for k in keys[:1]) and any(k in seg for k in keys):
+                    matrix[ri][col] = 1
+                    break
+    return matrix
+
+
+def _get_or_create_grading_report(db: Session, system_id: int) -> GradingReport:
+    row = db.query(GradingReport).filter(GradingReport.system_id == system_id).one_or_none()
+    if not row:
+        row = GradingReport(system_id=system_id, content=dict(GRADING_REPORT_DEFAULTS))
+        db.add(row)
+        db.flush()
+    return row
+
+
+def _merge_default_content(defaults: dict[str, Any], saved: Any) -> dict[str, Any]:
+    merged = deep_copy_json(defaults)
+    if isinstance(saved, dict):
+        for k, v in saved.items():
+            merged[k] = v
+    return merged
+
+
+@app.get("/api/systems/{system_id}/grading-report")
+def get_system_grading_report(request: Request, system_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    require_roles(request, db, {"admin", "evaluator", "reviewer"}, legacy_admin=True)
+    system = get_system_or_404(db, system_id)
+    org = get_org_or_404(db, system.organization_id)
+    row = db.query(GradingReport).filter(GradingReport.system_id == system_id).one_or_none()
+    content = _merge_default_content(GRADING_REPORT_DEFAULTS, row.content if row else None)
+    sys_detail = merged_system_filing_detail(system)
+    table3 = sys_detail.get("table3", {}) or {}
+    business_matrix = _matrix_cells_from_labels(table3.get("business_security_damage_items", []))
+    service_matrix = _matrix_cells_from_labels(table3.get("service_security_damage_items", []))
+    return {
+        "data": {
+            "system": {"id": system.id, "name": system.system_name, "level": system.proposed_level},
+            "organization": {"id": org.id, "name": org.name, "credit_code": org.credit_code},
+            "content": content,
+            "topology_path": row.topology_path if row else None,
+            "topology_url": f"/api/systems/{system_id}/grading-report/topology/file?t={int(datetime.now().timestamp())}" if row and row.topology_path else None,
+            "table3": {
+                "business_security_damage_items": table3.get("business_security_damage_items", []),
+                "service_security_damage_items": table3.get("service_security_damage_items", []),
+                "business_security_level": table3.get("business_security_level", 0),
+                "service_security_level": table3.get("service_security_level", 0),
+                "final_level": table3.get("final_level", 0) or system.proposed_level,
+            },
+            "business_matrix": business_matrix,
+            "service_matrix": service_matrix,
+        }
+    }
+
+
+@app.put("/api/systems/{system_id}/grading-report")
+def put_system_grading_report(
+    request: Request,
+    system_id: int,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    get_system_or_404(db, system_id)
+    row = _get_or_create_grading_report(db, system_id)
+    incoming = payload.get("content") if isinstance(payload.get("content"), dict) else {}
+    merged = _merge_default_content(GRADING_REPORT_DEFAULTS, row.content)
+    for key in GRADING_REPORT_DEFAULTS:
+        if key in incoming:
+            merged[key] = str(incoming.get(key) or "")
+    row.content = merged
+    row.updated_by = actor or "system"
+    db.commit()
+    return {"message": "已保存", "data": {"content": merged}}
+
+
+@app.post("/api/systems/{system_id}/grading-report/topology")
+async def upload_grading_topology(
+    request: Request,
+    system_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    get_system_or_404(db, system_id)
+    ext = Path(file.filename or "").suffix.lower().lstrip(".")
+    if ext not in {"jpg", "jpeg", "png", "gif", "bmp", "webp"}:
+        raise HTTPException(status_code=400, detail="仅支持 jpg/jpeg/png/gif/bmp/webp 图片。")
+    content = await file.read()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="拓扑图大小不能超过 20MB。")
+    topo_dir = UPLOAD_DIR / "topology"
+    topo_dir.mkdir(parents=True, exist_ok=True)
+    fname = f"grading_{system_id}_{datetime.now():%Y%m%d%H%M%S}.{ext}"
+    dest = topo_dir / fname
+    dest.write_bytes(content)
+    row = _get_or_create_grading_report(db, system_id)
+    # 删除旧文件
+    if row.topology_path:
+        old = Path(row.topology_path)
+        if old.exists():
+            try:
+                old.unlink()
+            except OSError:
+                pass
+    row.topology_path = str(dest)
+    row.updated_by = actor or "system"
+    db.commit()
+    return {"message": "上传成功", "data": {"file_name": fname}}
+
+
+@app.get("/api/systems/{system_id}/grading-report/topology/file")
+def get_grading_topology_file(request: Request, system_id: int, db: Session = Depends(get_db)) -> FileResponse:
+    require_roles(request, db, {"admin", "evaluator", "reviewer"}, legacy_admin=True)
+    row = db.query(GradingReport).filter(GradingReport.system_id == system_id).one_or_none()
+    if not row or not row.topology_path:
+        raise HTTPException(status_code=404, detail="未上传拓扑图。")
+    path = Path(row.topology_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="拓扑图文件已丢失。")
+    return FileResponse(path=str(path), filename=path.name)
+
+
+@app.get("/api/systems/{system_id}/export/grading-report")
+def export_system_grading_report(request: Request, system_id: int, db: Session = Depends(get_db)) -> FileResponse:
+    require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    system = get_system_or_404(db, system_id)
+    org = get_org_or_404(db, system.organization_id)
+    template_path = find_latest_docx_by_pattern("02-*.docx")
+    if not template_path or not Path(template_path).exists():
+        raise HTTPException(status_code=404, detail="定级报告模板不存在（template_docs/02-*.docx）。")
+    row = db.query(GradingReport).filter(GradingReport.system_id == system_id).one_or_none()
+    content = _merge_default_content(GRADING_REPORT_DEFAULTS, row.content if row else None)
+    sys_detail = merged_system_filing_detail(system)
+    table3 = sys_detail.get("table3", {}) or {}
+    business_matrix = _matrix_cells_from_labels(table3.get("business_security_damage_items", []))
+    service_matrix = _matrix_cells_from_labels(table3.get("service_security_damage_items", []))
+    safe_org = sanitize_filename_component(org.name, fallback=f"org{org.id}")
+    safe_sys = sanitize_filename_component(system.system_name, fallback=f"system{system.id}")
+    base_name = f"{safe_org}-{safe_sys}-网络安全等级保护定级报告"
+    path = EXPORT_DIR / f"{base_name}.docx"
+    if path.exists():
+        path = EXPORT_DIR / f"{base_name}_{datetime.now():%Y%m%d%H%M%S}.docx"
+    export_grading_report_docx(
+        template_path,
+        org,
+        system,
+        path,
+        content=content,
+        topology_path=Path(row.topology_path) if row and row.topology_path and Path(row.topology_path).exists() else None,
+        business_matrix=business_matrix,
+        service_matrix=service_matrix,
+    )
+    return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
+
+
+def _expert_review_defaults(variant: str) -> dict[str, Any]:
+    return dict(EXPERT_REVIEW_CITY_DEFAULTS if variant == "city" else EXPERT_REVIEW_DEPARTMENT_DEFAULTS)
+
+
+def _prefill_expert_review_defaults(org: Organization, system: SystemInfo, variant: str) -> dict[str, Any]:
+    data = _expert_review_defaults(variant)
+    cn_level = {1: "一", 2: "二", 3: "三", 4: "四", 5: "五"}.get(int(system.proposed_level or 3), "三")
+    data["unit_name"] = org.name or ""
+    data["system_name"] = system.system_name or ""
+    data["self_level"] = f"第{cn_level}级"
+    data["project_owner"] = getattr(org, "cybersecurity_owner_name", "") or ""
+    data["contact_phone"] = getattr(org, "cybersecurity_owner_phone", "") or ""
+    if variant == "department":
+        data["unit_address"] = getattr(org, "address", "") or ""
+        data["email"] = getattr(org, "cybersecurity_owner_email", "") or ""
+    return data
+
+
+def _get_or_create_expert_review(db: Session, system_id: int, variant: str) -> ExpertReviewForm:
+    row = (
+        db.query(ExpertReviewForm)
+        .filter(ExpertReviewForm.system_id == system_id, ExpertReviewForm.variant == variant)
+        .one_or_none()
+    )
+    if not row:
+        row = ExpertReviewForm(system_id=system_id, variant=variant, content=_expert_review_defaults(variant))
+        db.add(row)
+        db.flush()
+    return row
+
+
+@app.get("/api/systems/{system_id}/expert-review")
+def get_system_expert_review(
+    request: Request,
+    system_id: int,
+    variant: str = Query("city"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    require_roles(request, db, {"admin", "evaluator", "reviewer"}, legacy_admin=True)
+    if variant not in {"city", "department"}:
+        raise HTTPException(status_code=400, detail="variant 仅支持 city 或 department。")
+    system = get_system_or_404(db, system_id)
+    org = get_org_or_404(db, system.organization_id)
+    row = (
+        db.query(ExpertReviewForm)
+        .filter(ExpertReviewForm.system_id == system_id, ExpertReviewForm.variant == variant)
+        .one_or_none()
+    )
+    if row and isinstance(row.content, dict) and row.content:
+        content = _merge_default_content(_expert_review_defaults(variant), row.content)
+    else:
+        content = _prefill_expert_review_defaults(org, system, variant)
+    return {
+        "data": {
+            "system": {"id": system.id, "name": system.system_name, "level": system.proposed_level},
+            "organization": {"id": org.id, "name": org.name, "credit_code": org.credit_code},
+            "variant": variant,
+            "content": content,
+        }
+    }
+
+
+@app.put("/api/systems/{system_id}/expert-review")
+def put_system_expert_review(
+    request: Request,
+    system_id: int,
+    payload: dict[str, Any],
+    variant: str = Query("city"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    if variant not in {"city", "department"}:
+        raise HTTPException(status_code=400, detail="variant 仅支持 city 或 department。")
+    get_system_or_404(db, system_id)
+    row = _get_or_create_expert_review(db, system_id, variant)
+    incoming = payload.get("content") if isinstance(payload.get("content"), dict) else {}
+    merged = _merge_default_content(_expert_review_defaults(variant), row.content)
+    for key, default in _expert_review_defaults(variant).items():
+        if key in incoming:
+            value = incoming[key]
+            # list 字段（如 expert_members / attachment_systems）整段替换
+            if isinstance(default, list):
+                merged[key] = list(value) if isinstance(value, list) else []
+            else:
+                merged[key] = str(value or "")
+    row.content = merged
+    row.updated_by = actor or "system"
+    db.commit()
+    return {"message": "已保存", "data": {"content": merged}}
+
+
+@app.get("/api/systems/{system_id}/export/expert-review")
+def export_system_expert_review(
+    request: Request,
+    system_id: int,
+    variant: str = Query("city"),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    if variant not in {"city", "department"}:
+        raise HTTPException(status_code=400, detail="variant 仅支持 city（市级）或 department（厅级）。")
+    system = get_system_or_404(db, system_id)
+    org = get_org_or_404(db, system.organization_id)
+    pattern = "03-专家评审意见表-市级*.docx" if variant == "city" else "03-专家评审意见表-厅级*.docx"
+    template_path = find_latest_docx_by_pattern(pattern)
+    if not template_path or not Path(template_path).exists():
+        raise HTTPException(status_code=404, detail=f"专家评审意见表模板不存在（template_docs/{pattern}）。")
+    row = (
+        db.query(ExpertReviewForm)
+        .filter(ExpertReviewForm.system_id == system_id, ExpertReviewForm.variant == variant)
+        .one_or_none()
+    )
+    if row and isinstance(row.content, dict) and row.content:
+        content = _merge_default_content(_expert_review_defaults(variant), row.content)
+    else:
+        content = _prefill_expert_review_defaults(org, system, variant)
+    safe_org = sanitize_filename_component(org.name, fallback=f"org{org.id}")
+    safe_sys = sanitize_filename_component(system.system_name, fallback=f"system{system.id}")
+    label = "市级" if variant == "city" else "厅级"
+    base_name = f"{safe_org}-{safe_sys}-专家评审意见表-{label}"
+    path = EXPORT_DIR / f"{base_name}.docx"
+    if path.exists():
+        path = EXPORT_DIR / f"{base_name}_{datetime.now():%Y%m%d%H%M%S}.docx"
+    export_expert_review_docx(template_path, org, system, path, variant, content=content)
+    return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
+
+
+@app.post("/api/organizations/{org_id}/export/expert-review-merged")
+def export_org_expert_review_merged(
+    request: Request,
+    org_id: int,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    variant = str(payload.get("variant") or "city").strip()
+    if variant not in {"city", "department"}:
+        raise HTTPException(status_code=400, detail="variant 仅支持 city 或 department。")
+    raw_ids = payload.get("system_ids") or []
+    if not isinstance(raw_ids, list) or len(raw_ids) < 2:
+        raise HTTPException(status_code=400, detail="至少勾选两个系统才能合并。")
+    try:
+        system_ids = [int(x) for x in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="system_ids 必须为整数列表。")
+    org = get_org_or_404(db, org_id)
+    systems: list[SystemInfo] = []
+    for sid in system_ids:
+        sysinfo = get_system_or_404(db, sid)
+        if sysinfo.organization_id != org_id:
+            raise HTTPException(status_code=400, detail=f"系统 {sid} 不属于该单位。")
+        systems.append(sysinfo)
+    pattern = "03-专家评审意见表-市级*.docx" if variant == "city" else "03-专家评审意见表-厅级*.docx"
+    template_path = find_latest_docx_by_pattern(pattern)
+    if not template_path or not Path(template_path).exists():
+        raise HTTPException(status_code=404, detail=f"专家评审意见表模板不存在（template_docs/{pattern}）。")
+    safe_org = sanitize_filename_component(org.name, fallback=f"org{org.id}")
+    label = "市级" if variant == "city" else "厅级"
+    base_name = f"{safe_org}-合并专家评审意见表-{label}"
+    path = EXPORT_DIR / f"{base_name}.docx"
+    if path.exists():
+        path = EXPORT_DIR / f"{base_name}_{datetime.now():%Y%m%d%H%M%S}.docx"
+    export_expert_review_merged_docx(template_path, org, systems, path, variant)
     return FileResponse(path=str(path), filename=path.name, background=BackgroundTask(_cleanup_export_file, path))
 
 

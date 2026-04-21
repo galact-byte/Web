@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="expertReviewRoot" data-system-id="{{ system_id }}" data-variant="{{ variant }}">
+  <section class="panel workspace-detail-page-head">
+    <div class="section-intro">
+      <div class="section-copy">
+        <h2><i class="fas fa-clipboard-check"></i> 完善专家评审意见表 · <span id="variantLabel">{{ '市级单位' if variant == 'city' else '厅级单位' }}</span></h2>
+        <p id="expertReviewHint">正在加载系统信息，请稍候。</p>
+      </div>
+      <div class="panel-actions">
+        <button class="btn-lite" type="button" onclick="window.location.href='/organizations?focus_system={{ system_id }}'">
+          <i class="fas fa-arrow-left"></i> 返回备案对象
+        </button>
+        <div class="btn-group" style="display:inline-flex;gap:6px">
+          <button class="btn-lite btn-sm" type="button" data-variant-switch="city">市级版</button>
+          <button class="btn-lite btn-sm" type="button" data-variant-switch="department">厅级版</button>
+        </div>
+        <button class="btn-lite" id="expertReviewSaveBtn"><i class="fas fa-floppy-disk"></i> 保存</button>
+        <button class="btn-lite" id="expertReviewExportBtn"><i class="fas fa-file-word"></i> 导出 Word</button>
+      </div>
+    </div>
+    <div class="workspace-detail-head">
+      <div class="workspace-detail-summary">
+        <div><span>单位</span><strong id="exOrgName">加载中</strong></div>
+        <div><span>系统</span><strong id="exSysName">加载中</strong></div>
+        <div><span>自定级别</span><strong id="exSysLevel">加载中</strong></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel workspace-detail-panel">
+    <div class="workspace-form-stack">
+
+      <!-- 市级版字段 -->
+      <div data-variant-section="city" {% if variant != 'city' %}hidden{% endif %}>
+        <details class="workspace-collapsible" open>
+          <summary><span>基础信息</span><small>内容会覆盖 Word 模板</small></summary>
+          <div class="workspace-collapsible-body">
+            <div class="form-grid form-grid-3">
+              <div class="grid-span-2"><label>单位名称</label><input id="exCity_unit_name"></div>
+              <div><label>项目负责人</label><input id="exCity_project_owner"></div>
+              <div><label>联系电话</label><input id="exCity_contact_phone"></div>
+              <div class="grid-span-2"><label>信息系统名称</label><input id="exCity_system_name"></div>
+              <div><label>系统自定安全级别</label><input id="exCity_self_level" placeholder="例：第三级"></div>
+              <div class="grid-span-2"><label>评审日期</label><input id="exCity_review_date" placeholder="例：2026年4月21日"></div>
+              <div class="grid-span-3"><label>专家组成员</label><input id="exCity_experts" placeholder="以顿号分隔"></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="workspace-collapsible" open>
+          <summary><span>评审意见与签字</span><small>手动填写</small></summary>
+          <div class="workspace-collapsible-body">
+            <div class="form-field"><label>评审意见（长段落）</label>
+              <textarea id="exCity_review_opinion" rows="6"></textarea></div>
+            <div class="form-field"><label>评审专家组组长（签字）</label>
+              <input id="exCity_leader_signature"></div>
+            <div class="form-field"><label>评审专家组成员（签字）</label>
+              <input id="exCity_member_signatures" placeholder="以顿号分隔"></div>
+          </div>
+        </details>
+      </div>
+
+      <!-- 厅级版字段 -->
+      <div data-variant-section="department" {% if variant != 'department' %}hidden{% endif %}>
+        <details class="workspace-collapsible" open>
+          <summary><span>基础信息</span><small>用于填写模板中各标签单元格</small></summary>
+          <div class="workspace-collapsible-body">
+            <div class="form-grid form-grid-3">
+              <div class="grid-span-2"><label>信息系统运营、使用单位名称</label><input id="exDep_unit_name"></div>
+              <div><label>系统自定安全级别</label><input id="exDep_self_level" placeholder="例：第三级"></div>
+              <div class="grid-span-3"><label>信息系统运营、使用单位地址</label><input id="exDep_unit_address"></div>
+              <div><label>项目负责人</label><input id="exDep_project_owner"></div>
+              <div><label>联系电话</label><input id="exDep_contact_phone"></div>
+              <div><label>邮件地址</label><input id="exDep_email"></div>
+              <div class="grid-span-2"><label>信息系统名称</label><input id="exDep_system_name"></div>
+              <div><label>评审日期</label><input id="exDep_review_date" placeholder="例：2026年4月21日"></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="workspace-collapsible" open>
+          <summary><span>评审专家组意见</span><small>手动填写完整评审意见</small></summary>
+          <div class="workspace-collapsible-body">
+            <div class="form-field"><label>评审专家组意见</label>
+              <textarea id="exDep_review_opinion" rows="6"></textarea></div>
+          </div>
+        </details>
+      </div>
+
+    </div>
+    <div class="result" id="expertReviewResult">修改后请点击保存。</div>
+  </section>
+</div>
+<script src="/static/expert_review.js?v={{ asset_version }}"></script>
+{% endblock %}

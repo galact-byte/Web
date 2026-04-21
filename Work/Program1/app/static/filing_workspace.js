@@ -1669,16 +1669,19 @@
           </button>
           <div class="org-card-actions">
             <button class="btn-lite btn-sm" data-create-system="${org.id}"><i class="fas fa-plus"></i> 新增系统</button>
+            <button class="btn-lite btn-sm" data-merge-review-org="${org.id}"><i class="fas fa-object-group"></i> 合并专家评审表</button>
             <button class="btn-lite btn-sm" data-archive-org="${org.id}"><i class="fas fa-box-archive"></i> 归档</button>
             <button class="btn-lite btn-sm btn-danger" data-delete-org="${org.id}"><i class="fas fa-trash"></i> 删除申请</button>
           </div>
           <div class="org-card-body" ${open ? '' : 'hidden'}>
             ${(systems.length ? systems : [{}]).map((system) => system.id ? `
               <div class="system-row ${state.currentSystemId === system.id ? 'is-active' : ''}">
+                <label class="system-select"><input type="checkbox" class="system-merge-chk" data-merge-system="${system.id}" data-org-id="${org.id}"></label>
                 <div class="system-main"><strong>${esc(system.system_name || '-')}</strong><span>${esc(system.system_code || '未编号')} · ${levelBadge(system.proposed_level)}</span></div>
                 <div class="system-actions">
-                  <button class="btn-lite btn-sm" data-open-system="${system.id}"><i class="fas fa-arrow-up-right-from-square"></i> 完善信息</button>
-                  <button class="btn-lite btn-sm" data-export-system="${system.id}">导出 Word</button>
+                  <button class="btn-lite btn-sm" data-open-system="${system.id}"><i class="fas fa-arrow-up-right-from-square"></i> 完善备案表</button>
+                  <button class="btn-lite btn-sm" data-export-grading="${system.id}"><i class="fas fa-file-alt"></i> 完善定级报告</button>
+                  <button class="btn-lite btn-sm" data-export-review="${system.id}"><i class="fas fa-clipboard-check"></i> 完善专家评审意见表</button>
                   <button class="btn-lite btn-sm" data-archive-system="${system.id}">归档</button>
                   <button class="btn-lite btn-sm btn-danger" data-delete-system="${system.id}">删除申请</button>
                 </div>
@@ -1688,6 +1691,63 @@
         </article>
       `;
     }).join('');
+  }
+
+  function pickExpertReviewVariant() {
+    return new Promise((resolve) => {
+      const existing = document.getElementById('expertVariantModal');
+      if (existing) existing.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'expertVariantModal';
+      overlay.className = 'modal-overlay visible';
+      overlay.setAttribute('aria-hidden', 'false');
+      overlay.innerHTML = `
+        <div class="modal-box" role="dialog" aria-modal="true" style="width:min(100%,420px)">
+          <h2 style="margin:0 0 12px;font-size:15px;font-weight:600">选择专家评审意见表版本</h2>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <button type="button" class="btn-lite" data-variant="city">市级单位版本</button>
+            <button type="button" class="btn-lite" data-variant="department">厅级单位版本</button>
+            <button type="button" class="btn-lite" data-variant="">取消</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      const finish = (val) => { overlay.remove(); resolve(val || null); };
+      overlay.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-variant]');
+        if (btn) { finish(btn.dataset.variant); return; }
+        if (e.target === overlay) finish('');
+      });
+    });
+  }
+
+  async function mergeExpertReview(orgId) {
+    const checks = document.querySelectorAll(`.system-merge-chk[data-org-id="${orgId}"]:checked`);
+    const systemIds = Array.from(checks).map((c) => Number(c.dataset.mergeSystem)).filter(Boolean);
+    if (systemIds.length < 2) {
+      alert('请先勾选该单位下至少两个系统以合并专家评审表。');
+      return;
+    }
+    const variant = await pickExpertReviewVariant();
+    if (!variant) return;
+    const res = await fetch(`/api/organizations/${orgId}/export/expert-review-merged`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ system_ids: systemIds, variant }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(`合并导出失败：${apiErrorText(data)}`);
+      return;
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get('Content-Disposition') || '';
+    const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(cd);
+    const fname = decodeURIComponent(match?.[1] || match?.[2] || '合并专家评审意见表.docx');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
   }
 
   async function loadSystemDetail(systemId) {
@@ -2054,6 +2114,23 @@
       btn.addEventListener('click', () => switchMaintenanceTab(btn.dataset.maintenanceTab));
     });
 
+    // 修复：radio 可再次点击取消选择
+    document.addEventListener('mousedown', (event) => {
+      const label = event.target.closest('label');
+      const radio = label ? label.querySelector('input[type="radio"]') : (event.target.matches('input[type="radio"]') ? event.target : null);
+      if (radio) radio.dataset.wasChecked = radio.checked ? '1' : '0';
+    });
+    document.addEventListener('click', (event) => {
+      const label = event.target.closest('label');
+      const radio = label ? label.querySelector('input[type="radio"]') : (event.target.matches('input[type="radio"]') ? event.target : null);
+      if (!radio) return;
+      if (radio.dataset.wasChecked === '1') {
+        radio.checked = false;
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      delete radio.dataset.wasChecked;
+    });
+
     if (isDetailPage()) {
       document.addEventListener('change', (event) => {
         if (event.target.matches('input[type="checkbox"], input[type="radio"], select')) {
@@ -2095,6 +2172,15 @@
         window.location.href = `/organizations/systems/${btn.dataset.openSystem}`;
       } else if (btn.dataset.exportSystem) {
         window.location.href = `/api/systems/${btn.dataset.exportSystem}/export/word`;
+      } else if (btn.dataset.exportGrading) {
+        window.location.href = `/systems/${btn.dataset.exportGrading}/grading-report`;
+      } else if (btn.dataset.exportReview) {
+        const variant = await pickExpertReviewVariant();
+        if (variant) {
+          window.location.href = `/systems/${btn.dataset.exportReview}/expert-review?variant=${variant}`;
+        }
+      } else if (btn.dataset.mergeReviewOrg) {
+        await mergeExpertReview(Number(btn.dataset.mergeReviewOrg));
       } else if (btn.dataset.archiveOrg) {
         await archiveEntity('organizations', Number(btn.dataset.archiveOrg));
       } else if (btn.dataset.archiveSystem) {
