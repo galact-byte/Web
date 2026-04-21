@@ -160,6 +160,29 @@ class Report(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
+class GradingReport(Base):
+    __tablename__ = "grading_reports"
+
+    id = Column(Integer, primary_key=True)
+    system_id = Column(Integer, ForeignKey("systems.id"), nullable=False, unique=True, index=True)
+    content = Column(JSON, nullable=False, default=dict)
+    topology_path = Column(String(400), nullable=True)
+    updated_by = Column(String(100), nullable=False, default="system")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ExpertReviewForm(Base):
+    __tablename__ = "expert_review_forms"
+    __table_args__ = (UniqueConstraint("system_id", "variant", name="uq_expert_review_sys_variant"),)
+
+    id = Column(Integer, primary_key=True)
+    system_id = Column(Integer, ForeignKey("systems.id"), nullable=False, index=True)
+    variant = Column(String(32), nullable=False, default="city")
+    content = Column(JSON, nullable=False, default=dict)
+    updated_by = Column(String(100), nullable=False, default="system")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class ReviewRecord(Base):
     __tablename__ = "review_records"
 

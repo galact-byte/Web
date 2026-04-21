@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="gradingReportRoot" data-system-id="{{ system_id }}">
+  <section class="panel workspace-detail-page-head">
+    <div class="section-intro">
+      <div class="section-copy">
+        <h2><i class="fas fa-file-alt"></i> 完善定级报告</h2>
+        <p id="gradingReportHint">正在加载系统信息，请稍候。</p>
+      </div>
+      <div class="panel-actions">
+        <button class="btn-lite" type="button" onclick="window.location.href='/organizations?focus_system={{ system_id }}'">
+          <i class="fas fa-arrow-left"></i> 返回备案对象
+        </button>
+        <button class="btn-lite" id="gradingReportSaveBtn"><i class="fas fa-floppy-disk"></i> 保存</button>
+        <button class="btn-lite" id="gradingReportExportBtn"><i class="fas fa-file-word"></i> 导出 Word</button>
+      </div>
+    </div>
+    <div class="workspace-detail-head">
+      <div class="workspace-detail-summary">
+        <div><span>单位</span><strong id="gradingOrgName">加载中</strong></div>
+        <div><span>系统</span><strong id="gradingSysName">加载中</strong></div>
+        <div><span>当前等级</span><strong id="gradingSysLevel">加载中</strong></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel workspace-detail-panel">
+    <div class="workspace-form-stack">
+
+      <details class="workspace-collapsible" open>
+        <summary><span>一、定级对象描述</span><small>以下各段均由用户填写</small></summary>
+        <div class="workspace-collapsible-body">
+          <div class="form-field">
+            <label>（一）责任主体</label>
+            <textarea id="grField_responsible_subject" rows="5" placeholder="例：定级对象于YYYY年MM月由XX公司负责建设，目前由XX单位XX部门负责运行维护……"></textarea>
+          </div>
+          <div class="form-field">
+            <label>（二）定级对象构成</label>
+            <textarea id="grField_object_composition" rows="6" placeholder="描述系统部署环境、网络边界、主要设备等"></textarea>
+            <div class="upload-inline-field" style="margin-top:10px">
+              <div class="table-meta">拓扑图（仅一张，支持 jpg/png 等图片，导出 Word 时会插入到该节末尾）</div>
+              <div id="gradingTopologyPreview" style="margin-top:8px"></div>
+              <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+                <input type="file" id="gradingTopologyFile" accept="image/*" style="display:none">
+                <button class="btn-lite btn-sm" id="gradingTopologyPickBtn" type="button"><i class="fas fa-image"></i> 选择拓扑图</button>
+                <span id="gradingTopologyStatus" class="table-meta"></span>
+              </div>
+            </div>
+          </div>
+          <div class="form-field">
+            <label>（三）承载业务</label>
+            <textarea id="grField_carried_business" rows="5" placeholder="描述系统承载的主要业务模块与功能"></textarea>
+          </div>
+          <div class="form-field">
+            <label>（四）承载数据</label>
+            <textarea id="grField_carried_data" rows="5" placeholder="描述系统承载的数据类别、处理活动等"></textarea>
+          </div>
+          <div class="form-field">
+            <label>（五）安全责任</label>
+            <textarea id="grField_security_responsibility" rows="5" placeholder="描述单位责任、主管人员等"></textarea>
+          </div>
+        </div>
+      </details>
+
+      <details class="workspace-collapsible" open>
+        <summary><span>二、安全保护等级确定</span><small>矩阵表根据备案表表三自动涂黑</small></summary>
+        <div class="workspace-collapsible-body">
+          <h4>（一）业务信息安全保护等级的确定</h4>
+          <div class="form-field"><label>1. 业务信息描述</label>
+            <textarea id="grField_business_info_description" rows="4"></textarea></div>
+          <div class="form-field"><label>2. 业务信息受到破坏时所侵害客体的确定</label>
+            <textarea id="grField_business_info_damage_object" rows="3"></textarea></div>
+          <div class="form-field"><label>3. 业务信息受到破坏时对侵害客体的侵害程度的确定</label>
+            <textarea id="grField_business_info_damage_degree" rows="4"></textarea></div>
+          <div class="level-matrix-wrap">
+            <p class="level-matrix-title">表一 业务信息安全保护等级矩阵表（<span id="businessMatrixEmpty" class="table-meta" hidden>备案表表三未选择，无涂黑</span>）</p>
+            <table class="level-matrix" id="businessMatrix">
+              <thead>
+                <tr><th rowspan="2">业务信息安全被破坏时所侵害的客体</th><th colspan="3">对相应客体的侵害程度</th></tr>
+                <tr><th>一般损害</th><th>严重损害</th><th>特别严重损害</th></tr>
+              </thead>
+              <tbody>
+                <tr data-row="0"><td>公民、法人和其他组织的合法权益</td><td data-cell="0-0">第一级</td><td data-cell="0-1">第二级</td><td data-cell="0-2">第二级</td></tr>
+                <tr data-row="1"><td>社会秩序、公共利益</td><td data-cell="1-0">第二级</td><td data-cell="1-1">第三级</td><td data-cell="1-2">第四级</td></tr>
+                <tr data-row="2"><td>国家安全或地区安全、国计民生</td><td data-cell="2-0">第四级</td><td data-cell="2-1">第五级</td><td data-cell="2-2">第五级</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4 style="margin-top:18px">（二）系统服务安全保护等级的确定</h4>
+          <div class="form-field"><label>1. 系统服务描述</label>
+            <textarea id="grField_service_description" rows="4"></textarea></div>
+          <div class="form-field"><label>2. 系统服务受到破坏时所侵害客体的确定</label>
+            <textarea id="grField_service_damage_object" rows="3"></textarea></div>
+          <div class="form-field"><label>3. 系统服务受到破坏时对侵害客体的侵害程度的确定</label>
+            <textarea id="grField_service_damage_degree" rows="4"></textarea></div>
+          <div class="level-matrix-wrap">
+            <p class="level-matrix-title">表二 系统服务安全保护等级矩阵表（<span id="serviceMatrixEmpty" class="table-meta" hidden>备案表表三未选择，无涂黑</span>）</p>
+            <table class="level-matrix" id="serviceMatrix">
+              <thead>
+                <tr><th rowspan="2">系统服务安全被破坏时所侵害的客体</th><th colspan="3">对相应客体的侵害程度</th></tr>
+                <tr><th>一般损害</th><th>严重损害</th><th>特别严重损害</th></tr>
+              </thead>
+              <tbody>
+                <tr data-row="0"><td>公民、法人和其他组织的合法权益</td><td data-cell="0-0">第一级</td><td data-cell="0-1">第二级</td><td data-cell="0-2">第二级</td></tr>
+                <tr data-row="1"><td>社会秩序、公共利益</td><td data-cell="1-0">第二级</td><td data-cell="1-1">第三级</td><td data-cell="1-2">第四级</td></tr>
+                <tr data-row="2"><td>国家安全或地区安全、国计民生</td><td data-cell="2-0">第四级</td><td data-cell="2-1">第五级</td><td data-cell="2-2">第五级</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="form-field" style="margin-top:18px">
+            <label>填表日期（签章行）</label>
+            <input id="grField_fill_date" placeholder="例：2026年 4 月 21 日">
+          </div>
+        </div>
+      </details>
+    </div>
+    <div class="result" id="gradingReportResult">修改后请点击保存。</div>
+  </section>
+</div>
+<script src="/static/grading_report.js?v={{ asset_version }}"></script>
+{% endblock %}
