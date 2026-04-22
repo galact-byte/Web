@@ -686,6 +686,30 @@ def _replace_paragraph_starts_with(xml: str, match_substring: str, new_text: str
     return p_pattern.sub(repl, xml)
 
 
+def _replace_paragraph_contains(xml: str, match_substring: str, new_text: str) -> str:
+    """同 _replace_paragraph_starts_with 语义（保留以兼容之前命名）。"""
+    return _replace_paragraph_starts_with(xml, match_substring, new_text)
+
+
+def _remove_sample_numbered_paragraphs(xml: str, max_remove: int = 5) -> str:
+    """移除紧随 '形成如下评审意见' 段落之后、到 '评审专家组组长' 段落之前的所有内容段。"""
+    pattern = re.compile(r"<w:p\b[^>]*>.*?</w:p>", re.DOTALL)
+    matches = list(pattern.finditer(xml))
+    opinion_end = -1
+    stop_start = -1
+    for i, m in enumerate(matches):
+        plain = _paragraph_plain_text(m.group(0))
+        if opinion_end < 0 and "形成如下评审意见" in plain:
+            opinion_end = m.end()
+            continue
+        if opinion_end > 0 and ("评审专家组组长" in plain or "评审专家组成员" in plain):
+            stop_start = m.start()
+            break
+    if opinion_end < 0 or stop_start < 0 or stop_start <= opinion_end:
+        return xml
+    return xml[:opinion_end] + xml[stop_start:]
+
+
 def _shade_matrix_cells(
     xml: str,
     business_matrix: list[list[int]] | None,
@@ -904,6 +928,250 @@ def _make_drawing_paragraph(rel_id: str, name: str) -> str:
     )
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Word 导入解析（XML 级，保留方框/符号等 python-docx 会略过的内容）
+# ──────────────────────────────────────────────────────────────────────────────
+
+_WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+
+def _parse_docx_structure(content: bytes) -> dict[str, Any]:
+    """返回 {'paragraphs': [text,...], 'tables': [[[cell_text]]...]}。"""
+    import xml.etree.ElementTree as ET
+
+    with zipfile.ZipFile(io.BytesIO(content)) as z:
+        if "word/document.xml" not in z.namelist():
+            raise ValueError("上传的文件不是有效的 Word (.docx)。")
+        raw = z.read("word/document.xml")
+
+    root = ET.fromstring(raw)
+
+    def element_text(el: Any) -> str:
+        parts: list[str] = []
+        for node in el.iter():
+            tag = node.tag
+            if tag == _WORD_NS + "t":
+                parts.append(node.text or "")
+            elif tag == _WORD_NS + "tab":
+                parts.append("\t")
+            elif tag == _WORD_NS + "br":
+                parts.append("\n")
+        return "".join(parts)
+
+    paragraphs: list[str] = []
+    tables: list[list[list[str]]] = []
+
+    def walk(el: Any, in_table: bool = False) -> None:
+        for child in list(el):
+            tag = child.tag
+            if tag == _WORD_NS + "p":
+                if not in_table:
+                    paragraphs.append(element_text(child).strip())
+            elif tag == _WORD_NS + "tbl":
+                rows: list[list[str]] = []
+                for tr in child.findall(_WORD_NS + "tr"):
+                    cells: list[str] = []
+                    for tc in tr.findall(_WORD_NS + "tc"):
+                        cells.append(element_text(tc).strip())
+                    rows.append(cells)
+                tables.append(rows)
+                walk(child, in_table=True)
+            else:
+                walk(child, in_table)
+
+    body = root.find(_WORD_NS + "body")
+    if body is not None:
+        walk(body)
+
+    return {"paragraphs": paragraphs, "tables": tables}
+
+
+# 定级报告段落标题 → 字段 key 的映射
+_GRADING_HEADINGS = [
+    ("（一）责任主体", "responsible_subject"),
+    ("（二）定级对象构成", "object_composition"),
+    ("（三）承载业务", "carried_business"),
+    ("（四）承载数据", "carried_data"),
+    ("（五）安全责任", "security_responsibility"),
+    ("1、业务信息描述", "business_info_description"),
+    ("2、业务信息受到破坏时所侵害客体的确定", "business_info_damage_object"),
+    ("3、业务信息受到破坏时对侵害客体的侵害程度的确定", "business_info_damage_degree"),
+    ("1、系统服务描述", "service_description"),
+    ("2、系统服务受到破坏时所侵害客体的确定", "service_damage_object"),
+    ("3、系统服务受到破坏时对侵害客体的侵害程度的确定", "service_damage_degree"),
+]
+
+
+def parse_grading_report_docx(content: bytes) -> dict[str, Any]:
+    """从已填写的定级报告 Word 提取段落内容 → {字段 key: 文本}。"""
+    struct = _parse_docx_structure(content)
+    paragraphs = [p for p in struct["paragraphs"] if p]
+
+    result: dict[str, str] = {}
+    # 识别段落，标题段落的下一个（非空、非表格数据）段落即为内容
+    # 支持不严格匹配：忽略数字序号后的格式差异
+    def norm(s: str) -> str:
+        return re.sub(r"\s+", "", s)
+
+    heading_norm = [(norm(h), k) for h, k in _GRADING_HEADINGS]
+
+    i = 0
+    n = len(paragraphs)
+    while i < n:
+        para = paragraphs[i]
+        para_n = norm(para)
+        matched_key: str | None = None
+        for h_n, key in heading_norm:
+            if para_n == h_n or para_n.startswith(h_n):
+                matched_key = key
+                break
+        if matched_key:
+            # 向下取第一个非空、非下一个标题段
+            collected: list[str] = []
+            j = i + 1
+            while j < n:
+                nxt = paragraphs[j]
+                nxt_n = norm(nxt)
+                if not nxt:
+                    j += 1
+                    continue
+                # 若遇到下一个已知标题 / 二级章节，则停止
+                if any(nxt_n == h_n or nxt_n.startswith(h_n) for h_n, _ in heading_norm):
+                    break
+                if re.match(r"^[一二三四五六七八九十]+[、.]", nxt) or re.match(r"^[（(][一二三四五六七八九十][）)]", nxt):
+                    break
+                # 过滤"表一"、"表二"之类的图表注释行
+                if re.match(r"^表[一二三四五]", nxt):
+                    break
+                collected.append(nxt)
+                j += 1
+                # 仅取第一段（通常用户填写单段）；如需多段可扩展
+                break
+            if collected:
+                result[matched_key] = collected[0]
+            i = j if collected else i + 1
+            continue
+        # 尝试提取填表日期：以"年"和"日"结尾且含数字的段落
+        if re.match(r"^\d{4}年\s*\d{1,2}\s*月\s*\d{1,2}\s*日", para):
+            result.setdefault("fill_date", para)
+        i += 1
+
+    return result
+
+
+def parse_expert_review_city_docx(content: bytes) -> dict[str, Any]:
+    """从市级专家评审意见表 Word 提取字段。"""
+    struct = _parse_docx_structure(content)
+    result: dict[str, Any] = {}
+    for table in struct["tables"]:
+        for row in table:
+            if not row:
+                continue
+            first = row[0]
+            first_n = re.sub(r"\s+", "", first)
+            value = row[1] if len(row) > 1 else ""
+            if "单位名称" == first_n and value and value != first:
+                result["unit_name"] = value
+            elif "项目负责人" == first_n:
+                result["project_owner"] = value
+                # 若本行还有"联系电话"
+                for idx, cell in enumerate(row):
+                    if re.sub(r"\s+", "", cell) == "联系电话" and idx + 1 < len(row):
+                        result["contact_phone"] = row[idx + 1]
+                        break
+            elif "信息系统名称" == first_n and value and value != first:
+                result["system_name"] = value
+            elif "系统自定安全级别" == first_n and value and value != first:
+                result["self_level"] = value
+            elif "专家组成员" == first_n and value and value != first:
+                result["experts"] = value
+            elif "评审专家组组长（签字）" in first_n or first_n.startswith("评审专家组组长"):
+                if value and value != first:
+                    result["leader_signature"] = value
+            elif "评审专家组成员（签字）" in first_n or first_n.startswith("评审专家组成员"):
+                if value and value != first:
+                    result["member_signatures"] = value
+            # 审核意见：整行内容跨 4 列相同的长段
+            elif "形成如下评审意见" in first or "评审意见：" in first:
+                # 段落文本紧随"形成如下评审意见："后面
+                match = re.search(r"形成如下评审意见[：:](.*)", first, re.DOTALL)
+                if match and match.group(1).strip():
+                    result["review_opinion"] = match.group(1).strip()
+            # 尝试提取评审日期："YYYY年MM月DD日"
+            for cell in row:
+                m = re.search(r"(\d{4}年\s*\d{1,2}\s*月\s*\d{1,2}\s*日)", cell)
+                if m and "review_date" not in result:
+                    result["review_date"] = m.group(1)
+    return result
+
+
+def parse_expert_review_department_docx(content: bytes) -> dict[str, Any]:
+    """从厅级专家评审意见表 Word 提取字段。"""
+    struct = _parse_docx_structure(content)
+    result: dict[str, Any] = {}
+    labels = [
+        ("信息系统运营、使用单位名称", "unit_name"),
+        ("信息系统运营、使用单位地址", "unit_address"),
+        ("项目负责人", "project_owner"),
+        ("联系电话", "contact_phone"),
+        ("邮件地址", "email"),
+        ("信息系统名称", "system_name"),
+        ("系统自定安全级别", "self_level"),
+    ]
+    for table in struct["tables"]:
+        for row in table:
+            for cell in row:
+                for label, key in labels:
+                    # 支持格式 "信息系统名称：XXX" 或单独出现
+                    if cell.startswith(label):
+                        rest = cell[len(label):].lstrip("：: ").strip()
+                        if rest:
+                            result[key] = rest
+            # 评审专家组意见
+            for cell in row:
+                if cell.startswith("评审专家组意见"):
+                    rest = cell[len("评审专家组意见"):].lstrip("：: ").strip()
+                    if rest:
+                        result["review_opinion"] = rest
+    # 填表时间
+    for p in struct["paragraphs"]:
+        m = re.search(r"填表时间[：:]\s*(.+)", p)
+        if m:
+            value = m.group(1).strip()
+            if value and not value.startswith("年"):
+                result["review_date"] = value
+                break
+    return result
+
+
+def parse_filing_form_docx(content: bytes) -> dict[str, Any]:
+    """从备案表 Word 提取核心文本字段（仅文本，选项/附件不处理）。"""
+    struct = _parse_docx_structure(content)
+    result: dict[str, Any] = {}
+    label_to_key = {
+        "单位名称": "org_name",
+        "统一社会信用代码": "credit_code",
+        "单位地址": "org_address",
+        "法定代表人": "legal_representative",
+        "信息系统名称": "system_name",
+        "业务描述": "business_description",
+        "系统投入运行时间": "go_live_date",
+        "定级时间": "grading_date",
+        "填表人": "filler_name",
+        "填表日期": "filled_date",
+    }
+    for table in struct["tables"]:
+        for row in table:
+            for idx, cell in enumerate(row):
+                cell_n = re.sub(r"\s+", "", cell)
+                for label, key in label_to_key.items():
+                    if cell_n == label and idx + 1 < len(row):
+                        value = row[idx + 1].strip()
+                        if value and value != label:
+                            result[key] = value
+    return result
+
+
 def export_expert_review_docx(
     template_path: Path,
     org: Any,
@@ -941,29 +1209,35 @@ def export_expert_review_docx(
     xml, others = _read_docx_xml(template_path)
 
     if variant == "city":
+        # 基础单元格（单行文本）
         repl = {
             SAMPLE_ORG_NAME: f_unit,
             SAMPLE_SYSTEM_NAME: f_sys,
             SAMPLE_OWNER_NAME_REVIEW: f_owner,
             SAMPLE_OWNER_PHONE: f_phone,
             SAMPLE_EXPERTS: f_experts,
-            SAMPLE_REVIEW_DATE: f_date,
             "第三级": f_level,
-            "2026年1月21日": f_date,
         }
         xml = _xml_replace(xml, repl)
-        # 审核意见 / 签字（如果用户填了，追加到相应段落）
-        opinion = (c.get("review_opinion") or "").strip()
-        if opinion:
-            xml = _replace_paragraph_starts_with(xml, "2026年1月21日" if False else f_date, opinion) if False else xml
-            # 先尝试在"如下评审意见："标签后追加
-            xml = _append_label_value(xml, "形成如下评审意见：", opinion)
+
+        # 评审意见长段：整段替换（日期 + 单位 + 系统 + 意见）
+        opinion = (c.get("review_opinion") or "").strip() or "________"
+        full_paragraph = (
+            f"{f_date}，{f_unit}组织网络安全等级保护专家对本单位拟备案的{f_sys}"
+            f"进行了安全保护等级定级评审。与会专家听取了该单位对系统情况的介绍，"
+            f"审阅了有关材料，经过讨论质询，形成如下评审意见：{opinion}"
+        )
+        xml = _replace_paragraph_contains(xml, "形成如下评审意见", full_paragraph)
+        # 移除紧随其后的模板样例段落（数字开头："1.定级文档..."）
+        xml = _remove_sample_numbered_paragraphs(xml, max_remove=5)
+
+        # 签字行
         leader = (c.get("leader_signature") or "").strip()
         if leader:
-            xml = _append_label_value(xml, "评审专家组组长（签字）", leader)
+            xml = _replace_paragraph_contains(xml, "评审专家组组长（签字）", f"评审专家组组长（签字）：{leader}")
         members = (c.get("member_signatures") or "").strip()
         if members:
-            xml = _append_label_value(xml, "评审专家组成员（签字）", members)
+            xml = _replace_paragraph_contains(xml, "评审专家组成员（签字）", f"评审专家组成员（签字）：{members}")
     else:
         f_address = (c.get("unit_address") or "").strip() or address
         f_email = (c.get("email") or "").strip() or owner_email
