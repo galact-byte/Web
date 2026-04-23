@@ -2100,6 +2100,39 @@
     if ($('copyCyberToDataBtn')) $('copyCyberToDataBtn').addEventListener('click', copyCyberDeptToDataDept);
     if ($('workspaceSaveBtn')) $('workspaceSaveBtn').addEventListener('click', saveWorkspace);
     if ($('workspaceExportBtn')) $('workspaceExportBtn').addEventListener('click', () => { if (state.currentSystemId) window.location.href = `/api/systems/${state.currentSystemId}/export/word`; });
+    if ($('workspaceImportWordBtn')) $('workspaceImportWordBtn').addEventListener('click', () => $('workspaceImportWordFile')?.click());
+    if ($('workspaceImportWordFile')) $('workspaceImportWordFile').addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!file || !state.currentSystemId) return;
+      setDetailResult('正在解析 Word 文件...');
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        const res = await fetch(`/api/filing-workspace/systems/${state.currentSystemId}/import-word`, {
+          method: 'POST', headers: authHeaders(), body: fd,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { setDetailResult(`导入失败：${apiErrorText(data)}`); return; }
+        const p = data.data || {};
+        const fieldMap = {
+          org_name: 'orgName', credit_code: 'orgCreditCode', org_address: 'orgDetailAddress',
+          legal_representative: 'orgLeaderName', system_name: 'systemName',
+          business_description: 'businessDescription', go_live_date: 'systemGoLiveDate',
+          grading_date: 'gradingDate', filler_name: 'fillerName', filled_date: 'filledDate',
+          postal_code: 'orgPostalCode', district_code: 'orgDistrictCode',
+          cybersecurity_dept: 'cyberDept', data_security_dept: 'dataDept',
+          cybersecurity_owner_name: 'cyberOwnerName', legal_representative: 'orgLeaderName',
+        };
+        let filled = 0;
+        for (const [key, elId] of Object.entries(fieldMap)) {
+          if (p[key]) { setValue(elId, p[key]); filled++; }
+        }
+        setDetailResult(filled ? `导入成功，已回填 ${filled} 个字段。未匹配的字段请手动填写。` : '导入完成，但未匹配到可回填的字段。');
+      } catch (err) {
+        setDetailResult(`导入失败：${err.message || err}`);
+      }
+    });
     if ($('addDataItemBtn')) $('addDataItemBtn').addEventListener('click', () => {
       renderTable6Items([...collectTable6Items(), {}]);
       queueDraftSave();

@@ -1148,27 +1148,54 @@ def parse_filing_form_docx(content: bytes) -> dict[str, Any]:
     """从备案表 Word 提取核心文本字段（仅文本，选项/附件不处理）。"""
     struct = _parse_docx_structure(content)
     result: dict[str, Any] = {}
-    label_to_key = {
+
+    exact_labels = {
         "单位名称": "org_name",
-        "统一社会信用代码": "credit_code",
         "单位地址": "org_address",
-        "法定代表人": "legal_representative",
-        "信息系统名称": "system_name",
         "业务描述": "business_description",
-        "系统投入运行时间": "go_live_date",
         "定级时间": "grading_date",
-        "填表人": "filler_name",
-        "填表日期": "filled_date",
+        "邮政编码": "postal_code",
+        "行政区划代码": "district_code",
+        "网络安全责任部门": "cybersecurity_dept",
+        "数据安全管理部门": "data_security_dept",
     }
+    contains_labels = {
+        "统一社会信用代码": "credit_code",
+        "何时投入运行使用": "go_live_date",
+    }
+
     for table in struct["tables"]:
         for row in table:
             for idx, cell in enumerate(row):
                 cell_n = re.sub(r"\s+", "", cell)
-                for label, key in label_to_key.items():
-                    if cell_n == label and idx + 1 < len(row):
-                        value = row[idx + 1].strip()
-                        if value and value != label:
-                            result[key] = value
+                next_val = row[idx + 1].strip() if idx + 1 < len(row) else ""
+                for label, key in exact_labels.items():
+                    if cell_n == label and next_val and next_val != label:
+                        result.setdefault(key, next_val)
+                for label, key in contains_labels.items():
+                    if label in cell_n and next_val and next_val != cell_n:
+                        result.setdefault(key, next_val)
+                if cell_n == "定级对象" and next_val and next_val != "定级对象":
+                    result.setdefault("system_name", next_val)
+                if cell_n == "单位负责人":
+                    for si, sc in enumerate(row[idx + 1:], idx + 1):
+                        if re.sub(r"\s+", "", sc) == "姓名" and si + 1 < len(row) and row[si + 1].strip():
+                            result.setdefault("legal_representative", row[si + 1].strip())
+                            break
+                if cell_n.startswith("网络安全责任部门联系人"):
+                    for si, sc in enumerate(row[idx + 1:], idx + 1):
+                        if re.sub(r"\s+", "", sc) == "姓名" and si + 1 < len(row) and row[si + 1].strip():
+                            result.setdefault("cybersecurity_owner_name", row[si + 1].strip())
+                            break
+                if cell_n.startswith("填表人") and "：" in cell_n:
+                    val = cell_n.split("：", 1)[1].strip()
+                    if val:
+                        result.setdefault("filler_name", val)
+                if cell_n.startswith("填表日期") and "：" in cell_n:
+                    val = re.sub(r"\s+", "", cell).split("：", 1)[1].strip()
+                    if val:
+                        result.setdefault("filled_date", cell.split("：", 1)[1].strip())
+
     return result
 
 

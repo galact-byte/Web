@@ -102,6 +102,10 @@ from .services.reporting import (
     export_report_docx_with_template,
     export_report_pdf,
     generate_report_payload,
+    parse_expert_review_city_docx,
+    parse_expert_review_department_docx,
+    parse_filing_form_docx,
+    parse_grading_report_docx,
     sanitize_template_docx_content,
 )
 from .validators import (
@@ -4103,6 +4107,27 @@ def filing_workspace_detail(system_id: int, db: Session = Depends(get_db)) -> di
     return build_workspace_detail_response(db, org, system)
 
 
+@app.post("/api/filing-workspace/systems/{system_id}/import-word")
+async def import_filing_workspace_word(
+    request: Request,
+    system_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    get_system_or_404(db, system_id)
+    if not file.filename or not file.filename.lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="仅支持 .docx 文件。")
+    content_bytes = await file.read()
+    if len(content_bytes) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 50MB。")
+    try:
+        parsed = parse_filing_form_docx(content_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Word 解析失败：{exc}") from exc
+    return {"message": "解析完成", "data": parsed}
+
+
 @app.put("/api/filing-workspace/systems/{system_id}")
 def save_filing_workspace(
     request: Request,
@@ -5870,6 +5895,37 @@ def get_grading_topology_file(request: Request, system_id: int, db: Session = De
     return FileResponse(path=str(path), filename=path.name)
 
 
+@app.post("/api/systems/{system_id}/grading-report/import-word")
+async def import_grading_report_word(
+    request: Request,
+    system_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    get_system_or_404(db, system_id)
+    if not file.filename or not file.filename.lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="仅支持 .docx 文件。")
+    content_bytes = await file.read()
+    if len(content_bytes) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 50MB。")
+    try:
+        parsed = parse_grading_report_docx(content_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Word 解析失败：{exc}") from exc
+    if not parsed:
+        return {"message": "未能从 Word 中提取到有效字段。", "data": {"content": {}}}
+    row = _get_or_create_grading_report(db, system_id)
+    merged = _merge_default_content(GRADING_REPORT_DEFAULTS, row.content)
+    for key in GRADING_REPORT_DEFAULTS:
+        if key in parsed and str(parsed[key] or "").strip():
+            merged[key] = str(parsed[key]).strip()
+    row.content = merged
+    row.updated_by = actor or "system"
+    db.commit()
+    return {"message": "Word 导入成功", "data": {"content": merged}}
+
+
 @app.get("/api/systems/{system_id}/export/grading-report")
 def export_system_grading_report(request: Request, system_id: int, db: Session = Depends(get_db)) -> FileResponse:
     require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
@@ -5992,6 +6048,49 @@ def put_system_expert_review(
     row.updated_by = actor or "system"
     db.commit()
     return {"message": "已保存", "data": {"content": merged}}
+
+
+@app.post("/api/systems/{system_id}/expert-review/import-word")
+async def import_expert_review_word(
+    request: Request,
+    system_id: int,
+    file: UploadFile = File(...),
+    variant: str = Query("city"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, _ = require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    if variant not in {"city", "department"}:
+        raise HTTPException(status_code=400, detail="variant 仅支持 city 或 department。")
+    get_system_or_404(db, system_id)
+    if not file.filename or not file.filename.lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="仅支持 .docx 文件。")
+    content_bytes = await file.read()
+    if len(content_bytes) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 50MB。")
+    try:
+        parsed = (
+            parse_expert_review_city_docx(content_bytes)
+            if variant == "city"
+            else parse_expert_review_department_docx(content_bytes)
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Word 解析失败：{exc}") from exc
+    if not parsed:
+        return {"message": "未能从 Word 中提取到有效字段。", "data": {"content": {}}}
+    row = _get_or_create_expert_review(db, system_id, variant)
+    defaults = _expert_review_defaults(variant)
+    merged = _merge_default_content(defaults, row.content)
+    for key in defaults:
+        if key in parsed:
+            value = parsed[key]
+            if isinstance(defaults[key], list):
+                merged[key] = list(value) if isinstance(value, list) else []
+            elif str(value or "").strip():
+                merged[key] = str(value).strip()
+    row.content = merged
+    row.updated_by = actor or "system"
+    db.commit()
+    return {"message": "Word 导入成功", "data": {"content": merged}}
 
 
 @app.get("/api/systems/{system_id}/export/expert-review")
