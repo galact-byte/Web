@@ -69,12 +69,45 @@
     window.location.href = `${current}?variant=${next}`;
   }
 
+  async function importWord(file) {
+    if (!file) return;
+    setResult('正在解析 Word 文件...');
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch(`/api/systems/${systemId}/expert-review/import-word?variant=${variant}`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setResult(`导入失败：${data.detail || res.status}`, true); return; }
+      const content = data.data?.content || {};
+      const fields = currentFields();
+      const prefix = fieldPrefix();
+      const filled = [];
+      fields.forEach((f) => {
+        const el = $(`${prefix}${f}`);
+        if (el && content[f]) { el.value = content[f]; filled.push(f); }
+      });
+      setResult(filled.length ? `导入成功，已回填 ${filled.length} 个字段。` : '导入完成，但未匹配到可回填的字段。');
+    } catch (err) {
+      setResult(`导入失败：${err.message || err}`, true);
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     showSection();
     $('expertReviewSaveBtn')?.addEventListener('click', save);
     $('expertReviewExportBtn')?.addEventListener('click', async () => {
       await save();
       window.location.href = `/api/systems/${systemId}/export/expert-review?variant=${variant}`;
+    });
+    $('expertImportWordBtn')?.addEventListener('click', () => $('expertImportWordFile')?.click());
+    $('expertImportWordFile')?.addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) importWord(f);
+      e.target.value = '';
     });
     document.querySelectorAll('[data-variant-switch]').forEach((btn) => {
       btn.addEventListener('click', () => switchVariant(btn.dataset.variantSwitch));
