@@ -106,6 +106,7 @@ class UiTemplateTests(unittest.TestCase):
         self.assertIn('data-mode="list"', html)
         self.assertIn('workspaceList', html)
         self.assertIn('workspaceCreateModal', html)
+        self.assertIn('/static/radio_toggle.js', html)
         self.assertIn('/static/filing_workspace.js', html)
         self.assertIn('独立页面', html)
         self.assertNotIn('客户采集链接', html)
@@ -118,6 +119,7 @@ class UiTemplateTests(unittest.TestCase):
         self.assertIn('data-system-id="123"', html)
         self.assertIn('workspaceDetailPanel', html)
         self.assertIn('返回备案对象', html)
+        self.assertIn('/static/radio_toggle.js', html)
         self.assertIn('/static/filing_workspace.js', html)
 
     def test_workflow_template_uses_section_intro_layout(self):
@@ -151,6 +153,23 @@ class UiTemplateTests(unittest.TestCase):
         self.assertNotIn("|| 'tester'", reports_html)
         self.assertNotIn("|| 'tester'", workflow_html)
         self.assertNotIn("updated_by: 'admin'", workflow_html)
+
+    def test_workspace_js_uses_status_flags_for_table4_record_names(self):
+        workspace_js = Path('app/static/filing_workspace.js').read_text(encoding='utf-8')
+
+        self.assertIn('cloudRecordStatus', workspace_js)
+        self.assertIn('bigDataRecordStatus', workspace_js)
+        self.assertIn('data-export-preview-suffix', workspace_js)
+        self.assertIn('refreshExportAttachmentPreviews', workspace_js)
+        self.assertNotIn('格式化附件名称', workspace_js)
+        self.assertNotIn('uploadTable4Cloud', workspace_js)
+        self.assertNotIn('uploadTable4BigData', workspace_js)
+
+    def test_workspace_js_restores_saved_address_picker_values(self):
+        workspace_js = Path('app/static/filing_workspace.js').read_text(encoding='utf-8')
+
+        self.assertIn("function syncAddressPicker(preserveMeta, preferredCity = '', preferredDistrict = '')", workspace_js)
+        self.assertIn("syncAddressPicker(true, address.city, address.district)", workspace_js)
 
     def test_users_template_uses_refined_admin_layout(self):
         html = self.render_template('users.html')

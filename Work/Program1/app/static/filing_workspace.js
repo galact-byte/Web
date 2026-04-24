@@ -133,6 +133,9 @@
   const isDetailPage = () => pageMode() === 'detail';
   const isListPage = () => pageMode() === 'list';
   const initialSystemId = () => Number(root()?.dataset.systemId || 0);
+  const radioToggleHelper = window.radioToggleHelper || {};
+  const rememberRadioCheckedState = radioToggleHelper.rememberRadioCheckedState || (() => null);
+  const maybeToggleCheckedRadio = radioToggleHelper.maybeToggleCheckedRadio || (() => false);
 
   function authHeaders() {
     const token = localStorage.getItem('auth_token') || '';
@@ -244,13 +247,24 @@
     return radioGroupHtml(name, [['true', trueLabel], ['false', falseLabel]]);
   }
 
+  function currentExportAttachmentPreviewName(defaultSuffix = '', fallbackLabel = '') {
+    const orgName = getValue('orgName') || ((state.detail || {}).organization || {}).name || '单位名称';
+    const sysName = getValue('systemName') || ((state.detail || {}).system || {}).system_name || '系统名称';
+    const suffix = String(defaultSuffix || fallbackLabel || '附件').trim() || '附件';
+    return `《${orgName}-${sysName}-${suffix}》`;
+  }
+
+  function exportAttachmentPreviewHtml(defaultSuffix = '', fallbackLabel = '') {
+    const suffix = String(defaultSuffix || fallbackLabel || '附件').trim() || '附件';
+    return `
+      <div class="table-meta" data-export-preview-suffix="${esc(suffix)}">选"有"时，导出 Word 将自动写入：<strong>${esc(currentExportAttachmentPreviewName(suffix))}</strong></div>
+    `;
+  }
+
   function uploadFieldHtml(label, inputId, slotKey, accept, attachmentId, defaultSuffix = '') {
-    const orgName = ((state.detail || {}).organization || {}).name || '单位名称';
-    const sysName = ((state.detail || {}).system || {}).system_name || '系统名称';
-    const previewName = defaultSuffix ? `《${orgName}-${sysName}-${defaultSuffix}》` : `《${orgName}-${sysName}-${esc(label)}》`;
     return `
       <div class="upload-inline-field">
-        <div class="table-meta">选"有"时，导出 Word 将自动写入：<strong>${esc(previewName)}</strong></div>
+        ${exportAttachmentPreviewHtml(defaultSuffix, label)}
         <div class="attachment-list" id="${attachmentId}" hidden></div>
         <div class="table-meta" id="${attachmentId}Status" hidden></div>
       </div>
@@ -294,12 +308,12 @@
     }
   }
 
-  function syncAddressPicker(preserveMeta) {
+  function syncAddressPicker(preserveMeta, preferredCity = '', preferredDistrict = '') {
     const provinceName = findProvinceEntry(getValue('orgProvince'));
     const cityInput = $('orgCity');
     const districtInput = $('orgDistrict');
-    const currentCity = cityInput ? cityInput.value : '';
-    const currentDistrict = districtInput ? districtInput.value : '';
+    const currentCity = cityInput ? (cityInput.value || preferredCity || '') : '';
+    const currentDistrict = districtInput ? (districtInput.value || preferredDistrict || '') : '';
     const cities = REGION_TREE[provinceName] || [];
     if (cityInput) {
       cityInput.innerHTML = `<option value="">请选择地市</option>${cities.map((item) => `<option value="${esc(item.name)}">${esc(item.name)}</option>`).join('')}`;
@@ -755,7 +769,12 @@
             <div><label>平台备案编号</label><input id="cloudProviderRecordNo"></div>
             <div class="grid-span-2"><label>云服务客户运维地点</label><input id="cloudCustomerOpsLocation"></div>
           </div>
-          ${uploadFieldHtml('云平台备案证明', 'uploadTable4Cloud', 'table4.cloud', '.doc,.docx,.pdf', 'attachmentTable4Cloud', '云平台备案证明')}
+          <div class="workspace-subsection">
+            <h4>云平台备案证明</h4>
+            ${radioGroupHtml('cloudRecordStatus', [['has', '有'], ['none', '无']], 'choice-row')}
+            ${exportAttachmentPreviewHtml('云平台备案证明')}
+            <div class="table-meta">选"无"则留空。</div>
+          </div>
         </div>
       `)}
       ${sceneBlock('mobileScene', '移动互联应用场景补充信息', `<label>是否采用移动互联技术</label>${boolRadioHtml('mobileEnabled', '是', '否')}`, `
@@ -792,7 +811,12 @@
             <div><label>平台名称</label><input id="bigDataProviderPlatformName"></div>
             <div><label>平台备案编号</label><input id="bigDataProviderRecordNo"></div>
           </div>
-          ${uploadFieldHtml('大数据平台备案证明', 'uploadTable4BigData', 'table4.big_data', '.doc,.docx,.pdf', 'attachmentTable4BigData', '大数据平台备案证明')}
+          <div class="workspace-subsection">
+            <h4>大数据平台备案证明</h4>
+            ${radioGroupHtml('bigDataRecordStatus', [['has', '有'], ['none', '无']], 'choice-row')}
+            ${exportAttachmentPreviewHtml('大数据平台备案证明')}
+            <div class="table-meta">选"无"则留空。</div>
+          </div>
         </div>
       `)}
     `);
@@ -928,6 +952,7 @@
   function setValue(id, value) {
     const el = $(id);
     if (el) el.value = value ?? '';
+    if (id === 'orgName' || id === 'systemName') refreshExportAttachmentPreviews();
   }
 
   function getValue(id) {
@@ -955,6 +980,13 @@
   function getRadioValue(name) {
     const current = document.querySelector(`input[name="${name}"]:checked`);
     return current ? current.value : '';
+  }
+
+  function refreshExportAttachmentPreviews() {
+    document.querySelectorAll('[data-export-preview-suffix]').forEach((element) => {
+      const suffix = String(element.dataset.exportPreviewSuffix || '').trim() || '附件';
+      element.innerHTML = `选"有"时，导出 Word 将自动写入：<strong>${esc(currentExportAttachmentPreviewName(suffix))}</strong>`;
+    });
   }
 
   function show(id, visible) {
@@ -1236,8 +1268,7 @@
     setValue('orgFilingRegion', org.filing_region);
     setValue('unitInternetAddresses', table1.unit_internet_addresses || '无');
     setValue('orgProvince', findProvinceEntry(address.province));
-    setValue('orgCity', address.city);
-    setValue('orgDistrict', address.district);
+    syncAddressPicker(true, address.city, address.district);
     setValue('orgDetailAddress', address.detail);
     setValue('orgPostalCode', table1.postal_code);
     setValue('orgDistrictCode', table1.district_code);
@@ -1324,7 +1355,7 @@
     setValue('cloudProviderLevel', (table4.cloud || {}).provider_level);
     setValue('cloudProviderPlatformName', (table4.cloud || {}).provider_platform_name);
     setValue('cloudProviderRecordNo', (table4.cloud || {}).provider_record_no);
-    renderAttachmentList('attachmentTable4Cloud', (table4.cloud || {}).attachments);
+    setRadioValue('cloudRecordStatus', table4RecordStatus(table4.cloud));
     setRadioValue('mobileEnabled', table4.mobile && table4.mobile.enabled ? 'true' : 'false');
     setValue('mobileAppName', (table4.mobile || {}).app_name);
     setCheckedValues('mobileWirelessChannels', (table4.mobile || {}).wireless_channels);
@@ -1348,7 +1379,7 @@
     setValue('bigDataProviderLevel', (table4.big_data || {}).provider_level);
     setValue('bigDataProviderPlatformName', (table4.big_data || {}).provider_platform_name);
     setValue('bigDataProviderRecordNo', (table4.big_data || {}).provider_record_no);
-    renderAttachmentList('attachmentTable4BigData', (table4.big_data || {}).attachments);
+    setRadioValue('bigDataRecordStatus', table4RecordStatus(table4.big_data));
 
     MATERIAL_SLOTS.forEach(([key]) => {
       const slotData = table5[key] || {};
@@ -1358,7 +1389,6 @@
     });
 
     renderTable6Items(table6.items);
-    syncAddressPicker(true);
     updateLevelDisplays();
     syncConditionalFields();
     state.draftSuspend = false;
@@ -1403,6 +1433,13 @@
     return safe;
   }
 
+  function table4RecordStatus(slot) {
+    const safe = slot && typeof slot === 'object' ? slot : {};
+    const status = String(safe.record_status || '').trim();
+    if (status === 'has' || status === 'none') return status;
+    return (String(safe.record_file_name || '').trim() || (Array.isArray(safe.attachment_ids) && safe.attachment_ids.length)) ? 'has' : 'none';
+  }
+
   function buildSavePayload() {
     const orgIndustryCode = getValue('orgIndustryCode');
     const orgTypeCode = getRadioValue('orgTypeCode');
@@ -1427,6 +1464,7 @@
     const cloudDeploymentModes = cloudEnabled ? getCheckedValues('cloudDeploymentModes') : [];
     const cloudIsProvider = cloudResponsibilityTypes.includes('云服务商');
     const cloudIsCustomer = cloudResponsibilityTypes.includes('云服务客户');
+    const cloudRecordStatus = cloudEnabled && cloudIsCustomer ? (getRadioValue('cloudRecordStatus') || 'none') : 'none';
     const mobileEnabled = getRadioValue('mobileEnabled') === 'true';
     const iotEnabled = getRadioValue('iotEnabled') === 'true';
     const industrialEnabled = getRadioValue('industrialEnabled') === 'true';
@@ -1434,6 +1472,7 @@
     const bigDataComponents = bigDataEnabled ? getCheckedValues('bigDataComponents') : [];
     const bigDataHasPlatform = bigDataComponents.includes('大数据平台');
     const bigDataHasConsumer = bigDataComponents.includes('大数据应用') || bigDataComponents.includes('大数据资源');
+    const bigDataRecordStatus = bigDataEnabled && bigDataHasConsumer ? (getRadioValue('bigDataRecordStatus') || 'none') : 'none';
     const businessLevel = computeLevelFromItems(businessDamageItems);
     const serviceLevel = computeLevelFromItems(serviceDamageItems);
     const finalLevel = Math.max(businessLevel, serviceLevel, 0);
@@ -1553,7 +1592,6 @@
           table4: {
             ...prevTable4,
             cloud: {
-              ...attachmentRefs(cloudEnabled && cloudIsCustomer ? prevTable4.cloud : {}, 'record_file_name'),
               enabled: cloudEnabled,
               responsibility_types: cloudResponsibilityTypes,
               service_modes: cloudServiceModes,
@@ -1568,6 +1606,9 @@
               provider_platform_name: cloudEnabled && cloudIsCustomer ? getValue('cloudProviderPlatformName') : '',
               provider_record_no: cloudEnabled && cloudIsCustomer ? getValue('cloudProviderRecordNo') : '',
               customer_ops_location: cloudEnabled && cloudIsCustomer ? getValue('cloudCustomerOpsLocation') : '',
+              record_status: cloudRecordStatus,
+              record_file_name: '',
+              attachment_ids: [],
             },
             mobile: {
               ...(prevTable4.mobile || {}),
@@ -1592,7 +1633,6 @@
               component_other: industrialEnabled && getCheckedValues('industrialComponents').includes('其他') ? getValue('industrialComponentOther') : '',
             },
             big_data: {
-              ...attachmentRefs(bigDataEnabled && bigDataHasConsumer ? prevTable4.big_data : {}, 'record_file_name'),
               enabled: bigDataEnabled,
               system_components: bigDataComponents,
               cross_border_status: bigDataEnabled ? getRadioValue('bigDataCrossBorderStatus') : '',
@@ -1603,6 +1643,9 @@
               provider_level: bigDataEnabled && bigDataHasConsumer ? getValue('bigDataProviderLevel') : '',
               provider_platform_name: bigDataEnabled && bigDataHasConsumer ? getValue('bigDataProviderPlatformName') : '',
               provider_record_no: bigDataEnabled && bigDataHasConsumer ? getValue('bigDataProviderRecordNo') : '',
+              record_status: bigDataRecordStatus,
+              record_file_name: '',
+              attachment_ids: [],
             },
           },
           table5: MATERIAL_SLOTS.reduce((acc, [key]) => {
@@ -1866,6 +1909,143 @@
     await loadOverview();
   }
 
+  function excelImportConflictModal(previewData) {
+    const conflicts = Array.isArray(previewData?.conflicts) ? previewData.conflicts : [];
+    const directKeys = Array.isArray(previewData?.direct_update_keys) ? previewData.direct_update_keys : [];
+    return new Promise((resolve) => {
+      const existing = document.getElementById('excelImportConflictModal');
+      if (existing) existing.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'excelImportConflictModal';
+      overlay.className = 'modal-overlay visible workspace-modal-overlay';
+      overlay.setAttribute('aria-hidden', 'false');
+      overlay.innerHTML = `
+        <div class="modal-box workspace-modal-box excel-import-modal" role="dialog" aria-modal="true">
+          <button class="modal-close" type="button" data-modal-close aria-label="关闭弹窗">&times;</button>
+          <div class="workspace-modal-head">
+            <h2>确认导入 Excel</h2>
+            <p class="table-meta">将自动应用 ${directKeys.length} 个无冲突字段。存在冲突的字段请勾选后覆盖。</p>
+          </div>
+          <div class="excel-import-summary">
+            <div><strong>${directKeys.length}</strong><span>直接回填</span></div>
+            <div><strong>${conflicts.length}</strong><span>冲突待选</span></div>
+          </div>
+          <div class="excel-import-scroll">
+            ${conflicts.length ? `
+              <table class="excel-import-table">
+                <thead>
+                  <tr>
+                    <th style="width:72px;">
+                      <label class="choice-chip choice-chip-sm excel-import-check-all">
+                        <input type="checkbox" id="excelImportCheckAll">
+                        <span>全选</span>
+                      </label>
+                    </th>
+                    <th style="width:180px;">字段</th>
+                    <th>当前值</th>
+                    <th>Excel 值</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${conflicts.map((item, index) => `
+                    <tr>
+                      <td>
+                        <label class="choice-chip choice-chip-sm">
+                          <input type="checkbox" data-conflict-key="${esc(item.key)}" ${index === 0 ? 'checked' : ''}>
+                          <span>覆盖</span>
+                        </label>
+                      </td>
+                      <td><strong>${esc(item.label || item.key || '-')}</strong></td>
+                      <td><div class="excel-import-cell">${esc(item.current_value || '-')}</div></td>
+                      <td><div class="excel-import-cell excel-import-cell-next">${esc(item.incoming_value || '-')}</div></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<div class="table-meta">未发现冲突。确认后将直接回填已识别字段。</div>'}
+          </div>
+          <div class="app-dialog-actions" style="margin-top:16px;">
+            <button class="btn-lite" type="button" data-modal-cancel>取消</button>
+            <button type="button" data-modal-confirm>${conflicts.length ? '应用选中覆盖' : '直接导入'}</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const close = (value) => {
+        overlay.remove();
+        resolve(value);
+      };
+
+      overlay.addEventListener('click', (event) => {
+        if (event.target === overlay || event.target.closest('[data-modal-close]') || event.target.closest('[data-modal-cancel]')) {
+          close(null);
+          return;
+        }
+        if (event.target.closest('[data-modal-confirm]')) {
+          const overrideKeys = Array.from(overlay.querySelectorAll('[data-conflict-key]:checked')).map((input) => input.dataset.conflictKey);
+          close({ override_keys: overrideKeys });
+        }
+      });
+
+      const checkAll = overlay.querySelector('#excelImportCheckAll');
+      if (checkAll) {
+        checkAll.addEventListener('change', () => {
+          overlay.querySelectorAll('[data-conflict-key]').forEach((input) => {
+            input.checked = checkAll.checked;
+          });
+        });
+      }
+    });
+  }
+
+  async function applyExcelImportCandidate(previewData, overrideKeys) {
+    if (!state.currentSystemId) return;
+    const res = await fetch(`/api/filing-workspace/systems/${state.currentSystemId}/import-excel/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        candidate: previewData.candidate || {},
+        override_keys: Array.isArray(overrideKeys) ? overrideKeys : [],
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setDetailResult(`导入失败：${apiErrorText(data)}`);
+      return;
+    }
+    fillWorkspace(data.data?.detail || state.detail);
+    clearDraft(state.currentSystemId);
+    const appliedCount = Array.isArray(data.data?.applied_keys) ? data.data.applied_keys.length : 0;
+    setDetailResult(`Excel 导入成功，已应用 ${appliedCount} 个字段，定级报告对应内容已同步。`, { popup: true });
+    await loadOverview();
+  }
+
+  async function importWorkspaceExcel(file) {
+    if (!file || !state.currentSystemId) return;
+    setDetailResult('正在解析 Excel 文件...');
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`/api/filing-workspace/systems/${state.currentSystemId}/import-excel/preview`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setDetailResult(`导入失败：${apiErrorText(data)}`);
+      return;
+    }
+    const previewData = data.data || {};
+    const modalResult = await excelImportConflictModal(previewData);
+    if (!modalResult) {
+      setDetailResult('已取消 Excel 导入。');
+      return;
+    }
+    setDetailResult('正在应用 Excel 数据...');
+    await applyExcelImportCandidate(previewData, modalResult.override_keys || []);
+  }
+
   async function uploadSlot(slotKey, inputId) {
     if (!state.currentSystemId) {
       setDetailResult('请先选择系统。');
@@ -2101,6 +2281,7 @@
     if ($('workspaceSaveBtn')) $('workspaceSaveBtn').addEventListener('click', saveWorkspace);
     if ($('workspaceExportBtn')) $('workspaceExportBtn').addEventListener('click', () => { if (state.currentSystemId) window.location.href = `/api/systems/${state.currentSystemId}/export/word`; });
     if ($('workspaceImportWordBtn')) $('workspaceImportWordBtn').addEventListener('click', () => $('workspaceImportWordFile')?.click());
+    if ($('workspaceImportExcelBtn')) $('workspaceImportExcelBtn').addEventListener('click', () => $('workspaceImportExcelFile')?.click());
     if ($('workspaceImportWordFile')) $('workspaceImportWordFile').addEventListener('change', async (e) => {
       const file = e.target.files && e.target.files[0];
       e.target.value = '';
@@ -2133,6 +2314,16 @@
         setDetailResult(`导入失败：${err.message || err}`);
       }
     });
+    if ($('workspaceImportExcelFile')) $('workspaceImportExcelFile').addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!file || !state.currentSystemId) return;
+      try {
+        await importWorkspaceExcel(file);
+      } catch (err) {
+        setDetailResult(`导入失败：${err.message || err}`);
+      }
+    });
     if ($('addDataItemBtn')) $('addDataItemBtn').addEventListener('click', () => {
       renderTable6Items([...collectTable6Items(), {}]);
       queueDraftSave();
@@ -2147,21 +2338,11 @@
       btn.addEventListener('click', () => switchMaintenanceTab(btn.dataset.maintenanceTab));
     });
 
-    // 修复：radio 可再次点击取消选择
     document.addEventListener('mousedown', (event) => {
-      const label = event.target.closest('label');
-      const radio = label ? label.querySelector('input[type="radio"]') : (event.target.matches('input[type="radio"]') ? event.target : null);
-      if (radio) radio.dataset.wasChecked = radio.checked ? '1' : '0';
+      rememberRadioCheckedState(event.target);
     });
     document.addEventListener('click', (event) => {
-      const label = event.target.closest('label');
-      const radio = label ? label.querySelector('input[type="radio"]') : (event.target.matches('input[type="radio"]') ? event.target : null);
-      if (!radio) return;
-      if (radio.dataset.wasChecked === '1') {
-        radio.checked = false;
-        radio.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-      delete radio.dataset.wasChecked;
+      maybeToggleCheckedRadio(event.target, event);
     });
 
     if (isDetailPage()) {
@@ -2179,6 +2360,9 @@
         }
       });
       document.addEventListener('input', (event) => {
+        if (event.target.matches('#orgName, #systemName')) {
+          refreshExportAttachmentPreviews();
+        }
         if (event.target.matches('input:not([type="file"]), textarea, select')) {
           queueDraftSave();
         }

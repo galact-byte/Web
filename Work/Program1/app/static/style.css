@@ -2383,6 +2383,63 @@ tbody tr:hover td {
   margin-bottom: 8px;
 }
 
+.excel-import-modal {
+  width: min(100%, 980px);
+}
+
+.excel-import-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.excel-import-summary > div {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.excel-import-summary strong {
+  font-size: 1.25rem;
+  color: var(--primary);
+}
+
+.excel-import-scroll {
+  max-height: min(60vh, 520px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.excel-import-table {
+  width: 100%;
+}
+
+.excel-import-table th,
+.excel-import-table td {
+  vertical-align: top;
+}
+
+.excel-import-cell {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-muted);
+}
+
+.excel-import-cell-next {
+  color: var(--text);
+}
+
+.excel-import-check-all {
+  justify-content: center;
+}
+
 /* ----- Workspace Scene (表四 sub-blocks) ----- */
 .workspace-scene {
   border-color: var(--border);
@@ -2430,6 +2487,10 @@ tbody tr:hover td {
 
   .workspace-detail-summary > div:nth-child(n+3) {
     border-top: 1px solid var(--border);
+  }
+
+  .excel-import-summary {
+    grid-template-columns: 1fr;
   }
 }
 

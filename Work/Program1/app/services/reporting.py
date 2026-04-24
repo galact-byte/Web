@@ -12,6 +12,7 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt
+from openpyxl import load_workbook
 
 try:
     from reportlab.pdfbase import pdfmetrics
@@ -24,6 +25,220 @@ except Exception:
     HAS_REPORTLAB = False
 
 logger = logging.getLogger(__name__)
+
+
+def _cell_text(ws: Any, coord: str) -> str:
+    value = ws[coord].value
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, date):
+        return value.strftime("%Y-%m-%d")
+    return str(value).strip()
+
+
+def _parse_level_text(raw: str) -> int | None:
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    match = re.search(r"([1-5])", text)
+    if match:
+        return int(match.group(1))
+    cn_map = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5}
+    for key, value in cn_map.items():
+        if key in text:
+            return value
+    return None
+
+
+def parse_customer_filing_excel(content: bytes) -> dict[str, Any]:
+    """解析客户填写的备案信息 Excel 模板。"""
+    wb = load_workbook(io.BytesIO(content), data_only=True)
+    org_ws = wb["单位信息"] if "单位信息" in wb.sheetnames else None
+    sys_ws = wb["系统信息"] if "系统信息" in wb.sheetnames else None
+    if org_ws is None or sys_ws is None:
+        raise ValueError("Excel 模板缺少“单位信息”或“系统信息”工作表。")
+
+    org_name = _cell_text(org_ws, "B2")
+    credit_code = _cell_text(org_ws, "B3").upper()
+    leader_name = _cell_text(org_ws, "B4")
+    leader_title = _cell_text(org_ws, "E4")
+    leader_phone = _cell_text(org_ws, "B5")
+    leader_email = _cell_text(org_ws, "E5")
+    cybersecurity_dept = _cell_text(org_ws, "B6")
+    cyber_owner_name = _cell_text(org_ws, "B7")
+    cyber_owner_title = _cell_text(org_ws, "E7")
+    cyber_owner_phone = _cell_text(org_ws, "B8")
+    cyber_owner_mobile = _cell_text(org_ws, "B9")
+    cyber_owner_email = _cell_text(org_ws, "E8")
+    data_security_dept = _cell_text(org_ws, "B10")
+    data_owner_name = _cell_text(org_ws, "B11")
+    data_owner_title = _cell_text(org_ws, "E11")
+    data_owner_phone = _cell_text(org_ws, "B12")
+    data_owner_mobile = _cell_text(org_ws, "B13")
+    data_owner_email = _cell_text(org_ws, "E12")
+    unit_internet_addresses = _cell_text(org_ws, "B14")
+    supervising_department = _cell_text(org_ws, "B19")
+    builder_company = _cell_text(org_ws, "B15")
+    builder_contact = _cell_text(org_ws, "C16")
+    ops_company = _cell_text(org_ws, "B18")
+
+    system_name = _cell_text(sys_ws, "B2")
+    level_text = _cell_text(sys_ws, "D2")
+    level = _parse_level_text(level_text)
+    business_description = _cell_text(sys_ws, "B3")
+    go_live_date = _cell_text(sys_ws, "B8")
+    public_network = _cell_text(sys_ws, "B9")
+    public_ip = _cell_text(sys_ws, "D9")
+    protocol_ports = _cell_text(sys_ws, "B10")
+    access_address = _cell_text(sys_ws, "B11")
+    room_location = _cell_text(sys_ws, "B12")
+    room_owner = _cell_text(sys_ws, "B13")
+    room_owner_mobile = _cell_text(sys_ws, "D13")
+
+    object_parts: list[str] = []
+    if public_network:
+        if public_network in {"是", "Y", "y", "yes", "YES", "true", "True", "1"}:
+            object_parts.append("系统连接公网")
+        elif public_network in {"否", "N", "n", "no", "NO", "false", "False", "0"}:
+            object_parts.append("系统未连接公网")
+    if public_ip:
+        object_parts.append(f"公网IP地址：{public_ip}")
+    if protocol_ports:
+        object_parts.append(f"主要协议/端口：{protocol_ports}")
+    if access_address:
+        object_parts.append(f"系统访问地址：{access_address}")
+    if room_location:
+        object_parts.append(f"机房位置：{room_location}")
+    if room_owner or room_owner_mobile:
+        room_owner_text = room_owner or "未填写"
+        if room_owner_mobile:
+            room_owner_text = f"{room_owner_text}（{room_owner_mobile}）"
+        object_parts.append(f"机房负责人：{room_owner_text}")
+
+    security_parts: list[str] = []
+    if leader_name:
+        leader_text = leader_name
+        leader_meta = [item for item in [leader_title, leader_phone, leader_email] if item]
+        if leader_meta:
+            leader_text = f"{leader_text}（{'，'.join(leader_meta)}）"
+        security_parts.append(f"单位负责人：{leader_text}")
+    if cybersecurity_dept:
+        security_parts.append(f"网络安全责任部门：{cybersecurity_dept}")
+    if cyber_owner_name:
+        owner_text = cyber_owner_name
+        owner_meta = [item for item in [cyber_owner_title, cyber_owner_phone, cyber_owner_mobile, cyber_owner_email] if item]
+        if owner_meta:
+            owner_text = f"{owner_text}（{'，'.join(owner_meta)}）"
+        security_parts.append(f"网络安全联系人：{owner_text}")
+    if data_security_dept:
+        security_parts.append(f"数据安全管理部门：{data_security_dept}")
+    if data_owner_name:
+        data_owner_text = data_owner_name
+        data_owner_meta = [item for item in [data_owner_title, data_owner_phone, data_owner_mobile, data_owner_email] if item]
+        if data_owner_meta:
+            data_owner_text = f"{data_owner_text}（{'，'.join(data_owner_meta)}）"
+        security_parts.append(f"数据安全联系人：{data_owner_text}")
+
+    responsible_subject_parts: list[str] = []
+    if org_name:
+        responsible_subject_parts.append(f"定级对象由 {org_name} 负责管理。")
+    if builder_company:
+        responsible_subject_parts.append(f"系统建设部门/公司：{builder_company}。")
+    if builder_contact:
+        responsible_subject_parts.append(f"建设负责人信息：{builder_contact}。")
+    if ops_company:
+        responsible_subject_parts.append(f"系统运维部门/公司：{ops_company}。")
+
+    network_nature_code = ""
+    if public_network in {"是", "Y", "y", "yes", "YES", "true", "True", "1"}:
+        network_nature_code = "2"
+
+    object_composition = ""
+    if object_parts:
+        if object_parts[0] in {"系统连接公网", "系统未连接公网"} and len(object_parts) > 1:
+            object_composition = f"{object_parts[0]}，" + "；".join(object_parts[1:])
+        else:
+            object_composition = "；".join(object_parts)
+
+    candidate: dict[str, Any] = {
+        "organization": {
+            "name": org_name,
+            "credit_code": credit_code,
+            "legal_representative": leader_name,
+            "office_phone": leader_phone,
+            "email": leader_email,
+            "mobile_phone": cyber_owner_mobile or data_owner_mobile,
+            "cybersecurity_dept": cybersecurity_dept,
+            "cybersecurity_owner_name": cyber_owner_name,
+            "cybersecurity_owner_title": cyber_owner_title,
+            "cybersecurity_owner_phone": cyber_owner_phone,
+            "cybersecurity_owner_email": cyber_owner_email,
+            "data_security_dept": data_security_dept,
+            "data_security_owner_name": data_owner_name,
+            "data_security_owner_title": data_owner_title,
+            "data_security_owner_phone": data_owner_phone,
+            "data_security_owner_email": data_owner_email,
+            "supervising_department": supervising_department,
+            "filing_detail": {
+                "table1": {
+                    "unit_internet_addresses": unit_internet_addresses,
+                    "responsible_person": {
+                        "name": leader_name,
+                        "title": leader_title,
+                        "office_phone": leader_phone,
+                        "email": leader_email,
+                    },
+                }
+            },
+        },
+        "system": {
+            "system_name": system_name,
+            "business_description": business_description,
+            "filing_detail": {
+                "table2": {
+                    "running_status": "已运行" if go_live_date else "",
+                    "business_description": business_description,
+                    "go_live_date": go_live_date,
+                    "network_platform": {
+                        "network_nature": {
+                            "code": network_nature_code,
+                            "source_ip_range": public_ip,
+                            "domain": access_address,
+                            "protocol_ports": protocol_ports,
+                        }
+                    },
+                },
+                "table3": {
+                    "final_level": level or 0,
+                },
+            },
+        },
+        "grading_report_content": {
+            "responsible_subject": "".join(responsible_subject_parts),
+            "object_composition": object_composition,
+            "carried_business": business_description,
+            "security_responsibility": "；".join(security_parts),
+            "fill_date": "",
+        },
+        "identity": {
+            "organization_name": org_name,
+            "credit_code": credit_code,
+            "system_name": system_name,
+            "level": level,
+        },
+        "raw": {
+            "public_network": public_network,
+            "public_ip": public_ip,
+            "protocol_ports": protocol_ports,
+            "access_address": access_address,
+            "room_location": room_location,
+            "room_owner": room_owner,
+            "room_owner_mobile": room_owner_mobile,
+        },
+    }
+    return candidate
 
 
 # ──────────────────────────────────────────────────────────────────────────────
