@@ -14,7 +14,9 @@
         <button class="btn-lite" id="workspaceSaveBtn"><i class="fas fa-floppy-disk"></i> 保存</button>
         <button class="btn-lite" id="workspaceExportBtn"><i class="fas fa-file-word"></i> 导出 Word</button>
         <button class="btn-lite" id="workspaceImportWordBtn" type="button"><i class="fas fa-file-import"></i> 导入 Word</button>
+        <button class="btn-lite" id="workspaceImportExcelBtn" type="button"><i class="fas fa-file-excel"></i> 导入 Excel</button>
         <input type="file" id="workspaceImportWordFile" accept=".docx" style="display:none">
+        <input type="file" id="workspaceImportExcelFile" accept=".xlsx" style="display:none">
       </div>
     </div>
     <div class="workspace-detail-head" id="workspaceDetailHead">
@@ -40,5 +42,6 @@
   </section>
 </div>
 
-<script src="/static/filing_workspace.js?v=20260416-filing-refresh"></script>
+<script src="/static/radio_toggle.js?v=20260424-radio-toggle-fix"></script>
+<script src="/static/filing_workspace.js?v=20260424-radio-toggle-fix"></script>
 {% endblock %}

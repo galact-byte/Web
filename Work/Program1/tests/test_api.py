@@ -106,6 +106,82 @@ class ApiFlowTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.client.close()
 
+    def build_customer_filing_excel(
+        self,
+        *,
+        org_name: str,
+        credit_code: str,
+        system_name: str,
+        level: int,
+        business_description: str = '客户填报业务描述',
+        cybersecurity_dept: str = '信息安全部',
+        go_live_date: str = '2024-03-01',
+        leader_name: str = '负责人甲',
+        leader_title: str = '主任',
+        leader_phone: str = '010-88886666',
+        leader_email: str = 'leader@example.com',
+        cyber_owner_name: str = '网安联系人',
+        cyber_owner_title: str = '安全主管',
+        cyber_owner_phone: str = '010-66668888',
+        cyber_owner_mobile: str = '13900139099',
+        cyber_owner_email: str = 'cyber@example.com',
+        data_dept: str = '数据治理部',
+        data_owner_name: str = '数安联系人',
+        data_owner_title: str = '数据主管',
+        data_owner_phone: str = '010-55557777',
+        data_owner_mobile: str = '13900139100',
+        data_owner_email: str = 'data@example.com',
+        unit_internet_addresses: str = 'https://unit.example.com',
+        public_network: str = '是',
+        public_ip: str = '203.0.113.10',
+        protocol_ports: str = 'HTTPS/443',
+        access_address: str = 'https://sys.example.com',
+        room_location: str = 'A 栋 3 层机房',
+        room_owner: str = '机房管理员',
+        room_owner_mobile: str = '13900139101',
+    ) -> bytes:
+        wb = Workbook()
+        ws_org = wb.active
+        ws_org.title = '单位信息'
+        ws_sys = wb.create_sheet('系统信息')
+        wb.create_sheet('Sheet3')
+
+        ws_org['B2'] = org_name
+        ws_org['B3'] = credit_code
+        ws_org['B4'] = leader_name
+        ws_org['E4'] = leader_title
+        ws_org['B5'] = leader_phone
+        ws_org['E5'] = leader_email
+        ws_org['B6'] = cybersecurity_dept
+        ws_org['B7'] = cyber_owner_name
+        ws_org['E7'] = cyber_owner_title
+        ws_org['B8'] = cyber_owner_phone
+        ws_org['B9'] = cyber_owner_mobile
+        ws_org['E8'] = cyber_owner_email
+        ws_org['B10'] = data_dept
+        ws_org['B11'] = data_owner_name
+        ws_org['E11'] = data_owner_title
+        ws_org['B12'] = data_owner_phone
+        ws_org['B13'] = data_owner_mobile
+        ws_org['E12'] = data_owner_email
+        ws_org['B14'] = unit_internet_addresses
+
+        ws_sys['B2'] = system_name
+        ws_sys['D2'] = f'第{level}级'
+        ws_sys['B3'] = business_description
+        ws_sys['B8'] = go_live_date
+        ws_sys['B9'] = public_network
+        ws_sys['D9'] = public_ip
+        ws_sys['B10'] = protocol_ports
+        ws_sys['B11'] = access_address
+        ws_sys['B12'] = room_location
+        ws_sys['B13'] = room_owner
+        ws_sys['D13'] = room_owner_mobile
+
+        bio = io.BytesIO()
+        wb.save(bio)
+        return bio.getvalue()
+
     def test_01_org_system_report_flow(self):
         org_payload = {
             'name': '测试单位A',
@@ -254,6 +330,29 @@ class ApiFlowTests(unittest.TestCase):
             )
         )
 
+    def test_02ad_table4_record_export_name_respects_status_flag(self):
+        helper = self.main_module.table4_record_export_name
+        prefix = '测试单位-测试系统'
+        self.assertEqual(
+            helper({'record_status': 'has'}, prefix, '云平台备案证明'),
+            f'{prefix}-云平台备案证明',
+        )
+        self.assertEqual(
+            helper({'record_status': 'none', 'record_file_name': 'legacy.pdf', 'attachment_ids': [1]}, prefix, '云平台备案证明'),
+            '',
+        )
+        self.assertEqual(
+            helper({'record_file_name': 'legacy.pdf', 'attachment_ids': [1]}, prefix, '云平台备案证明'),
+            f'{prefix}-云平台备案证明',
+        )
+
+    def test_02ae_table6_data_total_check_indices_allow_both_rows(self):
+        helper = self.main_module.table6_data_total_check_indices
+        self.assertEqual(helper({'data_total_gb': '3.35'}), {0})
+        self.assertEqual(helper({'data_total_tb': '1.2'}), {0})
+        self.assertEqual(helper({'data_total_records': '0.5'}), {1})
+        self.assertEqual(helper({'data_total_gb': '3.35', 'data_total_records': '0.5'}), {0, 1})
+
     def test_02a_filing_workspace_flow_and_systems_redirect(self):
         org_resp = self.client.post('/api/organizations', json={
             'name': '备案工作台单位',
@@ -360,6 +459,196 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(saved['system']['data_name'], '交易数据')
         self.assertEqual(saved['system']['data_level'], '重要及以上数据')
         self.assertEqual(saved['system']['data_category'], '业务数据')
+
+    def test_02aa_filing_workspace_excel_preview_returns_candidate(self):
+        org_resp = self.client.post('/api/organizations', json={
+            'name': 'Excel预检单位',
+            'credit_code': '91350100M000100Y96',
+            'legal_representative': '李四',
+            'address': '太原市小店区',
+            'mobile_phone': '13900139006',
+            'email': 'excel-preview@example.com',
+            'industry': '能源',
+            'organization_type': '企业',
+            'filing_region': '太原',
+            'created_by': 'tester',
+        })
+        self.assertEqual(org_resp.status_code, 200, org_resp.text)
+        org_id = org_resp.json()['data']['id']
+
+        system_resp = self.client.post('/api/systems', json={
+            'organization_id': org_id,
+            'system_name': 'Excel预检系统',
+            'proposed_level': 3,
+            'created_by': 'tester',
+        })
+        self.assertEqual(system_resp.status_code, 200, system_resp.text)
+        system_id = system_resp.json()['data']['id']
+
+        excel_bytes = self.build_customer_filing_excel(
+            org_name='Excel预检单位',
+            credit_code='91350100M000100Y96',
+            system_name='Excel预检系统',
+            level=3,
+            business_description='来自客户 Excel 的业务描述',
+            cybersecurity_dept='网络安全处',
+            go_live_date='2024-03-01',
+            leader_name='李四',
+            leader_email='excel-preview@example.com',
+            cyber_owner_mobile='13900139006',
+            public_ip='203.0.113.88',
+            access_address='https://preview.example.com',
+        )
+        resp = self.client.post(
+            f'/api/filing-workspace/systems/{system_id}/import-excel/preview',
+            files={'file': ('customer.xlsx', excel_bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(resp.status_code, 200, resp.text)
+        data = resp.json()['data']
+        self.assertEqual(data['candidate']['organization']['cybersecurity_dept'], '网络安全处')
+        self.assertEqual(data['candidate']['system']['filing_detail']['table2']['go_live_date'], '2024-03-01')
+        self.assertEqual(data['candidate']['system']['filing_detail']['table2']['network_platform']['network_nature']['source_ip_range'], '203.0.113.88')
+        self.assertEqual(data['candidate']['grading_report_content']['carried_business'], '来自客户 Excel 的业务描述')
+        self.assertEqual(data['candidate']['grading_report_content']['object_composition'], '系统连接公网，公网IP地址：203.0.113.88；主要协议/端口：HTTPS/443；系统访问地址：https://preview.example.com；机房位置：A 栋 3 层机房；机房负责人：机房管理员（13900139101）')
+        self.assertEqual(data['conflicts'], [])
+        self.assertIn('organization.cybersecurity_dept', data['direct_update_keys'])
+
+    def test_02ab_filing_workspace_excel_preview_blocks_identity_mismatch(self):
+        org_resp = self.client.post('/api/organizations', json={
+            'name': 'Excel拦截单位',
+            'credit_code': '91350100M000100Y97',
+            'legal_representative': '王五',
+            'address': '太原市迎泽区',
+            'mobile_phone': '13900139007',
+            'email': 'excel-block@example.com',
+            'industry': '能源',
+            'organization_type': '企业',
+            'filing_region': '太原',
+            'created_by': 'tester',
+        })
+        self.assertEqual(org_resp.status_code, 200, org_resp.text)
+        org_id = org_resp.json()['data']['id']
+
+        system_resp = self.client.post('/api/systems', json={
+            'organization_id': org_id,
+            'system_name': 'Excel拦截系统',
+            'proposed_level': 2,
+            'created_by': 'tester',
+        })
+        self.assertEqual(system_resp.status_code, 200, system_resp.text)
+        system_id = system_resp.json()['data']['id']
+
+        excel_bytes = self.build_customer_filing_excel(
+            org_name='Excel拦截单位',
+            credit_code='91350100M000100Y97',
+            system_name='Excel拦截系统',
+            level=3,
+        )
+        resp = self.client.post(
+            f'/api/filing-workspace/systems/{system_id}/import-excel/preview',
+            files={'file': ('customer.xlsx', excel_bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(resp.status_code, 400, resp.text)
+        self.assertIn('备案等级', resp.json()['detail'])
+
+    def test_02ac_filing_workspace_excel_apply_only_overrides_selected_conflicts(self):
+        org_resp = self.client.post('/api/organizations', json={
+            'name': 'Excel覆盖单位',
+            'credit_code': '91350100M000100Y98',
+            'legal_representative': '赵六',
+            'address': '太原市杏花岭区',
+            'mobile_phone': '13900139008',
+            'email': 'excel-apply@example.com',
+            'industry': '能源',
+            'organization_type': '企业',
+            'filing_region': '太原',
+            'created_by': 'tester',
+        })
+        self.assertEqual(org_resp.status_code, 200, org_resp.text)
+        org_id = org_resp.json()['data']['id']
+
+        system_resp = self.client.post('/api/systems', json={
+            'organization_id': org_id,
+            'system_name': 'Excel覆盖系统',
+            'proposed_level': 2,
+            'business_description': '旧业务描述',
+            'created_by': 'tester',
+        })
+        self.assertEqual(system_resp.status_code, 200, system_resp.text)
+        system_id = system_resp.json()['data']['id']
+
+        save_resp = self.client.put(
+            f'/api/filing-workspace/systems/{system_id}',
+            json={
+                'organization': {
+                    'name': 'Excel覆盖单位',
+                    'credit_code': '91350100M000100Y98',
+                    'filing_region': '太原',
+                    'cybersecurity_dept': '旧网安部门',
+                },
+                'system': {
+                    'system_name': 'Excel覆盖系统',
+                    'business_description': '旧业务描述',
+                    'filing_detail': {
+                        'table2': {
+                            'business_description': '旧业务描述',
+                        }
+                    },
+                },
+            },
+            headers=self.admin_headers,
+        )
+        self.assertEqual(save_resp.status_code, 200, save_resp.text)
+
+        report_save_resp = self.client.put(
+            f'/api/systems/{system_id}/grading-report',
+            json={'content': {'carried_business': '旧业务描述', 'security_responsibility': '旧责任描述'}},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(report_save_resp.status_code, 200, report_save_resp.text)
+
+        excel_bytes = self.build_customer_filing_excel(
+            org_name='Excel覆盖单位',
+            credit_code='91350100M000100Y98',
+            system_name='Excel覆盖系统',
+            level=2,
+            business_description='新业务描述',
+            cybersecurity_dept='新网安部门',
+        )
+        preview_resp = self.client.post(
+            f'/api/filing-workspace/systems/{system_id}/import-excel/preview',
+            files={'file': ('customer.xlsx', excel_bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(preview_resp.status_code, 200, preview_resp.text)
+        preview_data = preview_resp.json()['data']
+        conflict_keys = {item['key'] for item in preview_data['conflicts']}
+        self.assertIn('organization.cybersecurity_dept', conflict_keys)
+        self.assertIn('system.filing_detail.table2.business_description', conflict_keys)
+        self.assertIn('grading_report_content.carried_business', conflict_keys)
+
+        apply_resp = self.client.post(
+            f'/api/filing-workspace/systems/{system_id}/import-excel/apply',
+            json={
+                'candidate': preview_data['candidate'],
+                'override_keys': ['organization.cybersecurity_dept'],
+            },
+            headers=self.admin_headers,
+        )
+        self.assertEqual(apply_resp.status_code, 200, apply_resp.text)
+
+        detail_resp = self.client.get(f'/api/filing-workspace/systems/{system_id}', headers=self.admin_headers)
+        self.assertEqual(detail_resp.status_code, 200, detail_resp.text)
+        detail = detail_resp.json()
+        self.assertEqual(detail['organization']['cybersecurity_dept'], '新网安部门')
+        self.assertEqual(detail['system']['business_description'], '旧业务描述')
+        self.assertEqual(detail['system']['filing_detail']['table2']['business_description'], '旧业务描述')
+
+        report_resp = self.client.get(f'/api/systems/{system_id}/grading-report', headers=self.admin_headers)
+        self.assertEqual(report_resp.status_code, 200, report_resp.text)
+        self.assertEqual(report_resp.json()['data']['content']['carried_business'], '旧业务描述')
 
     def test_02b_alerts_summary_counts_pending_and_recycle_items(self):
         org_pending_resp = self.client.post('/api/organizations', json={

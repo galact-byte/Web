@@ -102,6 +102,7 @@ from .services.reporting import (
     export_report_docx_with_template,
     export_report_pdf,
     generate_report_payload,
+    parse_customer_filing_excel,
     parse_expert_review_city_docx,
     parse_expert_review_department_docx,
     parse_filing_form_docx,
@@ -1217,6 +1218,7 @@ def default_system_filing_detail() -> dict[str, Any]:
                 "provider_platform_name": "",
                 "provider_record_no": "",
                 "customer_ops_location": "",
+                "record_status": "none",
                 "record_file_name": "",
                 "attachment_ids": [],
             },
@@ -1250,6 +1252,7 @@ def default_system_filing_detail() -> dict[str, Any]:
                 "provider_level": "",
                 "provider_platform_name": "",
                 "provider_record_no": "",
+                "record_status": "none",
                 "record_file_name": "",
                 "attachment_ids": [],
             },
@@ -1934,6 +1937,187 @@ def build_workspace_detail_response(db: Session, org: Organization, system: Syst
             "filing_detail": system_detail,
         },
     }
+
+
+FILING_EXCEL_IMPORT_LABELS: dict[str, str] = {
+    "organization.name": "单位名称",
+    "organization.credit_code": "统一社会信用代码",
+    "organization.legal_representative": "单位负责人",
+    "organization.office_phone": "单位负责人办公电话",
+    "organization.email": "单位负责人电子邮件",
+    "organization.mobile_phone": "移动电话",
+    "organization.cybersecurity_dept": "网络安全责任部门",
+    "organization.cybersecurity_owner_name": "网络安全责任部门联系人姓名",
+    "organization.cybersecurity_owner_title": "网络安全责任部门联系人职务/职称",
+    "organization.cybersecurity_owner_phone": "网络安全责任部门联系人办公电话",
+    "organization.cybersecurity_owner_email": "网络安全责任部门联系人电子邮件",
+    "organization.data_security_dept": "数据安全管理部门",
+    "organization.data_security_owner_name": "数据安全管理部门联系人姓名",
+    "organization.data_security_owner_title": "数据安全管理部门联系人职务/职称",
+    "organization.data_security_owner_phone": "数据安全管理部门联系人办公电话",
+    "organization.data_security_owner_email": "数据安全管理部门联系人电子邮件",
+    "organization.supervising_department": "系统安全主管部门",
+    "organization.filing_detail.table1.unit_internet_addresses": "单位使用互联网地址",
+    "organization.filing_detail.table1.responsible_person.name": "备案表单位负责人姓名",
+    "organization.filing_detail.table1.responsible_person.title": "备案表单位负责人职务/职称",
+    "organization.filing_detail.table1.responsible_person.office_phone": "备案表单位负责人办公电话",
+    "organization.filing_detail.table1.responsible_person.email": "备案表单位负责人电子邮件",
+    "system.system_name": "系统名称",
+    "system.business_description": "业务描述",
+    "system.filing_detail.table2.running_status": "系统运行状态",
+    "system.filing_detail.table2.business_description": "备案表业务描述",
+    "system.filing_detail.table2.go_live_date": "系统运行时间",
+    "system.filing_detail.table2.network_platform.network_nature.code": "系统是否连接公网",
+    "system.filing_detail.table2.network_platform.network_nature.source_ip_range": "公网IP地址",
+    "system.filing_detail.table2.network_platform.network_nature.domain": "系统访问地址",
+    "system.filing_detail.table2.network_platform.network_nature.protocol_ports": "主要协议/端口",
+    "system.filing_detail.table3.final_level": "系统备案等级",
+    "grading_report_content.responsible_subject": "定级报告责任主体",
+    "grading_report_content.object_composition": "定级报告定级对象构成",
+    "grading_report_content.carried_business": "定级报告承载业务",
+    "grading_report_content.security_responsibility": "定级报告安全责任",
+    "grading_report_content.fill_date": "定级报告填表日期",
+}
+
+
+def _normalize_import_compare_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, date):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
+        return str(value).strip()
+    return re.sub(r"\s+", " ", str(value).strip())
+
+
+def _is_effectively_empty_import_value(path: str, value: Any) -> bool:
+    normalized = _normalize_import_compare_value(value)
+    if not normalized:
+        return True
+    if path == "organization.filing_detail.table1.unit_internet_addresses" and normalized in {"无", "/"}:
+        return True
+    if path == "system.filing_detail.table3.final_level" and normalized == "0":
+        return True
+    return False
+
+
+def _flatten_import_candidate(value: Any, prefix: str = "") -> dict[str, Any]:
+    flattened: dict[str, Any] = {}
+    if isinstance(value, dict):
+        for key, item in value.items():
+            next_prefix = f"{prefix}.{key}" if prefix else str(key)
+            flattened.update(_flatten_import_candidate(item, next_prefix))
+        return flattened
+    flattened[prefix] = value
+    return flattened
+
+
+def _get_nested_path_value(data: Any, path: str) -> Any:
+    current = data
+    for part in path.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return None
+        current = current[part]
+    return current
+
+
+def _set_nested_path_value(data: dict[str, Any], path: str, value: Any) -> None:
+    current = data
+    parts = path.split(".")
+    for part in parts[:-1]:
+        next_value = current.get(part)
+        if not isinstance(next_value, dict):
+            next_value = {}
+            current[part] = next_value
+        current = next_value
+    current[parts[-1]] = value
+
+
+def _build_excel_import_current_snapshot(db: Session, org: Organization, system: SystemInfo) -> dict[str, Any]:
+    row = db.query(GradingReport).filter(GradingReport.system_id == system.id).one_or_none()
+    system_detail = merged_system_filing_detail(system)
+    table3 = system_detail.get("table3") if isinstance(system_detail.get("table3"), dict) else {}
+    if isinstance(table3, dict):
+        table3["final_level"] = to_int_or_zero(table3.get("final_level")) or system.proposed_level
+    return {
+        "organization": {
+            "name": org.name,
+            "credit_code": org.credit_code,
+            "legal_representative": org.legal_representative,
+            "office_phone": org.office_phone,
+            "email": org.email,
+            "mobile_phone": org.mobile_phone,
+            "cybersecurity_dept": org.cybersecurity_dept,
+            "cybersecurity_owner_name": org.cybersecurity_owner_name,
+            "cybersecurity_owner_title": org.cybersecurity_owner_title,
+            "cybersecurity_owner_phone": org.cybersecurity_owner_phone,
+            "cybersecurity_owner_email": org.cybersecurity_owner_email,
+            "data_security_dept": org.data_security_dept,
+            "data_security_owner_name": org.data_security_owner_name,
+            "data_security_owner_title": org.data_security_owner_title,
+            "data_security_owner_phone": org.data_security_owner_phone,
+            "data_security_owner_email": org.data_security_owner_email,
+            "supervising_department": org.supervising_department,
+            "filing_detail": merged_org_filing_detail(org),
+        },
+        "system": {
+            "system_name": system.system_name,
+            "business_description": system.business_description,
+            "filing_detail": system_detail,
+        },
+        "grading_report_content": _merge_default_content(GRADING_REPORT_DEFAULTS, row.content if row else None),
+    }
+
+
+def _diff_excel_import_candidate(current_snapshot: dict[str, Any], candidate: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
+    conflicts: list[dict[str, Any]] = []
+    direct_update_keys: list[str] = []
+    for key, incoming_value in _flatten_import_candidate(candidate).items():
+        incoming_norm = _normalize_import_compare_value(incoming_value)
+        if not incoming_norm:
+            continue
+        current_value = _get_nested_path_value(current_snapshot, key)
+        current_norm = "" if _is_effectively_empty_import_value(key, current_value) else _normalize_import_compare_value(current_value)
+        if current_norm == incoming_norm:
+            continue
+        if not current_norm:
+            direct_update_keys.append(key)
+            continue
+        conflicts.append(
+            {
+                "key": key,
+                "label": FILING_EXCEL_IMPORT_LABELS.get(key, key),
+                "current_value": current_norm,
+                "incoming_value": incoming_norm,
+            }
+        )
+    return conflicts, direct_update_keys
+
+
+def _select_excel_import_candidate_values(
+    current_snapshot: dict[str, Any],
+    candidate: dict[str, Any],
+    override_keys: set[str],
+) -> tuple[dict[str, Any], list[str]]:
+    selected: dict[str, Any] = {}
+    applied_keys: list[str] = []
+    for key, incoming_value in _flatten_import_candidate(candidate).items():
+        incoming_norm = _normalize_import_compare_value(incoming_value)
+        if not incoming_norm:
+            continue
+        current_value = _get_nested_path_value(current_snapshot, key)
+        current_norm = "" if _is_effectively_empty_import_value(key, current_value) else _normalize_import_compare_value(current_value)
+        if current_norm and current_norm != incoming_norm and key not in override_keys:
+            continue
+        _set_nested_path_value(selected, key, incoming_value)
+        applied_keys.append(key)
+    return selected, applied_keys
 
 def get_workflow_config(db: Session) -> WorkflowConfig:
     config = db.query(WorkflowConfig).filter(WorkflowConfig.name == "default").first()
@@ -4128,6 +4312,125 @@ async def import_filing_workspace_word(
     return {"message": "解析完成", "data": parsed}
 
 
+@app.post("/api/filing-workspace/systems/{system_id}/import-excel/preview")
+async def preview_filing_workspace_excel_import(
+    request: Request,
+    system_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    system = get_system_or_404(db, system_id)
+    org = get_org_or_404(db, system.organization_id)
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="仅支持 .xlsx 文件。")
+    content_bytes = await file.read()
+    if len(content_bytes) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 50MB。")
+    try:
+        parsed = parse_customer_filing_excel(content_bytes)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Excel 解析失败：{exc}") from exc
+
+    identity = parsed.get("identity") if isinstance(parsed.get("identity"), dict) else {}
+    system_name = _normalize_import_compare_value(identity.get("system_name"))
+    credit_code = _normalize_import_compare_value(identity.get("credit_code")).upper()
+    level = identity.get("level")
+    if system_name and system_name != _normalize_import_compare_value(system.system_name):
+        raise HTTPException(status_code=400, detail="Excel 中系统名称与当前系统不一致，已阻止导入。")
+    if credit_code and credit_code != _normalize_import_compare_value(org.credit_code).upper():
+        raise HTTPException(status_code=400, detail="Excel 中统一社会信用代码与当前单位不一致，已阻止导入。")
+    if level and int(level) != int(system.proposed_level or 0):
+        raise HTTPException(status_code=400, detail="Excel 中系统备案等级与当前系统不一致，已阻止导入。")
+
+    candidate = {
+        "organization": deep_copy_json(parsed.get("organization") if isinstance(parsed.get("organization"), dict) else {}),
+        "system": deep_copy_json(parsed.get("system") if isinstance(parsed.get("system"), dict) else {}),
+        "grading_report_content": deep_copy_json(
+            parsed.get("grading_report_content") if isinstance(parsed.get("grading_report_content"), dict) else {}
+        ),
+    }
+    current_snapshot = _build_excel_import_current_snapshot(db, org, system)
+    conflicts, direct_update_keys = _diff_excel_import_candidate(current_snapshot, candidate)
+    return {
+        "message": "预检完成",
+        "data": {
+            "candidate": candidate,
+            "conflicts": conflicts,
+            "direct_update_keys": direct_update_keys,
+            "unmapped_fields": [],
+        },
+    }
+
+
+@app.post("/api/filing-workspace/systems/{system_id}/import-excel/apply")
+def apply_filing_workspace_excel_import(
+    request: Request,
+    system_id: int,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    actor, role = require_roles(request, db, {"admin", "evaluator"}, legacy_admin=True)
+    system = get_system_or_404(db, system_id)
+    org = get_org_or_404(db, system.organization_id)
+    effective_is_admin = role == "admin"
+    if (org.archived and org.locked) or (system.archived and system.locked and not effective_is_admin):
+        raise HTTPException(status_code=403, detail="当前对象已归档锁定，不可编辑。")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="payload 必须为对象。")
+
+    raw_candidate = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    candidate = {
+        "organization": deep_copy_json(raw_candidate.get("organization") if isinstance(raw_candidate.get("organization"), dict) else {}),
+        "system": deep_copy_json(raw_candidate.get("system") if isinstance(raw_candidate.get("system"), dict) else {}),
+        "grading_report_content": deep_copy_json(
+            raw_candidate.get("grading_report_content") if isinstance(raw_candidate.get("grading_report_content"), dict) else {}
+        ),
+    }
+    override_keys = {
+        str(item).strip()
+        for item in (payload.get("override_keys") if isinstance(payload.get("override_keys"), list) else [])
+        if str(item).strip()
+    }
+
+    current_snapshot = _build_excel_import_current_snapshot(db, org, system)
+    selected, applied_keys = _select_excel_import_candidate_values(current_snapshot, candidate, override_keys)
+
+    org_payload = selected.get("organization") if isinstance(selected.get("organization"), dict) else {}
+    system_payload = selected.get("system") if isinstance(selected.get("system"), dict) else {}
+    report_payload = selected.get("grading_report_content") if isinstance(selected.get("grading_report_content"), dict) else {}
+
+    if org_payload:
+        sync_org_from_workspace(db, org, org_payload)
+    if system_payload:
+        sync_system_from_workspace(system, system_payload)
+
+    report_content = None
+    if report_payload:
+        row = _get_or_create_grading_report(db, system_id)
+        report_content = _merge_default_content(GRADING_REPORT_DEFAULTS, row.content)
+        for key, value in report_payload.items():
+            if key in GRADING_REPORT_DEFAULTS:
+                report_content[key] = str(value or "")
+        row.content = report_content
+        row.updated_by = actor or "system"
+
+    db.commit()
+    db.refresh(org)
+    db.refresh(system)
+    if report_content is None:
+        row = db.query(GradingReport).filter(GradingReport.system_id == system_id).one_or_none()
+        report_content = _merge_default_content(GRADING_REPORT_DEFAULTS, row.content if row else None)
+    return {
+        "message": "Excel 导入已应用",
+        "data": {
+            "applied_keys": applied_keys,
+            "detail": build_workspace_detail_response(db, org, system),
+            "grading_report_content": report_content,
+        },
+    }
+
+
 @app.put("/api/filing-workspace/systems/{system_id}")
 def save_filing_workspace(
     request: Request,
@@ -4206,11 +4509,13 @@ async def upload_filing_workspace_attachment(
     elif slot_key.startswith("table4.cloud"):
         target = detail.setdefault("table4", {}).setdefault("cloud", {})
         if isinstance(target, dict):
+            target["record_status"] = "has"
             target["record_file_name"] = slot_item["file_name"]
             target["attachment_ids"] = slot_item["attachment_ids"]
     elif slot_key.startswith("table4.big_data"):
         target = detail.setdefault("table4", {}).setdefault("big_data", {})
         if isinstance(target, dict):
+            target["record_status"] = "has"
             target["record_file_name"] = slot_item["file_name"]
             target["attachment_ids"] = slot_item["attachment_ids"]
     elif slot_key.startswith("table5."):
@@ -4886,6 +5191,15 @@ def set_cell_check_by_index(cell: Any, selected_indices) -> None:
         sym.set(f"{_WML_NS}char", _WINGDINGS_CHECKED if idx in indices else _WINGDINGS_UNCHECKED)
 
 
+def normalize_industry_cell_alignment(cell: Any) -> None:
+    """通过 XML 层面保持行业类别单元格的原始格式，不做任何修改。
+
+    这个函数现在是空操作，保留是为了向后兼容。
+    模板的原始格式会被完整保留。
+    """
+    pass
+
+
 def clear_cell_checks(cell: Any) -> None:
     set_cell_check_by_index(cell, [])
 
@@ -5040,6 +5354,21 @@ def _resolve_attachment_name(raw_name: Any, prefix: str, default_suffix: str) ->
     return f"{prefix}-{default_suffix}"
 
 
+def table4_record_status(slot: Any) -> str:
+    if not isinstance(slot, dict):
+        return "none"
+    status = str(slot.get("record_status") or "").strip()
+    if status in {"has", "none"}:
+        return status
+    has_legacy_file = bool(str(slot.get("record_file_name") or "").strip())
+    has_legacy_attachment = bool(normalize_attachment_refs(slot.get("attachment_ids")))
+    return "has" if has_legacy_file or has_legacy_attachment else "none"
+
+
+def table4_record_export_name(slot: Any, prefix: str, default_suffix: str) -> str:
+    return _resolve_attachment_name(None, prefix, default_suffix) if table4_record_status(slot) == "has" else ""
+
+
 def extract_workspace_export_context(org: Organization, system: SystemInfo) -> dict[str, Any]:
     org_detail = merged_org_filing_detail(org)
     sys_detail = merged_system_filing_detail(system)
@@ -5173,6 +5502,18 @@ def _fill_t6_data_total(cell: Any, gb: str, tb: str, records: str) -> None:
             if re.fullmatch(r"\s{3,}", r.text):
                 r.text = f"  {records}  " if records else "       "
                 return
+
+
+def table6_data_total_check_indices(item: dict[str, Any] | None) -> set[int]:
+    safe = item if isinstance(item, dict) else {}
+    has_data_total = bool(str(safe.get("data_total_gb") or "").strip() or str(safe.get("data_total_tb") or "").strip())
+    has_data_records = bool(str(safe.get("data_total_records") or "").strip())
+    result: set[int] = set()
+    if has_data_total:
+        result.add(0)
+    if has_data_records:
+        result.add(1)
+    return result
 
 
 def _fill_t6_monthly_growth(cell: Any, gb: str, tb: str) -> None:
@@ -5523,8 +5864,10 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
         _replace_keyword_suffix(t4.rows[9].cells[2], "平台名称", str(cloud.get("provider_platform_name") or ""))
         _replace_keyword_suffix(t4.rows[9].cells[2], "平台备案编号", str(cloud.get("provider_record_no") or ""))
         replace_cell_preserve_symbols(t4.rows[10].cells[2], str(cloud.get("customer_ops_location") or ""))
-        record_name = _resolve_attachment_name(cloud.get("record_file_name"), attachment_prefix, "云平台备案证明") if cloud_enabled else ""
+        record_name = table4_record_export_name(cloud, attachment_prefix, "云平台备案证明") if cloud_enabled else ""
         replace_attachment_name_in_cell(t4.rows[11].cells[2], record_name)
+    else:
+        replace_attachment_name_in_cell(t4.rows[11].cells[2], "")
     # R12-R15 移动
     mobile = table4.get("mobile") if isinstance(table4.get("mobile"), dict) else {}
     set_cell_check_by_index(t4.rows[12].cells[2], {0 if coerce_bool(mobile.get("enabled")) else 1})
@@ -5577,7 +5920,9 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
         _replace_keyword_suffix(t4.rows[30].cells[2], "平台安全等级", str(big_data.get("provider_level") or ""))
         _replace_keyword_suffix(t4.rows[30].cells[2], "平台名称", str(big_data.get("provider_platform_name") or ""))
         _replace_keyword_suffix(t4.rows[30].cells[2], "平台备案编号", str(big_data.get("provider_record_no") or ""))
-        replace_attachment_name_in_cell(t4.rows[31].cells[2], _resolve_attachment_name(big_data.get("record_file_name"), attachment_prefix, "大数据平台备案证明"))
+        replace_attachment_name_in_cell(t4.rows[31].cells[2], table4_record_export_name(big_data, attachment_prefix, "大数据平台备案证明"))
+    else:
+        replace_attachment_name_in_cell(t4.rows[31].cells[2], "")
 
     # ============ 表五 提交材料 ============
     t5 = doc.tables[5]
@@ -5626,6 +5971,7 @@ def fill_filing_template_document(doc: Document, org: Organization, system: Syst
             pi_values = _normalize_person_info_value(pi_values)
         set_cell_check_by_index(t6.rows[3].cells[1], labels_to_indices(pi_values, PI_OPTIONS))
         # R4 数据总量（保留下划线占位与双段结构）
+        set_cell_check_by_index(t6.rows[4].cells[1], table6_data_total_check_indices(item))
         _fill_t6_data_total(
             t6.rows[4].cells[1],
             str(item.get("data_total_gb") or "").strip(),
