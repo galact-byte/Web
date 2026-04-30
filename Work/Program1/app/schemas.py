@@ -38,6 +38,7 @@ class OrganizationCreate(BaseModel):
 
 class OrganizationUpdate(BaseModel):
     name: str | None = None
+    credit_code: str | None = None
     legal_representative: str | None = None
     address: str | None = None
     office_phone: str | None = None

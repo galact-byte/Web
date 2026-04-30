@@ -79,6 +79,25 @@ class UiTemplateTests(unittest.TestCase):
         self.assertIn('--font-brand', css)
         self.assertIn('--accent-cinnabar', css)
 
+    def test_grading_report_matrix_preview_shades_row_headers(self):
+        grading_js = Path('app/static/grading_report.js').read_text(encoding='utf-8')
+        css = Path('app/static/style.css').read_text(encoding='utf-8')
+
+        self.assertIn('td:first-child`)?.classList.toggle', grading_js)
+        self.assertIn('.level-matrix tbody td:first-child:not(.matrix-hit)', css)
+
+    def test_grading_report_template_includes_final_level_summary(self):
+        html = self.render_template('system_grading_report.html', system=SimpleNamespace(id=1))
+        grading_js = Path('app/static/grading_report.js').read_text(encoding='utf-8')
+
+        self.assertIn('（三）安全保护等级的确定', html)
+        self.assertIn('gradingFinalLevelTable', html)
+        self.assertIn('gradingFinalSystemName', html)
+        self.assertIn('gradingBusinessLevelCell', html)
+        self.assertIn('gradingServiceLevelCell', html)
+        self.assertIn('gradingFinalLevelCell', html)
+        self.assertIn('gradingFinalConclusion', grading_js)
+
     def test_reports_template_uses_section_intro_layout(self):
         html = self.render_template('reports.html')
 

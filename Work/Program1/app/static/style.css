@@ -2778,10 +2778,14 @@ tbody tr:hover td {
   font-weight: 600;
 }
 
-.level-matrix tbody td:first-child {
+.level-matrix tbody td:first-child:not(.matrix-hit) {
   text-align: left;
   color: var(--text-body);
   background: var(--surface);
+}
+
+.level-matrix tbody td:first-child {
+  text-align: left;
 }
 
 .level-matrix td.matrix-hit {
