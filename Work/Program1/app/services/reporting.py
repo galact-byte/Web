@@ -950,6 +950,8 @@ def _shade_matrix_cells(
         if len(rows) < 5:
             return table_seg
         for ri in range(3):
+            if any(matrix[ri][ci] for ci in range(3)):
+                rows[2 + ri] = _shade_row_cell(rows[2 + ri], 0, shade_xml)
             for ci in range(3):
                 if not matrix[ri][ci]:
                     continue
@@ -1260,10 +1262,8 @@ def parse_grading_report_docx(content: bytes) -> dict[str, Any]:
                     break
                 collected.append(nxt)
                 j += 1
-                # 仅取第一段（通常用户填写单段）；如需多段可扩展
-                break
             if collected:
-                result[matched_key] = collected[0]
+                result[matched_key] = "\n".join(collected)
             i = j if collected else i + 1
             continue
         # 尝试提取填表日期：以"年"和"日"结尾且含数字的段落

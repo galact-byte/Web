@@ -460,6 +460,62 @@ class ApiFlowTests(unittest.TestCase):
         self.assertEqual(saved['system']['data_level'], '重要及以上数据')
         self.assertEqual(saved['system']['data_category'], '业务数据')
 
+    def test_02a1_workspace_overview_supports_inline_edit_fields(self):
+        org_resp = self.client.post('/api/organizations', json={
+            'name': '工作台可编辑单位',
+            'credit_code': '91350100M000100Y72',
+            'legal_representative': '张三',
+            'address': '太原市迎泽区原地址',
+            'mobile_phone': '13900139072',
+            'email': 'inline-edit@example.com',
+            'industry': '能源',
+            'organization_type': '企业',
+            'filing_region': '太原',
+            'created_by': 'tester',
+        })
+        self.assertEqual(org_resp.status_code, 200, org_resp.text)
+        org_id = org_resp.json()['data']['id']
+
+        system_resp = self.client.post('/api/systems', json={
+            'organization_id': org_id,
+            'system_name': '工作台可编辑系统',
+            'proposed_level': 2,
+            'business_description': '原业务描述',
+            'system_type': '信息系统',
+            'deployment_mode': '本地部署',
+            'created_by': 'tester',
+        })
+        self.assertEqual(system_resp.status_code, 200, system_resp.text)
+        system_id = system_resp.json()['data']['id']
+
+        update_org_resp = self.client.put(f'/api/organizations/{org_id}', json={
+            'name': '工作台已修改单位',
+            'credit_code': '91350100M000100Y73',
+            'filing_region': '晋中',
+        }, headers=self.admin_headers)
+        self.assertEqual(update_org_resp.status_code, 200, update_org_resp.text)
+        self.assertEqual(update_org_resp.json()['data']['credit_code'], '91350100M000100Y73')
+
+        update_system_resp = self.client.put(f'/api/systems/{system_id}', json={
+            'system_name': '工作台已修改系统',
+            'proposed_level': 3,
+            'business_description': '已修改业务描述',
+            'deployment_mode': '云部署',
+        }, headers=self.admin_headers)
+        self.assertEqual(update_system_resp.status_code, 200, update_system_resp.text)
+
+        overview_resp = self.client.get('/api/filing-workspace/overview?keyword=工作台已修改单位', headers=self.admin_headers)
+        self.assertEqual(overview_resp.status_code, 200, overview_resp.text)
+        item = overview_resp.json()['items'][0]
+        self.assertEqual(item['organization']['name'], '工作台已修改单位')
+        self.assertEqual(item['organization']['credit_code'], '91350100M000100Y73')
+        self.assertEqual(item['organization']['legal_representative'], '张三')
+        self.assertEqual(item['organization']['address'], '太原市迎泽区原地址')
+        self.assertEqual(item['organization']['organization_type'], '企业')
+        self.assertEqual(item['systems'][0]['system_name'], '工作台已修改系统')
+        self.assertEqual(item['systems'][0]['business_description'], '已修改业务描述')
+        self.assertEqual(item['systems'][0]['deployment_mode'], '云部署')
+
     def test_02aa_filing_workspace_excel_preview_returns_candidate(self):
         org_resp = self.client.post('/api/organizations', json={
             'name': 'Excel预检单位',
@@ -734,6 +790,65 @@ class ApiFlowTests(unittest.TestCase):
         self.assertTrue(summary['items'])
         self.assertEqual(len(summary.get('entries') or []), 4)
         self.assertTrue(all((row.get('href') or '').startswith('/organizations?attention=') for row in summary['entries']))
+
+    def test_02c_grading_and_expert_review_save_persist_content(self):
+        org_resp = self.client.post('/api/organizations', json={
+            'name': '表单保存测试单位',
+            'credit_code': '91350100M000100Y81',
+            'legal_representative': '保存人',
+            'address': '太原市小店区',
+            'mobile_phone': '13900139081',
+            'email': 'form-save@example.com',
+            'industry': '制造业',
+            'organization_type': '企业',
+            'filing_region': '太原',
+            'created_by': 'tester',
+        })
+        self.assertEqual(org_resp.status_code, 200, org_resp.text)
+        org_id = org_resp.json()['data']['id']
+
+        sys_resp = self.client.post('/api/systems', json={
+            'organization_id': org_id,
+            'system_name': '表单保存测试系统',
+            'business_category': '生产控制',
+            'service_type': '内部服务',
+            'deployment_type': '本地部署',
+            'proposed_level': 3,
+            'created_by': 'tester',
+        }, headers=self.admin_headers)
+        self.assertEqual(sys_resp.status_code, 200, sys_resp.text)
+        system_id = sys_resp.json()['data']['id']
+
+        grading_save_resp = self.client.put(
+            f'/api/systems/{system_id}/grading-report',
+            json={'content': {'responsible_subject': '责任主体A', 'carried_business': '承载业务B'}},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(grading_save_resp.status_code, 200, grading_save_resp.text)
+        self.assertEqual(grading_save_resp.json().get('message'), '已保存')
+
+        grading_get_resp = self.client.get(f'/api/systems/{system_id}/grading-report', headers=self.admin_headers)
+        self.assertEqual(grading_get_resp.status_code, 200, grading_get_resp.text)
+        grading_content = grading_get_resp.json()['data']['content']
+        self.assertEqual(grading_content['responsible_subject'], '责任主体A')
+        self.assertEqual(grading_content['carried_business'], '承载业务B')
+
+        expert_save_resp = self.client.put(
+            f'/api/systems/{system_id}/expert-review?variant=city',
+            json={'content': {'unit_name': '单位甲', 'review_opinion': '评审意见乙'}},
+            headers=self.admin_headers,
+        )
+        self.assertEqual(expert_save_resp.status_code, 200, expert_save_resp.text)
+        self.assertEqual(expert_save_resp.json().get('message'), '已保存')
+
+        expert_get_resp = self.client.get(
+            f'/api/systems/{system_id}/expert-review?variant=city',
+            headers=self.admin_headers,
+        )
+        self.assertEqual(expert_get_resp.status_code, 200, expert_get_resp.text)
+        expert_content = expert_get_resp.json()['data']['content']
+        self.assertEqual(expert_content['unit_name'], '单位甲')
+        self.assertEqual(expert_content['review_opinion'], '评审意见乙')
 
     def test_03_word_import_and_collection_review(self):
         doc = Document()

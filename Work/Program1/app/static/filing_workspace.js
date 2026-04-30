@@ -395,6 +395,103 @@
     document.body.style.overflow = '';
   }
 
+  function fieldValue(value) {
+    return value === null || value === undefined ? '' : String(value);
+  }
+
+  function buildEditField(field) {
+    const value = esc(fieldValue(field.value));
+    const required = field.required ? ' required' : '';
+    if (field.type === 'select') {
+      return `
+        <div>
+          <label>${esc(field.label)}</label>
+          <select data-edit-field="${esc(field.name)}"${required}>
+            <option value="">请选择</option>
+            ${field.options.map(([code, label]) => `<option value="${esc(code)}" ${String(field.value || '') === String(code) ? 'selected' : ''}>${esc(label)}</option>`).join('')}
+          </select>
+        </div>`;
+    }
+    if (field.type === 'textarea') {
+      return `<div class="grid-span-2"><label>${esc(field.label)}</label><textarea data-edit-field="${esc(field.name)}" rows="3"${required}>${value}</textarea></div>`;
+    }
+    return `<div><label>${esc(field.label)}</label><input data-edit-field="${esc(field.name)}" value="${value}"${required}></div>`;
+  }
+
+  function openEditModal(type, item) {
+    const isOrg = type === 'organization';
+    const existing = document.getElementById('workspaceEditModal');
+    if (existing) existing.remove();
+    const fields = isOrg ? [
+      { name: 'name', label: '单位名称', value: item.name, required: true },
+      { name: 'credit_code', label: '统一社会信用代码', value: item.credit_code, required: true },
+      { name: 'filing_region', label: '备案地区', value: item.filing_region, required: true },
+      { name: 'industry', label: '所属行业', value: item.industry, type: 'select', options: INDUSTRY_OPTIONS, required: true },
+      { name: 'organization_type', label: '单位类型', value: item.organization_type, type: 'select', options: ORG_TYPE_OPTIONS, required: true },
+      { name: 'legal_representative', label: '单位负责人', value: item.legal_representative },
+      { name: 'mobile_phone', label: '移动电话', value: item.mobile_phone },
+      { name: 'email', label: '邮箱', value: item.email },
+      { name: 'address', label: '单位地址', value: item.address, type: 'textarea' },
+    ] : [
+      { name: 'system_name', label: '系统名称', value: item.system_name, required: true },
+      { name: 'proposed_level', label: '拟定等级', value: item.proposed_level || 3, type: 'select', options: [['1', '第1级'], ['2', '第2级'], ['3', '第3级'], ['4', '第4级'], ['5', '第5级']], required: true },
+      { name: 'system_type', label: '系统类型', value: item.system_type },
+      { name: 'deployment_mode', label: '部署方式', value: item.deployment_mode },
+      { name: 'business_description', label: '业务描述', value: item.business_description, type: 'textarea' },
+    ];
+    const overlay = document.createElement('div');
+    overlay.id = 'workspaceEditModal';
+    overlay.className = 'modal-overlay visible workspace-modal-overlay';
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.innerHTML = `
+      <div class="modal-box workspace-modal-box" role="dialog" aria-modal="true">
+        <button class="modal-close" type="button" data-edit-close aria-label="关闭弹窗">&times;</button>
+        <div class="workspace-modal-head">
+          <h2><i class="fas fa-pen-to-square"></i> 修改${isOrg ? '单位信息' : '系统信息'}</h2>
+          <p class="table-meta">保存后会同步列表；更完整的备案表字段仍可进入“完善备案表”维护。</p>
+        </div>
+        <div class="form-grid form-grid-2">${fields.map(buildEditField).join('')}</div>
+        <div class="modal-actions">
+          <button class="btn-lite" type="button" data-edit-close>取消</button>
+          <button type="button" data-edit-save data-edit-type="${type}" data-edit-id="${item.id}">保存修改</button>
+        </div>
+        <div class="result" id="workspaceEditResult">请确认后保存。</div>
+      </div>`;
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeEditModal() {
+    document.getElementById('workspaceEditModal')?.remove();
+    document.body.style.overflow = '';
+  }
+
+  async function saveInlineEdit(type, id) {
+    const modal = document.getElementById('workspaceEditModal');
+    if (!modal) return;
+    const payload = {};
+    modal.querySelectorAll('[data-edit-field]').forEach((input) => {
+      payload[input.dataset.editField] = input.value.trim();
+    });
+    if (type === 'system') payload.proposed_level = Number(payload.proposed_level || 3);
+    const result = document.getElementById('workspaceEditResult');
+    if (result) result.textContent = '正在保存...';
+    const endpoint = type === 'organization' ? `/api/organizations/${id}` : `/api/systems/${id}`;
+    const res = await fetch(endpoint, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (result) result.textContent = `保存失败：${apiErrorText(data)}`;
+      return;
+    }
+    closeEditModal();
+    setListResult(`${type === 'organization' ? '单位' : '系统'}信息已修改。`, { popup: true });
+    await loadOverview();
+  }
+
   function refreshAttentionIfAvailable() {
     if (typeof refreshAttentionSummary === 'function') {
       refreshAttentionSummary();
@@ -1711,6 +1808,7 @@
             </div>
           </button>
           <div class="org-card-actions">
+            <button class="btn-lite btn-sm" data-edit-org="${org.id}"><i class="fas fa-pen-to-square"></i> 修改单位信息</button>
             <button class="btn-lite btn-sm" data-create-system="${org.id}"><i class="fas fa-plus"></i> 新增系统</button>
             <button class="btn-lite btn-sm" data-merge-review-org="${org.id}"><i class="fas fa-object-group"></i> 合并专家评审表</button>
             <button class="btn-lite btn-sm" data-archive-org="${org.id}"><i class="fas fa-box-archive"></i> 归档</button>
@@ -1722,6 +1820,7 @@
                 <label class="system-select"><input type="checkbox" class="system-merge-chk" data-merge-system="${system.id}" data-org-id="${org.id}"></label>
                 <div class="system-main"><strong>${esc(system.system_name || '-')}</strong><span>${esc(system.system_code || '未编号')} · ${levelBadge(system.proposed_level)}</span></div>
                 <div class="system-actions">
+                  <button class="btn-lite btn-sm" data-edit-system="${system.id}"><i class="fas fa-pen-to-square"></i> 修改系统信息</button>
                   <button class="btn-lite btn-sm" data-open-system="${system.id}"><i class="fas fa-arrow-up-right-from-square"></i> 完善备案表</button>
                   <button class="btn-lite btn-sm" data-export-grading="${system.id}"><i class="fas fa-file-alt"></i> 完善定级报告</button>
                   <button class="btn-lite btn-sm" data-export-review="${system.id}"><i class="fas fa-clipboard-check"></i> 完善专家评审意见表</button>
@@ -2385,6 +2484,15 @@
         state.createOrgId = Number(btn.dataset.createSystem);
         const org = state.overview.find((item) => item.organization.id === state.createOrgId);
         openCreateModal('system', org ? org.organization : null);
+      } else if (btn.dataset.editOrg) {
+        const orgId = Number(btn.dataset.editOrg);
+        const org = state.overview.find((item) => Number((item.organization || {}).id) === orgId);
+        if (org && org.organization) openEditModal('organization', org.organization);
+      } else if (btn.dataset.editSystem) {
+        const systemId = Number(btn.dataset.editSystem);
+        const item = state.overview.find((entry) => (entry.systems || []).some((system) => Number(system.id) === systemId));
+        const system = (item?.systems || []).find((row) => Number(row.id) === systemId);
+        if (system) openEditModal('system', system);
       } else if (btn.dataset.openSystem) {
         window.location.href = `/organizations/systems/${btn.dataset.openSystem}`;
       } else if (btn.dataset.exportSystem) {
@@ -2422,6 +2530,10 @@
         await purgeEntity('organizations', Number(btn.dataset.purgeOrg));
       } else if (btn.dataset.purgeSystem) {
         await purgeEntity('systems', Number(btn.dataset.purgeSystem));
+      } else if (btn.dataset.editClose !== undefined) {
+        closeEditModal();
+      } else if (btn.dataset.editSave) {
+        await saveInlineEdit(btn.dataset.editType, Number(btn.dataset.editId));
       }
     });
   }
