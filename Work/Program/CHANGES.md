@@ -2,6 +2,8 @@
 
 > **修订记录**
 >
+> - v6.5: 新功能 — Docker Compose 一键部署与生产配置模板
+> - v6.4: 恶性 Bug 修复 — 稳定运行基线、备份完整性、系统进度保留、依赖损坏自检
 > - v6.3: 新功能 — 爬取客户联系人/电话，分发时自动填充到项目
 > - v6.2: 优化 — 顶部同步滚动条 + 定时爬取 + 分发弹窗备注框
 > - v6.1: 优化 — 多系统合并分发 + 分发状态显示
@@ -17,6 +19,122 @@
 > - v3.0: UI 重构 — 去除"AI 味"，对齐前端设计规范（Void Space 暗色主题）
 > - v2.0: 代码审查修复 — 15 项安全/质量/性能问题修复
 > - v1.9: 后端 API 修复 — 路由顺序修正、新增趋势API、导入大小限制、错误处理加固
+
+## v6.5 — Docker Compose 一键部署
+
+新增面向服务器的 Docker Compose 部署方案，保留本地一键启动用于测试开发，生产部署不依赖用户本机 Python/Anaconda 路径。
+
+### 新增文件
+
+#### `docker-compose.yml` — 生产编排
+- **功能**：编排 PostgreSQL、后端 FastAPI、前端 Nginx 三个服务。
+- **实现原理**：PostgreSQL 和后端数据分别使用 `postgres_data`、`backend_data` volume 持久化；后端等待数据库健康检查，前端等待后端健康检查。
+- **安全约束**：`POSTGRES_PASSWORD` 和 `SECRET_KEY` 必须由 `.env.production` 提供，缺失时 Compose 直接失败。
+
+#### `.env.production.example` — 生产配置模板
+- **功能**：提供服务器部署所需的端口、镜像、数据库和密钥配置模板。
+- **实现原理**：基础镜像通过变量配置，便于国内服务器替换为可访问的等价镜像源。
+
+#### `deploy.sh` — Linux 一键部署脚本
+- **功能**：检查 Docker/Compose v2，首次运行自动生成 `.env.production`，阻止占位符密钥进入部署。
+- **实现原理**：通过 `docker compose --env-file .env.production up -d --build` 构建并启动生产服务。
+
+#### `backend/Dockerfile` / `frontend/Dockerfile` / `deploy/nginx.conf`
+- **功能**：分别构建后端运行镜像、前端静态资源镜像，并由 Nginx 反向代理 `/api` 到后端容器。
+- **实现原理**：前端多阶段构建，运行阶段只保留 Nginx 和 `dist` 静态文件。
+
+#### `.dockerignore` / `backend/.dockerignore`
+- **功能**：排除虚拟环境、依赖目录、数据库、日志、本地环境变量和验证构建产物，减小镜像构建上下文并避免敏感文件进入镜像。
+
+### 修改文件
+
+#### `backend/app/database.py` — PostgreSQL 连接配置加固
+- **修改内容**：新增 `build_database_url()`，显式 `DATABASE_URL` 仍优先；Docker Compose 场景可由 `POSTGRES_HOST`、`POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD` 结构化生成连接地址。
+- **修改内容**：数据库用户名、密码和库名会 URL 编码，避免密码包含 `@`、`:`、`/`、`#` 等字符时连接串解析失败。
+
+#### `backend/app/services/progress_scraper.py` — 容器内爬虫配置持久化
+- **修改内容**：支持通过 `PROGRESS_CONFIG_FILE` 指定爬虫配置文件路径，Docker 部署默认保存到 `/app/data/progress_config.json`。
+
+#### `README.md` — 部署文档
+- **修改内容**：新增 Docker Compose 推荐部署流程、`.env.production` 配置说明、常用运维命令、数据持久化、PostgreSQL 备份恢复、国内镜像拉取处理方式和传统部署备选说明。
+
+#### `.gitignore` — 部署敏感文件与临时产物
+- **修改内容**：继续忽略真实 `.env.production`，放行 `.env.production.example`；新增本地 Compose override、部署密钥目录和验证构建目录忽略规则。
+
+#### `backend/tests/test_database_config.py` / `backend/tests/test_static_regressions.py`
+- **新增**：覆盖 PostgreSQL 连接地址构造、Compose 密钥要求、数据持久化、Nginx 反代、部署脚本占位符检查和 `.gitignore` 模板放行规则。
+
+### 文件清单总览
+
+| 操作 | 文件路径 |
+| :--- | :--- |
+| 新增 | `docker-compose.yml` |
+| 新增 | `.env.production.example` |
+| 新增 | `deploy.sh` |
+| 新增 | `backend/Dockerfile` |
+| 新增 | `frontend/Dockerfile` |
+| 新增 | `deploy/nginx.conf` |
+| 新增 | `.dockerignore` |
+| 新增 | `backend/.dockerignore` |
+| 新增 | `backend/tests/test_database_config.py` |
+| 修改 | `backend/app/database.py` |
+| 修改 | `backend/app/services/progress_scraper.py` |
+| 修改 | `backend/tests/test_static_regressions.py` |
+| 修改 | `README.md` |
+| 修改 | `.gitignore` |
+| 修改 | `CHANGES.md` |
+
+### 测试方式
+
+- `backend\.venv\Scripts\python.exe -m unittest backend.tests.test_database_config`
+- `backend\.venv\Scripts\python.exe -m unittest backend.tests.test_static_regressions`
+- `backend\.venv\Scripts\python.exe -m compileall -q backend\app launcher.py`
+- `D:\Tools\Git\bin\bash.exe -n deploy.sh`
+- `docker compose --env-file .env.production.example config`
+- `npm run build -- --outDir .vite-check-build-20260605`
+- `npm audit --audit-level=high`
+
+## v6.4 — 恶性 Bug 修复与部署基线加固
+
+修复项目编辑、备份恢复和启动环境检查中的高风险问题，并统一服务器部署运行基线。
+
+### 修改文件
+
+#### `launcher.py` / `start.bat` / `start.sh` — 启动前环境与依赖自检
+- **修改内容**：限制 Python 运行基线为 3.10 - 3.12，推荐 3.12，避免 Python 3.13+ / 3.14 下固定依赖需要本地编译导致部署失败。
+- **修改内容**：后端统一使用项目内 `backend/.venv`，并在已有虚拟环境版本不受支持时自动重建，避免混用本机全局 Python。
+- **修改内容**：按 Vite 8 要求限制 Node.js 为 20.19+ 或 22.12+。
+- **修改内容**：不再只依赖 `.deps_installed` 或 `node_modules` 是否存在，增加关键后端依赖导入检查和前端 runtime-core 语法检查。
+- **修改内容**：Windows 批处理入口改为纯 ASCII 最小引导，移除旧的 `Python 3.9+` 中文兜底提示，避免 CMD 乱码和错误版本提示。
+- **修改内容**：Windows 启动器不硬编码 Anaconda 路径；仅在普通 Python 查找失败后动态读取 conda 环境列表作为兜底，已有合规 Python 或项目 `.venv` 会优先使用。
+
+#### `backend/app/routers/projects.py` / `frontend/src/views/ProjectForm.vue` / `backend/app/schemas/schemas.py` — 编辑项目保留系统进度
+- **修改内容**：项目编辑时按系统 `id` 更新已有系统，仅删除用户明确移除的系统，避免全量删除重建导致系统进度历史丢失。
+- **修改内容**：项目编辑页回填并提交系统 `id`。
+
+#### `backend/app/routers/backup.py` — 备份恢复完整性
+- **修改内容**：备份新增项目优先级、备注、联系人、完成时间、系统归档状态、当前阶段、系统进度汇报、项目进度爬取记录和爬取日志。
+- **修改内容**：恢复逻辑兼容旧备份，同时恢复新增字段和进度相关表。
+
+#### `backend/app/services/scrape_scheduler.py` — 定时爬取启动死锁修复
+- **修改内容**：调度器锁改为可重入锁，避免开启定时爬取时 `start()` 内部调用 `stop()` 自锁，导致接口卡死。
+
+#### `README.md` / `CLAUDE.md` / `frontend/package.json`
+- **修改内容**：同步运行环境要求，明确 Python 和 Node.js 支持版本。
+
+#### `backend/tests/test_static_regressions.py`
+- **新增**：静态回归测试覆盖运行基线、依赖自检、备份字段完整性、项目系统更新策略和定时爬取启动锁。
+
+### 测试方式
+
+- `python -m unittest backend.tests.test_static_regressions`
+- `python -m compileall -q backend\app launcher.py`
+- `D:\Tools\Git\bin\bash.exe -n start.sh`
+- `python -c "import launcher; print(launcher._find_supported_python())"`
+- `python launcher.py`（当前机器未安装 Python 3.10 - 3.12 时，应输出清晰错误而非 traceback）
+- `node --check frontend\node_modules\@vue\runtime-core\dist\runtime-core.cjs.prod.js`
+- `npm run build -- --outDir .vite-check-build-20260605`
+- `npm audit --audit-level=high`
 
 ## v6.3 — 爬取客户联系人 + 分发自动填充
 

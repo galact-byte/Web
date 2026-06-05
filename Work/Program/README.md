@@ -20,8 +20,8 @@
 ### 手动启动
 
 ### 环境要求
-- Python 3.9+
-- Node.js 18+
+- Python 3.10 - 3.12（推荐 3.12；不支持 3.13+ / 3.14）
+- Node.js 20.19+ 或 22.12+（推荐 Node.js 22 LTS；匹配 Vite 8 要求）
 
 ### 启动后端
 
@@ -29,7 +29,7 @@
 cd backend
 
 # 安装依赖
-pip install fastapi uvicorn sqlalchemy python-jose[cryptography] passlib[bcrypt] python-multipart openpyxl python-docx
+python -m pip install -r requirements.txt
 
 # 启动服务
 uvicorn app.main:app --reload --port 8000
@@ -53,9 +53,124 @@ npm run dev
 
 ### 生产部署说明
 
-- 前端生产构建默认使用相对路径 `/api` 访问后端
-- 推荐使用 Nginx 托管 `frontend/dist`，并将 `/api` 反向代理到后端
-- 若使用 `vite preview` 临时预览生产包，项目已内置 `/api` 到本机后端的代理
+正式部署推荐使用 Docker Compose。前端生产构建默认使用相对路径 `/api` 访问后端，Compose 部署会由 Nginx 容器托管前端静态文件，并将 `/api` 反向代理到后端容器。
+
+#### Docker Compose 部署（推荐）
+
+服务器要求：
+
+- Linux 服务器
+- Docker Engine
+- Docker Compose v2（可执行 `docker compose version`）
+- 服务器防火墙放行 `HTTP_PORT`，默认 `80`
+
+首次部署：
+
+```bash
+# 1. 进入项目目录
+cd Program
+
+# 2. 复制生产配置模板
+cp .env.production.example .env.production
+
+# 3. 编辑生产配置
+vim .env.production
+```
+
+`.env.production` 必须修改这些值：
+
+```bash
+POSTGRES_PASSWORD=强数据库密码
+SECRET_KEY=强随机密钥
+DEFAULT_ADMIN_PASSWORD=首次登录管理员密码
+CORS_ORIGINS=http://你的服务器IP或https://你的域名
+```
+
+真实的 `.env.production` 包含密钥和数据库密码，已被 `.gitignore` 忽略；不要提交到代码仓库。模板 `.env.production.example` 会保留在仓库中，方便迁移到其他服务器。
+
+生成 `SECRET_KEY`：
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+启动部署：
+
+```bash
+bash deploy.sh
+```
+
+部署完成后访问：
+
+```text
+http://服务器IP
+```
+
+常用运维命令：
+
+```bash
+# 查看容器状态
+docker compose --env-file .env.production ps
+
+# 查看日志
+docker compose --env-file .env.production logs -f
+
+# 只看后端日志
+docker compose --env-file .env.production logs -f backend
+
+# 更新代码后重新构建并启动
+docker compose --env-file .env.production up -d --build
+
+# 停止服务（不删除数据卷）
+docker compose --env-file .env.production down
+```
+
+数据持久化：
+
+- PostgreSQL 数据保存在 Compose 项目的 `postgres_data` volume 中，实际名称会带当前 Compose 项目前缀
+- 后端运行数据保存在 Compose 项目的 `backend_data` volume 中，实际名称会带当前 Compose 项目前缀
+- 爬虫配置文件在容器内使用 `/app/data/progress_config.json`，会随 `backend_data` 持久化
+
+数据库备份：
+
+```bash
+# 导出 PostgreSQL 数据
+docker compose --env-file .env.production exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backup.sql
+
+# 恢复 PostgreSQL 数据
+docker compose --env-file .env.production exec -T postgres \
+  sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"' < backup.sql
+```
+
+#### 国内服务器镜像拉取问题
+
+国内服务器直连 Docker Hub 可能较慢或失败。本项目不绑定单一镜像源，基础镜像都可以在 `.env.production` 中替换：
+
+```bash
+PYTHON_IMAGE=python:3.12-slim
+NODE_IMAGE=node:22-alpine
+NGINX_IMAGE=nginx:alpine
+POSTGRES_IMAGE=postgres:16-alpine
+```
+
+可选处理方式：
+
+- 配置 Docker registry mirror 后再执行 `bash deploy.sh`
+- 将上面的镜像变量替换为你服务器可访问的等价镜像
+- 在能访问外网的机器执行 `docker pull` / `docker save`，再在服务器上 `docker load` 离线导入
+
+如果 `deploy.sh` 在构建阶段失败，优先检查镜像拉取日志；部署脚本不会静默跳过失败。
+
+#### 传统部署（备选）
+
+如果服务器资源极紧张，或运维团队更熟悉宿主机部署，也可以使用传统方式：
+
+- 后端：Python 3.12 虚拟环境 + `uvicorn` + `systemd`
+- 前端：`npm run build` 后由宿主机 Nginx 托管 `frontend/dist`
+- 数据库：宿主机 PostgreSQL
+
+传统部署需要自行维护 systemd unit、Nginx server 配置和数据库备份策略；新部署优先使用 Docker Compose。
 
 ---
 
@@ -144,6 +259,7 @@ DATABASE_URL=postgresql://user:password@localhost:5432/project_completion
 ```
 
 > 驱动 `psycopg2-binary` 已包含在 `requirements.txt` 中，无需额外安装。
+> Docker Compose 部署默认使用 `.env.production` 里的 `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD` 生成连接地址，不需要手写 `DATABASE_URL`。
 
 #### MySQL
 

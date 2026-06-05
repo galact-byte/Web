@@ -20,7 +20,7 @@ class ScheduledScraper:
     def __init__(self):
         self._timer = None
         self._running = False
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._last_run = None
         self._last_error = None
 

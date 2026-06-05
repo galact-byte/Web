@@ -55,7 +55,7 @@
         <div v-if="form.systems.length === 0" class="empty-systems"><p class="text-muted">暂无系统，点击上方按钮添加</p></div>
 
         <div v-else class="systems-list">
-          <div v-for="(sys, index) in form.systems" :key="index" class="system-item">
+          <div v-for="(sys, index) in form.systems" :key="sys.id || `new-${index}`" class="system-item">
             <div class="system-fields">
               <div class="input-group"><label>系统编号</label><input v-model="sys.system_code" class="input" placeholder="可选" /></div>
               <div class="input-group"><label>系统名称 *</label><input v-model="sys.system_name" class="input" placeholder="输入系统名称" required /></div>
@@ -121,7 +121,7 @@ const form = reactive({
 })
 
 function addSystem() {
-  form.systems.push({ system_code: '', system_name: '', system_level: '第二级', system_type: '传统系统', archive_status: '否' })
+  form.systems.push({ id: null, system_code: '', system_name: '', system_level: '第二级', system_type: '传统系统', archive_status: '否' })
 }
 
 function removeSystem(index) { form.systems.splice(index, 1) }
@@ -168,7 +168,7 @@ async function fetchData() {
         priority: p.priority || '/',
         business_manager_name: p.business_manager_name || '', implementation_manager_id: p.implementation_manager_id,
         contact_name: p.contact_name || '', contact_phone: p.contact_phone || '',
-        systems: p.systems.map(s => ({ system_code: s.system_code, system_name: s.system_name, system_level: s.system_level, system_type: s.system_type, archive_status: s.archive_status || '否' }))
+        systems: p.systems.map(s => ({ id: s.id, system_code: s.system_code, system_name: s.system_name, system_level: s.system_level, system_type: s.system_type, archive_status: s.archive_status || '否' }))
       })
     }
   } catch (err) { console.error('Fetch failed:', err) }
