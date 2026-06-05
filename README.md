@@ -20,7 +20,7 @@
   - Markdown 渲染与代码高亮
   - 本地存储 API Key，安全无忧
 - **启动命令**: `npm run tauri dev`
-- **构建命令**: `npm run tauri build`
+- **构建命令**: `npm run tauri:build`
 
 ### 3. docgen-electron/ - 过程文档输出客户端 (DocGenPro)
 - **技术栈**: Electron + Vue 3 + TypeScript + Python docx
@@ -45,8 +45,33 @@
   - 预设目标：内置抖音、快手、小红书、B站、微博、YouTube、TikTok 等
 - **构建命令**: 双击 `build-release.bat` 或见 `Reduce/README.md`
 
-### 5. test/ - 测试代码
-- **用途**: 各类测试和实验代码
+### 5. test/ - 工具集与实验项目
+包含多个独立的小工具和实验代码：
+
+#### 5.1 test/webui/ - CodeAudit WebUI（代码安全审计工具）
+- **技术栈**: Flask + Python + LLM API（OpenAI / DeepSeek / Claude）
+- **用途**: 通过调用大模型 API 对代码进行自动化安全审计
+- **特性**:
+  - 粘贴或上传代码文件，一键发起安全审计
+  - 审计记录管理，按状态筛选
+  - 报告导出（Markdown / HTML）
+  - 可视化的风险等级标识
+- **环境要求**: Python 3.8+ / MySQL 5.7+
+- **启动命令**: 双击 `start.bat` 或 `python app.py`
+
+#### 5.2 test/game/ - 控制台打字游戏（四语言版本）
+- **技术栈**: Python / Java / C++ / C#
+- **用途**: 用 4 种语言实现同一个打字游戏，帮助理解语法差异
+- **详情**: 见 `test/game/README.md`
+
+#### 5.3 test/article/ - 论文格式化工具
+- **技术栈**: Python + python-docx
+- **用途**: 研究生学位论文格式化处理，自动解析模板并应用到论文文档
+
+#### 5.4 其他工具
+- **update.bat** — CLIProxyAPI 自动更新脚本（版本检测、自动备份、保留配置）
+- **md2bbcode.html** — Markdown 转 BBCode 在线转换工具
+- **漫画上色工作流** — ComfyUI 漫画上色 JSON 工作流配置
 
 ### 6. Work/ - 工作项目
 
@@ -57,34 +82,38 @@
   - 支持经理/员工角色区分
   - 项目管理、分发与贡献率填写
   - 季度工作量统计
+  - 项目进度爬取（支持 OCR 验证码自动登录、分页爬取、Excel 导出）
   - Excel/Word 批量导出
   - 深浅主题切换
   - JWT Token 认证
+  - 支持 Docker Compose 一键部署
 - **启动**:
   - 一键启动: 双击 `start.bat`（Windows）或 `bash start.sh`（Linux/macOS）
   - 后端: `cd backend && uvicorn app.main:app --reload --port 8000`
   - 前端: `cd frontend && npm run dev`
 
-#### 6.2 Work/Program1/ - 定级备案管理系统
-- **技术栈**: FastAPI + SQLAlchemy + Jinja2 + Chart.js
+#### 6.2 Work/Program1/ - 衡鉴 · 定级备案管理系统
+- **技术栈**: FastAPI + SQLAlchemy + Jinja2 + Chart.js + reportlab
 - **用途**: 网络安全定级备案管理
 - **特性**:
   - 单位与系统信息维护
   - 自动生成定级报告/备案表/专家评审意见表
-  - 流程管控（6 步工作流）
-  - 数据看板（地区/行业/级别分布）
-  - 知识库管理
-  - Word/PDF 导出
-- **启动**: 双击 `start.bat` 或手动 `uvicorn app.main:app --reload --port 8000`
+  - 报告版本管理与差异对比
+  - 流程管控（节点负责人/时限/超时提醒）
+  - 数据看板（地区/行业/级别分布、地图热力图）
+  - 知识库管理（版本控制、批量下载）
+  - Word/PDF 导出（PDF 支持密码加密）
+  - 模板中心化管理与签章
+- **启动**: 双击 `start.bat` 或手动 `uvicorn app.main:app --reload --port 8011`
 
 ---
 
 ## 🚀 快速开始
 
 ### 环境要求
-- Node.js 18+
-- Python 3.9+（Work 项目需要）
-
+- Node.js 20.19+ 或 22.12+（Work/Program 前端需要，推荐 Node.js 22 LTS）
+- Python 3.10 - 3.12（Work/Program 需要，不支持 3.13+）
+- Python 3.8+（test/webui 需要，另需 MySQL 5.7+）
 - Rust（ai-client 构建需要）
 - JDK 17 + Android SDK 34（Reduce 构建需要）
 
@@ -100,9 +129,13 @@ npm install
 
 # 项目完结单管理平台
 cd Work/Program/backend
-pip install fastapi uvicorn sqlalchemy python-jose[cryptography] passlib[bcrypt] python-multipart openpyxl python-docx
+pip install -r requirements.txt
 cd ../frontend
 npm install
+
+# CodeAudit WebUI (代码安全审计)
+cd test/webui
+pip install -r requirements.txt
 
 # Reduce (短视频时间控制)
 # 环境要求: JDK 17 + Android SDK 34
@@ -123,6 +156,10 @@ npm run dev
 cd Work/Program
 start.bat          # Windows
 # bash start.sh   # Linux/macOS
+
+# CodeAudit WebUI
+cd test/webui
+python app.py      # 或双击 start.bat
 ```
 
 ---
@@ -135,8 +172,11 @@ start.bat          # Windows
 | docgen-electron | Electron + Vue 3 | Element Plus | electron-vite |
 | Reduce | Kotlin + Jetpack Compose | Material 3 | Gradle |
 | front | Vanilla JS/CSS | - | - |
+| test/webui | Flask + LLM API | Vanilla CSS/JS | - |
+| test/game | Python/Java/C++/C# | 控制台 | - |
+| test/article | Python + python-docx | - | - |
 | Work/Program | FastAPI + Vue 3 | Vanilla CSS | Vite |
-| Work/Program1 | FastAPI + Jinja2 | Chart.js | - |
+| Work/Program1 | FastAPI + Jinja2 | Chart.js + reportlab | - |
 
 ---
 
