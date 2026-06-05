@@ -63,6 +63,10 @@ class SystemCreate(SystemBase):
     pass
 
 
+class SystemUpdate(SystemBase):
+    id: Optional[int] = None
+
+
 class SystemResponse(SystemBase):
     id: int
     current_phase: Optional[str] = "not_started"
@@ -92,7 +96,7 @@ class ProjectCreate(ProjectBase):
 
 
 class ProjectUpdate(ProjectBase):
-    systems: List[SystemCreate] = []
+    systems: List[SystemUpdate] = []
 
 
 class ProjectResponse(ProjectBase):

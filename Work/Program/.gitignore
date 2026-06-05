@@ -33,6 +33,15 @@ uploads/
 .env
 .env.*
 !.env.example
+!.env.production.example
+
+# 部署本地配置与敏感文件
+docker-compose.override.yml
+deploy/secrets/
+
+# 验证/构建临时产物
+.vite-check-build-*/
+frontend/.vite-check-build-*/
 
 # 爬虫配置（含凭据）
 progress_config.json

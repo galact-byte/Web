@@ -131,7 +131,9 @@ def project_to_response(project: Project, db: Session) -> ProjectResponse:
             "system_code": s.system_code,
             "system_name": s.system_name,
             "system_level": s.system_level,
-            "system_type": s.system_type
+            "system_type": s.system_type,
+            "archive_status": s.archive_status,
+            "current_phase": s.current_phase or "not_started"
         } for s in project.systems],
         created_at=project.created_at,
         remark=project.remark,
@@ -270,7 +272,8 @@ def create_project(
             system_code=sys_data.system_code,
             system_name=sys_data.system_name,
             system_level=sys_data.system_level,
-            system_type=sys_data.system_type
+            system_type=sys_data.system_type,
+            archive_status=sys_data.archive_status
         )
         db.add(system)
 
@@ -326,17 +329,30 @@ def update_project(
     project.contact_name = request.contact_name
     project.contact_phone = request.contact_phone
 
-    # 更新系统：删除旧系统后重新创建
-    db.query(System).filter(System.project_id == project_id).delete()
+    # 更新系统：按 id 更新已有系统，新增无 id 的系统，仅删除用户明确移除的系统。
+    existing_systems = {
+        s.id: s for s in db.query(System).filter(System.project_id == project_id).all()
+    }
+    kept_system_ids = set()
     for sys_data in request.systems:
-        system = System(
-            project_id=project.id,
-            system_code=sys_data.system_code,
-            system_name=sys_data.system_name,
-            system_level=sys_data.system_level,
-            system_type=sys_data.system_type
-        )
-        db.add(system)
+        if sys_data.id is not None:
+            system = existing_systems.get(sys_data.id)
+            if not system:
+                raise HTTPException(status_code=400, detail=f"系统 ID {sys_data.id} 不属于该项目")
+            kept_system_ids.add(system.id)
+        else:
+            system = System(project_id=project.id)
+            db.add(system)
+
+        system.system_code = sys_data.system_code
+        system.system_name = sys_data.system_name
+        system.system_level = sys_data.system_level
+        system.system_type = sys_data.system_type
+        system.archive_status = sys_data.archive_status
+
+    for system_id, system in existing_systems.items():
+        if system_id not in kept_system_ids:
+            db.delete(system)
 
     db.commit()
     db.refresh(project)

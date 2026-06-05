@@ -18,8 +18,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
-# 配置文件路径（backend 根目录）
-CONFIG_FILE = Path(__file__).parent.parent.parent / "progress_config.json"
+# 配置文件路径；容器部署时可通过 PROGRESS_CONFIG_FILE 指向持久化卷。
+CONFIG_FILE = Path(
+    os.getenv("PROGRESS_CONFIG_FILE", Path(__file__).parent.parent.parent / "progress_config.json")
+)
 
 # 默认配置
 DEFAULT_CONFIG = {

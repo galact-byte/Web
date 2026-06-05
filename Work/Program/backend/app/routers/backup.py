@@ -13,7 +13,10 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db, DATABASE_URL
-from app.models import User, Project, System, ProjectAssignment, UserRole, ProjectStatus
+from app.models import (
+    User, Project, System, ProjectAssignment, SystemProgressReport,
+    ProgressRecord, ProgressScrapeLog, UserRole, ProjectStatus
+)
 from app.services.auth import get_current_manager, hash_password
 
 router = APIRouter(prefix="/api/backup", tags=["备份恢复"])
@@ -22,7 +25,10 @@ logger = logging.getLogger(__name__)
 IS_DEV = os.getenv("ENV", "dev").lower() == "dev"
 
 # 序列重置白名单
-_ALLOWED_TABLES = ("users", "projects", "systems", "project_assignments")
+_ALLOWED_TABLES = (
+    "users", "projects", "systems", "project_assignments",
+    "system_progress_reports", "progress_records", "progress_scrape_logs"
+)
 
 
 def _serialize_value(v):
@@ -43,6 +49,18 @@ def _row_to_dict(row, columns):
     return {col: _serialize_value(getattr(row, col)) for col in columns}
 
 
+def _parse_datetime(value):
+    """兼容恢复 ISO 日期时间字符串。"""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 @router.post("/export")
 def export_backup(
     db: Session = Depends(get_db),
@@ -57,21 +75,40 @@ def export_backup(
     project_cols = [
         "id", "project_code", "project_name", "client_name",
         "business_category", "project_location", "contract_status",
-        "filing_status", "approval_date", "status",
+        "filing_status", "priority", "remark", "contact_name", "contact_phone",
+        "approval_date", "status",
         "creator_id", "business_manager_name", "implementation_manager_id",
-        "created_at"
+        "created_at", "updated_at", "completed_at"
     ]
     system_cols = [
         "id", "project_id", "system_code", "system_name",
-        "system_level", "system_type"
+        "system_level", "system_type", "archive_status", "current_phase", "created_at"
     ]
     assignment_cols = [
         "id", "project_id", "assignee_id",
-        "department", "contribution", "status", "created_at"
+        "department", "contribution", "status", "created_at", "updated_at"
+    ]
+    system_progress_cols = [
+        "id", "system_id", "project_id", "reporter_id",
+        "phase", "remark", "report_week", "created_at", "updated_at"
+    ]
+    progress_record_cols = [
+        "id", "project_type", "batch_id", "system_id", "system_name",
+        "customer_name", "system_level", "system_tag", "business_type",
+        "project_name", "project_code", "project_location", "init_status",
+        "project_manager", "pm_department", "sale_contact", "required_start_date",
+        "required_end_date", "actual_start_date", "actual_end_date",
+        "project_status", "is_finished", "plan_printed", "report_printed",
+        "register_status", "contract_status", "remark", "contact_name",
+        "contact_phone", "scraped_at"
+    ]
+    progress_log_cols = [
+        "id", "project_type", "status", "total_records",
+        "error_message", "duration_seconds", "started_at", "finished_at"
     ]
 
     backup_data = {
-        "version": "1.0",
+        "version": "1.1",
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "exported_by": current_user.display_name,
         "tables": {
@@ -81,6 +118,18 @@ def export_backup(
             "project_assignments": [
                 _row_to_dict(a, assignment_cols)
                 for a in db.query(ProjectAssignment).all()
+            ],
+            "system_progress_reports": [
+                _row_to_dict(r, system_progress_cols)
+                for r in db.query(SystemProgressReport).all()
+            ],
+            "progress_records": [
+                _row_to_dict(r, progress_record_cols)
+                for r in db.query(ProgressRecord).all()
+            ],
+            "progress_scrape_logs": [
+                _row_to_dict(r, progress_log_cols)
+                for r in db.query(ProgressScrapeLog).all()
             ],
         }
     }
@@ -186,9 +235,12 @@ async def import_backup(
 
     try:
         # 按依赖顺序清空（先删子表再删父表）
+        db.query(SystemProgressReport).delete()
         db.query(ProjectAssignment).delete()
         db.query(System).delete()
         db.query(Project).delete()
+        db.query(ProgressRecord).delete()
+        db.query(ProgressScrapeLog).delete()
         db.query(User).delete()
         db.flush()
 
@@ -203,6 +255,7 @@ async def import_backup(
                 role=UserRole(u["role"]),
                 department=u.get("department", ""),
                 must_change_password=True,
+                created_at=_parse_datetime(u.get("created_at")),
             )
             db.add(user)
         db.flush()
@@ -227,11 +280,18 @@ async def import_backup(
                 project_location=p.get("project_location", ""),
                 contract_status=p.get("contract_status", "未签订"),
                 filing_status=p.get("filing_status", "未备案"),
+                priority=p.get("priority", "/"),
+                remark=p.get("remark"),
+                contact_name=p.get("contact_name"),
+                contact_phone=p.get("contact_phone"),
                 approval_date=p.get("approval_date"),
                 status=ProjectStatus(p.get("status", "draft")),
                 creator_id=creator_id,
                 business_manager_name=bm_name,
                 implementation_manager_id=im_id,
+                created_at=_parse_datetime(p.get("created_at")),
+                updated_at=_parse_datetime(p.get("updated_at")),
+                completed_at=_parse_datetime(p.get("completed_at")),
             )
             db.add(project)
         db.flush()
@@ -248,9 +308,14 @@ async def import_backup(
                 system_name=s["system_name"],
                 system_level=s.get("system_level", "第二级"),
                 system_type=s.get("system_type", "传统系统"),
+                archive_status=s.get("archive_status", "否"),
+                current_phase=s.get("current_phase", "not_started"),
+                created_at=_parse_datetime(s.get("created_at")),
             )
             db.add(system)
         db.flush()
+
+        valid_system_ids = {s["id"] for s in tables["systems"] if s.get("project_id") in valid_project_ids}
 
         # 恢复分配
         for a in tables["project_assignments"]:
@@ -265,8 +330,81 @@ async def import_backup(
                 department=a.get("department", ""),
                 contribution=a.get("contribution", ""),
                 status=a.get("status", "pending"),
+                created_at=_parse_datetime(a.get("created_at")),
+                updated_at=_parse_datetime(a.get("updated_at")),
             )
             db.add(assignment)
+        db.flush()
+
+        # 恢复系统进度汇报（兼容旧备份：不存在该表则跳过）
+        for r in tables.get("system_progress_reports", []):
+            if r.get("system_id") not in valid_system_ids:
+                continue
+            if r.get("project_id") not in valid_project_ids:
+                continue
+            if r.get("reporter_id") not in valid_user_ids:
+                continue
+            report = SystemProgressReport(
+                id=r["id"],
+                system_id=r["system_id"],
+                project_id=r["project_id"],
+                reporter_id=r["reporter_id"],
+                phase=r.get("phase", "not_started"),
+                remark=r.get("remark"),
+                report_week=r.get("report_week", ""),
+                created_at=_parse_datetime(r.get("created_at")),
+                updated_at=_parse_datetime(r.get("updated_at")),
+            )
+            db.add(report)
+
+        # 恢复爬取进度记录
+        for r in tables.get("progress_records", []):
+            record = ProgressRecord(
+                id=r["id"],
+                project_type=r["project_type"],
+                batch_id=r["batch_id"],
+                system_id=r.get("system_id"),
+                system_name=r.get("system_name"),
+                customer_name=r.get("customer_name"),
+                system_level=r.get("system_level"),
+                system_tag=r.get("system_tag"),
+                business_type=r.get("business_type"),
+                project_name=r.get("project_name"),
+                project_code=r.get("project_code"),
+                project_location=r.get("project_location"),
+                init_status=r.get("init_status"),
+                project_manager=r.get("project_manager"),
+                pm_department=r.get("pm_department"),
+                sale_contact=r.get("sale_contact"),
+                required_start_date=r.get("required_start_date"),
+                required_end_date=r.get("required_end_date"),
+                actual_start_date=r.get("actual_start_date"),
+                actual_end_date=r.get("actual_end_date"),
+                project_status=r.get("project_status"),
+                is_finished=r.get("is_finished"),
+                plan_printed=r.get("plan_printed"),
+                report_printed=r.get("report_printed"),
+                register_status=r.get("register_status"),
+                contract_status=r.get("contract_status"),
+                remark=r.get("remark"),
+                contact_name=r.get("contact_name"),
+                contact_phone=r.get("contact_phone"),
+                scraped_at=_parse_datetime(r.get("scraped_at")),
+            )
+            db.add(record)
+
+        for r in tables.get("progress_scrape_logs", []):
+            log = ProgressScrapeLog(
+                id=r["id"],
+                project_type=r["project_type"],
+                status=r.get("status", "running"),
+                total_records=r.get("total_records", 0),
+                error_message=r.get("error_message"),
+                duration_seconds=r.get("duration_seconds"),
+                started_at=_parse_datetime(r.get("started_at")),
+                finished_at=_parse_datetime(r.get("finished_at")),
+            )
+            db.add(log)
 
         db.commit()
 
@@ -288,6 +426,9 @@ async def import_backup(
             "projects": len(tables["projects"]),
             "systems": len(tables["systems"]),
             "assignments": len(tables["project_assignments"]),
+            "system_progress_reports": len(tables.get("system_progress_reports", [])),
+            "progress_records": len(tables.get("progress_records", [])),
+            "progress_scrape_logs": len(tables.get("progress_scrape_logs", [])),
         }
     }
 
@@ -299,6 +440,9 @@ def _reset_sequences(db: Session, tables: dict):
         ("projects", tables["projects"]),
         ("systems", tables["systems"]),
         ("project_assignments", tables["project_assignments"]),
+        ("system_progress_reports", tables.get("system_progress_reports", [])),
+        ("progress_records", tables.get("progress_records", [])),
+        ("progress_scrape_logs", tables.get("progress_scrape_logs", [])),
     ]
 
     try:
