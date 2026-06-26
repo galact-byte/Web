@@ -1,2 +1,5 @@
 # .bat 文件不做任何编码/换行符转换，保持原始字节
 *.bat -text
+
+# shell 脚本强制 LF，避免 Windows CRLF 导致容器内 /bin/sh 执行失败
+*.sh text eol=lf

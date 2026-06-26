@@ -49,7 +49,7 @@
 包含多个独立的小工具和实验代码：
 
 #### 5.1 test/webui/ - CodeAudit WebUI（代码安全审计工具）
-- **技术栈**: Flask + Python + LLM API（OpenAI / DeepSeek / Claude）
+- **技术栈**: Flask + Python + LLM API（OpenAI 兼容接口 / Anthropic Claude）
 - **用途**: 通过调用大模型 API 对代码进行自动化安全审计
 - **特性**:
   - 粘贴或上传代码文件，一键发起安全审计
@@ -64,11 +64,7 @@
 - **用途**: 用 4 种语言实现同一个打字游戏，帮助理解语法差异
 - **详情**: 见 `test/game/README.md`
 
-#### 5.3 test/article/ - 论文格式化工具
-- **技术栈**: Python + python-docx
-- **用途**: 研究生学位论文格式化处理，自动解析模板并应用到论文文档
-
-#### 5.4 其他工具
+#### 5.3 其他工具
 - **update.bat** — CLIProxyAPI 自动更新脚本（版本检测、自动备份、保留配置）
 - **md2bbcode.html** — Markdown 转 BBCode 在线转换工具
 - **漫画上色工作流** — ComfyUI 漫画上色 JSON 工作流配置
@@ -174,7 +170,6 @@ python app.py      # 或双击 start.bat
 | front | Vanilla JS/CSS | - | - |
 | test/webui | Flask + LLM API | Vanilla CSS/JS | - |
 | test/game | Python/Java/C++/C# | 控制台 | - |
-| test/article | Python + python-docx | - | - |
 | Work/Program | FastAPI + Vue 3 | Vanilla CSS | Vite |
 | Work/Program1 | FastAPI + Jinja2 | Chart.js + reportlab | - |
 

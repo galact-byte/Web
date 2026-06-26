@@ -39,6 +39,14 @@ uploads/
 docker-compose.override.yml
 deploy/secrets/
 
+# TLS 证书（运行时在容器内自动生成，勿提交）
+deploy/ssl/
+*.crt
+*.key
+
+# 个人部署备忘（本地自用，不入库）
+DEPLOY.md
+
 # 验证/构建临时产物
 .vite-check-build-*/
 frontend/.vite-check-build-*/

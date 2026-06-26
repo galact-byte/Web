@@ -55,6 +55,8 @@ npm run dev
 
 正式部署推荐使用 Docker Compose。前端生产构建默认使用相对路径 `/api` 访问后端，Compose 部署会由 Nginx 容器托管前端静态文件，并将 `/api` 反向代理到后端容器。
 
+部署默认启用 HTTPS：Nginx 容器首次启动时会自动生成自签名证书（存于 `frontend_ssl` 卷，重建不丢），HTTP 请求统一 301 跳转到 HTTPS。这是必需的——前端登录通过浏览器 `crypto.subtle` 加密密码，该 API 仅在安全上下文（HTTPS / localhost）下可用，纯 HTTP 访问会导致登录静默失败，且明文传输不安全。如需正式证书，把 `server.crt` / `server.key` 放进证书卷覆盖即可。
+
 #### Docker Compose 部署（推荐）
 
 服务器要求：
@@ -62,7 +64,7 @@ npm run dev
 - Linux 服务器
 - Docker Engine
 - Docker Compose v2（可执行 `docker compose version`）
-- 服务器防火墙放行 `HTTP_PORT`，默认 `80`
+- 服务器防火墙 / 安全组放行 `HTTPS_PORT`（默认 `443`）和 `HTTP_PORT`（默认 `80`，用于跳转）
 
 首次部署：
 
@@ -83,8 +85,10 @@ vim .env.production
 POSTGRES_PASSWORD=强数据库密码
 SECRET_KEY=强随机密钥
 DEFAULT_ADMIN_PASSWORD=首次登录管理员密码
-CORS_ORIGINS=http://你的服务器IP或https://你的域名
+CORS_ORIGINS=https://你的服务器IP或域名
 ```
+
+可选项：`SSL_CN` 填服务器 IP / 域名（自签名证书标识用），`HTTP_PORT` / `HTTPS_PORT` 默认 `80` / `443`。
 
 真实的 `.env.production` 包含密钥和数据库密码，已被 `.gitignore` 忽略；不要提交到代码仓库。模板 `.env.production.example` 会保留在仓库中，方便迁移到其他服务器。
 
@@ -103,8 +107,10 @@ bash deploy.sh
 部署完成后访问：
 
 ```text
-http://服务器IP
+https://服务器IP
 ```
+
+> 自签名证书浏览器会提示"不安全"，点"高级 → 继续访问"即可（内部系统可接受）。
 
 常用运维命令：
 
@@ -130,6 +136,7 @@ docker compose --env-file .env.production down
 - PostgreSQL 数据保存在 Compose 项目的 `postgres_data` volume 中，实际名称会带当前 Compose 项目前缀
 - 后端运行数据保存在 Compose 项目的 `backend_data` volume 中，实际名称会带当前 Compose 项目前缀
 - 爬虫配置文件在容器内使用 `/app/data/progress_config.json`，会随 `backend_data` 持久化
+- TLS 自签名证书保存在 `frontend_ssl` volume 中，容器重建不会重新生成；如需更换证书可删除该卷或直接覆盖卷内 `server.crt` / `server.key`
 
 数据库备份：
 
@@ -287,7 +294,7 @@ DATABASE_URL=mysql+pymysql://user:password@localhost:3306/project_completion
 - 切换 PostgreSQL / 人大金仓 / GaussDB：只需修改 `DATABASE_URL`，驱动已内置
 - 切换 MySQL / 达梦：修改 `DATABASE_URL` + 安装对应驱动包
 - 切换数据库后首次启动会自动建表
-- 如数据库中无用户，会自动创建默认管理员 `admin / admin123`
+- 如数据库中无用户，会自动创建管理员账户 `admin`：本地开发默认密码 `admin123`；设置了 `DEFAULT_ADMIN_PASSWORD`（Docker 部署）时则以该值为准，首次登录强制改密
 
 ### JWT 密钥（生产环境必须修改）
 
@@ -375,7 +382,7 @@ VITE_API_URL=https://你的后端地址
 
 ## 📝 使用流程
 
-1. **首次启动** - 系统自动创建管理员 `admin / admin123`，首次登录需改密
+1. **首次启动** - 系统自动创建管理员 `admin`（本地开发默认密码 `admin123`；Docker 部署为 `DEFAULT_ADMIN_PASSWORD`），首次登录需改密
 2. **管理员创建用户** - 在用户管理页添加员工/经理账户
 3. **创建项目**（经理）- 填写项目信息和系统
 4. **分发项目**（经理）- 将项目分配给员工
