@@ -1,0 +1,36 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+release/
+*.zip
+
+# TypeScript
+*.tsbuildinfo
+
+# Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# AI agent config
+AGENTS.md
+.claude/
+.codex/
+.pi/
+.trellis/
+
+# Local reference documents
+测评证据截图要求V1.0.docx
+测评证据采集工具-项目计划.md

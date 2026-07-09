@@ -1,0 +1,132 @@
+name: Build Picture OCR Release
+
+on:
+  push:
+    tags:
+      - 'picture-ocr-v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag, for example: picture-ocr-v0.1.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: picture-ocr-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  APP_DIR: Work/picture_ocr
+  NODE_VERSION: '22'
+
+jobs:
+  build-and-release:
+    name: Build and publish release asset
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ env.APP_DIR }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: npm ci
+
+      - name: Build static site
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run build
+
+      - name: Package release zip
+        id: package
+        working-directory: ${{ env.APP_DIR }}
+        env:
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${RELEASE_TAG_INPUT:-}" ]; then
+            RELEASE_TAG="$RELEASE_TAG_INPUT"
+          else
+            RELEASE_TAG="$GITHUB_REF_NAME"
+          fi
+
+          SAFE_TAG="$(printf '%s' "$RELEASE_TAG" | sed 's/[^A-Za-z0-9._-]/-/g')"
+          if [[ "$SAFE_TAG" == picture-ocr-* ]]; then
+            PACKAGE_NAME="$SAFE_TAG"
+          else
+            PACKAGE_NAME="picture-ocr-${SAFE_TAG}"
+          fi
+          ZIP_NAME="${PACKAGE_NAME}.zip"
+          export PACKAGE_NAME ZIP_NAME
+
+          rm -rf release "$ZIP_NAME"
+          mkdir -p "release/${PACKAGE_NAME}"
+
+          cp -R dist "release/${PACKAGE_NAME}/dist"
+          cp README.md "release/${PACKAGE_NAME}/README.md"
+          cp start.bat "release/${PACKAGE_NAME}/start.bat"
+          cp start-server.ps1 "release/${PACKAGE_NAME}/start-server.ps1"
+          cp '启动测评证据采集工具.bat' "release/${PACKAGE_NAME}/启动测评证据采集工具.bat"
+          printf '%s\n' "$RELEASE_TAG" > "release/${PACKAGE_NAME}/VERSION.txt"
+
+          python - <<'PY'
+          import os
+          import zipfile
+          from pathlib import Path
+
+          package_name = os.environ['PACKAGE_NAME']
+          zip_name = os.environ['ZIP_NAME']
+          package_dir = Path('release') / package_name
+
+          with zipfile.ZipFile(zip_name, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+              for path in package_dir.rglob('*'):
+                  if path.is_file():
+                      archive.write(path, path.relative_to('release'))
+          PY
+
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "zip_path=${APP_DIR}/${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "zip_name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.zip_name }}
+          path: ${{ steps.package.outputs.zip_path }}
+          if-no-files-found: error
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.package.outputs.release_tag }}
+          ZIP_PATH: ${{ steps.package.outputs.zip_path }}
+        run: |
+          set -euo pipefail
+
+          NOTES_FILE="release-notes.md"
+          cat > "$NOTES_FILE" <<EOF
+          ## 测评证据采集工具
+
+          构建来源：${GITHUB_SHA}
+
+          下载 ZIP 后可直接使用其中的 \`dist/\` 静态文件部署或本地预览。
+          EOF
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$ZIP_PATH" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$ZIP_PATH" \
+              --target "$GITHUB_SHA" \
+              --title "Picture OCR ${RELEASE_TAG}" \
+              --notes-file "$NOTES_FILE"
+          fi
