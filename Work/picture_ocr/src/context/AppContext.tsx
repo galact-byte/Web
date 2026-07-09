@@ -1,57 +1,75 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import type { ProjectDocument } from '../types';
 import { appReducer, createInitialState, AppState, AppAction } from './appReducer';
-import { saveProject, loadProject } from '../utils/db';
+import { saveProject, loadProject, createProjectDocument } from '../utils/db';
 
 interface AppContextValue {
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
 }
 
+interface AppProviderProps {
+  children: React.ReactNode;
+  projectId: string;
+  onProjectSaved?: () => void;
+}
+
 const AppContext = createContext<AppContextValue | null>(null);
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
+export function AppProvider({ children, projectId, onProjectSaved }: AppProviderProps) {
   const [state, dispatch] = useReducer(appReducer, undefined, createInitialState);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedRef = useRef(false);
+  const createdAtRef = useRef<number>(Date.now());
+  const latestDocRef = useRef<ProjectDocument | null>(null);
 
-  // Load data from IndexedDB on mount
+  // Load selected project from IndexedDB.
   useEffect(() => {
-    loadProject()
+    loadedRef.current = false;
+    loadProject(projectId)
       .then((doc) => {
         if (doc) {
+          createdAtRef.current = doc.createdAt;
           dispatch({ type: 'LOAD_PROJECT', payload: doc });
         } else {
-          // First time: use defaults with presets
-          dispatch({ type: 'CLEAR_PROJECT' });
+          const fallbackDoc = createProjectDocument();
+          createdAtRef.current = fallbackDoc.createdAt;
+          dispatch({ type: 'LOAD_PROJECT', payload: { ...fallbackDoc, id: projectId } });
         }
         loadedRef.current = true;
       })
       .catch((err) => {
         console.error('Failed to load from IndexedDB:', err);
-        dispatch({ type: 'CLEAR_PROJECT' });
+        const fallbackDoc = createProjectDocument();
+        createdAtRef.current = fallbackDoc.createdAt;
+        dispatch({ type: 'LOAD_PROJECT', payload: { ...fallbackDoc, id: projectId } });
         loadedRef.current = true;
       });
-  }, []);
+  }, [projectId]);
 
   // Auto-save to IndexedDB (debounced 500ms)
   useEffect(() => {
     if (!loadedRef.current) return; // don't save before first load
 
+    const doc: ProjectDocument = {
+      id: projectId,
+      meta: state.meta,
+      categories: state.categories,
+      assets: state.assets,
+      createdAt: createdAtRef.current,
+      updatedAt: Date.now(),
+    };
+    latestDocRef.current = doc;
+
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
     }
     saveTimerRef.current = setTimeout(() => {
-      const doc: ProjectDocument = {
-        id: 'current',
-        meta: state.meta,
-        categories: state.categories,
-        assets: state.assets,
-        updatedAt: Date.now(),
-      };
-      saveProject(doc).catch((err) => {
-        console.error('Failed to save to IndexedDB:', err);
-      });
+      saveProject(doc)
+        .then(() => onProjectSaved?.())
+        .catch((err) => {
+          console.error('Failed to save to IndexedDB:', err);
+        });
     }, 500);
 
     return () => {
@@ -59,7 +77,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         clearTimeout(saveTimerRef.current);
       }
     };
-  }, [state.meta, state.categories, state.assets]);
+  }, [projectId, state.meta, state.categories, state.assets, onProjectSaved]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+      if (latestDocRef.current) {
+        void saveProject({ ...latestDocRef.current, updatedAt: Date.now() }).catch((err) => {
+          console.error('Failed to flush project save on unmount:', err);
+        });
+      }
+    };
+  }, []);
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>

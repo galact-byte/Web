@@ -1,9 +1,10 @@
 /** 项目元数据 */
 export interface ProjectMeta {
+  projectCode: string;
   projectName: string;
   unitName: string;
-  evaluator: string;
-  reportDate: string; // ISO date string
+  systemName: string;
+  reportDate: string; // ISO date string, can be empty
 }
 
 /** 检查项模板（分类级默认项） */
@@ -54,7 +55,17 @@ export interface ProjectDocument {
   meta: ProjectMeta;
   categories: Category[];
   assets: Asset[];
+  createdAt: number; // timestamp
   updatedAt: number; // timestamp
+}
+
+/** 项目列表摘要 */
+export interface ProjectSummary {
+  id: string;
+  meta: ProjectMeta;
+  assetCount: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 /** 导出包的 manifest 中的分类 */

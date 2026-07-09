@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback } from 'react';
+import { getImageFilesFromClipboard } from '../utils/imageFiles';
 
 interface UploadZoneProps {
   onImageFiles: (files: File[]) => void;
@@ -57,18 +58,11 @@ const UploadZone: React.FC<UploadZoneProps> = ({ onImageFiles }) => {
   // Clipboard paste
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      const imageFiles: File[] = [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile();
-          if (file) imageFiles.push(file);
-        }
-      }
+      const imageFiles = getImageFilesFromClipboard(e);
       if (imageFiles.length > 0) {
         e.preventDefault();
+        e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
         onImageFiles(imageFiles);
       }
     },
@@ -84,11 +78,11 @@ const UploadZone: React.FC<UploadZoneProps> = ({ onImageFiles }) => {
       onPaste={handlePaste}
       tabIndex={0}
       className={`
-        border-2 border-dashed rounded-lg p-4 text-center cursor-pointer
+        flex h-44 w-44 flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-4 text-center
         transition-all duration-150
         ${isDragOver
-          ? 'border-blue-400 bg-blue-50'
-          : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/30'
+          ? 'border-blue-400 bg-blue-50 shadow-sm'
+          : 'border-gray-300 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/40'
         }
       `}
     >
@@ -101,8 +95,8 @@ const UploadZone: React.FC<UploadZoneProps> = ({ onImageFiles }) => {
         className="hidden"
       />
       <svg
-        className={`w-8 h-8 mx-auto mb-1 transition-colors ${
-          isDragOver ? 'text-blue-400' : 'text-gray-300'
+        className={`mb-3 h-9 w-9 transition-colors ${
+          isDragOver ? 'text-blue-500' : 'text-slate-400'
         }`}
         fill="none"
         stroke="currentColor"
@@ -115,9 +109,15 @@ const UploadZone: React.FC<UploadZoneProps> = ({ onImageFiles }) => {
           d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
         />
       </svg>
-      <p className="text-sm text-gray-500">
-        {isDragOver ? '松开鼠标上传' : 'Ctrl+V 粘贴截图 · 拖拽 · 点击选择'}
+      <p className="text-sm font-medium text-slate-700">
+        {isDragOver ? '松开鼠标上传' : '点击此处后'}
       </p>
+      {!isDragOver && (
+        <>
+          <p className="mt-1 text-sm text-slate-600">按 <kbd className="rounded border bg-white px-1 py-0.5 text-xs">Ctrl+V</kbd> 粘贴</p>
+          <p className="mt-2 text-xs text-slate-400">或拖拽到这里上传</p>
+        </>
+      )}
     </div>
   );
 };

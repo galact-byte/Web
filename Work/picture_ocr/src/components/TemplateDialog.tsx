@@ -75,6 +75,8 @@ const TemplateDialog: React.FC<TemplateDialogProps> = ({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
       onClick={onClose}
     >

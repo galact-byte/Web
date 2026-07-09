@@ -1,76 +1,34 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { AppProvider, useAppState, useDispatch } from './context/AppContext';
 import Toolbar from './components/Toolbar';
 import Sidebar from './components/Sidebar';
 import ContentArea from './components/ContentArea';
 import ProjectInfoDialog from './components/ProjectInfoDialog';
-import ImportDialog from './components/ImportDialog';
 import ValidationDialog from './components/ValidationDialog';
 import TemplateDialog from './components/TemplateDialog';
-import { exportDataPackage, importDataPackage } from './utils/exportImport';
+import ProjectList from './components/ProjectList';
 import { exportWordReport, validateRequired } from './utils/wordExport';
-import type { ProjectDocument, CheckItemTemplate } from './types';
+import type { CheckItemTemplate } from './types';
 import type { ValidationMissing } from './utils/wordExport';
 
-const AppContent: React.FC = () => {
+interface AppContentProps {
+  onBackToProjects: () => void;
+  openProjectInfoOnMount: boolean;
+}
+
+const AppContent: React.FC<AppContentProps> = ({ onBackToProjects, openProjectInfoOnMount }) => {
   const { loaded, meta, categories, assets } = useAppState();
   const dispatch = useDispatch();
-  const [projectInfoOpen, setProjectInfoOpen] = useState(false);
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [projectInfoOpen, setProjectInfoOpen] = useState(openProjectInfoOnMount);
   const [validationMissing, setValidationMissing] = useState<ValidationMissing[]>([]);
   const [validationOpen, setValidationOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
 
-  // Export data
-  const handleExportData = useCallback(async () => {
-    try {
-      await exportDataPackage(meta, categories, assets);
-    } catch (err) {
-      alert(`导出失败：${err instanceof Error ? err.message : '未知错误'}`);
+  useEffect(() => {
+    if (openProjectInfoOnMount) {
+      setProjectInfoOpen(true);
     }
-  }, [meta, categories, assets]);
-
-  // Import overwrite
-  const handleImportOverwrite = useCallback(
-    async (file: File) => {
-      const result = await importDataPackage(file, 'overwrite', assets, categories, meta);
-      if (!result.success || !result.data) {
-        alert(result.message);
-        return;
-      }
-      const doc: ProjectDocument = {
-        id: 'current',
-        meta: result.data.meta,
-        categories: result.data.categories,
-        assets: result.data.assets,
-        updatedAt: Date.now(),
-      };
-      dispatch({ type: 'LOAD_PROJECT', payload: doc });
-      alert(result.message);
-    },
-    [assets, categories, meta, dispatch]
-  );
-
-  // Import merge
-  const handleImportMerge = useCallback(
-    async (file: File) => {
-      const result = await importDataPackage(file, 'merge', assets, categories, meta);
-      if (!result.success || !result.data) {
-        alert(result.message);
-        return;
-      }
-      const doc: ProjectDocument = {
-        id: 'current',
-        meta: result.data.meta,
-        categories: result.data.categories,
-        assets: result.data.assets,
-        updatedAt: Date.now(),
-      };
-      dispatch({ type: 'LOAD_PROJECT', payload: doc });
-      alert(result.message);
-    },
-    [assets, categories, meta, dispatch]
-  );
+  }, [openProjectInfoOnMount]);
 
   // Word export
   const handleExportWord = useCallback(async () => {
@@ -117,9 +75,8 @@ const AppContent: React.FC = () => {
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       <Toolbar
+        onBackToProjects={onBackToProjects}
         onOpenProjectInfo={() => setProjectInfoOpen(true)}
-        onExportData={handleExportData}
-        onImportData={() => setImportDialogOpen(true)}
         onExportWord={handleExportWord}
         onManageTemplates={() => setTemplateDialogOpen(true)}
       />
@@ -130,12 +87,6 @@ const AppContent: React.FC = () => {
       <ProjectInfoDialog
         open={projectInfoOpen}
         onClose={() => setProjectInfoOpen(false)}
-      />
-      <ImportDialog
-        isOpen={importDialogOpen}
-        onClose={() => setImportDialogOpen(false)}
-        onImportOverwrite={handleImportOverwrite}
-        onImportMerge={handleImportMerge}
       />
       <TemplateDialog
         isOpen={templateDialogOpen}
@@ -154,9 +105,39 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  const [openProjectId, setOpenProjectId] = useState<string | null>(null);
+  const [newProjectInfoPrompt, setNewProjectInfoPrompt] = useState(false);
+  const [projectListRefreshKey, setProjectListRefreshKey] = useState(0);
+
+  const handleOpenProject = (projectId: string, isNewProject = false) => {
+    setNewProjectInfoPrompt(isNewProject);
+    setOpenProjectId(projectId);
+  };
+
+  const handleBackToProjects = () => {
+    setOpenProjectId(null);
+    setNewProjectInfoPrompt(false);
+    setProjectListRefreshKey((key) => key + 1);
+  };
+
+  const handleProjectSaved = useCallback(() => {
+    setProjectListRefreshKey((key) => key + 1);
+  }, []);
+
+  if (!openProjectId) {
+    return <ProjectList key={projectListRefreshKey} onOpenProject={handleOpenProject} />;
+  }
+
   return (
-    <AppProvider>
-      <AppContent />
+    <AppProvider
+      key={openProjectId}
+      projectId={openProjectId}
+      onProjectSaved={handleProjectSaved}
+    >
+      <AppContent
+        onBackToProjects={handleBackToProjects}
+        openProjectInfoOnMount={newProjectInfoPrompt}
+      />
     </AppProvider>
   );
 };

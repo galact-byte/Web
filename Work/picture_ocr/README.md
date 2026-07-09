@@ -46,6 +46,25 @@ npm run build
 npm run preview
 ```
 
+## 客户端打包
+
+项目支持两种交付形态：
+
+1. Web 静态版 ZIP：解压后可用 `启动测评证据采集工具.bat` 启动本地静态服务。
+2. Windows 桌面客户端：基于 Electron 打包为 exe/安装包。
+
+本地构建 Windows 客户端：
+
+```bash
+npm run desktop:pack
+```
+
+如果只想快速验证 Electron 目录构建：
+
+```bash
+npm run desktop:build
+```
+
 ## Release 打包
 
 仓库已提供 GitHub Actions 工作流：`.github/workflows/release-picture-ocr.yml`。
@@ -61,8 +80,9 @@ git push origin picture-ocr-v0.1.0
 
 1. 安装依赖。
 2. 运行 `npm run build`。
-3. 将 `dist/`、启动脚本、使用说明、`README.md` 和版本信息打包为 `picture-ocr-<tag>.zip`。
-4. 创建或更新 GitHub Release，并上传 ZIP 附件。
+3. 将 `dist/`、启动脚本、`README.md` 和版本信息打包为 `picture-ocr-<tag>.zip`。
+4. 构建 Windows 桌面客户端 exe/安装包。
+5. 创建或更新 GitHub Release，并上传 Web ZIP 和 Windows 客户端附件。
 
 ZIP 解压后，同事只需要双击 `启动测评证据采集工具.bat`，浏览器会自动打开本地页面。使用期间不要关闭启动窗口，用完后关闭窗口即可退出。
 

@@ -3,6 +3,7 @@ import type {
   ProjectMeta,
   Category,
   Asset,
+  CheckItem,
   ImageData,
   ExportPackage,
   AssetExport,
@@ -204,7 +205,7 @@ export async function importDataPackage(
         success: true,
         message: `导入成功：${newCategories.length} 个分类，${newAssets.length} 个资产`,
         data: {
-          meta: exportPkg.meta,
+          meta: normalizeImportedMeta(exportPkg.meta),
           categories: newCategories,
           assets: newAssets,
         },
@@ -290,14 +291,14 @@ function mergeAssets(existingAssets: Asset[], importedAssets: Asset[]): Asset[] 
   const merged = existingAssets.map(cloneAsset);
 
   for (const importedAsset of importedAssets) {
-    const existingAsset = merged.find((asset) => asset.id === importedAsset.id);
+    const existingAsset = findMatchingAsset(merged, importedAsset);
     if (!existingAsset) {
       merged.push(cloneAsset(importedAsset));
       continue;
     }
 
     for (const importedItem of importedAsset.items) {
-      const existingItem = existingAsset.items.find((item) => item.id === importedItem.id);
+      const existingItem = findMatchingItem(existingAsset.items, importedItem);
       if (!existingItem) {
         existingAsset.items.push({
           ...importedItem,
@@ -306,16 +307,62 @@ function mergeAssets(existingAssets: Asset[], importedAssets: Asset[]): Asset[] 
         continue;
       }
 
-      const imageIds = new Set(existingItem.images.map((image) => image.id));
-      for (const importedImage of importedItem.images) {
-        if (!imageIds.has(importedImage.id)) {
-          existingItem.images.push({ ...importedImage });
-        }
-      }
+      mergeImages(existingItem.images, importedItem.images);
     }
   }
 
   return merged;
+}
+
+function normalizeImportedMeta(meta: Partial<ProjectMeta> | undefined): ProjectMeta {
+  return {
+    projectCode: meta?.projectCode ?? '',
+    projectName: meta?.projectName ?? '',
+    unitName: meta?.unitName ?? '',
+    systemName: meta?.systemName ?? '',
+    reportDate: meta?.reportDate ?? '',
+  };
+}
+
+function findMatchingAsset(assets: Asset[], importedAsset: Asset): Asset | undefined {
+  return assets.find((asset) => asset.id === importedAsset.id)
+    ?? assets.find(
+      (asset) =>
+        asset.categoryId === importedAsset.categoryId &&
+        normalizeName(asset.name) === normalizeName(importedAsset.name)
+    );
+}
+
+function findMatchingItem(items: CheckItem[], importedItem: CheckItem): CheckItem | undefined {
+  return items.find((item) => item.id === importedItem.id)
+    ?? items.find(
+      (item) =>
+        !!item.fromTemplateId &&
+        item.fromTemplateId === importedItem.fromTemplateId
+    )
+    ?? items.find((item) => normalizeName(item.label) === normalizeName(importedItem.label));
+}
+
+function mergeImages(existingImages: ImageData[], importedImages: ImageData[]): void {
+  const imageKeys = new Set(existingImages.flatMap((image) => getImageDedupKeys(image)));
+  for (const importedImage of importedImages) {
+    const importedKeys = getImageDedupKeys(importedImage);
+    if (importedKeys.some((key) => imageKeys.has(key))) continue;
+    existingImages.push({ ...importedImage });
+    importedKeys.forEach((key) => imageKeys.add(key));
+  }
+}
+
+function getImageDedupKeys(image: ImageData): string[] {
+  const keys = [`id:${image.id}`];
+  if (image.fileName && image.uploadedAt) {
+    keys.push(`file-time:${image.fileName}::${image.uploadedAt}`);
+  }
+  return keys;
+}
+
+function normalizeName(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function cloneAsset(asset: Asset): Asset {

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { genId } from '../context/appReducer';
 import type { CheckItem, ImageData } from '../types';
+import { readImageFiles } from '../utils/imageFiles';
 import UploadZone from './UploadZone';
 import ImageThumbnail from './ImageThumbnail';
 import ImageViewer from './ImageViewer';
@@ -15,6 +15,8 @@ interface ItemCardProps {
   onRemoveImage: (assetId: string, itemId: string, imageId: string) => void;
   onUpdateCaption: (assetId: string, itemId: string, imageId: string, caption: string) => void;
   onReorderImages: (assetId: string, itemId: string, imageIds: string[]) => void;
+  isPasteTarget?: boolean;
+  onSelectPasteTarget?: (itemId: string) => void;
 }
 
 const ItemCard: React.FC<ItemCardProps> = ({
@@ -27,6 +29,8 @@ const ItemCard: React.FC<ItemCardProps> = ({
   onRemoveImage,
   onUpdateCaption,
   onReorderImages,
+  isPasteTarget = false,
+  onSelectPasteTarget,
 }) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(item.label);
@@ -47,24 +51,9 @@ const ItemCard: React.FC<ItemCardProps> = ({
 
   // ---- Image file handlers ----
   const handleImageFiles = useCallback(
-    (files: File[]) => {
-      files.forEach((file) => {
-        if (file.size > 5 * 1024 * 1024) {
-          console.warn(`图片过大 (${(file.size / 1024 / 1024).toFixed(1)}MB): ${file.name}`);
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-          const image: ImageData = {
-            id: genId(),
-            fileName: file.name,
-            data: reader.result as string,
-            caption: '',
-            uploadedAt: new Date().toISOString(),
-          };
-          onAddImage(assetId, item.id, image);
-        };
-        reader.readAsDataURL(file);
-      });
+    async (files: File[]) => {
+      const images = await readImageFiles(files);
+      images.forEach((image) => onAddImage(assetId, item.id, image));
     },
     [assetId, item.id, onAddImage]
   );
@@ -85,7 +74,15 @@ const ItemCard: React.FC<ItemCardProps> = ({
   );
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3 hover:border-gray-300 transition-colors">
+    <div
+      className={`relative bg-white border rounded-xl p-4 space-y-3 transition-colors shadow-sm
+        ${isPasteTarget
+          ? 'border-blue-400 ring-2 ring-blue-100 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:rounded-l-xl before:bg-blue-500'
+          : 'border-gray-200 hover:border-gray-300'
+        }
+      `}
+      onClick={() => onSelectPasteTarget?.(item.id)}
+    >
       {/* Item header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2 flex-1 min-w-0">
@@ -150,32 +147,32 @@ const ItemCard: React.FC<ItemCardProps> = ({
       </div>
 
       {/* Image management */}
-      <div className="space-y-3">
-        {/* Upload zone */}
-        <UploadZone onImageFiles={(files) => handleImageFiles(files)} />
+      {isPasteTarget && (
+        <div className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
+          当前粘贴目标：按 Ctrl+V 可直接粘贴截图到此检查项
+        </div>
+      )}
 
-        {/* Image thumbnails grid */}
-        {item.images.length > 0 && (
-          <div className="flex flex-wrap gap-3">
-            {item.images.map((img) => (
-              <ImageThumbnail
-                key={img.id}
-                image={img}
-                onRemove={(imageId) => onRemoveImage(assetId, item.id, imageId)}
-                onClick={(imageId) => {
-                  const idx = item.images.findIndex((i) => i.id === imageId);
-                  if (idx >= 0) setViewerIndex(idx);
-                }}
-                onUpdateCaption={(imageId, caption) =>
-                  onUpdateCaption(assetId, item.id, imageId, caption)
-                }
-                onDragStart={(_, imageId) => setDragImageId(imageId)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(_, targetId) => handleDrop(targetId)}
-              />
-            ))}
-          </div>
-        )}
+      <div className="flex flex-wrap items-start gap-3">
+        <UploadZone onImageFiles={(files) => void handleImageFiles(files)} />
+
+        {item.images.map((img) => (
+          <ImageThumbnail
+            key={img.id}
+            image={img}
+            onRemove={(imageId) => onRemoveImage(assetId, item.id, imageId)}
+            onClick={(imageId) => {
+              const idx = item.images.findIndex((i) => i.id === imageId);
+              if (idx >= 0) setViewerIndex(idx);
+            }}
+            onUpdateCaption={(imageId, caption) =>
+              onUpdateCaption(assetId, item.id, imageId, caption)
+            }
+            onDragStart={(_, imageId) => setDragImageId(imageId)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(_, targetId) => handleDrop(targetId)}
+          />
+        ))}
       </div>
 
       {/* Image viewer */}
