@@ -168,6 +168,7 @@ export function createPresetAssets(categories: Category[]): Asset[] {
     makeAsset('XX数据库（地址）', 'cat-system-mgmt', cats),
     makeAsset('XX中间件（地址）', 'cat-system-mgmt', cats),
     makeAsset('XX应用系统（地址）', 'cat-app', cats),
+    makeAsset('制度', 'cat-management', cats),
   ];
 }
 
@@ -180,9 +181,10 @@ export function createDefaultMeta() {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return {
+    projectCode: '',
     projectName: '',
     unitName: '',
-    evaluator: '',
+    systemName: '',
     reportDate: `${year}-${month}-${day}`,
   };
 }

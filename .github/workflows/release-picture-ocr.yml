@@ -25,7 +25,7 @@ env:
 jobs:
   build-and-release:
     name: Build and publish release asset
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -46,9 +46,15 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         run: npm run build
 
+      - name: Build Windows desktop client
+        working-directory: ${{ env.APP_DIR }}
+        shell: bash
+        run: npm run desktop:clean && npx electron-builder --win --publish never
+
       - name: Package release zip
         id: package
         working-directory: ${{ env.APP_DIR }}
+        shell: bash
         env:
           RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
         run: |
@@ -98,11 +104,13 @@ jobs:
           echo "zip_path=${APP_DIR}/${ZIP_NAME}" >> "$GITHUB_OUTPUT"
           echo "zip_name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload workflow artifact
+      - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.package.outputs.zip_name }}
-          path: ${{ steps.package.outputs.zip_path }}
+          name: picture-ocr-release-assets
+          path: |
+            ${{ steps.package.outputs.zip_path }}
+            ${{ env.APP_DIR }}/desktop-dist/*
           if-no-files-found: error
 
       - name: Create or update GitHub Release
@@ -110,6 +118,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.package.outputs.release_tag }}
           ZIP_PATH: ${{ steps.package.outputs.zip_path }}
+          DESKTOP_DIST: ${{ env.APP_DIR }}/desktop-dist
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -119,13 +129,18 @@ jobs:
 
           构建来源：${GITHUB_SHA}
 
-          下载 ZIP 后可直接使用其中的 \`dist/\` 静态文件部署或本地预览。
+          下载 ZIP 可使用 Web 静态版；下载 Windows exe/安装包可直接作为客户端使用。
           EOF
 
+          release_files=("$ZIP_PATH")
+          while IFS= read -r -d '' file; do
+            release_files+=("$file")
+          done < <(find "$DESKTOP_DIST" -maxdepth 1 -type f -print0)
+
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$ZIP_PATH" --clobber
+            gh release upload "$RELEASE_TAG" "${release_files[@]}" --clobber
           else
-            gh release create "$RELEASE_TAG" "$ZIP_PATH" \
+            gh release create "$RELEASE_TAG" "${release_files[@]}" \
               --target "$GITHUB_SHA" \
               --title "Picture OCR ${RELEASE_TAG}" \
               --notes-file "$NOTES_FILE"

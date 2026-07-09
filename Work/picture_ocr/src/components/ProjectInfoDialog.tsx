@@ -26,17 +26,28 @@ const ProjectInfoDialog: React.FC<ProjectInfoDialogProps> = ({ open, onClose }) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
         className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-800">项目信息</h2>
+          <p className="mt-1 text-sm text-gray-500">项目编号、项目名称和日期为选填项。</p>
         </div>
         <div className="px-6 py-4 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">项目名称</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">项目编号（选填）</label>
+            <input
+              type="text"
+              value={form.projectCode}
+              onChange={(e) => setForm({ ...form, projectCode: e.target.value })}
+              className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="例：HJ-2026-001"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">项目名称（选填）</label>
             <input
               type="text"
               value={form.projectName}
@@ -46,7 +57,7 @@ const ProjectInfoDialog: React.FC<ProjectInfoDialogProps> = ({ open, onClose }) 
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">被测单位名称</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">单位名称</label>
             <input
               type="text"
               value={form.unitName}
@@ -56,17 +67,17 @@ const ProjectInfoDialog: React.FC<ProjectInfoDialogProps> = ({ open, onClose }) 
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">测评人员</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">系统名称</label>
             <input
               type="text"
-              value={form.evaluator}
-              onChange={(e) => setForm({ ...form, evaluator: e.target.value })}
+              value={form.systemName}
+              onChange={(e) => setForm({ ...form, systemName: e.target.value })}
               className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="姓名"
+              placeholder="例：XX业务系统"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">报告日期</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">日期（选填）</label>
             <input
               type="date"
               value={form.reportDate}

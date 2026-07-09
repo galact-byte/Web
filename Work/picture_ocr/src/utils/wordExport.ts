@@ -139,8 +139,24 @@ function formatDateChinese(isoDate: string): string {
   return `${chineseNum(year)}年${chineseNum(month)}月`;
 }
 
-function getDateStr(): string {
-  return new Date().toISOString().slice(0, 10).replace(/-/g, '');
+function sanitizeFileNamePart(value: string, fallback: string): string {
+  const cleaned = value
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[. ]+$/g, '')
+    .replace(/_+/g, '_');
+  if (!cleaned) return fallback;
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(cleaned)) {
+    return `${cleaned}_项目`;
+  }
+  return cleaned;
+}
+
+function buildReportFileName(meta: ProjectMeta): string {
+  const projectName = sanitizeFileNamePart(meta.projectName, '未命名项目');
+  const systemName = sanitizeFileNamePart(meta.systemName, '未命名系统');
+  return `${projectName}_${systemName}_测评证据.docx`;
 }
 
 function templateText(text: string, size = 32, font = '仿宋', bold = false, color = '000000'): TextRun {
@@ -473,5 +489,5 @@ export async function exportWordReport(
   });
 
   const blob = await Packer.toBlob(doc);
-  downloadBlob(blob, `测评证据报告_${meta.unitName || '未命名'}_${getDateStr()}.docx`);
+  downloadBlob(blob, buildReportFileName(meta));
 }

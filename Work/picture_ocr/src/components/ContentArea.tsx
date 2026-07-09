@@ -1,21 +1,60 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import { getAssetById } from '../context/appReducer';
+import { getImageFilesFromClipboard, readImageFiles } from '../utils/imageFiles';
 import ItemCard from './ItemCard';
+
+function isTextEditingElement(element: Element | null): boolean {
+  if (!element) return false;
+  const tagName = element.tagName.toLowerCase();
+  if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') return true;
+  return element instanceof HTMLElement && element.isContentEditable;
+}
 
 const ContentArea: React.FC = () => {
   const { assets, activeAssetId, categories } = useAppState();
   const dispatch = useDispatch();
   const [newItemLabel, setNewItemLabel] = useState('');
+  const [pasteTargetItemId, setPasteTargetItemId] = useState<string | null>(null);
 
   const activeAsset = activeAssetId ? getAssetById(assets, activeAssetId) : undefined;
   const activeCategory = activeAsset
     ? categories.find((c) => c.id === activeAsset.categoryId)
     : undefined;
 
+  useEffect(() => {
+    setPasteTargetItemId(null);
+  }, [activeAsset?.id]);
+
+  useEffect(() => {
+    const handleWindowPaste = async (event: ClipboardEvent) => {
+      if (!activeAsset || !pasteTargetItemId) return;
+      if (isTextEditingElement(document.activeElement)) return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+
+      const imageFiles = getImageFilesFromClipboard(event);
+      if (imageFiles.length === 0) return;
+
+      const targetItem = activeAsset.items.find((item) => item.id === pasteTargetItemId);
+      if (!targetItem) return;
+
+      event.preventDefault();
+      const images = await readImageFiles(imageFiles);
+      images.forEach((image) => {
+        dispatch({
+          type: 'ADD_IMAGE',
+          payload: { assetId: activeAsset.id, itemId: targetItem.id, image },
+        });
+      });
+    };
+
+    window.addEventListener('paste', handleWindowPaste);
+    return () => window.removeEventListener('paste', handleWindowPaste);
+  }, [activeAsset, pasteTargetItemId, dispatch]);
+
   if (!activeAssetId || !activeAsset) {
     return (
-      <main className="flex-1 flex items-center justify-center bg-gray-50">
+      <main className="flex-1 flex items-center justify-center bg-slate-50">
         <div className="text-center text-gray-400">
           <svg className="w-16 h-16 mx-auto mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -36,18 +75,20 @@ const ContentArea: React.FC = () => {
   };
 
   return (
-    <main className="flex-1 bg-gray-50 overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-6 py-6">
+    <main className="flex-1 overflow-y-auto bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px]">
+      <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Asset header */}
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">{activeAsset.name}</h2>
-          {activeCategory && (
-            <span className="text-base text-gray-500">{activeCategory.name}</span>
-          )}
-          <span className="text-base text-gray-400 ml-2">
-            · {activeAsset.items.length} 个检查项
-            · {activeAsset.items.filter((i) => i.required).length} 个必填
-          </span>
+          <h2 className="text-3xl font-bold text-slate-900">{activeAsset.name}</h2>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-base text-slate-500">
+            {activeCategory && <span>{activeCategory.name}</span>}
+            <span>· 总计 {activeAsset.items.length} 个检查项</span>
+            <span className="text-red-500">· {activeAsset.items.filter((i) => i.required).length} 个必填</span>
+          </div>
+          <p className="mt-2 text-sm text-slate-500">
+            先点击某个检查项卡片边缘设为粘贴目标，然后直接按 Ctrl+V 粘贴截图。
+            {!pasteTargetItemId && <span className="ml-2 text-amber-600">当前还未选择粘贴目标。</span>}
+          </p>
         </div>
 
         {/* Check items */}
@@ -56,12 +97,14 @@ const ContentArea: React.FC = () => {
             <p className="text-sm">暂无检查项，请在下方添加</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-5">
             {activeAsset.items.map((item) => (
               <ItemCard
                 key={item.id}
                 item={item}
                 assetId={activeAsset.id}
+                isPasteTarget={item.id === pasteTargetItemId}
+                onSelectPasteTarget={(itemId) => setPasteTargetItemId(itemId)}
                 onRename={(itemId, newLabel) =>
                   dispatch({
                     type: 'RENAME_ITEM',
@@ -110,7 +153,7 @@ const ContentArea: React.FC = () => {
         )}
 
         {/* Add item */}
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <input
             type="text"
             value={newItemLabel}

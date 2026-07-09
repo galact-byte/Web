@@ -1,10 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 interface ImportDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportOverwrite: (file: File) => Promise<void>;
-  onImportMerge: (file: File) => Promise<void>;
+  onImportOverwrite: (file: File) => Promise<boolean | void>;
+  onImportMerge: (file: File) => Promise<boolean | void>;
 }
 
 const ImportDialog: React.FC<ImportDialogProps> = ({
@@ -16,6 +16,13 @@ const ImportDialog: React.FC<ImportDialogProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedFile(null);
+      setImporting(false);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -29,23 +36,26 @@ const ImportDialog: React.FC<ImportDialogProps> = ({
     if (!selectedFile) return;
     setImporting(true);
 
+    let shouldClose = false;
     try {
-      if (mode === 'overwrite') {
-        await onImportOverwrite(selectedFile);
-      } else {
-        await onImportMerge(selectedFile);
-      }
+      const success = mode === 'overwrite'
+        ? await onImportOverwrite(selectedFile)
+        : await onImportMerge(selectedFile);
+      if (success === false) return;
+      shouldClose = true;
       onClose();
     } catch (err) {
       alert(`导入失败：${err instanceof Error ? err.message : '未知错误'}`);
     } finally {
       setImporting(false);
-      setSelectedFile(null);
+      if (shouldClose) {
+        setSelectedFile(null);
+      }
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
         className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 mx-4"
         onClick={(e) => e.stopPropagation()}
