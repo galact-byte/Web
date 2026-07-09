@@ -102,6 +102,18 @@
   - 模板中心化管理与签章
 - **启动**: 双击 `start.bat` 或手动 `uvicorn app.main:app --reload --port 8011`
 
+#### 6.3 Work/picture_ocr/ - 测评证据采集工具
+- **技术栈**: React 18 + TypeScript + Vite + Tailwind CSS
+- **用途**: 采集、整理等保测评截图证据，导出项目数据包和 Word 报告
+- **特性**:
+  - 内置物理环境、网络设备、安全设备、主机设备、应用系统等证据分类模板
+  - 浏览器 IndexedDB 本地保存，无需后端服务
+  - 支持截图上传/粘贴、检查项模板维护、ZIP 导入导出
+  - 支持 Word 报告导出和必填截图缺失提示
+  - 已配置 GitHub Actions Release 打包流程
+- **启动**: `cd Work/picture_ocr && npm ci && npm run dev`
+- **Release**: 推送 `picture-ocr-v*` 标签自动打包发布
+
 ---
 
 ## 🚀 快速开始
@@ -129,6 +141,10 @@ pip install -r requirements.txt
 cd ../frontend
 npm install
 
+# 测评证据采集工具
+cd Work/picture_ocr
+npm ci
+
 # CodeAudit WebUI (代码安全审计)
 cd test/webui
 pip install -r requirements.txt
@@ -153,6 +169,10 @@ cd Work/Program
 start.bat          # Windows
 # bash start.sh   # Linux/macOS
 
+# 测评证据采集工具
+cd Work/picture_ocr
+npm run dev
+
 # CodeAudit WebUI
 cd test/webui
 python app.py      # 或双击 start.bat
@@ -172,6 +192,7 @@ python app.py      # 或双击 start.bat
 | test/game | Python/Java/C++/C# | 控制台 | - |
 | Work/Program | FastAPI + Vue 3 | Vanilla CSS | Vite |
 | Work/Program1 | FastAPI + Jinja2 | Chart.js + reportlab | - |
+| Work/picture_ocr | React + TypeScript | Tailwind CSS | Vite |
 
 ---
 
