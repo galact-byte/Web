@@ -1,0 +1,89 @@
+name: Build Picture OCR Release
+
+on:
+  push:
+    tags:
+      - 'picture-ocr-v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag, for example picture-ocr-v0.1.0'
+        required: true
+        default: 'picture-ocr-v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Prepare release variables
+        id: vars
+        shell: pwsh
+        run: |
+          $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { '${{ github.event.inputs.release_tag }}' } else { '${{ github.ref_name }}' }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "web_zip=picture-ocr-$tag-web.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Package web ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-web | Out-Null
+          Copy-Item -Recurse dist release-web/dist
+          Copy-Item README.md release-web/README.md
+          if (Test-Path '启动测评证据采集工具.bat') { Copy-Item '启动测评证据采集工具.bat' release-web/ }
+          if (Test-Path 'start-server.ps1') { Copy-Item 'start-server.ps1' release-web/ }
+          @"
+          测评证据采集工具 ${{ steps.vars.outputs.tag }}
+
+          本次更新摘要：
+          - 新增多项目外层列表，项目创建/删除/导入/导出都在外层完成。
+          - 新建项目校验单位名称和系统名称，保存后留在项目列表，取消不会生成空项目。
+          - 优化暗色左侧导航、白色顶部栏、点阵背景、证据卡片和粘贴/上传区域视觉。
+          - 修复报告命名、默认管理制度材料、项目级数据包导入合并等体验问题。
+          "@ | Set-Content -Encoding UTF8 release-web/RELEASE-NOTES.txt
+          Compress-Archive -Path release-web/* -DestinationPath "${{ steps.vars.outputs.web_zip }}" -Force
+
+      - name: Build Windows desktop client
+        run: npm run desktop:pack
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: 测评证据采集工具 ${{ steps.vars.outputs.tag }}
+          body: |
+            ## 本次更新/修复摘要
+
+            - 新增多项目外层列表：支持新建、打开、搜索、删除、项目级导入/导出。
+            - 修复新建项目流程：单位名称和系统名称必填；保存后留在项目列表，取消不会留下空项目。
+            - 删除项目入口改为外层列表中的醒目红色按钮，并保留二次确认。
+            - 优化采集界面视觉：暗色左侧导航、白色顶部栏、点阵背景、白色证据卡片、必填红色左侧状态线、紧凑方形虚线上传卡片。
+            - 保留 Web ZIP 交付，同时上传 Windows 桌面客户端构建产物。
+
+            ## 使用方式
+
+            - Web 静态版：下载 `*-web.zip`，解压后双击 `启动测评证据采集工具.bat` 运行。
+            - Windows 客户端：下载 `desktop-dist` 产出的 exe/portable 附件，双击运行。
+          files: |
+            ${{ steps.vars.outputs.web_zip }}
+            desktop-dist/*
+          fail_on_unmatched_files: false
