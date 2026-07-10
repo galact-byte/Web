@@ -38,6 +38,27 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ env.APP_DIR }}/package-lock.json
 
+      - name: Sync app version from release tag
+        working-directory: ${{ env.APP_DIR }}
+        shell: bash
+        env:
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${RELEASE_TAG_INPUT:-}" ]; then
+            TAG="$RELEASE_TAG_INPUT"
+          else
+            TAG="$GITHUB_REF_NAME"
+          fi
+          VERSION="$(printf '%s' "$TAG" | sed 's/^picture-ocr-v//')"
+          echo "Syncing version to: $VERSION"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
       - name: Install dependencies
         working-directory: ${{ env.APP_DIR }}
         run: npm ci
@@ -80,7 +101,6 @@ jobs:
 
           cp -R dist "release/${PACKAGE_NAME}/dist"
           cp README.md "release/${PACKAGE_NAME}/README.md"
-          cp start.bat "release/${PACKAGE_NAME}/start.bat"
           cp start-server.ps1 "release/${PACKAGE_NAME}/start-server.ps1"
           cp '启动测评证据采集工具.bat' "release/${PACKAGE_NAME}/启动测评证据采集工具.bat"
           printf '%s\n' "$RELEASE_TAG" > "release/${PACKAGE_NAME}/VERSION.txt"
@@ -124,13 +144,35 @@ jobs:
           set -euo pipefail
 
           NOTES_FILE="release-notes.md"
-          cat > "$NOTES_FILE" <<EOF
+
+          # ---------- generate changelog from git history ----------
+          PREV_TAG=$(git tag --list 'picture-ocr-v*' --sort=-version:refname | grep -A1 "^${RELEASE_TAG}$" | tail -1 || true)
+
+          cat > "$NOTES_FILE" <<'NOTES_HEADER'
           ## 测评证据采集工具
 
-          构建来源：${GITHUB_SHA}
+          NOTES_HEADER
 
-          下载 ZIP 可使用 Web 静态版；下载 Windows exe/安装包可直接作为客户端使用。
-          EOF
+          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$RELEASE_TAG" ]; then
+            echo "### 📋 本版本更新内容" >> "$NOTES_FILE"
+            echo "" >> "$NOTES_FILE"
+            git log "${PREV_TAG}..${RELEASE_TAG}" --pretty=format:'- %s' --no-merges >> "$NOTES_FILE" 2>/dev/null \
+              || echo "- （无提交记录）" >> "$NOTES_FILE"
+          else
+            echo "### 📋 更新内容" >> "$NOTES_FILE"
+            echo "" >> "$NOTES_FILE"
+            git log --pretty=format:'- %s' --no-merges >> "$NOTES_FILE" 2>/dev/null \
+              || echo "- 首个正式发布版本。" >> "$NOTES_FILE"
+          fi
+
+          cat >> "$NOTES_FILE" <<'NOTES_FOOTER'
+
+          ### 📦 使用方式
+
+          - **Web 静态版**：下载 `*-web.zip`，解压后双击 `启动测评证据采集工具.bat` 运行
+          - **Windows 客户端**：下载 `.exe` 便携版，双击运行
+          NOTES_FOOTER
+          # --------------------------------------------------------
 
           release_files=("$ZIP_PATH")
           while IFS= read -r -d '' file; do

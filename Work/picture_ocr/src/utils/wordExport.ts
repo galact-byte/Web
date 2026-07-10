@@ -154,9 +154,9 @@ function sanitizeFileNamePart(value: string, fallback: string): string {
 }
 
 function buildReportFileName(meta: ProjectMeta): string {
-  const projectName = sanitizeFileNamePart(meta.projectName, '未命名项目');
+  const unitName = sanitizeFileNamePart(meta.unitName, '未命名单位');
   const systemName = sanitizeFileNamePart(meta.systemName, '未命名系统');
-  return `${projectName}_${systemName}_测评证据.docx`;
+  return `${unitName}_${systemName}_测评证据.docx`;
 }
 
 function templateText(text: string, size = 32, font = '仿宋', bold = false, color = '000000'): TextRun {
@@ -165,6 +165,11 @@ function templateText(text: string, size = 32, font = '仿宋', bold = false, co
 
 function ensureAssetTitleSuffix(name: string): string {
   return /[：:]\s*$/.test(name) ? name : `${name}：`;
+}
+
+function formatChineseSectionNumber(index: number): string {
+  const numbers = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+  return numbers[index - 1] ?? String(index);
 }
 
 // ==================== Cover Page ====================
@@ -184,8 +189,8 @@ async function buildCoverPage(meta: ProjectMeta): Promise<Paragraph[]> {
 
   const result: Paragraph[] = [];
 
-  // Spacer to push title down
-  result.push(new Paragraph({ spacing: { before: 3000 } }));
+  // 模板封面采用“标题 / Logo / 单位日期”三段式；标题靠上，单位和日期靠近页底。
+  result.push(new Paragraph({ spacing: { before: 1600 } }));
 
   // Title: 测评证据截图要求 (36pt bold, center)
   result.push(
@@ -205,8 +210,8 @@ async function buildCoverPage(meta: ProjectMeta): Promise<Paragraph[]> {
     })
   );
 
-  // Gap
-  result.push(new Paragraph({ spacing: { before: 60 } }));
+  // 让 Logo 独立位于页面中段，不与标题或单位信息挤在一起。
+  result.push(new Paragraph({ spacing: { before: 1800 } }));
 
   // Decorative image
   if (decorationImage) {
@@ -218,8 +223,8 @@ async function buildCoverPage(meta: ProjectMeta): Promise<Paragraph[]> {
     );
   }
 
-  // Gap
-  result.push(new Paragraph({ spacing: { before: 60 } }));
+  // Logo 与落款之间保留模板中的大块留白，形成封面层级。
+  result.push(new Paragraph({ spacing: { before: 3800 } }));
 
   // Company name (22pt, center) — matching template sz=44
   result.push(
@@ -416,6 +421,7 @@ export async function exportWordReport(
 
   // --- Body ---
   let hasWrittenCategory = false;
+  let categoryIndex = 0;
   for (const cat of categories) {
     const catAssets = assets.filter((a) => a.categoryId === cat.id);
     if (catAssets.length === 0) continue;
@@ -425,10 +431,11 @@ export async function exportWordReport(
       sections.push(new Paragraph({ children: [new PageBreak()] }));
     }
 
+    categoryIndex += 1;
     sections.push(
       new Paragraph({
         style: 'TemplateHeading1',
-        children: [templateText(cat.name, 32, '黑体', true)],
+        children: [templateText(`${formatChineseSectionNumber(categoryIndex)}、${cat.name}`, 32, '黑体', true)],
       })
     );
     hasWrittenCategory = true;

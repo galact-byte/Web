@@ -4,6 +4,7 @@ import { readImageFiles } from '../utils/imageFiles';
 import UploadZone from './UploadZone';
 import ImageThumbnail from './ImageThumbnail';
 import ImageViewer from './ImageViewer';
+import { useConfirmDialog } from './ConfirmDialog';
 
 interface ItemCardProps {
   item: CheckItem;
@@ -36,6 +37,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
   const [editValue, setEditValue] = useState(item.label);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [dragImageId, setDragImageId] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmDialog();
 
   const handleStartEdit = () => {
     setEditValue(item.label);
@@ -75,44 +77,56 @@ const ItemCard: React.FC<ItemCardProps> = ({
 
   return (
     <div
-      className={`relative bg-white border rounded-xl p-4 space-y-3 transition-colors shadow-sm
+      className={`relative overflow-hidden border bg-white shadow-sm transition-all
         ${isPasteTarget
-          ? 'border-blue-400 ring-2 ring-blue-100 before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:rounded-l-xl before:bg-blue-500'
-          : 'border-gray-200 hover:border-gray-300'
+          ? 'border-blue-400 ring-2 ring-blue-100 shadow-blue-100'
+          : 'border-slate-200 hover:border-slate-300'
         }
       `}
       onClick={() => onSelectPasteTarget?.(item.id)}
     >
+      <div
+        className={`absolute left-0 top-0 h-full w-1.5 ${item.required ? 'bg-red-500' : 'bg-slate-300'}`}
+        title={item.required ? '必填项' : '选填项'}
+      />
       {/* Item header */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-2 flex-1 min-w-0">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-8 py-5">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
           <span
-            className={`mt-0.5 flex-shrink-0 inline-block w-2 h-2 rounded-full ${
-              item.required ? 'bg-red-400' : 'bg-gray-300'
+            className={`mt-0.5 flex-shrink-0 border px-2 py-0.5 text-xs font-semibold ${
+              item.required ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-200 bg-slate-50 text-slate-500'
             }`}
             title={item.required ? '必填' : '选填'}
-          />
-          {editing ? (
-            <input
-              type="text"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onBlur={handleFinishEdit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleFinishEdit();
-                if (e.key === 'Escape') setEditing(false);
-              }}
-              className="flex-1 text-base border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              autoFocus
-            />
-          ) : (
-            <span className="text-base text-gray-800 leading-6">{item.label}</span>
-          )}
+          >
+            {item.required ? '必填项' : '选填项'}
+          </span>
+          <div className="min-w-0 flex-1">
+            {editing ? (
+              <input
+                type="text"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={handleFinishEdit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleFinishEdit();
+                  if (e.key === 'Escape') setEditing(false);
+                }}
+                className="w-full text-base border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                autoFocus
+              />
+            ) : (
+              <span className="block text-base font-bold text-slate-950 leading-6">{item.label}</span>
+            )}
+
+          </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
-            onClick={() => onToggleRequired(item.id)}
-            className={`px-3 py-1 text-sm rounded transition-colors ${
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleRequired(item.id);
+            }}
+            className={`px-3 py-1 text-sm rounded-[2px] transition-colors ${
               item.required
                 ? 'bg-red-50 text-red-600 hover:bg-red-100'
                 : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
@@ -122,7 +136,10 @@ const ItemCard: React.FC<ItemCardProps> = ({
             {item.required ? '必填' : '选填'}
           </button>
           <button
-            onClick={handleStartEdit}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleStartEdit();
+            }}
             className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
             title="重命名"
           >
@@ -131,8 +148,15 @@ const ItemCard: React.FC<ItemCardProps> = ({
             </svg>
           </button>
           <button
-            onClick={() => {
-              if (window.confirm('确定要删除该检查项吗？')) {
+            onClick={async (event) => {
+              event.stopPropagation();
+              const confirmed = await confirm({
+                title: '删除检查项',
+                message: `确定要删除“${item.label}”吗？\n\n该检查项下的截图也会被删除，此操作不可撤销。`,
+                confirmText: '删除检查项',
+                tone: 'danger',
+              });
+              if (confirmed) {
                 onRemove(item.id);
               }
             }}
@@ -143,37 +167,41 @@ const ItemCard: React.FC<ItemCardProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
+          <span className="px-2 py-1 text-lg leading-none text-slate-400" title="更多操作">⋮</span>
         </div>
       </div>
 
       {/* Image management */}
-      {isPasteTarget && (
-        <div className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
-          当前粘贴目标：按 Ctrl+V 可直接粘贴截图到此检查项
+      <div className="px-8 py-6">
+        {isPasteTarget && (
+          <div className="mb-4 border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+            当前粘贴目标：按 Ctrl+V 可直接粘贴截图到此检查项
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-start gap-4">
+          {item.images.map((img) => (
+            <ImageThumbnail
+              key={img.id}
+              image={img}
+              onRemove={(imageId) => onRemoveImage(assetId, item.id, imageId)}
+              onClick={(imageId) => {
+                const idx = item.images.findIndex((i) => i.id === imageId);
+                if (idx >= 0) setViewerIndex(idx);
+              }}
+              onUpdateCaption={(imageId, caption) =>
+                onUpdateCaption(assetId, item.id, imageId, caption)
+              }
+              onDragStart={(_, imageId) => setDragImageId(imageId)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(_, targetId) => handleDrop(targetId)}
+            />
+          ))}
+          <UploadZone onImageFiles={(files) => void handleImageFiles(files)} />
         </div>
-      )}
-
-      <div className="flex flex-wrap items-start gap-3">
-        <UploadZone onImageFiles={(files) => void handleImageFiles(files)} />
-
-        {item.images.map((img) => (
-          <ImageThumbnail
-            key={img.id}
-            image={img}
-            onRemove={(imageId) => onRemoveImage(assetId, item.id, imageId)}
-            onClick={(imageId) => {
-              const idx = item.images.findIndex((i) => i.id === imageId);
-              if (idx >= 0) setViewerIndex(idx);
-            }}
-            onUpdateCaption={(imageId, caption) =>
-              onUpdateCaption(assetId, item.id, imageId, caption)
-            }
-            onDragStart={(_, imageId) => setDragImageId(imageId)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(_, targetId) => handleDrop(targetId)}
-          />
-        ))}
       </div>
+
+      {dialog}
 
       {/* Image viewer */}
       {viewerIndex !== null && (
@@ -185,15 +213,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
         />
       )}
 
-      {/* Summary line */}
-      {item.images.length > 0 && (
-        <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <span>已上传 {item.images.length} 张图片</span>
-        </div>
-      )}
+
     </div>
   );
 };

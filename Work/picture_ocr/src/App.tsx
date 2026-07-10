@@ -73,15 +73,15 @@ const AppContent: React.FC<AppContentProps> = ({ onBackToProjects, openProjectIn
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      <Toolbar
-        onBackToProjects={onBackToProjects}
-        onOpenProjectInfo={() => setProjectInfoOpen(true)}
-        onExportWord={handleExportWord}
-        onManageTemplates={() => setTemplateDialogOpen(true)}
-      />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+    <div className="h-screen flex bg-slate-100">
+      <Sidebar />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Toolbar
+          onBackToProjects={onBackToProjects}
+          onOpenProjectInfo={() => setProjectInfoOpen(true)}
+          onExportWord={handleExportWord}
+          onManageTemplates={() => setTemplateDialogOpen(true)}
+        />
         <ContentArea />
       </div>
       <ProjectInfoDialog

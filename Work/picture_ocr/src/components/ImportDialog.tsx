@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 
 interface ImportDialogProps {
   isOpen: boolean;
+  targetProjectName: string;
   onClose: () => void;
   onImportOverwrite: (file: File) => Promise<boolean | void>;
   onImportMerge: (file: File) => Promise<boolean | void>;
@@ -9,6 +10,7 @@ interface ImportDialogProps {
 
 const ImportDialog: React.FC<ImportDialogProps> = ({
   isOpen,
+  targetProjectName,
   onClose,
   onImportOverwrite,
   onImportMerge,
@@ -55,12 +57,13 @@ const ImportDialog: React.FC<ImportDialogProps> = ({
   };
 
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!importing) onClose(); }}>
       <div
         className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold text-gray-800 mb-4">导入数据包</h2>
+        <h2 className="text-lg font-bold text-gray-800 mb-1">导入数据包</h2>
+        <p className="mb-4 text-sm text-gray-500">目标项目：<span className="font-medium text-slate-800">{targetProjectName}</span></p>
 
         {/* File selection */}
         <div className="mb-4">
@@ -72,6 +75,7 @@ const ImportDialog: React.FC<ImportDialogProps> = ({
             type="file"
             accept=".zip"
             onChange={handleFileChange}
+            disabled={importing}
             className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
           />
         </div>
@@ -110,7 +114,8 @@ const ImportDialog: React.FC<ImportDialogProps> = ({
 
         <button
           onClick={onClose}
-          className="w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          disabled={importing}
+          className="w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         >
           取消
         </button>

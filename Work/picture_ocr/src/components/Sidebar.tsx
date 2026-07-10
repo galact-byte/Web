@@ -1,6 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import { getAssetsForCategory } from '../context/appReducer';
+import { useConfirmDialog } from './ConfirmDialog';
+
+function renderCategoryIcon(categoryId: string): React.ReactNode {
+  const commonProps = { strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, strokeWidth: 2 };
+  if (categoryId === 'cat-physical') {
+    return <path {...commonProps} d="M4 6h16v10H4zM8 20h8M10 16v4m4-4v4M8 10h.01M12 10h.01" />;
+  }
+  if (categoryId === 'cat-network') {
+    return <path {...commonProps} d="M12 5v4m-6 8h12M6 17a2 2 0 100-4 2 2 0 000 4zm12 0a2 2 0 100-4 2 2 0 000 4zm-6-8a2 2 0 100-4 2 2 0 000 4zm0 0v4" />;
+  }
+  if (categoryId === 'cat-security') {
+    return <path {...commonProps} d="M12 3l7 4v5c0 4.2-2.9 7.2-7 9-4.1-1.8-7-4.8-7-9V7l7-4zM9.5 12l1.8 1.8 3.7-4" />;
+  }
+  if (categoryId === 'cat-host') {
+    return <path {...commonProps} d="M7 3h10a2 2 0 012 2v14H5V5a2 2 0 012-2zm2 4h6M9 11h6M8 19v2m8-2v2" />;
+  }
+  if (categoryId === 'cat-system-mgmt') {
+    return <path {...commonProps} d="M12 8a4 4 0 100 8 4 4 0 000-8zm8 4h2M2 12h2m14.1-6.1l1.4-1.4M4.5 19.5l1.4-1.4m0-12.2L4.5 4.5m15 15l-1.4-1.4" />;
+  }
+  if (categoryId === 'cat-app') {
+    return <path {...commonProps} d="M4 5h16v14H4zM4 9h16M8 13h3m-3 3h8" />;
+  }
+  if (categoryId === 'cat-management') {
+    return <path {...commonProps} d="M8 4h8l2 2v14H6V6l2-2zm1 8h6m-6 4h6m-4-8h2" />;
+  }
+  return <path {...commonProps} d="M4 6h16v12H4zM8 10h8m-8 4h5" />;
+}
 
 const Sidebar: React.FC = () => {
   const { categories, assets, activeCategoryId, activeAssetId } = useAppState();
@@ -12,6 +39,7 @@ const Sidebar: React.FC = () => {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(activeCategoryId ? [activeCategoryId] : [])
   );
+  const { confirm, dialog } = useConfirmDialog();
 
   // Ensure active category is always expanded without updating state during render.
   useEffect(() => {
@@ -44,9 +72,15 @@ const Sidebar: React.FC = () => {
     setAddingToCategoryId(null);
   };
 
-  const handleRemoveAsset = (assetId: string, e: React.MouseEvent) => {
+  const handleRemoveAsset = async (assetId: string, assetName: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('确定要删除该资产吗？此操作不可撤销。')) {
+    const confirmed = await confirm({
+      title: '删除资产',
+      message: `确定要删除“${assetName}”吗？\n\n该资产下的检查项和截图也会被删除，此操作不可撤销。`,
+      confirmText: '删除资产',
+      tone: 'danger',
+    });
+    if (confirmed) {
       dispatch({ type: 'REMOVE_ASSET', payload: { assetId } });
     }
   };
@@ -69,7 +103,23 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="w-72 border-r border-gray-200 bg-gray-50 flex flex-col h-full overflow-y-auto">
+    <aside className="w-72 border-r border-slate-800 bg-slate-950 flex flex-col h-full overflow-y-auto text-slate-200 shadow-2xl shadow-slate-950/30 bg-[radial-gradient(rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:24px_24px]">
+      <div className="flex items-center gap-3 border-b border-slate-800 px-6 py-5">
+        <div className="flex h-8 w-8 items-center justify-center border border-cyan-400/50 bg-cyan-500/10 text-cyan-300">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h9M4 12h7M4 17h9" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 6l3 3 3-5M17 15l2 2 4-6" />
+          </svg>
+        </div>
+        <div>
+          <p className="text-sm font-bold text-white">Evidence Pro</p>
+          <p className="text-xs text-slate-500">证据分类导航</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <span>分类导航</span>
+        <span className="text-lg leading-none text-slate-600">+</span>
+      </div>
       {categories.map((cat) => {
         const isActive = cat.id === activeCategoryId;
         const catAssets = getAssetsForCategory(assets, cat.id);
@@ -78,29 +128,28 @@ const Sidebar: React.FC = () => {
         const isAdding = addingToCategoryId === cat.id;
 
         return (
-          <div key={cat.id} className="border-b border-gray-200">
+          <div key={cat.id} className="border-b border-slate-800/80">
             {/* Category header */}
             <div
               className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors select-none
                 ${isActive
-                  ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-blue-500/15 text-blue-100 border-r-2 border-blue-400'
+                  : 'text-slate-300 hover:bg-white/5'
                 }`}
               onClick={() => toggleCategory(cat.id)}
             >
               <div className="flex items-center gap-2 min-w-0">
-                {/* Expand/collapse arrow */}
                 <svg
-                  className={`w-4 h-4 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                  className={`h-4 w-4 flex-shrink-0 text-blue-300 transition-transform ${isExpanded ? 'scale-110' : ''}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  {renderCategoryIcon(cat.id)}
                 </svg>
                 <span className="font-medium truncate">{cat.name}</span>
                 {catAssets.length > 0 && (
-                  <span className="text-xs text-gray-400 bg-gray-200 rounded-full px-2 py-0.5">
+                  <span className="text-xs text-slate-300 bg-white/10 rounded-full px-2 py-0.5">
                     {catAssets.length}
                   </span>
                 )}
@@ -113,7 +162,7 @@ const Sidebar: React.FC = () => {
                   setAddingToCategoryId(isAdding ? null : cat.id);
                   setNewAssetName('');
                 }}
-                className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0"
+                className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-blue-200 transition-colors flex-shrink-0"
                 title={isFreestyle ? '添加材料' : '添加资产'}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -124,10 +173,10 @@ const Sidebar: React.FC = () => {
 
             {/* Expanded: show assets + add input */}
             {isExpanded && (
-              <div className="bg-white">
+              <div className="bg-slate-950/35 py-1">
                 {/* Adding input */}
                 {isAdding && (
-                  <div className="px-4 py-2 border-b border-gray-100">
+                  <div className="border-b border-slate-800 py-2 pl-10 pr-3">
                     <input
                       type="text"
                       value={newAssetName}
@@ -143,7 +192,7 @@ const Sidebar: React.FC = () => {
                         }
                       }}
                       placeholder={isFreestyle ? '材料名称（如：信息安全管理规定）' : '资产名称（如：核心交换机(192.168.1.1)）'}
-                      className="w-full text-sm border border-blue-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      className="w-full text-sm border border-blue-400/40 bg-slate-950 text-slate-100 placeholder:text-slate-500 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
                       autoFocus
                     />
                   </div>
@@ -151,8 +200,8 @@ const Sidebar: React.FC = () => {
 
                 {/* Asset list */}
                 {catAssets.length === 0 && !isAdding && (
-                  <div className="px-4 py-3">
-                    <p className="text-sm text-gray-400 italic">
+                  <div className="py-3 pl-10 pr-3">
+                    <p className="text-sm text-slate-500 italic">
                       {isFreestyle ? '暂无材料，点击 + 添加' : '暂无资产，点击 + 添加'}
                     </p>
                   </div>
@@ -165,10 +214,10 @@ const Sidebar: React.FC = () => {
                       dispatch({ type: 'SET_ACTIVE_CATEGORY', payload: cat.id });
                       dispatch({ type: 'SET_ACTIVE_ASSET', payload: asset.id });
                     }}
-                    className={`group flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors border-b border-gray-50
+                    className={`group relative ml-8 mr-3 my-1 flex cursor-pointer items-center justify-between border-l px-3 py-2 text-sm transition-colors before:absolute before:-left-px before:top-1/2 before:h-px before:w-3
                       ${asset.id === activeAssetId
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'text-gray-600 hover:bg-gray-50'
+                        ? 'border-blue-400 bg-blue-500/20 text-blue-50 before:bg-blue-400'
+                        : 'border-slate-700/70 text-slate-400 before:bg-slate-700/70 hover:bg-white/5 hover:text-slate-200'
                       }`}
                   >
                     {renamingAssetId === asset.id ? (
@@ -181,7 +230,7 @@ const Sidebar: React.FC = () => {
                           if (e.key === 'Enter') handleFinishRename();
                           if (e.key === 'Escape') setRenamingAssetId(null);
                         }}
-                        className="flex-1 text-sm border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        className="flex-1 text-sm border border-blue-400 bg-slate-950 text-slate-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
                         autoFocus
                         onClick={(e) => e.stopPropagation()}
                       />
@@ -190,25 +239,24 @@ const Sidebar: React.FC = () => {
                         className="flex items-center gap-2 min-w-0"
                         onDoubleClick={(e) => handleStartRename(asset.id, asset.name, e)}
                       >
-                        {/* Asset type icon */}
-                        <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-3.5 w-3.5 flex-shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           {isFreestyle ? (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 4h8l2 2v14H6V6l2-2zm1 8h6m-6 4h6" />
                           ) : (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                            renderCategoryIcon(cat.id)
                           )}
                         </svg>
-                        <span className="truncate">{asset.name}</span>
+                        <span className="truncate font-medium">{asset.name}</span>
                         {/* Missing required indicator */}
                         {asset.items.filter((i) => i.required && i.images.length === 0).length > 0 && (
-                          <span className="text-xs text-red-400 flex-shrink-0" title="有未完成的必填项">●</span>
+                          <span className="text-xs text-red-300 flex-shrink-0" title="有未完成的必填项">●</span>
                         )}
                       </div>
                     )}
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                       <button
                         onClick={(e) => handleStartRename(asset.id, asset.name, e)}
-                        className="p-1 text-gray-400 hover:text-blue-600"
+                        className="p-1 text-slate-500 hover:text-blue-200"
                         title="重命名"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -216,8 +264,8 @@ const Sidebar: React.FC = () => {
                         </svg>
                       </button>
                       <button
-                        onClick={(e) => handleRemoveAsset(asset.id, e)}
-                        className="p-1 text-gray-400 hover:text-red-600"
+                        onClick={(e) => handleRemoveAsset(asset.id, asset.name, e)}
+                        className="p-1 text-slate-500 hover:text-red-300"
                         title="删除"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,6 +280,7 @@ const Sidebar: React.FC = () => {
           </div>
         );
       })}
+      {dialog}
     </aside>
   );
 };
