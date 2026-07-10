@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { ImageData } from '../types';
+import { useConfirmDialog } from './ConfirmDialog';
 
 interface ImageThumbnailProps {
   image: ImageData;
@@ -22,6 +23,7 @@ const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
 }) => {
   const [editingCaption, setEditingCaption] = useState(false);
   const [captionValue, setCaptionValue] = useState(image.caption);
+  const { confirm, dialog } = useConfirmDialog();
 
   const handleFinishCaption = () => {
     if (captionValue.trim() !== image.caption) {
@@ -46,13 +48,13 @@ const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
     >
       {/* Thumbnail */}
       <div
-        className="relative w-[120px] h-[90px] rounded-lg overflow-hidden border border-gray-200 cursor-pointer bg-gray-50"
+        className="relative h-40 w-40 overflow-hidden border border-slate-200 bg-slate-50 p-1 cursor-pointer"
         onClick={() => onClick(image.id)}
       >
         <img
           src={image.data}
           alt={image.fileName}
-          className="w-full h-full object-cover"
+          className="h-full w-full object-cover"
           draggable={false}
         />
 
@@ -71,9 +73,15 @@ const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
             </svg>
           </button>
           <button
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              if (window.confirm('确定要删除该图片吗？')) {
+              const confirmed = await confirm({
+                title: '删除图片',
+                message: `确定要删除这张图片吗？\n\n文件：${image.fileName || '未命名图片'}\n此操作不可撤销。`,
+                confirmText: '删除图片',
+                tone: 'danger',
+              });
+              if (confirmed) {
                 onRemove(image.id);
               }
             }}
@@ -94,8 +102,10 @@ const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
         )}
       </div>
 
+      {dialog}
+
       {/* Caption */}
-      <div className="mt-1 max-w-[120px]">
+      <div className="mt-2 max-w-40">
         {editingCaption ? (
           <input
             type="text"
@@ -106,13 +116,13 @@ const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
               if (e.key === 'Enter') handleFinishCaption();
               if (e.key === 'Escape') setEditingCaption(false);
             }}
-            className="w-full text-[11px] border border-blue-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            className="w-full rounded border border-blue-300 px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
             autoFocus
             placeholder="添加备注..."
           />
         ) : (
           <p
-            className="text-[11px] text-gray-500 truncate cursor-pointer hover:text-gray-700"
+            className="truncate text-sm text-slate-700 cursor-pointer hover:text-slate-950"
             onClick={() => {
               setCaptionValue(image.caption);
               setEditingCaption(true);

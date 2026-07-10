@@ -14,10 +14,7 @@ if not exist "dist\index.html" (
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-server.ps1"
+set "SERVER_EXIT_CODE=%ERRORLEVEL%"
 
-if errorlevel 1 (
-  echo.
-  echo [错误] 启动失败，请把本窗口截图发给维护人员。
-  echo.
-  pause
-)
+rem PowerShell 服务进程退出后，CMD 也必须立即退出，避免留下无效的“假运行”窗口。
+exit /b %SERVER_EXIT_CODE%

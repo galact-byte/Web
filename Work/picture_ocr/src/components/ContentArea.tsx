@@ -27,6 +27,12 @@ const ContentArea: React.FC = () => {
   }, [activeAsset?.id]);
 
   useEffect(() => {
+    if (pasteTargetItemId && !activeAsset?.items.some((item) => item.id === pasteTargetItemId)) {
+      setPasteTargetItemId(null);
+    }
+  }, [activeAsset?.items, pasteTargetItemId]);
+
+  useEffect(() => {
     const handleWindowPaste = async (event: ClipboardEvent) => {
       if (!activeAsset || !pasteTargetItemId) return;
       if (isTextEditingElement(document.activeElement)) return;
@@ -54,7 +60,7 @@ const ContentArea: React.FC = () => {
 
   if (!activeAssetId || !activeAsset) {
     return (
-      <main className="flex-1 flex items-center justify-center bg-slate-50">
+      <main className="flex-1 flex items-center justify-center bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px]">
         <div className="text-center text-gray-400">
           <svg className="w-16 h-16 mx-auto mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -75,20 +81,53 @@ const ContentArea: React.FC = () => {
   };
 
   return (
-    <main className="flex-1 overflow-y-auto bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px]">
-      <div className="max-w-5xl mx-auto px-6 py-8">
+    <main className="flex-1 overflow-y-auto bg-slate-100 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px]">
+      <div className="mx-auto max-w-6xl px-8 py-8">
         {/* Asset header */}
-        <div className="mb-6">
-          <h2 className="text-3xl font-bold text-slate-900">{activeAsset.name}</h2>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-base text-slate-500">
-            {activeCategory && <span>{activeCategory.name}</span>}
-            <span>· 总计 {activeAsset.items.length} 个检查项</span>
-            <span className="text-red-500">· {activeAsset.items.filter((i) => i.required).length} 个必填</span>
+        <div className="mb-8">
+          <h2 className="text-4xl font-extrabold tracking-tight text-slate-950">{activeAsset.name}</h2>
+          <div className="mt-4 flex flex-wrap items-center gap-4 text-base text-slate-600">
+            {activeCategory && (
+              <span className="inline-flex items-center gap-1.5">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M5 7v10a2 2 0 002 2h10a2 2 0 002-2V7M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2" />
+                </svg>
+                {activeCategory.name}
+              </span>
+            )}
+            <span>·</span>
+            <span>总计 {activeAsset.items.length} 项检查</span>
+            <span>·</span>
+            <span className="text-red-500">{activeAsset.items.filter((i) => i.required).length} 项必填</span>
           </div>
-          <p className="mt-2 text-sm text-slate-500">
-            先点击某个检查项卡片边缘设为粘贴目标，然后直接按 Ctrl+V 粘贴截图。
-            {!pasteTargetItemId && <span className="ml-2 text-amber-600">当前还未选择粘贴目标。</span>}
-          </p>
+          {!pasteTargetItemId && <p className="mt-3 text-sm text-amber-600">请先选择粘贴目标，再按 Ctrl+V 粘贴截图。</p>}
+        </div>
+
+        {/* Add item */}
+        <div className="sticky top-0 z-10 mb-6 border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={newItemLabel}
+              onChange={(e) => setNewItemLabel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAddItem();
+              }}
+              placeholder="添加自定义检查项..."
+              className="flex-1 border border-gray-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <button
+              onClick={handleAddItem}
+              disabled={!newItemLabel.trim()}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 text-base bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              添加
+            </button>
+          </div>
+
         </div>
 
         {/* Check items */}
@@ -97,7 +136,7 @@ const ContentArea: React.FC = () => {
             <p className="text-sm">暂无检查项，请在下方添加</p>
           </div>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-6">
             {activeAsset.items.map((item) => (
               <ItemCard
                 key={item.id}
@@ -152,26 +191,6 @@ const ContentArea: React.FC = () => {
           </div>
         )}
 
-        {/* Add item */}
-        <div className="mt-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <input
-            type="text"
-            value={newItemLabel}
-            onChange={(e) => setNewItemLabel(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleAddItem();
-            }}
-            placeholder="添加自定义检查项..."
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-          <button
-            onClick={handleAddItem}
-            disabled={!newItemLabel.trim()}
-            className="px-5 py-2.5 text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-          >
-            添加
-          </button>
-        </div>
       </div>
     </main>
   );

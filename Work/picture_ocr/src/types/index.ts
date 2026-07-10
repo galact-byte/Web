@@ -52,6 +52,8 @@ export interface Asset {
 /** IndexedDB 存储的完整项目文档 */
 export interface ProjectDocument {
   id: string;
+  /** 所属项目组；旧项目没有该字段时为 null，仍作为独立系统正常使用。 */
+  groupId: string | null;
   meta: ProjectMeta;
   categories: Category[];
   assets: Asset[];
@@ -59,13 +61,32 @@ export interface ProjectDocument {
   updatedAt: number; // timestamp
 }
 
-/** 项目列表摘要 */
+/** 项目组（母项目）元数据。系统名称及证据数据保存在各系统子项目中。 */
+export interface ProjectGroup {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  unitName: string;
+  reportDate: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 项目列表中的系统子项目摘要 */
 export interface ProjectSummary {
   id: string;
+  groupId: string | null;
   meta: ProjectMeta;
   assetCount: number;
   createdAt: number;
   updatedAt: number;
+}
+
+/** 外层列表使用的项目组及其系统子项目。 */
+export interface ProjectGroupSummary {
+  id: string;
+  group: ProjectGroup | null;
+  systems: ProjectSummary[];
 }
 
 /** 导出包的 manifest 中的分类 */

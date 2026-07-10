@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Category, CheckItemTemplate } from '../types';
 import { genId } from '../context/appReducer';
+import { useConfirmDialog } from './ConfirmDialog';
 
 interface TemplateDialogProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ const TemplateDialog: React.FC<TemplateDialogProps> = ({
   );
   const [items, setItems] = useState<CheckItemTemplate[]>([]);
   const [newLabel, setNewLabel] = useState('');
+  const { confirm, dialog } = useConfirmDialog();
 
   // Load current category's template items
   useEffect(() => {
@@ -45,9 +47,16 @@ const TemplateDialog: React.FC<TemplateDialogProps> = ({
     setNewLabel('');
   };
 
-  const handleRemoveItem = (itemId: string) => {
-    if (window.confirm('确定要删除该默认检查项吗？')) {
-      setItems(items.filter((item) => item.id !== itemId));
+  const handleRemoveItem = async (itemId: string) => {
+    const item = items.find((currentItem) => currentItem.id === itemId);
+    const confirmed = await confirm({
+      title: '删除默认检查项',
+      message: `确定要删除“${item?.label || '该默认检查项'}”吗？\n\n修改保存后会影响后续新建资产。`,
+      confirmText: '删除默认项',
+      tone: 'danger',
+    });
+    if (confirmed) {
+      setItems(items.filter((currentItem) => currentItem.id !== itemId));
     }
   };
 
@@ -177,6 +186,7 @@ const TemplateDialog: React.FC<TemplateDialogProps> = ({
           </button>
         </div>
       </div>
+      {dialog}
     </div>
   );
 };

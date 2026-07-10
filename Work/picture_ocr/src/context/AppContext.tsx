@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import type { ProjectDocument } from '../types';
 import { appReducer, createInitialState, AppState, AppAction } from './appReducer';
-import { saveProject, loadProject, createProjectDocument } from '../utils/db';
+import { saveProject, loadProject, createProjectDocument, loadProjectGroup, updateProjectGroupAndSystems } from '../utils/db';
 
 interface AppContextValue {
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
+  projectGroupId: string | null;
+  updateProjectMeta: (meta: AppState['meta']) => Promise<void>;
 }
 
 interface AppProviderProps {
@@ -21,6 +23,7 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedRef = useRef(false);
   const createdAtRef = useRef<number>(Date.now());
+  const projectGroupIdRef = useRef<string | null>(null);
   const latestDocRef = useRef<ProjectDocument | null>(null);
 
   // Load selected project from IndexedDB.
@@ -30,10 +33,12 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
       .then((doc) => {
         if (doc) {
           createdAtRef.current = doc.createdAt;
+          projectGroupIdRef.current = doc.groupId;
           dispatch({ type: 'LOAD_PROJECT', payload: doc });
         } else {
           const fallbackDoc = createProjectDocument();
           createdAtRef.current = fallbackDoc.createdAt;
+          projectGroupIdRef.current = null;
           dispatch({ type: 'LOAD_PROJECT', payload: { ...fallbackDoc, id: projectId } });
         }
         loadedRef.current = true;
@@ -42,7 +47,8 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
         console.error('Failed to load from IndexedDB:', err);
         const fallbackDoc = createProjectDocument();
         createdAtRef.current = fallbackDoc.createdAt;
-        dispatch({ type: 'LOAD_PROJECT', payload: { ...fallbackDoc, id: projectId } });
+        projectGroupIdRef.current = null;
+        dispatch({ type: 'LOAD_PROJECT', payload: { ...fallbackDoc, id: projectId} });
         loadedRef.current = true;
       });
   }, [projectId]);
@@ -53,6 +59,7 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
 
     const doc: ProjectDocument = {
       id: projectId,
+      groupId: projectGroupIdRef.current,
       meta: state.meta,
       categories: state.categories,
       assets: state.assets,
@@ -92,8 +99,26 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
     };
   }, []);
 
+  const updateProjectMeta = async (meta: AppState['meta']) => {
+    const groupId = projectGroupIdRef.current;
+    if (groupId) {
+      const group = await loadProjectGroup(groupId);
+      if (group) {
+        await updateProjectGroupAndSystems({
+          ...group,
+          projectCode: meta.projectCode,
+          projectName: meta.projectName,
+          unitName: meta.unitName,
+          reportDate: meta.reportDate,
+          updatedAt: Date.now(),
+        });
+      }
+    }
+    dispatch({ type: 'SET_META', payload: meta });
+  };
+
   return (
-    <AppContext.Provider value={{ state, dispatch }}>
+    <AppContext.Provider value={{ state, dispatch, projectGroupId: projectGroupIdRef.current, updateProjectMeta }}>
       {children}
     </AppContext.Provider>
   );

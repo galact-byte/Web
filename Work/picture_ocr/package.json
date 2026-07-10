@@ -1,7 +1,7 @@
 {
   "name": "picture_ocr",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "测评证据采集工具",
   "author": "galact",
   "repository": {
@@ -48,6 +48,7 @@
       "package.json"
     ],
     "win": {
+      "artifactName": "${name}-${version}.${ext}",
       "target": [
         {
           "target": "portable",
