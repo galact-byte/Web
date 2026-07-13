@@ -7,6 +7,8 @@ import ProjectInfoDialog from './components/ProjectInfoDialog';
 import ValidationDialog from './components/ValidationDialog';
 import TemplateDialog from './components/TemplateDialog';
 import ProjectList from './components/ProjectList';
+import MobileProjectList from './components/MobileProjectList';
+import MobileCollector from './components/MobileCollector';
 import { exportWordReport, validateRequired } from './utils/wordExport';
 import type { CheckItemTemplate } from './types';
 import type { ValidationMissing } from './utils/wordExport';
@@ -104,10 +106,22 @@ const AppContent: React.FC<AppContentProps> = ({ onBackToProjects, openProjectIn
   );
 };
 
+function getMobileProjectId(): string | null {
+  const match = window.location.hash.match(/^#\/mobile\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 const App: React.FC = () => {
+  const [hash, setHash] = useState(() => window.location.hash);
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
   const [newProjectInfoPrompt, setNewProjectInfoPrompt] = useState(false);
   const [projectListRefreshKey, setProjectListRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const handleHashChange = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   const handleOpenProject = (projectId: string, isNewProject = false) => {
     setNewProjectInfoPrompt(isNewProject);
@@ -123,6 +137,21 @@ const App: React.FC = () => {
   const handleProjectSaved = useCallback(() => {
     setProjectListRefreshKey((key) => key + 1);
   }, []);
+
+  const handleLeaveMobile = () => {
+    setOpenProjectId(null);
+    setNewProjectInfoPrompt(false);
+    setProjectListRefreshKey((key) => key + 1);
+    window.location.hash = '';
+  };
+
+  const mobileProjectId = getMobileProjectId();
+  if (hash === '#/mobile') {
+    return <MobileProjectList onOpen={(projectId) => { window.location.hash = `/mobile/${encodeURIComponent(projectId)}`; }} onOpenDesktop={handleLeaveMobile} />;
+  }
+  if (mobileProjectId) {
+    return <MobileCollector projectId={mobileProjectId} onBack={() => { window.location.hash = '#/mobile'; }} />;
+  }
 
   if (!openProjectId) {
     return <ProjectList key={projectListRefreshKey} onOpenProject={handleOpenProject} />;

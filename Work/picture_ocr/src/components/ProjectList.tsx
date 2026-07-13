@@ -12,8 +12,10 @@ import {
   saveProject,
   updateProjectGroupAndSystems,
 } from '../utils/db';
-import { exportDataPackage, importDataPackage } from '../utils/exportImport';
+import { exportDataPackage, exportEncryptedDataPackage, importDataPackage, importEncryptedDataPackage } from '../utils/exportImport';
+import { isEvidencePackageFile } from '../utils/evidencePackage';
 import ImportDialog from './ImportDialog';
+import EncryptedExportDialog from './EncryptedExportDialog';
 import ProjectListHeader from './project-list/ProjectListHeader';
 import ProjectGroupDialog, { type ProjectGroupDialogMode } from './project-list/ProjectGroupDialog';
 import { useConfirmDialog } from './ConfirmDialog';
@@ -64,6 +66,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(() => new Set());
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => new Set());
   const [importTargetId, setImportTargetId] = useState<string | null>(null);
+  const [encryptedExportTarget, setEncryptedExportTarget] = useState<ProjectSummary | null>(null);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const [saving, setSaving] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
@@ -170,12 +173,14 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
     }
   };
 
-  const importIntoSystem = async (file: File, mode: 'overwrite' | 'merge'): Promise<boolean> => {
+  const importIntoSystem = async (file: File, password: string, mode: 'overwrite' | 'merge'): Promise<boolean> => {
     if (!importTargetId) return false;
     try {
       const targetDocument = await loadProject(importTargetId);
       if (!targetDocument) { alert('导入失败：目标系统不存在或已被删除'); return false; }
-      const result = await importDataPackage(file, mode, targetDocument.assets, targetDocument.categories, targetDocument.meta);
+      const result = isEvidencePackageFile(file)
+        ? await importEncryptedDataPackage(file, password, mode, targetDocument.assets, targetDocument.categories, targetDocument.meta)
+        : await importDataPackage(file, mode, targetDocument.assets, targetDocument.categories, targetDocument.meta);
       if (!result.success || !result.data) { alert(result.message); return false; }
       const group = targetDocument.groupId ? await getGroupForSystem(targetDocument.groupId) : null;
       const meta: ProjectMeta = group && mode === 'overwrite'
@@ -203,6 +208,13 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
   const getGroupForSystem = async (groupId: string): Promise<ProjectGroup | null> => {
     const summary = groups.find((group) => group.id === groupId);
     return summary?.group ?? null;
+  };
+
+  const handleExportEncryptedSystem = async (password: string) => {
+    if (!encryptedExportTarget) return;
+    const document = await loadProject(encryptedExportTarget.id);
+    if (!document) throw new Error('导出失败：系统不存在或已被删除。');
+    await exportEncryptedDataPackage(document.meta, document.categories, document.assets, password);
   };
 
   const handleSaveDialog = async (values: { projectCode: string; projectName: string; unitName: string; reportDate: string; systemName: string }): Promise<boolean> => {
@@ -258,7 +270,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
       <main className="mx-auto max-w-[1280px] px-8 py-8">
         <section className="mb-6 flex items-end justify-between gap-6 border-b border-slate-300 pb-4">
           <div><h2 className="text-2xl font-extrabold text-slate-950">项目管理中心</h2></div>
-          <div className="shrink-0 text-sm text-slate-500">共 {groups.length} 个项目组，{groups.flatMap((group) => group.systems).length} 个系统</div>
+          <div className="flex shrink-0 items-center gap-4"><a href="#/mobile" className="border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">打开手机采集入口</a><div className="text-sm text-slate-500">共 {groups.length} 个项目组，{groups.flatMap((group) => group.systems).length} 个系统</div></div>
         </section>
         <section className="border border-slate-200 bg-white shadow-sm">
           <div className="grid grid-cols-[44px_minmax(200px,1.2fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)_72px_minmax(360px,1.4fr)] items-center gap-3 border-b border-slate-200 px-6 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
@@ -275,7 +287,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
                   <label className="flex items-center justify-center" title="选择系统"><input type="checkbox" checked={selectedProjectIds.has(system.id)} onChange={() => toggleProjectSelection(system.id)} className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" /></label>
                   <div className={`min-w-0 ${indented ? 'border-l-2 border-blue-200 pl-3' : ''}`}><div className="break-words font-semibold text-slate-950">{getSystemDisplayName(system)}</div></div>
                   <div className="break-words leading-5">{system.meta.unitName || '未填写'}</div><div className="break-words leading-5 text-xs">{formatTime(system.updatedAt)}</div><div className="text-center"><span className="inline-flex min-w-7 justify-center border border-blue-100 bg-blue-50 px-2 py-0.5 font-medium text-blue-700">{system.assetCount}</span></div>
-                  <div className="flex flex-wrap justify-end gap-2"><button onClick={() => onOpenProject(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>打开</button><button onClick={() => setDialogState({ mode: 'edit-system', group, system })} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>编辑</button><button onClick={() => void handleExportSystem(system)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>导出数据包</button><button onClick={() => setImportTargetId(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>导入数据包</button><button onClick={() => void handleDeleteSystem(system)} className={`${actionButton} border-red-200 bg-white text-red-600 hover:bg-red-50`}>删除</button></div>
+                  <div className="flex flex-wrap justify-end gap-2"><button onClick={() => onOpenProject(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>打开</button><button onClick={() => setDialogState({ mode: 'edit-system', group, system })} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>编辑</button><button onClick={() => void handleExportSystem(system)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>导出数据包</button><button onClick={() => setEncryptedExportTarget(system)} className={`${actionButton} border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100`}>导出加密采集包</button><button onClick={() => setImportTargetId(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>导入数据包</button><button onClick={() => void handleDeleteSystem(system)} className={`${actionButton} border-red-200 bg-white text-red-600 hover:bg-red-50`}>删除</button></div>
                 </div>
               );
 
@@ -296,7 +308,8 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
         </section>
       </main>
       <ProjectGroupDialog open={!!dialogState} mode={dialogState?.mode ?? 'create-group'} group={dialogState?.group ?? null} system={dialogState?.system?.meta ?? null} onClose={() => { if (!saving) setDialogState(null); }} onSave={handleSaveDialog} />
-      <ImportDialog isOpen={!!importTargetId} targetProjectName={importTarget ? `${getGroupDisplayName(groups.find((group) => group.id === importTarget.groupId) ?? { id: 'ungrouped', group: null, systems: [importTarget] })} / ${getSystemDisplayName(importTarget)}` : '未知系统'} onClose={() => setImportTargetId(null)} onImportOverwrite={(file) => importIntoSystem(file, 'overwrite')} onImportMerge={(file) => importIntoSystem(file, 'merge')} />
+      <ImportDialog isOpen={!!importTargetId} targetProjectName={importTarget ? `${getGroupDisplayName(groups.find((group) => group.id === importTarget.groupId) ?? { id: 'ungrouped', group: null, systems: [importTarget] })} / ${getSystemDisplayName(importTarget)}` : '未知系统'} onClose={() => setImportTargetId(null)} onImportOverwrite={(file, password) => importIntoSystem(file, password, 'overwrite')} onImportMerge={(file, password) => importIntoSystem(file, password, 'merge')} />
+      <EncryptedExportDialog open={!!encryptedExportTarget} onClose={() => setEncryptedExportTarget(null)} onExport={handleExportEncryptedSystem} />
       {dialog}
     </div>
   );
