@@ -1,7 +1,7 @@
 {
   "name": "picture_ocr",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "测评证据采集工具",
   "author": "galact",
   "repository": {
@@ -12,8 +12,11 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "prebuild": "node scripts/generate-pwa-icons.mjs",
+    "build": "tsc -b && vite build && node scripts/generate-service-worker.mjs",
     "preview": "vite preview",
+    "verify:evidence-package": "node scripts/verify-evidence-package.mjs",
+    "verify:pwa-build": "node scripts/verify-pwa-build.mjs",
     "desktop:build": "npm run build && npm run desktop:clean && electron-builder --win --dir",
     "desktop:pack": "npm run build && npm run desktop:clean && electron-builder --win --publish never",
     "desktop:clean": "node -e \"require('fs').rmSync('desktop-dist',{recursive:true,force:true})\""

@@ -1,0 +1,25 @@
+{
+  "name": "测评证据采集工具",
+  "short_name": "证据采集",
+  "description": "离线采集测评截图证据，并通过加密采集包回传。",
+  "lang": "zh-CN",
+  "start_url": "./#/mobile",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

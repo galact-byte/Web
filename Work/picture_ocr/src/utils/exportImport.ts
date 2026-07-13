@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { decryptEvidenceBlob, encryptEvidenceBlob } from './evidencePackage';
 import type {
   ProjectMeta,
   Category,
@@ -35,11 +36,11 @@ function buildExportAssets(
     }));
 }
 
-export async function exportDataPackage(
+export async function createDataPackageBlob(
   meta: ProjectMeta,
   categories: Category[],
   assets: Asset[]
-): Promise<void> {
+): Promise<Blob> {
   const zip = new JSZip();
   const imageFolder = zip.folder('images');
 
@@ -96,13 +97,29 @@ export async function exportDataPackage(
   // Add manifest
   zip.file('manifest.json', JSON.stringify(exportPackage, null, 2));
 
-  // Generate zip and download
-  const content = await zip.generateAsync({ type: 'blob' });
+  return zip.generateAsync({ type: 'blob' });
+}
 
+export async function exportDataPackage(
+  meta: ProjectMeta,
+  categories: Category[],
+  assets: Asset[]
+): Promise<void> {
+  const content = await createDataPackageBlob(meta, categories, assets);
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const filename = `测评证据_${meta.unitName || '未命名'}_${dateStr}.zip`;
+  downloadBlob(content, `测评证据_${meta.unitName || '未命名'}_${dateStr}.zip`);
+}
 
-  downloadBlob(content, filename);
+export async function exportEncryptedDataPackage(
+  meta: ProjectMeta,
+  categories: Category[],
+  assets: Asset[],
+  password: string
+): Promise<void> {
+  const zip = await createDataPackageBlob(meta, categories, assets);
+  const encryptedPackage = await encryptEvidenceBlob(zip, password);
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  downloadBlob(encryptedPackage, `测评采集包_${meta.systemName || meta.projectName || '未命名系统'}_${dateStr}.evidence`);
 }
 
 // ==================== Import ====================
@@ -118,7 +135,7 @@ export interface ImportResult {
 }
 
 export async function importDataPackage(
-  file: File,
+  file: Blob,
   mode: 'overwrite' | 'merge',
   existingAssets: Asset[],
   existingCategories: Category[],
@@ -236,6 +253,26 @@ export async function importDataPackage(
     return {
       success: false,
       message: `导入失败：${err instanceof Error ? err.message : '未知错误'}`,
+    };
+  }
+}
+
+/** 解密后继续走既有 ZIP 导入和合并逻辑，绝不把失败的加密包降级成明文处理。 */
+export async function importEncryptedDataPackage(
+  file: File,
+  password: string,
+  mode: 'overwrite' | 'merge',
+  existingAssets: Asset[],
+  existingCategories: Category[],
+  existingMeta: ProjectMeta
+): Promise<ImportResult> {
+  try {
+    const zipBlob = await decryptEvidenceBlob(file, password);
+    return importDataPackage(zipBlob, mode, existingAssets, existingCategories, existingMeta);
+  } catch (err) {
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : '加密采集包导入失败。',
     };
   }
 }

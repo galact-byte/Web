@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { isEvidencePackageFile } from '../utils/evidencePackage';
 
 interface ImportDialogProps {
   isOpen: boolean;
   targetProjectName: string;
   onClose: () => void;
-  onImportOverwrite: (file: File) => Promise<boolean | void>;
-  onImportMerge: (file: File) => Promise<boolean | void>;
+  onImportOverwrite: (file: File, password: string) => Promise<boolean | void>;
+  onImportMerge: (file: File, password: string) => Promise<boolean | void>;
 }
 
 const ImportDialog: React.FC<ImportDialogProps> = ({
@@ -17,11 +18,13 @@ const ImportDialog: React.FC<ImportDialogProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [password, setPassword] = useState('');
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
       setSelectedFile(null);
+      setPassword('');
       setImporting(false);
     }
   }, [isOpen]);
@@ -41,8 +44,8 @@ const ImportDialog: React.FC<ImportDialogProps> = ({
     let shouldClose = false;
     try {
       const success = mode === 'overwrite'
-        ? await onImportOverwrite(selectedFile)
-        : await onImportMerge(selectedFile);
+        ? await onImportOverwrite(selectedFile, password)
+        : await onImportMerge(selectedFile, password);
       if (success === false) return;
       shouldClose = true;
       onClose();
@@ -68,12 +71,12 @@ const ImportDialog: React.FC<ImportDialogProps> = ({
         {/* File selection */}
         <div className="mb-4">
           <label className="block text-sm text-gray-600 mb-2">
-            请选择要导入的 .zip 数据包文件
+            请选择 .zip 或 .evidence 数据包文件
           </label>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".zip"
+            accept=".zip,.evidence"
             onChange={handleFileChange}
             disabled={importing}
             className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
@@ -86,11 +89,17 @@ const ImportDialog: React.FC<ImportDialogProps> = ({
           </div>
         )}
 
+        {selectedFile && isEvidencePackageFile(selectedFile) && (
+          <label className="mb-4 block text-sm text-gray-600">加密采集包密码
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} disabled={importing} className="mt-2 block w-full border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none" />
+          </label>
+        )}
+
         {/* Mode selection */}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <button
             onClick={() => handleImport('overwrite')}
-            disabled={!selectedFile || importing}
+            disabled={!selectedFile || (isEvidencePackageFile(selectedFile) && !password) || importing}
             className="px-4 py-3 text-sm rounded-lg border-2 border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <div className="font-semibold">覆盖导入</div>
@@ -98,7 +107,7 @@ const ImportDialog: React.FC<ImportDialogProps> = ({
           </button>
           <button
             onClick={() => handleImport('merge')}
-            disabled={!selectedFile || importing}
+            disabled={!selectedFile || (isEvidencePackageFile(selectedFile) && !password) || importing}
             className="px-4 py-3 text-sm rounded-lg border-2 border-green-200 bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <div className="font-semibold">合并导入</div>
