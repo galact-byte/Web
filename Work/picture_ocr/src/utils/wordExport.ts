@@ -159,11 +159,16 @@ function buildReportFileName(meta: ProjectMeta): string {
   return `${unitName}_${systemName}_测评证据.docx`;
 }
 
+function isLegacyTemplateEditorHintLabel(label: string): boolean {
+  // 仅兼容已知旧模板的三个全/半角感叹号及其间、正文前的水平空白变体；正文必须完整匹配。
+  return /^(?:！|!)[ \t\u3000]*(?:！|!)[ \t\u3000]*(?:！|!)[ \t\u3000]*如果多个设备，依次复制表格，更改表头名称$/.test(label);
+}
+
 function isEmptyTemplateEditorHint(item: { label: string; required: boolean; images: ImageData[] }): boolean {
-  // 旧版默认模板把这句 Word 编辑指引作为非必填检查项保存；仅跳过无证据的精确提示，避免过滤用户已填写的正常项。
+  // 旧版默认模板把这句 Word 编辑指引作为非必填检查项保存；仅跳过无证据的已知提示，避免过滤用户已填写的正常项。
   return !item.required
     && item.images.length === 0
-    && item.label === '！！！如果多个设备，依次复制表格，更改表头名称';
+    && isLegacyTemplateEditorHintLabel(item.label);
 }
 
 function templateText(text: string, size = 32, font = '仿宋', bold = false, color = '000000'): TextRun {
