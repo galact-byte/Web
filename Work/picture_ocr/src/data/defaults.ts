@@ -49,7 +49,6 @@ const defaultCategories: Category[] = [
       tpl('数据加密方式、版本号'),
       tpl('Vlan划分'),
       tpl('Cpu内存使用率'),
-      tpl('！！！如果多个设备，依次复制表格，更改表头名称', false),
     ],
   },
   {
@@ -70,7 +69,6 @@ const defaultCategories: Category[] = [
       tpl('规则库'),
       tpl('策略'),
       tpl('Cpu内存'),
-      tpl('！！！如果多个设备，依次复制表格，更改表头名称', false),
     ],
   },
   {
@@ -89,7 +87,6 @@ const defaultCategories: Category[] = [
       tpl('数据的备份方式（设备配置文件备份）'),
       tpl('版本号'),
       tpl('服务器部署的程序'),
-      tpl('！！！如果多个设备，依次复制表格，更改表头名称', false),
     ],
   },
   {
@@ -122,7 +119,6 @@ const defaultCategories: Category[] = [
       tpl('数据传输加密'),
       tpl('鉴别数据加密存储算法、个人数据加密存储算法'),
       tpl('版本号'),
-      tpl('！！！如果多个设备，依次复制表格，更改表头名称', false),
     ],
   },
   {

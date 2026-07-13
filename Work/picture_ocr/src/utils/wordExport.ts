@@ -159,6 +159,13 @@ function buildReportFileName(meta: ProjectMeta): string {
   return `${unitName}_${systemName}_测评证据.docx`;
 }
 
+function isEmptyTemplateEditorHint(item: { label: string; required: boolean; images: ImageData[] }): boolean {
+  // 旧版默认模板把这句 Word 编辑指引作为非必填检查项保存；仅跳过无证据的精确提示，避免过滤用户已填写的正常项。
+  return !item.required
+    && item.images.length === 0
+    && item.label === '！！！如果多个设备，依次复制表格，更改表头名称';
+}
+
 function templateText(text: string, size = 32, font = '仿宋', bold = false, color = '000000'): TextRun {
   return new TextRun({ text, bold, size, font, color });
 }
@@ -441,10 +448,12 @@ export async function exportWordReport(
     hasWrittenCategory = true;
 
     for (const asset of catAssets) {
-      const items = asset.items.map((item) => ({
-        label: item.label,
-        images: item.images,
-      }));
+      const items = asset.items
+        .filter((item) => !isEmptyTemplateEditorHint(item))
+        .map((item) => ({
+          label: item.label,
+          images: item.images,
+        }));
       sections.push(...(await buildAssetSection(asset.name, items)));
     }
   }
