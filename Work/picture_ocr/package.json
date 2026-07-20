@@ -1,7 +1,7 @@
 {
   "name": "picture_ocr",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "测评证据采集工具",
   "author": "galact",
   "repository": {
@@ -16,6 +16,8 @@
     "build": "tsc -b && vite build && node scripts/generate-service-worker.mjs",
     "preview": "vite preview",
     "verify:evidence-package": "node scripts/verify-evidence-package.mjs",
+    "verify:lan-server": "node scripts/verify-lan-server.cjs",
+    "verify:web-lan-server": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-web-lan-server.ps1",
     "verify:pwa-build": "node scripts/verify-pwa-build.mjs",
     "desktop:build": "npm run build && npm run desktop:clean && electron-builder --win --dir",
     "desktop:pack": "npm run build && npm run desktop:clean && electron-builder --win --publish never",
@@ -24,10 +26,12 @@
   "dependencies": {
     "docx": "^9.7.1",
     "jszip": "^3.10.1",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

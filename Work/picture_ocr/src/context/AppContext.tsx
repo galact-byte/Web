@@ -8,6 +8,7 @@ interface AppContextValue {
   dispatch: React.Dispatch<AppAction>;
   projectGroupId: string | null;
   updateProjectMeta: (meta: AppState['meta']) => Promise<void>;
+  addImageAndSave: (payload: Extract<AppAction, { type: 'ADD_IMAGE' }>['payload']) => Promise<void>;
 }
 
 interface AppProviderProps {
@@ -25,6 +26,17 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
   const createdAtRef = useRef<number>(Date.now());
   const projectGroupIdRef = useRef<string | null>(null);
   const latestDocRef = useRef<ProjectDocument | null>(null);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const enqueueProjectSave = (doc: ProjectDocument): Promise<void> => {
+    const operation = saveQueueRef.current
+      .catch(() => undefined)
+      .then(() => saveProject(doc));
+    saveQueueRef.current = operation.catch(() => undefined);
+    return operation;
+  };
 
   // Load selected project from IndexedDB.
   useEffect(() => {
@@ -72,7 +84,7 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
       clearTimeout(saveTimerRef.current);
     }
     saveTimerRef.current = setTimeout(() => {
-      saveProject(doc)
+      void enqueueProjectSave(doc)
         .then(() => onProjectSaved?.())
         .catch((err) => {
           console.error('Failed to save to IndexedDB:', err);
@@ -92,12 +104,40 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
         clearTimeout(saveTimerRef.current);
       }
       if (latestDocRef.current) {
-        void saveProject({ ...latestDocRef.current, updatedAt: Date.now() }).catch((err) => {
+        void enqueueProjectSave({ ...latestDocRef.current, updatedAt: Date.now() }).catch((err) => {
           console.error('Failed to flush project save on unmount:', err);
         });
       }
     };
   }, []);
+
+  const addImageAndSave = async (payload: Extract<AppAction, { type: 'ADD_IMAGE' }>['payload']) => {
+    if (!loadedRef.current) throw new Error('当前项目尚未加载完成。');
+    const targetItem = stateRef.current.assets
+      .find((asset) => asset.id === payload.assetId)
+      ?.items.find((item) => item.id === payload.itemId);
+    if (!targetItem) throw new Error('目标资产或检查项已不存在，请在电脑端重新开启采集会话。');
+    if (targetItem.images.some((image) => image.id === payload.image.id)) return;
+
+    const action: AppAction = { type: 'ADD_IMAGE', payload };
+    const nextState = appReducer(stateRef.current, action);
+
+    const document: ProjectDocument = {
+      id: projectId,
+      groupId: projectGroupIdRef.current,
+      meta: nextState.meta,
+      categories: nextState.categories,
+      assets: nextState.assets,
+      createdAt: createdAtRef.current,
+      updatedAt: Date.now(),
+    };
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    stateRef.current = nextState;
+    latestDocRef.current = document;
+    await enqueueProjectSave(document);
+    onProjectSaved?.();
+    dispatch(action);
+  };
 
   const updateProjectMeta = async (meta: AppState['meta']) => {
     const groupId = projectGroupIdRef.current;
@@ -118,7 +158,7 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
   };
 
   return (
-    <AppContext.Provider value={{ state, dispatch, projectGroupId: projectGroupIdRef.current, updateProjectMeta }}>
+    <AppContext.Provider value={{ state, dispatch, projectGroupId: projectGroupIdRef.current, updateProjectMeta, addImageAndSave }}>
       {children}
     </AppContext.Provider>
   );
