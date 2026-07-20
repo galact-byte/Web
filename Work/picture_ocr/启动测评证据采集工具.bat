@@ -1,20 +1,22 @@
 @echo off
 setlocal
-chcp 65001 >nul
-title 测评证据采集工具
+chcp 65001 >nul 2>&1
+title Picture OCR
 cd /d "%~dp0"
 
 if not exist "dist\index.html" (
-  echo.
-  echo [错误] 未找到 dist\index.html。
-  echo 请确认已经解压完整 Release 压缩包，不要只复制这个 bat 文件。
-  echo.
-  pause
-  exit /b 1
+  set "SERVER_EXIT_CODE=1"
+  echo [ERROR] dist\index.html was not found. Extract the complete release package.
+  goto failed
 )
-
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-server.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-server.ps1"
 set "SERVER_EXIT_CODE=%ERRORLEVEL%"
+if "%SERVER_EXIT_CODE%"=="0" exit /b 0
 
-rem PowerShell 服务进程退出后，CMD 也必须立即退出，避免留下无效的“假运行”窗口。
+:failed
+echo.
+echo [ERROR] Web service stopped or failed. Exit code: %SERVER_EXIT_CODE%
+echo [INFO] Read the PowerShell error shown above before closing this window.
+echo.
+pause
 exit /b %SERVER_EXIT_CODE%

@@ -215,6 +215,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'ADD_IMAGE': {
       const { assetId: ai, itemId: ii, image } = action.payload;
+      const targetAsset = state.assets.find((asset) => asset.id === ai);
+      if (!targetAsset?.items.some((item) => item.id === ii)) return state;
       return {
         ...state,
         assets: state.assets.map((a) =>

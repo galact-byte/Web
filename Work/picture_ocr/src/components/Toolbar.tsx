@@ -6,6 +6,7 @@ interface ToolbarProps {
   onOpenProjectInfo: () => void;
   onExportWord: () => void;
   onManageTemplates: () => void;
+  onOpenLanCollector?: () => void;
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -13,6 +14,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onOpenProjectInfo,
   onExportWord,
   onManageTemplates,
+  onOpenLanCollector,
 }) => {
   const { meta } = useAppState();
   const projectTitle = meta.projectName.trim() || meta.systemName.trim() || '未命名项目';
@@ -37,6 +39,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </div>
       </div>
       <div className="flex items-center gap-2">
+        {onOpenLanCollector && <button
+          onClick={onOpenLanCollector}
+          className="inline-flex items-center gap-1.5 rounded-[2px] border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm text-sky-800 transition-colors hover:bg-sky-100"
+        >
+          手机局域网采集
+        </button>}
         <button
           onClick={onManageTemplates}
           className="inline-flex items-center gap-1.5 rounded-[2px] border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-50"
