@@ -53,10 +53,10 @@ jobs:
           测评证据采集工具 ${{ steps.vars.outputs.tag }}
 
           本次更新摘要：
-          - Web ZIP 与 Windows 客户端均支持“手机局域网采集”：手机拍照后实时写入当前系统项目，电脑 IndexedDB 确认落盘后手机才显示成功。
-          - Web ZIP 启动器升级为受控局域网临时宿主：本机控制 API、32 字节随机 token、资产/检查项白名单、图片文件头与 10MB 校验、内存交付确认与关闭失效。
-          - 选择可信 Wi-Fi / 热点 IPv4 后扫码即可采集；仅允许专用可信网络上的 HTTP 临时会话，不适用于公共网络。
-          - 普通 ZIP 数据包继续用于备份和迁移；`.evidence` 仅保留历史兼容和紧急恢复。
+          - 优化手机局域网采集入口：使用同一个“拍照 / 选择图片”按钮，由手机系统提供可用的拍照或相册选项。
+          - 清理局域网会话弹窗中的重复“关闭”操作；会话启动后可直接使用“停止会话”。
+          - 优化项目列表在小屏幕和 Windows 高 DPI 缩放下的布局：重要操作保持可见，其余操作收纳至“更多操作”。
+          - 图片仍仅支持 PNG、JPEG、GIF、WebP 和 BMP；HEIC 暂不支持。
           "@ | Set-Content -Encoding UTF8 release-web/RELEASE-NOTES.txt
           Compress-Archive -Path release-web/* -DestinationPath "${{ steps.vars.outputs.web_zip }}" -Force
 
@@ -71,19 +71,23 @@ jobs:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: 测评证据采集工具 ${{ steps.vars.outputs.tag }}
           body: |
-            ## 本次更新/修复摘要
+            ## ✨ 手机采集更顺手
 
-            - Web ZIP 与 Windows 客户端均提供“手机局域网采集”：扫码后手机拍照/选图，图片实时写入当前系统项目。
-            - 手机只有在电脑端 IndexedDB 确认落盘后才显示成功；图片不会永久停留在局域网服务内存中。
-            - Web ZIP 的 PowerShell 宿主和 Electron 临时服务均使用 32 字节随机 token、资产/检查项白名单、文件头/MIME/10MB 校验及关闭即失效。
-            - 普通 ZIP 数据包继续用于备份与迁移；`.evidence` 仅为历史兼容和紧急恢复保留。
+            - 优化“手机局域网采集”的图片入口：保持一个清晰的“拍照 / 选择图片”按钮，不再强制指定后置相机。
+            - Android、iPhone 与 HarmonyOS 设备会由各自的浏览器和系统选择器提供可用的拍照或相册选项，减少部分设备只能进入相册的情况。
+            - 局域网会话弹窗移除了重复的底部“关闭”按钮；启动会话后仅保留明确的“停止会话”操作。
 
-            ## 使用方式与安全边界
+            ## 🛠️ 项目列表显示优化
 
-            - Web 静态版：下载 `*-web.zip`，解压后双击 `启动测评证据采集工具.bat`。不要关闭 PowerShell 窗口。
-            - Windows 客户端：下载 `desktop-dist` 产出的 exe/portable 附件，双击运行。
-            - 在目标系统点击“手机局域网采集”，选择手机实际可访问的可信 Wi-Fi / 热点 IPv4 后扫码。
-            - 这是不加密的同一可信局域网 HTTP 会话；仅在专用网络允许防火墙访问，绝不要在公共 Wi-Fi、陌生热点或不可信网络使用。
+            - 优化小屏幕及 Windows 高 DPI 缩放下的项目列表布局，避免操作按钮拥挤、换行混乱。
+            - 窄窗口优先展示系统名称、概要信息和“打开”；手机局域网采集、编辑、导入导出与删除等低频操作收纳至“更多操作”。
+            - 宽屏继续保留完整快捷操作，便于高频管理。
+
+            ## 🔄 兼容性说明
+
+            - 图片上传继续支持 PNG、JPEG、GIF、WebP 和 BMP，单个文件上限仍为 10MB；HEIC 暂不支持。
+            - 拍照/相册选项最终由手机浏览器和系统版本决定。建议在实际使用的 vivo、华为或 iPhone 设备上先完成一次扫码烟测。
+            - 手机局域网采集仍是同一可信 Wi-Fi 或个人热点内的临时 HTTP 会话；请勿在公共 Wi-Fi、陌生热点或其他不可信网络中使用。
           files: |
             ${{ steps.vars.outputs.web_zip }}
             desktop-dist/*

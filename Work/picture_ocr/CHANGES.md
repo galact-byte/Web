@@ -1,5 +1,36 @@
 # 修改记录 — Picture OCR
 
+## 2026-07-21 — v0.4.2 手机采集兼容性与响应式项目列表
+
+### 背景与目标
+- 改善部分 Android / HarmonyOS 浏览器扫码后仅显示相册的问题，并消除局域网会话对话框中重复的关闭操作。
+- 适配 Windows 不同屏幕尺寸与 DPI 缩放下的项目列表，避免操作按钮拥挤或不自然换行。
+
+### 影响与兼容性
+- 手机端继续使用单一“拍照 / 选择图片”入口，移除 `capture="environment"` 的相机强制指令，由 Android、iOS 和 HarmonyOS 的浏览器/系统选择器提供可用的拍照或相册选项。
+- 图片格式白名单仍为 PNG、JPEG、GIF、WebP 和 BMP，未增加 HEIC；已有服务端校验和 Word 导出行为不变。
+- 窄窗口将低频项目操作收纳至“更多操作”，宽屏保留全部快捷操作；不改变项目数据、局域网会话或导入导出协议。
+
+### 文件与实现
+| 操作 | 路径 | 说明 |
+|---|---|---|
+| 修改 | `src/components/LanMobileCollector.tsx` | 移除 `capture="environment"`，保留单一图片选择入口和既有格式限制。 |
+| 修改 | `src/components/LanCollectorDialog.tsx` | 移除底部重复“关闭”按钮，保留右上角关闭与明确的会话启停操作。 |
+| 修改 | `src/components/ProjectList.tsx` | 为项目表格添加窄/宽屏列布局和低频操作菜单。 |
+| 修改 | `src/components/project-list/ProjectListHeader.tsx` | 调整搜索与操作区的自适应换行、间距及触控高度。 |
+| 新增 | `scripts/verify-lan-mobile-picker.mjs` | 校验图片入口、对话框操作及响应式布局约束。 |
+| 修改 | `package.json`、`package-lock.json` | 升级版本至 `0.4.2` 并登记专项验证命令。 |
+
+### 验证
+- `npm run verify:lan-mobile-picker`：通过单一图片入口、取消相机强制、会话操作和响应式布局约束验证。
+- `npm run verify:lan-server`、`npm run verify:web-lan-server`、`npm run verify:evidence-package`：通过局域网服务、Web ZIP 会话和数据包回归验证。
+- `npm run build`、`npm run verify:pwa-build`：通过 TypeScript、生产构建及 PWA 构建产物验证。
+- `git diff --check`：通过。
+
+### 已知限制与后续
+- 手机系统文件选择器展示的拍照/相册选项由具体浏览器与系统版本决定，仍需在目标 vivo、iPhone 和华为设备上完成扫码烟测。
+- 历史 HEIC 照片仍不在支持范围内；若需支持，应单独实现并验证 HEIC 转 JPEG 的完整上传、校验、存储和报告导出链路。
+
 ## 2026-07-20 — Web ZIP 与 Windows 客户端统一手机局域网实时采集
 
 ### 背景与目标

@@ -1,7 +1,7 @@
 {
   "name": "picture_ocr",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "测评证据采集工具",
   "author": "galact",
   "repository": {
@@ -17,6 +17,7 @@
     "preview": "vite preview",
     "verify:evidence-package": "node scripts/verify-evidence-package.mjs",
     "verify:lan-server": "node scripts/verify-lan-server.cjs",
+    "verify:lan-mobile-picker": "node scripts/verify-lan-mobile-picker.mjs",
     "verify:web-lan-server": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-web-lan-server.ps1",
     "verify:pwa-build": "node scripts/verify-pwa-build.mjs",
     "desktop:build": "npm run build && npm run desktop:clean && electron-builder --win --dir",
