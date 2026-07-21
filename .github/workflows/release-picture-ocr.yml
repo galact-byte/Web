@@ -151,6 +151,7 @@ jobs:
           NOTES_FILE="${APP_DIR}/RELEASE-NOTES.md"
           RELEASE_VERSION="${RELEASE_TAG#picture-ocr-v}"
           RELEASE_TITLE="测评证据采集工具 v${RELEASE_VERSION}"
+          TARGET_COMMIT="$(git rev-list -n 1 "$RELEASE_TAG")"
 
           if [ ! -s "$NOTES_FILE" ]; then
             echo "缺少人工发布说明：$NOTES_FILE。每次发布必须提供面向用户的 RELEASE-NOTES.md，不能使用提交标题或通用模板代替。" >&2
@@ -167,7 +168,7 @@ jobs:
             gh release upload "$RELEASE_TAG" "${release_files[@]}" --clobber
           else
             gh release create "$RELEASE_TAG" "${release_files[@]}" \
-              --target "$RELEASE_TAG" \
+              --target "$TARGET_COMMIT" \
               --title "$RELEASE_TITLE" \
               --notes-file "$NOTES_FILE"
           fi
