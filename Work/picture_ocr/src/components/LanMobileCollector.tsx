@@ -10,9 +10,7 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null);
   const [message, setMessage] = useState('正在验证采集会话...');
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
-  const [captureTarget, setCaptureTarget] = useState<{ assetId: string; itemId: string } | null>(null);
-  const cameraInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-  const galleryInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const snapshotRef = useRef<LanCollectorSnapshot | null>(null);
   const activeCategoryIdRef = useRef<string | null>(null);
   const activeAssetIdRef = useRef<string | null>(null);
@@ -126,13 +124,6 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
     }
   };
 
-  const chooseCaptureSource = (source: 'camera' | 'gallery') => {
-    if (!captureTarget || uploadingItemId !== null) return;
-    const target = captureTarget;
-    setCaptureTarget(null);
-    const input = source === 'camera' ? cameraInputRefs.current[target.itemId] : galleryInputRefs.current[target.itemId];
-    input?.click();
-  };
 
   if (!snapshot) return <main className="min-h-dvh bg-slate-100 p-5 text-base text-slate-700"><div className="mx-auto max-w-xl border border-slate-200 bg-white p-4" role="status">{message}</div></main>;
 
@@ -143,9 +134,8 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
         {message && <p role="status" className="border border-slate-200 bg-white p-3 text-sm text-slate-700">{message}</p>}
         <nav aria-label="检查分类" className="flex gap-2 overflow-x-auto pb-1">{snapshot.categories.map((category) => <button key={category.id} type="button" onClick={() => selectCategory(category.id)} className={`min-h-11 shrink-0 border px-3 text-sm font-medium ${category.id === activeCategoryId ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700'}`}>{category.name}</button>)}</nav>
         <section aria-label="资产" className="grid grid-cols-2 gap-2 sm:grid-cols-3">{visibleAssets.map((asset) => <button key={asset.id} type="button" onClick={() => selectAsset(asset.id)} className={`min-h-16 border p-3 text-left text-sm ${asset.id === activeAsset?.id ? 'border-sky-700 bg-sky-50 font-semibold text-sky-950' : 'border-slate-200 bg-white'}`}><span className="block break-words">{asset.name}</span><span className="mt-1 block text-xs font-normal text-slate-600">{asset.items.length} 项</span></button>)}</section>
-        {!activeAsset ? <p className="border border-slate-200 bg-white p-4 text-sm text-slate-600">请选择资产。</p> : <section className="space-y-3">{activeAsset.items.length === 0 ? <p className="border border-slate-200 bg-white p-4 text-sm text-slate-600">此资产暂无检查项，请联系电脑端补充。</p> : activeAsset.items.map((item) => <article key={item.id} className="border border-slate-200 bg-white p-4"><div className="flex items-start justify-between gap-3"><h2 className="text-base font-semibold leading-6">{item.label}</h2>{item.required && <span className="shrink-0 border border-red-300 bg-red-50 px-2 py-1 text-xs font-medium text-red-800">必填</span>}</div><p className="mt-2 text-sm text-slate-600">已同步 {item.imageCount} 张</p><input ref={(node) => { cameraInputRefs.current[item.id] = node; }} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" capture="environment" className="hidden" onChange={(event) => { void uploadImage(activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><input ref={(node) => { galleryInputRefs.current[item.id] = node; }} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" className="hidden" onChange={(event) => { void uploadImage(activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><button type="button" onClick={() => setCaptureTarget({ assetId: activeAsset.id, itemId: item.id })} disabled={uploadingItemId !== null} className="mt-3 min-h-11 w-full border border-sky-700 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50">{uploadingItemId === item.id ? '正在同步...' : '拍照 / 选择图片'}</button></article>)}</section>}
+        {!activeAsset ? <p className="border border-slate-200 bg-white p-4 text-sm text-slate-600">请选择资产。</p> : <section className="space-y-3">{activeAsset.items.length === 0 ? <p className="border border-slate-200 bg-white p-4 text-sm text-slate-600">此资产暂无检查项，请联系电脑端补充。</p> : activeAsset.items.map((item) => <article key={item.id} className="border border-slate-200 bg-white p-4"><div className="flex items-start justify-between gap-3"><h2 className="text-base font-semibold leading-6">{item.label}</h2>{item.required && <span className="shrink-0 border border-red-300 bg-red-50 px-2 py-1 text-xs font-medium text-red-800">必填</span>}</div><p className="mt-2 text-sm text-slate-600">已同步 {item.imageCount} 张</p><input ref={(node) => { inputRefs.current[item.id] = node; }} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" className="hidden" onChange={(event) => { void uploadImage(activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><button type="button" onClick={() => inputRefs.current[item.id]?.click()} disabled={uploadingItemId !== null} className="mt-3 min-h-11 w-full border border-sky-700 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50">{uploadingItemId === item.id ? '正在同步...' : '拍照 / 选择图片'}</button><p className="mt-2 text-xs leading-5 text-slate-500">若未出现拍照选项，请使用微信、Chrome 或其他支持拍照的浏览器打开链接。</p></article>)}</section>}
       </div>
-      {captureTarget && <div className="fixed inset-0 z-30 flex items-end bg-slate-950/50 p-4 sm:items-center sm:justify-center"><section role="dialog" aria-modal="true" aria-labelledby="capture-source-title" className="w-full max-w-sm border border-slate-300 bg-white p-4 shadow-lg"><h2 id="capture-source-title" className="text-lg font-bold text-slate-950">选择图片来源</h2><p className="mt-1 text-sm text-slate-600">请选择拍照或从已有照片中选择。</p><div className="mt-4 grid gap-2"><button type="button" onClick={() => chooseCaptureSource('camera')} disabled={uploadingItemId !== null} className="min-h-11 border border-sky-700 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50">拍照</button><button type="button" onClick={() => chooseCaptureSource('gallery')} disabled={uploadingItemId !== null} className="min-h-11 border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">从相册选择</button><button type="button" onClick={() => setCaptureTarget(null)} disabled={uploadingItemId !== null} className="min-h-11 border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">取消</button></div></section></div>}
     </main>
   );
 };
