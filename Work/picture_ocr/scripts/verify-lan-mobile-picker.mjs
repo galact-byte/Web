@@ -13,7 +13,14 @@ const toolbarSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/comp
 const bridgeSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/utils/lanBridge.ts'), 'utf8');
 
 assert.match(collectorSource, /accept="image\/png,image\/jpeg,image\/gif,image\/webp,image\/bmp"/, '手机采集应仅请求服务端和报告导出均支持的图片格式。');
-assert.doesNotMatch(collectorSource, /capture="environment"/, '手机采集不应强制直接打开后置相机，以便 Android、iOS 和 HarmonyOS 在同一入口提供拍照或选图。');
+assert.match(collectorSource, /role="dialog" aria-modal="true" aria-labelledby="capture-source-title"/, '手机采集必须在同一入口内提供可访问的图片来源选择层。');
+assert.match(collectorSource, />选择图片来源<\//, '来源选择层必须说明当前操作。');
+assert.match(collectorSource, />拍照<\//, '来源选择层必须提供拍照操作。');
+assert.match(collectorSource, />从相册选择<\//, '来源选择层必须提供相册选择操作。');
+assert.match(collectorSource, />取消<\//, '来源选择层必须允许取消选择。');
+assert.match(collectorSource, /capture="environment"/, '专用相机输入必须请求后置相机。');
+assert.match(collectorSource, /cameraInputRefs/, '相机与相册输入必须使用独立引用。');
+assert.match(collectorSource, /galleryInputRefs/, '相册输入必须不带相机捕获提示。');
 assert.doesNotMatch(dialogSource, />关闭<\/button>/, '会话对话框不应同时提供右上角 × 和重复的底部“关闭”按钮。');
 assert.match(dialogSource, /'停止会话'/, '已启动会话时，底部应保留明确的“停止会话”操作。');
 assert.match(projectListSource, /grid-cols-\[44px_minmax\(0,1fr\)_160px\]/, '窄窗口下项目列表应收敛为选择、系统名和固定宽度操作列。');
