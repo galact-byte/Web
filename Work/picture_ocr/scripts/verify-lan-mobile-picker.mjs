@@ -12,11 +12,17 @@ const appSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/App.tsx'
 const toolbarSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/components/Toolbar.tsx'), 'utf8');
 const bridgeSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/utils/lanBridge.ts'), 'utf8');
 
-assert.match(collectorSource, /accept="image\/png,image\/jpeg,image\/gif,image\/webp,image\/bmp"/, '手机采集应仅请求服务端和报告导出均支持的图片格式。');
-assert.doesNotMatch(collectorSource, /capture="environment"/, '手机采集不应依赖浏览器不一致的相机捕获提示。');
-assert.doesNotMatch(collectorSource, /capture-source-title|cameraInputRefs|galleryInputRefs/, '手机采集应保留单一图片选择入口，不增加无效的网页来源选择层。');
-assert.match(collectorSource, /inputRefs/, '单一图片选择入口必须保留输入引用。');
-assert.match(collectorSource, /若未出现拍照选项，请使用微信、Chrome 或其他支持拍照的浏览器打开链接。/, '手机采集页必须说明浏览器不显示拍照选项时的可行替代方式。');
+assert.match(collectorSource, /const ACCEPTED_IMAGE_TYPES = 'image\/png,image\/jpeg,image\/gif,image\/webp,image\/bmp';/, '手机采集应仅请求服务端和报告导出均支持的图片格式。');
+assert.match(collectorSource, /localStorage\.getItem\(CAPTURE_SOURCE_MODE_KEY\)/, '手机采集必须读取本浏览器已保存的图片来源方式。');
+assert.match(collectorSource, /localStorage\.setItem\(CAPTURE_SOURCE_MODE_KEY, mode\)/, '切换图片来源方式后必须保存到本浏览器。');
+assert.match(collectorSource, /系统选择（推荐）/, '手机采集必须提供默认的系统选择方式。');
+assert.match(collectorSource, /拍照\/相册分开选择/, '手机采集必须提供适合 Chrome 的分开选择方式。');
+assert.match(collectorSource, /cameraInputRefs/, '分开选择方式必须使用专用相机输入引用。');
+assert.match(collectorSource, /galleryInputRefs/, '分开选择方式必须使用专用相册输入引用。');
+assert.match(collectorSource, /capture="environment"/, '专用相机输入必须请求后置相机。');
+assert.match(collectorSource, /role="dialog" aria-modal="true" aria-labelledby="capture-source-title"/, '分开选择方式必须使用可访问的图片来源选择层。');
+assert.match(collectorSource, />从相册选择<\//, '分开选择方式必须提供相册选择操作。');
+assert.match(collectorSource, /若未出现拍照选项，请切换“拍照\/相册分开选择”；vivo 自带浏览器仍可能只提供相册。/, '系统选择方式必须说明切换方式和 vivo 浏览器的已知限制。');
 assert.doesNotMatch(dialogSource, />关闭<\/button>/, '会话对话框不应同时提供右上角 × 和重复的底部“关闭”按钮。');
 assert.match(dialogSource, /'停止会话'/, '已启动会话时，底部应保留明确的“停止会话”操作。');
 assert.match(projectListSource, /grid-cols-\[44px_minmax\(0,1fr\)_160px\]/, '窄窗口下项目列表应收敛为选择、系统名和固定宽度操作列。');
