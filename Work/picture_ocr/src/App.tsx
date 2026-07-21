@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { AppProvider, useAppContext, useAppState, useDispatch } from './context/AppContext';
 import Toolbar from './components/Toolbar';
 import Sidebar from './components/Sidebar';
@@ -33,9 +33,10 @@ const AppContent: React.FC<AppContentProps> = ({ projectId, onBackToProjects, op
   const [validationOpen, setValidationOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [lanCollectorOpen, setLanCollectorOpen] = useState(false);
-  const lanStructureRef = useRef<string | null>(null);
+  const [lanSessionRunning, setLanSessionRunning] = useState(false);
+  const [lanSessionNotice, setLanSessionNotice] = useState('');
 
-  const lanSnapshot: LanCollectorSnapshot = {
+  const lanSnapshot = useMemo<LanCollectorSnapshot>(() => ({
     projectId,
     title: meta.systemName.trim() || meta.projectName.trim() || '未命名采集系统',
     categories: categories.map((category) => ({ id: category.id, name: category.name })),
@@ -45,33 +46,26 @@ const AppContent: React.FC<AppContentProps> = ({ projectId, onBackToProjects, op
       categoryId: asset.categoryId,
       items: asset.items.map((item) => ({ id: item.id, label: item.label, required: item.required, imageCount: item.images.length })),
     })),
-  };
+  }), [assets, categories, meta.projectName, meta.systemName, projectId]);
 
   useEffect(() => {
     if (openProjectInfoOnMount) setProjectInfoOpen(true);
   }, [openProjectInfoOnMount]);
 
-  const lanStructureSignature = useMemo(() => JSON.stringify({
-    categories: categories.map((category) => [category.id, category.name]),
-    assets: assets.map((asset) => [asset.id, asset.name, asset.categoryId, asset.items.map((item) => [item.id, item.label, item.required])]),
-  }), [assets, categories]);
-
   useEffect(() => {
-    if (!loaded || !lanBridge || !lanCollectorOpen) {
-      lanStructureRef.current = null;
-      return;
-    }
-    if (lanStructureRef.current === null) {
-      lanStructureRef.current = lanStructureSignature;
-      return;
-    }
-    if (lanStructureRef.current !== lanStructureSignature) {
-      lanStructureRef.current = null;
-      void lanBridge.stopSession();
-      setLanCollectorOpen(false);
-      alert('项目结构已变更，手机局域网采集会话已停止。请重新启动会话后再继续采集。');
-    }
-  }, [lanBridge, lanCollectorOpen, lanStructureSignature, loaded]);
+    if (!loaded || !lanBridge || !lanSessionRunning) return;
+    void lanBridge.updateSession(lanSnapshot).then((status) => {
+      setLanSessionRunning(status.running);
+      if (!status.running) setLanSessionNotice('手机局域网采集会话已结束。');
+    }).catch((error: unknown) => {
+      setLanSessionNotice(`手机端同步最新项目结构失败：${error instanceof Error ? error.message : '未知错误'}。`);
+    });
+  }, [lanBridge, lanSessionRunning, lanSnapshot, loaded]);
+
+  const handleLanSessionStatusChange = useCallback((running: boolean) => {
+    setLanSessionRunning(running);
+    if (running) setLanSessionNotice('');
+  }, []);
 
   useEffect(() => {
     if (!lanBridge) return;
@@ -145,10 +139,18 @@ const AppContent: React.FC<AppContentProps> = ({ projectId, onBackToProjects, op
           onExportWord={handleExportWord}
           onManageTemplates={() => setTemplateDialogOpen(true)}
           onOpenLanCollector={lanBridge ? () => setLanCollectorOpen(true) : undefined}
+          lanSessionRunning={lanSessionRunning}
         />
         <ContentArea />
       </div>
-      <LanCollectorDialog open={lanCollectorOpen} snapshot={lanSnapshot} bridge={lanBridge} onClose={() => setLanCollectorOpen(false)} />
+      <LanCollectorDialog
+        open={lanCollectorOpen}
+        snapshot={lanSnapshot}
+        bridge={lanBridge}
+        sessionNotice={lanSessionNotice}
+        onClose={() => setLanCollectorOpen(false)}
+        onSessionStatusChange={handleLanSessionStatusChange}
+      />
       <ProjectInfoDialog
         open={projectInfoOpen}
         onClose={() => setProjectInfoOpen(false)}
@@ -229,7 +231,7 @@ const App: React.FC = () => {
   }
 
   if (!openProjectId) {
-    return <ProjectList key={projectListRefreshKey} lanBridge={lanBridge} onOpenProject={handleOpenProject} />;
+    return <ProjectList key={projectListRefreshKey} onOpenProject={handleOpenProject} />;
   }
 
   return (

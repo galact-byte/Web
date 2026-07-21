@@ -49,6 +49,7 @@ export function prioritizeLanAddresses(addresses: LanAddress[]): LanAddress[] {
 export interface LanBridge {
   startSession: (snapshot: LanCollectorSnapshot, selectedAddress?: string) => Promise<LanSessionStatus>;
   stopSession: () => Promise<LanSessionStatus>;
+  updateSession: (snapshot: LanCollectorSnapshot) => Promise<LanSessionStatus>;
   getStatus: () => Promise<LanSessionStatus>;
   onImage: (listener: (upload: LanImageUpload) => void) => () => void;
   confirmImageSaved: (requestId: string, outcome: { success: boolean; message?: string }) => void;
@@ -151,6 +152,13 @@ const webBridge: LanBridge = {
     pollingRequestIds.clear();
     return requestControl<LanSessionStatus>('/stop', { method: 'POST' });
   },
+  updateSession(snapshot) {
+    return requestControl<LanSessionStatus>('/update', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ snapshot }),
+    });
+  },
   getStatus() {
     return requestControl<LanSessionStatus>('/status');
   },
@@ -184,6 +192,7 @@ function serializeSessionLifecycle(bridge: LanBridge): LanBridge {
   return {
     startSession: (snapshot, selectedAddress) => enqueue(() => bridge.startSession(snapshot, selectedAddress)),
     stopSession: () => enqueue(() => bridge.stopSession()),
+    updateSession: (snapshot) => enqueue(() => bridge.updateSession(snapshot)),
     getStatus: () => lifecycleQueue.catch(() => undefined).then(() => bridge.getStatus()),
     onImage: (listener) => bridge.onImage(listener),
     confirmImageSaved: (requestId, outcome) => bridge.confirmImageSaved(requestId, outcome),

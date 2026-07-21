@@ -1,5 +1,38 @@
 # 修改记录 — Picture OCR
 
+## 2026-07-21 — 局域网会话热更新与持续采集
+
+### 背景与目标
+- 电脑端编辑分类、资产或检查项后，让已扫码的手机采集页自动获得最新结构，不要求重新扫码。
+- 将局域网采集限制为项目工作台入口；二维码窗口可收起而不停止采集，并明确展示活动会话状态。
+
+### 影响与兼容性
+- Electron 与 Web ZIP 均支持以同一项目 ID 原子替换会话快照和上传白名单；旧资产/检查项的上传会立即被拒绝，避免写入已删除的数据目标。
+- 手机端每 2 秒拉取会话快照，保留仍存在的分类和资产选择；当前选择被电脑端删除时自动回退到首个有效选择并提示用户。
+- 工作台工具栏在会话存活时显示绿色状态点和“采集中”；右上角 × 仅收起二维码窗口，可通过该状态按钮重新打开。只有明确停止、离开工作台、退出程序或会话超时才会终止。
+- 项目列表移除局域网采集入口及其会话逻辑，原有响应式列布局和“更多操作”收纳保持不变。
+
+### 文件与实现
+| 操作 | 路径 | 说明 |
+|---|---|---|
+| 修改 | `electron/lanServer.cjs`、`electron/main.cjs`、`electron/preload.cjs`、`src/vite-env.d.ts` | 为 Electron 会话添加受限的同项目快照/白名单更新 IPC。 |
+| 修改 | `start-server.ps1` | 为 Web ZIP loopback 控制端添加受 `X-Evidence-Control` 保护的快照更新端点。 |
+| 修改 | `src/utils/lanBridge.ts` | 统一 Electron 与 Web ZIP 的 `updateSession` 桥接接口并串行会话操作。 |
+| 修改 | `src/App.tsx`、`src/components/LanCollectorDialog.tsx`、`src/components/Toolbar.tsx` | 推送工作台快照、维护会话状态，支持弹窗收起和“采集中”重开入口。 |
+| 修改 | `src/components/LanMobileCollector.tsx` | 每 2 秒同步最新快照、按稳定 ID 保留选择、选择失效时回退，并在页面离开时取消在途刷新请求。 |
+| 修改 | `src/components/ProjectList.tsx` | 删除项目外局域网采集入口及重复会话处理。 |
+| 修改 | `scripts/verify-lan-server.cjs`、`scripts/verify-web-lan-server.ps1`、`scripts/verify-lan-mobile-picker.mjs` | 覆盖 Electron/Web ZIP 原子更新、新旧白名单边界、手机同步与工作台状态约束。 |
+| 新增 | `docs/superpowers/specs/2026-07-21-lan-session-live-sync-design.md`、`docs/superpowers/plans/2026-07-21-lan-session-live-sync-implementation.md` | 记录设计决策和可复现实施计划。 |
+
+### 验证
+- `npm run verify:lan-mobile-picker`、`npm run verify:lan-server`、`npm run verify:web-lan-server`：通过前端交互与 Electron/Web ZIP 会话更新安全边界验证。
+- `npm run verify:evidence-package`、`npm run build`、`npm run verify:pwa-build`：通过数据包、TypeScript、生产构建和 PWA 回归验证。
+- `git diff --check`：通过。
+
+### 已知限制与后续
+- 尚未在实际 vivo、iPhone Safari、华为/HarmonyOS 浏览器上执行“扫码后编辑电脑结构、手机自动更新、继续上传”的端到端烟测；系统文件选择器和局域网策略仍需目标设备确认。
+- LAN HTTP 传输仍仅适用于可信同一局域网或个人热点；不提供互联网访问、传输加密、账号隔离或多用户协作。
+
 ## 2026-07-21 — v0.4.2 手机采集兼容性与响应式项目列表
 
 ### 背景与目标
