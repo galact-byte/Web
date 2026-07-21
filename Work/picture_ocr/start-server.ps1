@@ -95,6 +95,30 @@ function Handle-Control { param($Request,$Path)
     if ([string]$Request.headers['x-evidence-control'] -ne '1') { Send-Error $Request 403 '控制接口缺少本机应用标识。'; return }
     if ($Path -eq '/api/control/status' -and $Request.method -eq 'GET') { $session=Get-ActiveSession; Send-Json $Request 200 @{running=[bool]$session;url=$(if($session){$session.url}else{$null});addresses=@(Get-PrivateLanAddresses)}; return }
     if ($Path -eq '/api/control/start' -and $Request.method -eq 'POST') { try { $payload=([Text.Encoding]::UTF8.GetString($Request.body)|ConvertFrom-Json);$addresses=@(Get-PrivateLanAddresses);$selected=[string]$payload.selectedAddress;if($addresses.Count -eq 0){throw '未检测到可用私有局域网 IPv4 地址。请连接同一 Wi-Fi 或启用电脑连接的手机热点后重试。'};if(@($addresses | ForEach-Object { $_.address }) -notcontains $selected){throw '请选择手机实际可访问的 Wi-Fi 或热点地址。'};$normalized=ConvertTo-NormalizedSnapshot $payload.snapshot;Stop-LanSession;Ensure-LanListener $selected;$token=New-SessionToken;$session=[pscustomobject]@{token=$token;address=$selected;snapshot=$normalized.snapshot;allowed=$normalized.allowed;pending=[ordered]@{};completed=[ordered]@{};expiresAt=[DateTime]::UtcNow.AddHours(2);url="http://$selected`:$script:ListenPort/#/lan/$token"};[Threading.Monitor]::Enter($script:SessionLock);try{$script:Session=$session}finally{[Threading.Monitor]::Exit($script:SessionLock)};Send-Json $Request 200 @{running=$true;url=$session.url;addresses=$addresses};return }catch{Send-Error $Request 400 $_.Exception.Message;return} }
+    if ($Path -eq '/api/control/update' -and $Request.method -eq 'POST') {
+        try {
+            $payload = ([Text.Encoding]::UTF8.GetString($Request.body) | ConvertFrom-Json)
+            $normalized = ConvertTo-NormalizedSnapshot $payload.snapshot
+            $session = Get-ActiveSession
+            if (-not $session) { Send-Error $Request 409 '采集会话已结束。'; return }
+            $outcome = $null
+            [Threading.Monitor]::Enter($script:SessionLock)
+            try {
+                if (-not $script:Session -or $script:Session.token -ne $session.token) {
+                    $outcome = @{ status = 409; message = '采集会话已结束。' }
+                } elseif ($normalized.snapshot.projectId -ne $script:Session.snapshot.projectId) {
+                    $outcome = @{ status = 409; message = '不能用其他项目更新当前采集会话。' }
+                } else {
+                    $script:Session.snapshot = $normalized.snapshot
+                    $script:Session.allowed = $normalized.allowed
+                    $outcome = @{ status = 200 }
+                }
+            } finally { [Threading.Monitor]::Exit($script:SessionLock) }
+            if ($outcome.status -ne 200) { Send-Error $Request $outcome.status $outcome.message; return }
+            Send-Json $Request 200 @{running=$true;url=$session.url;addresses=@(Get-PrivateLanAddresses)}
+            return
+        } catch { Send-Error $Request 400 $_.Exception.Message; return }
+    }
     if ($Path -eq '/api/control/stop' -and $Request.method -eq 'POST') { Stop-LanSession;Send-Json $Request 200 @{running=$false;url=$null;addresses=@(Get-PrivateLanAddresses)};return }
     if ($Path -eq '/api/control/pending' -and $Request.method -eq 'GET') { $session=Get-ActiveSession;if(-not $session){Send-Json $Request 200 @{upload=$null};return};[Threading.Monitor]::Enter($script:SessionLock);try{$upload=@($session.pending.Values|Select-Object -First 1)[0];Send-Json $Request 200 @{upload=$upload}}finally{[Threading.Monitor]::Exit($script:SessionLock)};return }
     if ($Path -eq '/api/control/confirm' -and $Request.method -eq 'POST') { try{$payload=([Text.Encoding]::UTF8.GetString($Request.body)|ConvertFrom-Json);$session=Get-ActiveSession;if(-not $session){Send-Error $Request 409 '采集会话已结束。';return};$id=[string]$payload.requestId;[Threading.Monitor]::Enter($script:SessionLock);try{if(-not $session.pending.Contains($id)){Send-Error $Request 404 '待确认图片不存在或已处理。';return};$session.pending.Remove($id);$session.completed[$id]=[pscustomobject]@{success=[bool]$payload.success;message=$(if($payload.success){'图片已写入电脑项目。'}elseif([string]::IsNullOrWhiteSpace([string]$payload.message)){'电脑端未能保存图片。'}else{[string]$payload.message});expiresAt=[DateTime]::UtcNow.AddMinutes(2)}}finally{[Threading.Monitor]::Exit($script:SessionLock)};Send-Json $Request 200 @{message='图片保存结果已确认。'};return}catch{Send-Error $Request 400 $_.Exception.Message;return} }
