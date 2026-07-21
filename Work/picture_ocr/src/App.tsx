@@ -181,6 +181,16 @@ function getLanToken(): string | null {
   return match ? match[1] : null;
 }
 
+function getDesktopProjectId(): string | null {
+  const match = window.location.hash.match(/^#\/project\/([^/]+)$/);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]) || null;
+  } catch {
+    return null;
+  }
+}
+
 const App: React.FC = () => {
   const [hash, setHash] = useState(() => window.location.hash);
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
@@ -193,7 +203,13 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const handleHashChange = () => setHash(window.location.hash);
+    const handleHashChange = () => {
+      setHash(window.location.hash);
+      if (!getDesktopProjectId()) {
+        setOpenProjectId(null);
+        setNewProjectInfoPrompt(false);
+      }
+    };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
@@ -201,12 +217,14 @@ const App: React.FC = () => {
   const handleOpenProject = (projectId: string, isNewProject = false) => {
     setNewProjectInfoPrompt(isNewProject);
     setOpenProjectId(projectId);
+    window.location.hash = `/project/${encodeURIComponent(projectId)}`;
   };
 
   const handleBackToProjects = () => {
     setOpenProjectId(null);
     setNewProjectInfoPrompt(false);
     setProjectListRefreshKey((key) => key + 1);
+    window.location.hash = '';
   };
 
   const handleProjectSaved = useCallback(() => {
@@ -230,18 +248,20 @@ const App: React.FC = () => {
     return <MobileCollector projectId={mobileProjectId} onBack={() => { window.location.hash = '#/mobile'; }} />;
   }
 
-  if (!openProjectId) {
+  const desktopProjectId = getDesktopProjectId();
+  const activeProjectId = desktopProjectId ?? openProjectId;
+  if (!activeProjectId) {
     return <ProjectList key={projectListRefreshKey} onOpenProject={handleOpenProject} />;
   }
 
   return (
     <AppProvider
-      key={openProjectId}
-      projectId={openProjectId}
+      key={activeProjectId}
+      projectId={activeProjectId}
       onProjectSaved={handleProjectSaved}
     >
       <AppContent
-        projectId={openProjectId}
+        projectId={activeProjectId}
         onBackToProjects={handleBackToProjects}
         openProjectInfoOnMount={newProjectInfoPrompt}
         lanBridge={lanBridge}

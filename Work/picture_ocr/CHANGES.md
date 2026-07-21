@@ -1,5 +1,37 @@
 # 修改记录 — Picture OCR
 
+## 2026-07-21 — v0.4.3 实时会话同步与手机网页相机
+
+### 背景与目标
+- 让手机局域网采集在电脑端编辑资产或检查项后保持同一会话并自动更新，避免重新扫码。
+- 改善不同手机浏览器的图片来源体验：保留系统选择，并提供可记忆的“拍照 / 相册分开选择”和网页相机预览路径。
+
+### 影响与兼容性
+- 项目工作台是唯一的局域网采集入口；关闭二维码窗口只收起界面，工具栏“采集中”状态可重新打开会话信息，停止会话才会失效。
+- Electron 与 Web ZIP 会话可原子更新同项目快照和上传白名单；手机每 2 秒同步最新结构。删除的目标立即拒绝上传，新增目标无需重新扫码即可出现。
+- 手机默认使用“系统选择（推荐）”，可将偏好保存到当前浏览器；“拍照 / 相册分开选择”优先尝试网页后置相机预览，失败时仍可使用系统相机或相册回退。
+- 网页相机是否可用于局域网 HTTP 地址取决于浏览器安全策略与权限。vivo 自带浏览器可能仍仅提供相册；用户可切换系统选择、使用微信/Chrome 或其他支持的浏览器。
+- PC Web 在项目工作台刷新时会从 `#/project/<项目ID>` 恢复当前项目；返回项目列表时清除该路由，不再因刷新退回项目列表。
+
+### 文件与实现
+| 操作 | 路径 | 说明 |
+|---|---|---|
+| 修改 | `electron/lanServer.cjs`、`electron/main.cjs`、`electron/preload.cjs`、`src/vite-env.d.ts` | 支持 Electron 同项目快照与白名单热更新。 |
+| 修改 | `start-server.ps1`、`src/utils/lanBridge.ts` | 增加 Web ZIP 受控快照更新端点并统一桥接接口。 |
+| 修改 | `src/App.tsx`、`src/components/LanCollectorDialog.tsx`、`src/components/Toolbar.tsx`、`src/components/ProjectList.tsx` | 持续会话状态、项目内唯一入口、桌面项目刷新路由恢复及响应式项目列表修复。 |
+| 修改 | `src/components/LanMobileCollector.tsx` | 手机 2 秒结构同步、图片来源方式、网页相机预览、系统相机和相册回退。 |
+| 修改 | `scripts/verify-lan-server.cjs`、`scripts/verify-web-lan-server.ps1`、`scripts/verify-lan-mobile-picker.mjs` | 覆盖热更新安全边界、手机来源模式、网页相机资源清理和响应式布局约束。 |
+| 修改 | `package.json`、`package-lock.json` | 升级版本至 `0.4.3`。 |
+
+### 验证
+- `npm run verify:lan-mobile-picker`、`npm run verify:lan-server`、`npm run verify:web-lan-server`：通过手机交互和 Electron/Web ZIP 会话安全边界验证。
+- `npm run verify:evidence-package`、`npm run build`、`npm run verify:pwa-build`：通过数据包、生产构建和 PWA 回归验证。
+- `git diff --check`：通过。
+
+### 已知限制与后续
+- 尚未在真实 vivo、华为/HarmonyOS、微信和 Chrome 的局域网 HTTP 地址上完成网页相机预览烟测；浏览器可能因安全上下文或厂商策略拒绝网页相机，系统选择和相册回退仍可用。
+- 局域网采集仍仅适用于可信同一 Wi-Fi 或个人热点，HTTP 传输不加密。
+
 ## 2026-07-21 — 局域网会话热更新与持续采集
 
 ### 背景与目标

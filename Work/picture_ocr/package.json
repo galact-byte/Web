@@ -1,7 +1,7 @@
 {
   "name": "picture_ocr",
   "private": true,
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "测评证据采集工具",
   "author": "galact",
   "repository": {
