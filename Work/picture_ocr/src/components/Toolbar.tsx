@@ -7,6 +7,7 @@ interface ToolbarProps {
   onExportWord: () => void;
   onManageTemplates: () => void;
   onOpenLanCollector?: () => void;
+  lanSessionRunning: boolean;
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -15,6 +16,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onExportWord,
   onManageTemplates,
   onOpenLanCollector,
+  lanSessionRunning,
 }) => {
   const { meta } = useAppState();
   const projectTitle = meta.projectName.trim() || meta.systemName.trim() || '未命名项目';
@@ -41,9 +43,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <div className="flex items-center gap-2">
         {onOpenLanCollector && <button
           onClick={onOpenLanCollector}
-          className="inline-flex items-center gap-1.5 rounded-[2px] border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm text-sky-800 transition-colors hover:bg-sky-100"
+          className={`inline-flex min-h-11 items-center gap-1.5 rounded-[2px] border px-3 py-1.5 text-sm transition-colors ${lanSessionRunning ? 'border-emerald-300 bg-emerald-50 font-medium text-emerald-800 hover:bg-emerald-100' : 'border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100'}`}
         >
-          手机局域网采集
+          {lanSessionRunning && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-600" aria-hidden="true" />}
+          {lanSessionRunning ? '采集中' : '手机局域网采集'}
         </button>}
         <button
           onClick={onManageTemplates}
