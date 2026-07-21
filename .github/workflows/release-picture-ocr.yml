@@ -30,6 +30,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # 手动重发既有标签时，从默认分支读取工作流与人工发布说明；
+          # 普通标签推送仍严格构建该标签指向的源码。
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -101,6 +105,7 @@ jobs:
 
           cp -R dist "release/${PACKAGE_NAME}/dist"
           cp README.md "release/${PACKAGE_NAME}/README.md"
+          cp RELEASE-NOTES.md "release/${PACKAGE_NAME}/RELEASE-NOTES.md"
           cp start-server.ps1 "release/${PACKAGE_NAME}/start-server.ps1"
           cp '启动测评证据采集工具.bat' "release/${PACKAGE_NAME}/启动测评证据采集工具.bat"
           printf '%s\n' "$RELEASE_TAG" > "release/${PACKAGE_NAME}/VERSION.txt"
@@ -143,36 +148,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          NOTES_FILE="release-notes.md"
+          NOTES_FILE="${APP_DIR}/RELEASE-NOTES.md"
+          RELEASE_VERSION="${RELEASE_TAG#picture-ocr-v}"
+          RELEASE_TITLE="测评证据采集工具 v${RELEASE_VERSION}"
 
-          # ---------- generate changelog from git history ----------
-          PREV_TAG=$(git tag --list 'picture-ocr-v*' --sort=-version:refname | grep -A1 "^${RELEASE_TAG}$" | tail -1 || true)
-
-          cat > "$NOTES_FILE" <<'NOTES_HEADER'
-          ## 测评证据采集工具
-
-          NOTES_HEADER
-
-          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$RELEASE_TAG" ]; then
-            echo "### 📋 本版本更新内容" >> "$NOTES_FILE"
-            echo "" >> "$NOTES_FILE"
-            git log "${PREV_TAG}..${RELEASE_TAG}" --pretty=format:'- %s' --no-merges >> "$NOTES_FILE" 2>/dev/null \
-              || echo "- （无提交记录）" >> "$NOTES_FILE"
-          else
-            echo "### 📋 更新内容" >> "$NOTES_FILE"
-            echo "" >> "$NOTES_FILE"
-            git log --pretty=format:'- %s' --no-merges >> "$NOTES_FILE" 2>/dev/null \
-              || echo "- 首个正式发布版本。" >> "$NOTES_FILE"
+          if [ ! -s "$NOTES_FILE" ]; then
+            echo "缺少人工发布说明：$NOTES_FILE。每次发布必须提供面向用户的 RELEASE-NOTES.md，不能使用提交标题或通用模板代替。" >&2
+            exit 1
           fi
-
-          cat >> "$NOTES_FILE" <<'NOTES_FOOTER'
-
-          ### 📦 使用方式
-
-          - **Web 静态版**：下载 `*-web.zip`，解压后双击 `启动测评证据采集工具.bat` 运行
-          - **Windows 客户端**：下载 `.exe` 便携版，双击运行
-          NOTES_FOOTER
-          # --------------------------------------------------------
 
           release_files=("$ZIP_PATH")
           while IFS= read -r -d '' file; do
@@ -180,10 +163,11 @@ jobs:
           done < <(find "$DESKTOP_DIST" -maxdepth 1 -type f -print0)
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "$RELEASE_TITLE" --notes-file "$NOTES_FILE"
             gh release upload "$RELEASE_TAG" "${release_files[@]}" --clobber
           else
             gh release create "$RELEASE_TAG" "${release_files[@]}" \
-              --target "$GITHUB_SHA" \
-              --title "Picture OCR ${RELEASE_TAG}" \
+              --target "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
               --notes-file "$NOTES_FILE"
           fi
