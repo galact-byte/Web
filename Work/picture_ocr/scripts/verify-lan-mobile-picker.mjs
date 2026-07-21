@@ -19,7 +19,13 @@ assert.match(collectorSource, /系统选择（推荐）/, '手机采集必须提
 assert.match(collectorSource, /拍照\/相册分开选择/, '手机采集必须提供适合 Chrome 的分开选择方式。');
 assert.match(collectorSource, /cameraInputRefs/, '分开选择方式必须使用专用相机输入引用。');
 assert.match(collectorSource, /galleryInputRefs/, '分开选择方式必须使用专用相册输入引用。');
-assert.match(collectorSource, /capture="environment"/, '专用相机输入必须请求后置相机。');
+assert.match(collectorSource, /navigator\.mediaDevices\?\.getUserMedia\(\{ video: \{ facingMode: \{ ideal: 'environment' \} \}, audio: false \}\)/, '分开选择方式的拍照必须优先请求网页后置相机。');
+assert.match(collectorSource, /cameraVideoRef/, '网页相机必须维护视频预览引用。');
+assert.match(collectorSource, /cameraStreamRef/, '网页相机必须维护并在关闭时释放媒体流。');
+assert.match(collectorSource, /canvas\.toBlob/, '确认拍照必须将视频画面转换为 JPEG 图片。');
+assert.match(collectorSource, /capture="environment"/, '网页相机不可用时必须保留后置相机文件输入作为回退。');
+assert.match(collectorSource, /aria-labelledby="camera-preview-title"/, '网页相机预览必须使用可访问对话框。');
+assert.match(collectorSource, />确认拍照<\//, '网页相机预览必须提供明确的确认拍照操作。');
 assert.match(collectorSource, /role="dialog" aria-modal="true" aria-labelledby="capture-source-title"/, '分开选择方式必须使用可访问的图片来源选择层。');
 assert.match(collectorSource, />从相册选择<\//, '分开选择方式必须提供相册选择操作。');
 assert.match(collectorSource, /若未出现拍照选项，请切换“拍照\/相册分开选择”；vivo 自带浏览器仍可能只提供相册。/, '系统选择方式必须说明切换方式和 vivo 浏览器的已知限制。');
