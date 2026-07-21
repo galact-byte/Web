@@ -29,6 +29,7 @@ interface DialogState {
 }
 
 const actionButton = 'inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap border px-2.5 py-1.5 text-xs font-medium transition-colors';
+const projectListGrid = 'grid-cols-[44px_minmax(0,1fr)_160px] lg:grid-cols-[44px_minmax(0,1.3fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_64px_160px] 2xl:grid-cols-[44px_minmax(0,1.3fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_64px_448px]';
 
 function getSystemDisplayName(project: ProjectSummary): string {
   return project.meta.systemName.trim() || '未命名系统';
@@ -263,7 +264,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
           <div className="flex shrink-0 items-center gap-4"><div className="text-sm text-slate-500">共 {groups.length} 个项目组，{groups.flatMap((group) => group.systems).length} 个系统</div></div>
         </section>
         <section className="border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-200 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 sm:px-6 lg:grid-cols-[44px_minmax(0,1.3fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_64px_auto]">
+          <div className={`${projectListGrid} items-center gap-3 border-b border-slate-200 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 sm:px-6`}>
             <label className="flex items-center justify-center" title="全选当前筛选结果"><input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFilteredProjects} disabled={filteredSystems.length === 0} className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" /></label>
             <span>项目组 / 系统</span><span className="hidden lg:block">单位名称</span><span className="hidden lg:block">最后更新</span><span className="hidden lg:block text-center">资产数</span><span className="text-center">操作</span>
           </div>
@@ -273,7 +274,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
               const isExpanded = expandedGroupIds.has(summary.id);
               const group = summary.group;
               const renderSystemRow = (system: ProjectSummary, indented: boolean) => (
-                <div key={system.id} className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-100 bg-white px-4 py-3 text-sm text-slate-700 last:border-b-0 hover:bg-slate-50 sm:px-6 lg:grid-cols-[44px_minmax(0,1.3fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_64px_auto]">
+                <div key={system.id} className={`${projectListGrid} items-center gap-3 border-b border-slate-100 bg-white px-4 py-3 text-sm text-slate-700 last:border-b-0 hover:bg-slate-50 sm:px-6`}>
                   <label className="flex items-center justify-center" title="选择系统"><input type="checkbox" checked={selectedProjectIds.has(system.id)} onChange={() => toggleProjectSelection(system.id)} className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" /></label>
                   <div className={`min-w-0 ${indented ? 'border-l-2 border-blue-200 pl-3' : ''}`}><div className="break-words font-semibold text-slate-950">{getSystemDisplayName(system)}</div><div className="mt-1 text-xs leading-5 text-slate-500 lg:hidden">{system.meta.unitName || '未填写'} · {formatTime(system.updatedAt)} · {system.assetCount} 项资产</div></div>
                   <div className="hidden break-words leading-5 lg:block">{system.meta.unitName || '未填写'}</div><div className="hidden break-words leading-5 text-xs lg:block">{formatTime(system.updatedAt)}</div><div className="hidden text-center lg:block"><span className="inline-flex min-w-7 justify-center border border-blue-100 bg-blue-50 px-2 py-0.5 font-medium text-blue-700">{system.assetCount}</span></div>
