@@ -5,6 +5,7 @@ interface LanMobileCollectorProps {
 }
 
 type CaptureSourceMode = 'system' | 'separate';
+type CaptureTarget = { assetId: string; itemId: string };
 
 const ACCEPTED_IMAGE_TYPES = 'image/png,image/jpeg,image/gif,image/webp,image/bmp';
 const CAPTURE_SOURCE_MODE_KEY = 'lan-capture-source-mode';
@@ -20,10 +21,15 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
   const [message, setMessage] = useState('正在验证采集会话...');
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
   const [captureSourceMode, setCaptureSourceMode] = useState<CaptureSourceMode>(getCaptureSourceMode);
-  const [captureTarget, setCaptureTarget] = useState<{ assetId: string; itemId: string } | null>(null);
+  const [captureTarget, setCaptureTarget] = useState<CaptureTarget | null>(null);
+  const [cameraTarget, setCameraTarget] = useState<CaptureTarget | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraFallbackAvailable, setCameraFallbackAvailable] = useState(false);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const cameraInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const galleryInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
   const snapshotRef = useRef<LanCollectorSnapshot | null>(null);
   const activeCategoryIdRef = useRef<string | null>(null);
   const activeAssetIdRef = useRef<string | null>(null);
@@ -37,6 +43,13 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
     activeAssetIdRef.current = assetId;
     setActiveCategoryId(categoryId);
     setActiveAssetId(assetId);
+  }, []);
+
+  const stopCameraStream = useCallback(() => {
+    const stream = cameraStreamRef.current;
+    if (stream) stream.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+    if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null;
   }, []);
 
   const refreshSnapshot = useCallback(async (initialLoad: boolean, signal?: AbortSignal) => {
@@ -82,6 +95,43 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
       controller.abort();
     };
   }, [refreshSnapshot, setSelection]);
+
+  useEffect(() => {
+    if (!cameraTarget) return;
+    let active = true;
+    let stream: MediaStream | null = null;
+    setCameraReady(false);
+
+    const openCamera = async () => {
+      try {
+        const nextStream = await navigator.mediaDevices?.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+        if (!nextStream) throw new Error('当前浏览器不支持网页相机。');
+        if (!active) {
+          nextStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        stream = nextStream;
+        cameraStreamRef.current = nextStream;
+        if (cameraVideoRef.current) cameraVideoRef.current.srcObject = nextStream;
+      } catch {
+        if (!active) return;
+        setCameraTarget(null);
+        setCameraFallbackAvailable(true);
+        setCaptureTarget(cameraTarget);
+        setMessage('网页相机无法启动。可使用系统相机回退，或从相册选择图片。');
+      }
+    };
+
+    void openCamera();
+    return () => {
+      active = false;
+      if (stream) stream.getTracks().forEach((track) => track.stop());
+      if (cameraStreamRef.current === stream) cameraStreamRef.current = null;
+      if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null;
+    };
+  }, [cameraTarget]);
+
+  useEffect(() => () => stopCameraStream(), [stopCameraStream]);
 
   const selectCategory = (categoryId: string) => {
     const assetId = snapshotRef.current?.assets.find((asset) => asset.categoryId === categoryId)?.id ?? null;
@@ -137,10 +187,18 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
     }
   };
 
+  const closeCameraPreview = () => {
+    stopCameraStream();
+    setCameraReady(false);
+    setCameraTarget(null);
+  };
+
   const setSourceMode = (mode: CaptureSourceMode) => {
     window.localStorage.setItem(CAPTURE_SOURCE_MODE_KEY, mode);
     setCaptureSourceMode(mode);
     setCaptureTarget(null);
+    setCameraFallbackAvailable(false);
+    closeCameraPreview();
   };
 
   const openImagePicker = (assetId: string, itemId: string) => {
@@ -149,15 +207,61 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
       inputRefs.current[itemId]?.click();
       return;
     }
+    setCameraFallbackAvailable(false);
     setCaptureTarget({ assetId, itemId });
   };
 
-  const chooseCaptureSource = (source: 'camera' | 'gallery') => {
+  const startWebCamera = () => {
+    if (!captureTarget || uploadingItemId) return;
+    const target = captureTarget;
+    setCaptureTarget(null);
+    setCameraFallbackAvailable(false);
+    setCameraTarget(target);
+  };
+
+  const chooseGallery = () => {
     const target = captureTarget;
     if (!target || uploadingItemId) return;
     setCaptureTarget(null);
-    const input = source === 'camera' ? cameraInputRefs.current[target.itemId] : galleryInputRefs.current[target.itemId];
-    input?.click();
+    galleryInputRefs.current[target.itemId]?.click();
+  };
+
+  const useCameraInputFallback = () => {
+    const target = captureTarget;
+    if (!target || uploadingItemId) return;
+    setCaptureTarget(null);
+    setCameraFallbackAvailable(false);
+    cameraInputRefs.current[target.itemId]?.click();
+  };
+
+  const captureCameraFrame = () => {
+    const target = cameraTarget;
+    const video = cameraVideoRef.current;
+    if (!target || !video || !cameraReady || uploadingItemId) return;
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    if (!width || !height) {
+      setMessage('相机预览尚未就绪，请稍后再试。');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      setMessage('当前浏览器无法处理相机画面，请改用从相册选择。');
+      return;
+    }
+    context.drawImage(video, 0, 0, width, height);
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setMessage('拍照失败，请重试或从相册选择。');
+        return;
+      }
+      const file = new File([blob], `mobile-camera-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      closeCameraPreview();
+      void uploadImage(target.assetId, target.itemId, file);
+    }, 'image/jpeg', 0.92);
   };
 
   if (!snapshot) return <main className="min-h-dvh bg-slate-100 p-5 text-base text-slate-700"><div className="mx-auto max-w-xl border border-slate-200 bg-white p-4" role="status">{message}</div></main>;
@@ -167,12 +271,13 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3 shadow-sm"><div className="mx-auto max-w-3xl"><h1 className="truncate text-lg font-bold">{snapshot.title}</h1><p className="mt-1 text-sm text-slate-600">局域网实时采集 · 图片会同步到电脑</p></div></header>
       <div className="mx-auto max-w-3xl space-y-4 px-4 pt-4">
         {message && <p role="status" className="border border-slate-200 bg-white p-3 text-sm text-slate-700">{message}</p>}
-        <section aria-labelledby="capture-source-mode-title" className="border border-slate-200 bg-white p-3"><h2 id="capture-source-mode-title" className="text-sm font-semibold text-slate-800">图片来源方式</h2><div className="mt-2 grid gap-2 sm:grid-cols-2"><button type="button" onClick={() => setSourceMode('system')} aria-pressed={captureSourceMode === 'system'} className={`min-h-11 border px-3 text-left text-sm ${captureSourceMode === 'system' ? 'border-sky-700 bg-sky-50 font-semibold text-sky-950' : 'border-slate-300 bg-white text-slate-700'}`}>系统选择（推荐）<span className="mt-1 block text-xs font-normal text-slate-600">适合微信、华为和雨云等会自行提供拍照或选图的浏览器。</span></button><button type="button" onClick={() => setSourceMode('separate')} aria-pressed={captureSourceMode === 'separate'} className={`min-h-11 border px-3 text-left text-sm ${captureSourceMode === 'separate' ? 'border-sky-700 bg-sky-50 font-semibold text-sky-950' : 'border-slate-300 bg-white text-slate-700'}`}>拍照/相册分开选择<span className="mt-1 block text-xs font-normal text-slate-600">适合 Chrome 等需要明确选择拍照或相册的浏览器。</span></button></div></section>
+        <section aria-labelledby="capture-source-mode-title" className="border border-slate-200 bg-white p-3"><h2 id="capture-source-mode-title" className="text-sm font-semibold text-slate-800">图片来源方式</h2><div className="mt-2 grid gap-2 sm:grid-cols-2"><button type="button" onClick={() => setSourceMode('system')} aria-pressed={captureSourceMode === 'system'} className={`min-h-11 border px-3 text-left text-sm ${captureSourceMode === 'system' ? 'border-sky-700 bg-sky-50 font-semibold text-sky-950' : 'border-slate-300 bg-white text-slate-700'}`}>系统选择（推荐）<span className="mt-1 block text-xs font-normal text-slate-600">适合微信、华为和雨云等会自行提供拍照或选图的浏览器。</span></button><button type="button" onClick={() => setSourceMode('separate')} aria-pressed={captureSourceMode === 'separate'} className={`min-h-11 border px-3 text-left text-sm ${captureSourceMode === 'separate' ? 'border-sky-700 bg-sky-50 font-semibold text-sky-950' : 'border-slate-300 bg-white text-slate-700'}`}>拍照/相册分开选择<span className="mt-1 block text-xs font-normal text-slate-600">拍照优先尝试网页相机，适合 Chrome 等需要明确选择的浏览器。</span></button></div></section>
         <nav aria-label="检查分类" className="flex gap-2 overflow-x-auto pb-1">{snapshot.categories.map((category) => <button key={category.id} type="button" onClick={() => selectCategory(category.id)} className={`min-h-11 shrink-0 border px-3 text-sm font-medium ${category.id === activeCategoryId ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700'}`}>{category.name}</button>)}</nav>
         <section aria-label="资产" className="grid grid-cols-2 gap-2 sm:grid-cols-3">{visibleAssets.map((asset) => <button key={asset.id} type="button" onClick={() => selectAsset(asset.id)} className={`min-h-16 border p-3 text-left text-sm ${asset.id === activeAsset?.id ? 'border-sky-700 bg-sky-50 font-semibold text-sky-950' : 'border-slate-200 bg-white'}`}><span className="block break-words">{asset.name}</span><span className="mt-1 block text-xs font-normal text-slate-600">{asset.items.length} 项</span></button>)}</section>
         {!activeAsset ? <p className="border border-slate-200 bg-white p-4 text-sm text-slate-600">请选择资产。</p> : <section className="space-y-3">{activeAsset.items.length === 0 ? <p className="border border-slate-200 bg-white p-4 text-sm text-slate-600">此资产暂无检查项，请联系电脑端补充。</p> : activeAsset.items.map((item) => <article key={item.id} className="border border-slate-200 bg-white p-4"><div className="flex items-start justify-between gap-3"><h2 className="text-base font-semibold leading-6">{item.label}</h2>{item.required && <span className="shrink-0 border border-red-300 bg-red-50 px-2 py-1 text-xs font-medium text-red-800">必填</span>}</div><p className="mt-2 text-sm text-slate-600">已同步 {item.imageCount} 张</p><input ref={(node) => { inputRefs.current[item.id] = node; }} type="file" accept={ACCEPTED_IMAGE_TYPES} className="hidden" onChange={(event) => { void uploadImage(activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><input ref={(node) => { cameraInputRefs.current[item.id] = node; }} type="file" accept={ACCEPTED_IMAGE_TYPES} capture="environment" className="hidden" onChange={(event) => { void uploadImage(activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><input ref={(node) => { galleryInputRefs.current[item.id] = node; }} type="file" accept={ACCEPTED_IMAGE_TYPES} className="hidden" onChange={(event) => { void uploadImage(activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><button type="button" onClick={() => openImagePicker(activeAsset.id, item.id)} disabled={uploadingItemId !== null} className="mt-3 min-h-11 w-full border border-sky-700 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50">{uploadingItemId === item.id ? '正在同步...' : '拍照 / 选择图片'}</button>{captureSourceMode === 'system' && <p className="mt-2 text-xs leading-5 text-slate-500">若未出现拍照选项，请切换“拍照/相册分开选择”；vivo 自带浏览器仍可能只提供相册。</p>}</article>)}</section>}
       </div>
-      {captureSourceMode === 'separate' && captureTarget && <div className="fixed inset-0 z-20 flex items-end bg-slate-950/50 p-4 sm:items-center sm:justify-center"><section role="dialog" aria-modal="true" aria-labelledby="capture-source-title" className="w-full max-w-sm border border-slate-300 bg-white p-4 shadow-lg"><h2 id="capture-source-title" className="text-base font-semibold text-slate-950">选择图片来源</h2><p className="mt-1 text-sm text-slate-600">请选择拍照或从相册选择图片。</p><div className="mt-4 grid gap-2"><button type="button" onClick={() => chooseCaptureSource('camera')} disabled={uploadingItemId !== null} className="min-h-11 border border-sky-700 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 disabled:opacity-50">拍照</button><button type="button" onClick={() => chooseCaptureSource('gallery')} disabled={uploadingItemId !== null} className="min-h-11 border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50">从相册选择</button><button type="button" onClick={() => setCaptureTarget(null)} disabled={uploadingItemId !== null} className="min-h-11 border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50">取消</button></div></section></div>}
+      {captureSourceMode === 'separate' && captureTarget && <div className="fixed inset-0 z-20 flex items-end bg-slate-950/50 p-4 sm:items-center sm:justify-center"><section role="dialog" aria-modal="true" aria-labelledby="capture-source-title" className="w-full max-w-sm border border-slate-300 bg-white p-4 shadow-lg"><h2 id="capture-source-title" className="text-base font-semibold text-slate-950">选择图片来源</h2><p className="mt-1 text-sm text-slate-600">{cameraFallbackAvailable ? '网页相机不可用，可使用系统相机回退或从相册选择。' : '拍照会优先尝试网页相机；从相册选择不受相机权限影响。'}</p><div className="mt-4 grid gap-2">{cameraFallbackAvailable ? <button type="button" onClick={useCameraInputFallback} disabled={uploadingItemId !== null} className="min-h-11 border border-sky-700 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 disabled:opacity-50">使用系统相机回退</button> : <button type="button" onClick={startWebCamera} disabled={uploadingItemId !== null} className="min-h-11 border border-sky-700 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 disabled:opacity-50">拍照</button>}<button type="button" onClick={chooseGallery} disabled={uploadingItemId !== null} className="min-h-11 border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50">从相册选择</button><button type="button" onClick={() => { setCaptureTarget(null); setCameraFallbackAvailable(false); }} disabled={uploadingItemId !== null} className="min-h-11 border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50">取消</button></div></section></div>}
+      {cameraTarget && <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/75 p-4"><section role="dialog" aria-modal="true" aria-labelledby="camera-preview-title" className="w-full max-w-lg border border-slate-300 bg-white p-4 shadow-lg"><h2 id="camera-preview-title" className="text-base font-semibold text-slate-950">相机预览</h2><p className="mt-1 text-sm text-slate-600">确认画面后点击“确认拍照”。</p><video ref={cameraVideoRef} autoPlay muted playsInline onLoadedMetadata={(event) => { void event.currentTarget.play().then(() => setCameraReady(true)).catch(() => setMessage('相机预览无法播放，请改用系统相机或从相册选择。')); }} className="mt-4 aspect-[4/3] w-full bg-slate-950 object-cover" /><div className="mt-4 grid gap-2 sm:grid-cols-2"><button type="button" onClick={captureCameraFrame} disabled={!cameraReady || uploadingItemId !== null} className="min-h-11 border border-sky-700 bg-sky-700 px-4 text-sm font-semibold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50">确认拍照</button><button type="button" onClick={closeCameraPreview} disabled={uploadingItemId !== null} className="min-h-11 border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50">取消</button></div></section></div>}
     </main>
   );
 };
