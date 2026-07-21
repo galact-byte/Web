@@ -18,7 +18,7 @@ assert.doesNotMatch(dialogSource, />关闭<\/button>/, '会话对话框不应同
 assert.match(dialogSource, /'停止会话'/, '已启动会话时，底部应保留明确的“停止会话”操作。');
 assert.match(projectListSource, /grid-cols-\[44px_minmax\(0,1fr\)_160px\]/, '窄窗口下项目列表应收敛为选择、系统名和固定宽度操作列。');
 assert.match(projectListSource, /const projectListGrid = 'grid-cols-\[44px_minmax\(0,1fr\)_160px\] lg:grid-cols-\[44px_minmax\(0,1\.3fr\)_minmax\(0,0\.85fr\)_minmax\(0,0\.95fr\)_64px_160px\] 2xl:grid-cols-\[44px_minmax\(0,1\.3fr\)_minmax\(0,0\.85fr\)_minmax\(0,0\.95fr\)_64px_448px\]';/, '表头与数据行必须复用按断点预留操作列宽度的同一网格模板。');
-assert.match(projectListSource, /className=\{`\$\{projectListGrid\}/, '项目列表表头和数据行必须引用共享网格模板，避免列宽漂移。');
+assert.match(projectListSource, /className=\{`grid \$\{projectListGrid\}/, '项目列表表头和数据行必须以 grid 容器引用共享模板，避免列宽漂移或纵向堆叠。');
 assert.match(projectListSource, /<details className="relative 2xl:hidden">/, '中等宽度下低频系统操作应收纳在“更多操作”菜单中。');
 assert.match(projectListSource, /hidden 2xl:flex/, '宽屏应保留完整的快捷操作按钮。');
 assert.match(projectListHeaderSource, /flex-wrap/, '项目列表顶栏在低宽度下应允许搜索和操作按钮换行。');
