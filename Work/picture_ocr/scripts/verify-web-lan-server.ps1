@@ -100,7 +100,26 @@ try {
     Assert-That ((Invoke-JsonRequest -Method GET -Uri "$lanBaseUrl/api/upload-status?token=$token&requestId=$($pending.Body.upload.requestId)").StatusCode -eq 201) '手机只能在浏览器确认后从上传状态接口收到 201。'
     Assert-That ((Invoke-JsonRequest -Method GET -Uri "$baseUrl/api/control/pending").Body.upload -eq $null) '确认后图片必须立即离开待确认队列，不能被重复投递。'
 
+    try { $missingUpdateHeaderStatus = [int](Invoke-WebRequest -UseBasicParsing -Method POST -Uri "$baseUrl/api/control/update" -ContentType 'application/json; charset=utf-8' -Body (@{ snapshot = $snapshot } | ConvertTo-Json -Depth 12 -Compress)).StatusCode } catch { $missingUpdateHeaderStatus = [int]$_.Exception.Response.StatusCode }
+    Assert-That ($missingUpdateHeaderStatus -eq 403) '更新接口缺少本机应用标识时必须被拒绝。'
+    $updatedSnapshot = @{
+        projectId = 'verify-project'; title = '已更新 Web LAN 验证系统'
+        categories = @(@{ id = 'cat-1'; name = '验证分类' })
+        assets = @(@{ id = 'asset-2'; name = '新增验证资产'; categoryId = 'cat-1'; items = @(@{ id = 'item-2'; label = '新增验证检查项'; required = $false; imageCount = 0 }) })
+    }
+    $updated = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/update" -Body @{ snapshot = $updatedSnapshot }
+    Assert-That ($updated.StatusCode -eq 200 -and $updated.Body.running) '同项目快照更新必须保持当前会话运行。'
+    $updatedSession = Invoke-JsonRequest -Method GET -Uri "$lanBaseUrl/api/session?token=$token"
+    Assert-That ($updatedSession.StatusCode -eq 200 -and $updatedSession.Body.assets[0].id -eq 'asset-2') '手机会话必须返回最新快照。'
+    Assert-That ((Invoke-JsonRequest -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&assetId=asset-1&itemId=item-1").StatusCode -eq 403) '快照更新后旧白名单必须立即失效。'
+    $otherProjectSnapshot = $updatedSnapshot.Clone()
+    $otherProjectSnapshot.projectId = 'other-project'
+    $otherProjectUpdate = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/update" -Body @{ snapshot = $otherProjectSnapshot }
+    Assert-That ($otherProjectUpdate.StatusCode -eq 409) '不同项目不得更新当前采集会话。'
+
     Assert-That ((Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/stop" -Body @{}).StatusCode -eq 200) '控制端必须能停止会话。'
+    $stoppedUpdate = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/update" -Body @{ snapshot = $updatedSnapshot }
+    Assert-That ($stoppedUpdate.StatusCode -eq 409) '会话停止后不得通过更新接口重新创建会话。'
     $sessionClosed = $false
     try { $sessionClosed = (Invoke-JsonRequest -Method GET -Uri "$lanBaseUrl/api/session?token=$token").StatusCode -eq 401 } catch { $sessionClosed = $true }
     Assert-That $sessionClosed '会话停止后 token 必须失效，且 LAN 监听可被关闭。'
