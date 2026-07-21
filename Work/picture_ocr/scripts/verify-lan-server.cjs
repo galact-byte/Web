@@ -26,6 +26,15 @@ async function main() {
   const baseUrl = `http://127.0.0.1:${server.port}`;
   const token = server.token;
   const png = Buffer.from('89504e470d0a1a0a', 'hex');
+  const updatedSnapshot = {
+    projectId: 'project-1',
+    title: '已更新验证系统',
+    categories: [{ id: 'cat-1', name: '分类' }],
+    assets: [
+      { id: 'asset-1', name: '资产', categoryId: 'cat-1', items: [{ id: 'item-2', label: '更新检查项', required: false, imageCount: 0 }] },
+      { id: 'asset-2', name: '新增资产', categoryId: 'cat-1', items: [{ id: 'item-3', label: '新增资产检查项', required: true, imageCount: 0 }] },
+    ],
+  };
 
   try {
     assert.equal((await request(`${baseUrl}/api/session`)).status, 401, '未带令牌的快照请求必须被拒绝');
@@ -47,6 +56,15 @@ async function main() {
     assert.equal(uploads[0].assetId, 'asset-1');
     assert.equal(uploads[0].image.fileName, '现场截图.png');
     assert.match(uploads[0].image.data, /^data:image\/png;base64,/);
+
+    server.updateSnapshot(updatedSnapshot);
+    const updatedSession = await request(`${baseUrl}/api/session?token=${encodeURIComponent(token)}`);
+    assert.equal(updatedSession.status, 200, '更新后会话仍应可读取快照');
+    assert.equal((await updatedSession.json()).assets[1].id, 'asset-2', '手机必须读取最新资产快照');
+    assert.equal((await request(`${baseUrl}/api/upload?token=${encodeURIComponent(token)}&assetId=asset-1&itemId=item-1`, { method: 'POST', headers: { 'content-type': 'image/png' }, body: png })).status, 403, '更新后旧检查项必须被拒绝');
+    const updatedUpload = await request(`${baseUrl}/api/upload?token=${encodeURIComponent(token)}&assetId=asset-1&itemId=item-2`, { method: 'POST', headers: { 'content-type': 'image/png' }, body: png });
+    assert.equal(updatedUpload.status, 201, '更新后新增检查项应能上传');
+    assert.equal(uploads.length, 2, '更新后允许图片应继续通知桌面端');
   } finally {
     await server.close();
     fs.rmSync(staticDir, { recursive: true, force: true });

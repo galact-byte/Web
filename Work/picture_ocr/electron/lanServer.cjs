@@ -114,7 +114,8 @@ function serveStatic(staticDir, pathname, requestMethod, response) {
 async function createLanCollectorServer({ staticDir, snapshot, onImage, port = 0, host = '127.0.0.1' }) {
   if (!fs.existsSync(path.join(staticDir, 'index.html'))) throw new Error('局域网采集服务未找到构建后的 index.html。请先运行 npm run build。');
   const token = crypto.randomBytes(32).toString('base64url');
-  const allowedItems = createAllowedItems(snapshot);
+  let currentSnapshot = snapshot;
+  let currentAllowedItems = createAllowedItems(snapshot);
   let closed = false;
   let activeUploads = 0;
   let uploadQueue = Promise.resolve();
@@ -129,14 +130,14 @@ async function createLanCollectorServer({ staticDir, snapshot, onImage, port = 0
     }
     if (requestUrl.pathname === '/api/session') {
       if (request.method !== 'GET') { sendJson(response, 405, { message: '不支持的请求方法' }); return; }
-      sendJson(response, 200, snapshot);
+      sendJson(response, 200, currentSnapshot);
       return;
     }
     if (requestUrl.pathname === '/api/upload') {
       if (request.method !== 'POST') { sendJson(response, 405, { message: '不支持的请求方法' }); return; }
       const assetId = requestUrl.searchParams.get('assetId') || '';
       const itemId = requestUrl.searchParams.get('itemId') || '';
-      if (!allowedItems.get(assetId)?.has(itemId)) { sendJson(response, 403, { message: '目标资产或检查项不属于本次采集会话。' }); return; }
+      if (!currentAllowedItems.get(assetId)?.has(itemId)) { sendJson(response, 403, { message: '目标资产或检查项不属于本次采集会话。' }); return; }
       const contentType = (request.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       if (!IMAGE_TYPES.has(contentType)) { sendJson(response, 415, { message: '仅支持 PNG、JPEG、GIF、WebP 或 BMP 图片。' }); return; }
       if (activeUploads >= MAX_CONCURRENT_UPLOADS) {
@@ -185,6 +186,11 @@ async function createLanCollectorServer({ staticDir, snapshot, onImage, port = 0
   return {
     token,
     port: address.port,
+    updateSnapshot: (nextSnapshot) => {
+      const nextAllowedItems = createAllowedItems(nextSnapshot);
+      currentSnapshot = nextSnapshot;
+      currentAllowedItems = nextAllowedItems;
+    },
     close: () => new Promise((resolve) => {
       if (closed) { resolve(); return; }
       closed = true;

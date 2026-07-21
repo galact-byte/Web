@@ -44,6 +44,7 @@ interface Window {
   evidenceLan?: {
     startSession: (snapshot: LanCollectorSnapshot, selectedAddress?: string) => Promise<LanSessionStatus>;
     stopSession: () => Promise<LanSessionStatus>;
+    updateSession: (snapshot: LanCollectorSnapshot) => Promise<LanSessionStatus>;
     getStatus: () => Promise<LanSessionStatus>;
     onImage: (listener: (upload: LanImageUpload) => void) => () => void;
     confirmImageSaved: (requestId: string, outcome: { success: boolean; message?: string }) => void;

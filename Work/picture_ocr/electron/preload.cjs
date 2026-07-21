@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('evidenceLan', {
   startSession: (snapshot, selectedAddress) => ipcRenderer.invoke('lan:start-session', snapshot, selectedAddress),
   stopSession: () => ipcRenderer.invoke('lan:stop-session'),
+  updateSession: (snapshot) => ipcRenderer.invoke('lan:update-session', snapshot),
   getStatus: () => ipcRenderer.invoke('lan:get-status'),
   onImage: (listener) => {
     const wrappedListener = (_event, payload) => listener(payload);
