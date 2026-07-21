@@ -146,6 +146,14 @@ ipcMain.handle('lan:stop-session', async (event) => {
   if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可停止局域网采集会话。');
   return stopLanSession();
 });
+ipcMain.handle('lan:update-session', (event, snapshot) => {
+  if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可更新局域网采集会话。');
+  if (!lanSession) throw new Error('采集会话已结束。');
+  const normalizedSnapshot = normalizeSnapshot(snapshot);
+  if (normalizedSnapshot.projectId !== lanSession.projectId) throw new Error('不能用其他项目更新当前采集会话。');
+  lanSession.server.updateSnapshot(normalizedSnapshot);
+  return getLanStatus();
+});
 ipcMain.on('lan:image-saved', (event, requestId, outcome) => {
   if (!isExpectedRenderer(event.sender) || typeof requestId !== 'string') return;
   const pending = pendingImageSaves.get(requestId);
@@ -171,7 +179,7 @@ ipcMain.handle('lan:start-session', async (event, snapshot, selectedAddress) => 
     host: ip,
     onImage: async (payload) => {
       if (lanSession?.server !== server) throw new Error('采集会话已结束。');
-      await requestImageSave({ ...payload, projectId: normalizedSnapshot.projectId });
+      await requestImageSave({ ...payload, projectId: lanSession.projectId });
     },
   });
   const url = `http://${ip}:${server.port}/#/lan/${server.token}`;
@@ -179,7 +187,7 @@ ipcMain.handle('lan:start-session', async (event, snapshot, selectedAddress) => 
     if (lanSession?.server === server) void stopLanSession();
   }, 2 * 60 * 60 * 1000);
   expiryTimer.unref();
-  lanSession = { server, url, expiryTimer };
+  lanSession = { server, url, expiryTimer, projectId: normalizedSnapshot.projectId };
   return getLanStatus();
 });
 
