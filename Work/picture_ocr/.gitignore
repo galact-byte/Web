@@ -30,7 +30,17 @@ AGENTS.md
 .claude/
 .codex/
 .pi/
-.trellis/
+# Trellis: share workflow/config, specs, tasks, and developer workspaces; keep runtime/tool state local
+.trellis/*
+!.trellis/workflow.md
+!.trellis/config.yaml
+!.trellis/spec/
+!.trellis/spec/**
+!.trellis/tasks/
+!.trellis/tasks/**
+!.trellis/workspace/
+!.trellis/workspace/*/
+!.trellis/workspace/*/**
 
 # Local reference documents
 测评证据截图要求V1.0.docx
