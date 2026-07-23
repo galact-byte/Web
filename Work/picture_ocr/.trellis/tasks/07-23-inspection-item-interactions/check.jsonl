@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "构建、验证脚本和手工交互质量基线。"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "检查排序模式的可访问性、语义、图标按钮与响应式要求。"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核对 reducer 更新和既有自动保存兼容性。"}

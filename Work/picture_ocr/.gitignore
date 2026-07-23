@@ -5,6 +5,7 @@ node_modules
 dist
 desktop-dist/
 release/
+release-web/
 *.zip
 
 # TypeScript
@@ -30,6 +31,7 @@ AGENTS.md
 .claude/
 .codex/
 .pi/
+.superpowers/
 # Trellis: share workflow/config, specs, tasks, and developer workspaces; keep runtime/tool state local
 .trellis/*
 !.trellis/workflow.md
