@@ -1,5 +1,35 @@
 # 修改记录 — Picture OCR
 
+## 2026-07-23 — v0.4.4 检查项排序与操作优化
+
+### 背景与目标
+- 让手动新增检查项的默认必填状态和插入位置明确，并移除无功能操作入口。
+- 提供独立、安全且可连续调整长列表的检查项排序体验，避免触屏环境将普通滑动或编辑误识别为排序。
+
+### 影响与兼容性
+- 手动新增检查项默认必填并插入当前资产首位；既有项目数据结构与 IndexedDB 文档无需迁移。
+- 排序仅在显式“调整顺序”模式中由专用六点手柄发起；拖动时实时预览、悬浮副本与边缘自动滚动均是页面瞬时状态，松手后才经 reducer 持久化，取消会还原。
+- Web 静态版与 Electron 客户端共用同一 React 渲染代码；自动化以生产预览验证 Pointer Events，并额外核验 Windows Electron 目录包包含当前前端资源。
+
+### 文件与实现
+| 操作 | 路径 | 说明 |
+|---|---|---|
+| 修改 | `src/context/appReducer.ts` | 新增完整检查项顺序校验与重排 action；新增项默认必填并置顶。 |
+| 修改 | `src/components/ContentArea.tsx`、`src/components/ItemCard.tsx` | 实现隔离的排序模式、鼠标/触摸拖拽实时预览、FLIP 让位动画、边缘自动滚动及普通操作恢复。 |
+| 新增 | `scripts/verify-inspection-item-interactions.mjs`、`scripts/verify-inspection-item-pointer-drag.mjs` | 覆盖 reducer 契约与生产浏览器中的鼠标/触摸拖拽、取消还原、边缘自动滚动。 |
+| 修改 | `README.md`、`.github/workflows/release-picture-ocr.yml`、`.gitignore` | 更新使用、验证、发行说明和本地构建产物忽略规则。 |
+| 修改 | `.trellis/spec/frontend/*.md`、`.trellis/tasks/07-23-inspection-item-interactions/` | 记录排序数据、rAF 生命周期和任务设计/验证证据。 |
+
+### 验证
+- `node scripts/verify-inspection-item-interactions.mjs`、`node scripts/verify-inspection-item-pointer-drag.mjs`：通过新增默认值、完整排序 payload、鼠标/触摸实时拖拽、取消还原和边缘自动滚动验证。
+- `npm run verify:evidence-package`、`npm run verify:lan-server`、`npm run verify:lan-mobile-picker`、`npm run verify:web-lan-server`、`npm run verify:pwa-build`、`npm run build`：通过既有完整 Web/PWA 基线。
+- 临时输出目录的 Electron `--win --dir` 打包通过，且已核验 `app.asar` 包含实时排序和边缘自动滚动前端代码。
+
+### 已知限制与后续
+- 工作区默认 `desktop-dist/` 在本机被 Windows 占用时，`npm run desktop:build` 可能在目录重命名阶段出现 `EPERM`；切换到临时输出目录可完成等价的目录包验证。
+- 自动滚动速度按帧计算（单帧最大 18px）；高刷新率设备上的每秒速度会更快，如需跨刷新率严格一致可改为基于时间戳计算。
+
+
 ## 2026-07-21 — v0.4.3 实时会话同步与手机网页相机
 
 ### 背景与目标

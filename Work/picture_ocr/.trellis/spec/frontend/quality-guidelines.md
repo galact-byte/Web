@@ -10,6 +10,8 @@
 npm run verify:evidence-package
 npm run verify:lan-server
 npm run verify:lan-mobile-picker
+node scripts/verify-inspection-item-interactions.mjs
+node scripts/verify-inspection-item-pointer-drag.mjs
 npm run build
 npm run verify:web-lan-server
 npm run verify:pwa-build
@@ -19,7 +21,7 @@ git diff --check
 - `npm run build` 执行 `tsc -b`、Vite 构建与 Service Worker 生成，因此也是类型检查与生产构建验证。
 - `scripts/verify-evidence-package.mjs` 使用 Node `assert` 验证加密格式、往返解密与错误密码拒绝。
 - `scripts/verify-lan-server.cjs` 验证 Electron 局域网服务安全边界；`scripts/verify-lan-mobile-picker.mjs` 用源码断言守护移动端图片来源、会话同步、可访问对话框和项目列表响应式契约。
-- 移动端采集或项目列表相关改动运行 `npm run verify:lan-mobile-picker`（`scripts/verify-lan-mobile-picker.mjs`）；构建或 PWA 改动后运行 `npm run verify:pwa-build`（`scripts/verify-pwa-build.mjs`）；Web LAN 启动器改动后运行 `npm run verify:web-lan-server`（`scripts/verify-web-lan-server.ps1`）。不要把这些脚本当作通用单元测试框架。
+- 移动端采集或项目列表相关改动运行 `npm run verify:lan-mobile-picker`（`scripts/verify-lan-mobile-picker.mjs`）；检查项新增、状态或排序改动运行 `node scripts/verify-inspection-item-interactions.mjs`，涉及 Pointer 拖拽、实时预览或边缘自动滚动时再运行 `node scripts/verify-inspection-item-pointer-drag.mjs`（生产预览 Chrome 回归）；构建或 PWA 改动后运行 `npm run verify:pwa-build`（`scripts/verify-pwa-build.mjs`）；Web LAN 启动器改动后运行 `npm run verify:web-lan-server`（`scripts/verify-web-lan-server.ps1`）。不要把这些脚本当作通用单元测试框架。
 
 ## 代码与错误处理
 

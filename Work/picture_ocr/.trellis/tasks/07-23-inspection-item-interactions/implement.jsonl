@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "React 组件、reducer、持久化与质量规范的入口。"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "排序模式和卡片交互的组件、无障碍及 Tailwind 约束。"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "检查项重排 action 与既有 IndexedDB 自动保存流程约束。"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "严格 TypeScript、判别 action 联合和不可变更新规则。"}

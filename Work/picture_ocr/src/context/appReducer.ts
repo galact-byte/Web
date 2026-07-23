@@ -28,6 +28,7 @@ export type AppAction =
   | { type: 'SET_ACTIVE_CATEGORY'; payload: string }
   | { type: 'SET_ACTIVE_ASSET'; payload: string | null }
   | { type: 'ADD_ITEM'; payload: { assetId: string; label: string } }
+  | { type: 'REORDER_ITEMS'; payload: { assetId: string; itemIds: string[] } }
   | { type: 'REMOVE_ITEM'; payload: { assetId: string; itemId: string } }
   | { type: 'RENAME_ITEM'; payload: { assetId: string; itemId: string; newLabel: string } }
   | { type: 'SET_TEMPLATES'; payload: { categoryId: string; items: CheckItemTemplate[] } }
@@ -155,14 +156,37 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const newItem: CheckItem = {
         id: genId(),
         label,
-        required: false,
+        required: true,
         fromTemplateId: null,
         images: [],
       };
       return {
         ...state,
         assets: state.assets.map((a) =>
-          a.id === assetId ? { ...a, items: [...a.items, newItem] } : a
+          a.id === assetId ? { ...a, items: [newItem, ...a.items] } : a
+        ),
+      };
+    }
+
+    case 'REORDER_ITEMS': {
+      const { assetId, itemIds } = action.payload;
+      const asset = state.assets.find((candidate) => candidate.id === assetId);
+      if (!asset || itemIds.length !== asset.items.length) return state;
+
+      const itemMap = new Map(asset.items.map((item) => [item.id, item]));
+      if (new Set(itemIds).size !== itemIds.length || itemIds.some((id) => !itemMap.has(id))) {
+        return state;
+      }
+
+      const reorderedItems = itemIds
+        .map((id) => itemMap.get(id))
+        .filter((item): item is CheckItem => !!item);
+      if (reorderedItems.length !== asset.items.length) return state;
+
+      return {
+        ...state,
+        assets: state.assets.map((candidate) =>
+          candidate.id === assetId ? { ...candidate, items: reorderedItems } : candidate
         ),
       };
     }
