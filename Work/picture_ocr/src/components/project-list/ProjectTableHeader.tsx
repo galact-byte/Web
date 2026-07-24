@@ -9,7 +9,7 @@ interface ProjectTableHeaderProps {
 
 const ProjectTableHeader: React.FC<ProjectTableHeaderProps> = ({ allSelected, disabled, onToggleAll }) => {
   return (
-    <div className={`${PROJECT_TABLE_GRID_CLASS} border-b border-slate-200 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500`}>
+    <div className={`${PROJECT_TABLE_GRID_CLASS} border-b border-slate-200 bg-white px-6 py-3 text-xs font-semibold text-slate-500`}>
       <label className="flex items-center justify-center" title="全选当前筛选结果">
         <input
           type="checkbox"

@@ -15,8 +15,6 @@ const LEGACY_STORE_NAME = 'project';
 const PROJECTS_STORE_NAME = 'projects';
 const PROJECT_GROUPS_STORE_NAME = 'projectGroups';
 const LEGACY_PROJECT_ID = 'current';
-const MANAGEMENT_CATEGORY_ID = 'cat-management';
-const MANAGEMENT_POLICY_ASSET_NAME = '制度';
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -89,7 +87,7 @@ export function normalizeProjectDocument(doc: Partial<ProjectDocument> & { id?: 
     createdAt: doc.createdAt || doc.updatedAt || now,
     updatedAt: doc.updatedAt || now,
   };
-  return ensureManagementPolicyAsset(normalizedDoc);
+  return normalizedDoc;
 }
 
 export function normalizeProjectGroup(group: Partial<ProjectGroup> & { id?: string }): ProjectGroup {
@@ -371,15 +369,6 @@ function normalizeMeta(meta: Partial<ProjectMeta> | undefined): ProjectMeta {
 
 function normalizeCategories(categories: Category[] | undefined): Category[] {
   return cloneCategories(categories && categories.length > 0 ? categories : defaultCategories);
-}
-
-function ensureManagementPolicyAsset(doc: ProjectDocument): ProjectDocument {
-  if (!doc.categories.some((category) => category.id === MANAGEMENT_CATEGORY_ID)) return doc;
-  if (doc.assets.some((asset) => asset.categoryId === MANAGEMENT_CATEGORY_ID && asset.name.trim() === MANAGEMENT_POLICY_ASSET_NAME)) return doc;
-  return {
-    ...doc,
-    assets: [...doc.assets, { id: genId('asset'), name: MANAGEMENT_POLICY_ASSET_NAME, categoryId: MANAGEMENT_CATEGORY_ID, items: [] }],
-  };
 }
 
 function toProjectSummary(doc: ProjectDocument): ProjectSummary {

@@ -392,8 +392,10 @@ function mergeImages(existingImages: ImageData[], importedImages: ImageData[]): 
 
 function getImageDedupKeys(image: ImageData): string[] {
   const keys = [`id:${image.id}`];
+  // 文件名+时间戳只是补充启发式：同一毫秒批量粘贴的多张剪贴板图常常同名同时间戳，
+  // 因此再带上数据长度作为区分，避免把内容不同的截图误判成重复而在合并导入时丢弃。
   if (image.fileName && image.uploadedAt) {
-    keys.push(`file-time:${image.fileName}::${image.uploadedAt}`);
+    keys.push(`file-time:${image.fileName}::${image.uploadedAt}::${image.data.length}`);
   }
   return keys;
 }
