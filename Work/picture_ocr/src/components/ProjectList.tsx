@@ -256,7 +256,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px]">
+    <div className="min-h-screen bg-slate-100">
       <ProjectListHeader search={search} selectedCount={selectedSystems.length} onSearchChange={setSearch} onDeleteSelected={handleDeleteSelectedProjects} onCreateProject={() => setDialogState({ mode: 'create-group', group: null, system: null })} />
       <main className="mx-auto max-w-[1280px] px-8 py-8">
         <section className="mb-6 flex items-end justify-between gap-6 border-b border-slate-300 pb-4">
@@ -264,7 +264,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
           <div className="flex shrink-0 items-center gap-4"><div className="text-sm text-slate-500">共 {groups.length} 个项目组，{groups.flatMap((group) => group.systems).length} 个系统</div></div>
         </section>
         <section className="border border-slate-200 bg-white shadow-sm">
-          <div className={`grid ${projectListGrid} items-center gap-3 border-b border-slate-200 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 sm:px-6`}>
+          <div className={`grid ${projectListGrid} items-center gap-3 border-b border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 sm:px-6`}>
             <label className="flex items-center justify-center" title="全选当前筛选结果"><input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFilteredProjects} disabled={filteredSystems.length === 0} className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" /></label>
             <span>项目组 / 系统</span><span className="hidden lg:block">单位名称</span><span className="hidden lg:block">最后更新</span><span className="hidden lg:block text-center">资产数</span><span className="text-center">操作</span>
           </div>

@@ -79,6 +79,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 function formatDateChinese(isoDate: string): string {
   if (!isoDate) return '';
   const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return '';
   const year = d.getFullYear();
   const month = d.getMonth() + 1;
   const chineseNum = (n: number) => {
