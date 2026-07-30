@@ -291,7 +291,15 @@ function downloadBlob(blob: Blob, filename: string): void {
 }
 
 function base64ToBlob(dataUrl: string): Promise<Blob> {
-  return fetch(dataUrl).then((r) => r.blob());
+  // 手动解码 base64，避免 fetch(data:) 在 file:// 大图或 CSP connect-src 下抛 "Failed to fetch"
+  const commaIdx = dataUrl.indexOf(',');
+  const header = commaIdx >= 0 ? dataUrl.slice(0, commaIdx) : '';
+  const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+  const mime = header.match(/^data:([^;]+)/)?.[1] || 'application/octet-stream';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return Promise.resolve(new Blob([bytes], { type: mime }));
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
