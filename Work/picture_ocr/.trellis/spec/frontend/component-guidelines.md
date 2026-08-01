@@ -23,6 +23,7 @@
 
 - 对话框容器使用 `role="dialog"` 和 `aria-modal="true"`；有可见标题时以 `aria-labelledby` 关联它，参见 `src/components/LanCollectorDialog.tsx`。无独立标题的图片预览 `src/components/ImageViewer.tsx` 目前只有 `role`/`aria-modal`，新增或重构时不要将其误作完整命名范例。
 - 状态通知使用 `role="status"` 或 `aria-live`，见 `LanCollectorDialog.tsx` 和 `PwaReadinessCard.tsx`。
+- 非阻塞轻提示统一走 `useToast()`（`src/components/Toast.tsx` 的 `ToastProvider` 挂在 `main.tsx`），成功/失败/信息分别用 `success`/`error`/`info`；error toast 用 `role="alert"`，其余用 `role="status"`。不要用 `window.alert` 做提示；二次确认仍用 `useConfirmDialog()`。
 - 新增仅有图标或关闭符号的按钮必须有中文 `aria-label`，输入错误状态通过 `aria-invalid` 暴露，见 `src/components/project-list/NewProjectDialog.tsx`。历史 `ImageViewer.tsx` 的图标按钮仅有 `title`，不应复制；应在后续触及该组件时补齐。
 - 使用语义化 `button`、`label`、`input`；移动端及对话框中的按钮通常写明 `type="button"`，参见 `src/components/LanMobileCollector.tsx` 和 `LanCollectorDialog.tsx`。项目列表及早期组件存在省略该属性的历史写法；新增表单内按钮应显式写明，且保留禁用状态。
 
