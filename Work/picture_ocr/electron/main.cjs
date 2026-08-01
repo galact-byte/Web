@@ -213,7 +213,12 @@ ipcMain.handle('data:delete-backup', (event) => {
 });
 ipcMain.handle('data:relaunch', (event) => {
   if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可重启应用。');
-  app.relaunch();
+  // electron-builder portable 运行在临时解压目录，process.execPath 指向临时 exe；
+  // app.exit 后 portable 启动器会清理该临时目录，直接 relaunch 会“关了不再打开”。
+  // 有 PORTABLE_EXECUTABLE_FILE 时改用真实便携 exe 重启（args 置空，避免转发指向临时目录的旧参数）。
+  const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (portableExe) app.relaunch({ execPath: portableExe, args: [] });
+  else app.relaunch();
   app.exit(0);
 });
 
