@@ -37,6 +37,8 @@
 
 ## 里程碑 C — Web B（导出可选保存位置）
 
+> 变更（用户验收后回退）：实际环境下普通消费级 Chrome 导出就会弹保存框，`showSaveFilePicker` 开关与之重叠、对用户无增益且关闭时会“弹框+已开始下载”叠加。故 **方案 B 已移除**：saveBlob/exportPreference/verify-save-blob 删除，导出回退普通 `<a download>`。保留方案 A（用量展示）。
+
 ### C1. saveBlob 工具（R8/R9）
 - [ ] 新增 `src/utils/saveBlob.ts`：`saveBlob(blob, filename, preferPicker?)` → `'saved'|'downloaded'|'cancelled'`；支持 `showSaveFilePicker` 且偏好开启走 picker（`AbortError`→`cancelled`），否则 `<a download>`。
 - [ ] 新增 `src/utils/exportPreference.ts`：读写 `localStorage['evidence.exportAskLocation']`，默认随 picker 支持性。

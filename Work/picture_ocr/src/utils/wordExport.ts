@@ -1,5 +1,15 @@
 import type { Asset, Category, ProjectMeta } from '../types';
-import { saveBlob, type SaveOutcome } from './saveBlob';
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
 
 // ==================== Validation ====================
 
@@ -50,7 +60,7 @@ export async function exportWordReport(
   meta: ProjectMeta,
   categories: Category[],
   assets: Asset[]
-): Promise<SaveOutcome> {
+): Promise<void> {
   let createWordReportBlob: (typeof import('./wordDocument'))['createWordReportBlob'];
   try {
     ({ createWordReportBlob } = await import('./wordDocument'));
@@ -58,5 +68,5 @@ export async function exportWordReport(
     throw new Error('无法加载 Word 导出组件，请确认应用文件完整后重试。');
   }
   const blob = await createWordReportBlob(meta, categories, assets);
-  return saveBlob(blob, buildReportFileName(meta));
+  downloadBlob(blob, buildReportFileName(meta));
 }

@@ -182,9 +182,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
     try {
       const document = await loadProject(system.id);
       if (!document) { showToast('导出失败：系统不存在或已被删除', 'error'); return; }
-      const outcome = await exportDataPackage(document.meta, document.categories, document.assets);
-      if (outcome === 'saved') showToast('数据包已保存到所选位置', 'success');
-      else if (outcome === 'downloaded') showToast('数据包已开始下载', 'success');
+      await exportDataPackage(document.meta, document.categories, document.assets);
     } catch (err) {
       showToast(`导出失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     }

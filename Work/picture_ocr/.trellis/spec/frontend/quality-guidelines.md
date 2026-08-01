@@ -14,7 +14,6 @@ node scripts/verify-inspection-item-interactions.mjs
 node scripts/verify-inspection-item-pointer-drag.mjs
 npm run verify:data-location
 npm run verify:storage-estimate
-npm run verify:save-blob
 npm run build
 npm run verify:web-lan-server
 npm run verify:pwa-build
@@ -29,8 +28,8 @@ git diff --check
 ## 存储位置与导出保存（缓解 C 盘膨胀）
 
 - 桌面版数据目录可迁移：主进程 `electron/dataLocation.cjs` 管理“指针/数据本体分离”（`%APPDATA%\<应用名>\data-location.json` 只存路径），在 `app.whenReady()` 之前 `init()` 应用指针；目录复制在“下次启动、store 未打开前”进行（运行中只写 migration 标记并重启），避免复制占用中的 IndexedDB。旧数据作“临时备份”保留默认 7 天后自动清理。新增数据目录 IPC 走 `window.evidenceData`（preload 桥接），主进程侧沿用 `isExpectedRenderer` 校验。
-- 导出落盘统一走 `src/utils/saveBlob.ts` 的 `saveBlob()`：支持 `showSaveFilePicker`（Chromium + 安全上下文）且偏好开启时弹原生保存框，否则回退 `<a download>`；返回 `'saved'|'downloaded'|'cancelled'`，`cancelled` 不报错。不要在导出处再自写 `URL.createObjectURL` 下载逻辑。Web 用量展示用 `src/utils/storageEstimate.ts`。
-- “存储设置”入口（`src/components/StorageSettingsDialog.tsx`）环境自适应：有 `window.evidenceData` → 桌面迁移 UI；否则 → Web 用量 + 导出偏好。
+- 导出落盘走普通浏览器下载（`<a download>`），保存位置交给浏览器/企业策略决定。（曾试验 `showSaveFilePicker` 导出选目录开关，因与浏览器/强制策略的“下载前询问位置”重叠、对用户无增益而移除。）Web 用量展示用 `src/utils/storageEstimate.ts`。
+- “存储设置”入口（`src/components/StorageSettingsDialog.tsx`）环境自适应：有 `window.evidenceData` → 桌面迁移 UI；否则 → Web 用量展示 + 归档引导文案。
 
 ## 代码与错误处理
 
