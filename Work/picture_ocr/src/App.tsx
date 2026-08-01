@@ -15,6 +15,7 @@ import { exportWordReport, validateRequired } from './utils/wordExport';
 import type { CheckItemTemplate } from './types';
 import type { ValidationMissing } from './utils/wordExport';
 import { detectLanBridge } from './utils/lanBridge';
+import { useToast } from './components/Toast';
 import type { LanBridge, LanCollectorSnapshot } from './utils/lanBridge';
 
 interface AppContentProps {
@@ -28,6 +29,7 @@ const AppContent: React.FC<AppContentProps> = ({ projectId, onBackToProjects, op
   const { loaded, meta, categories, assets } = useAppState();
   const { addImageAndSave } = useAppContext();
   const dispatch = useDispatch();
+  const showToast = useToast();
   const [projectInfoOpen, setProjectInfoOpen] = useState(openProjectInfoOnMount);
   const [validationMissing, setValidationMissing] = useState<ValidationMissing[]>([]);
   const [validationOpen, setValidationOpen] = useState(false);
@@ -97,10 +99,10 @@ const AppContent: React.FC<AppContentProps> = ({ projectId, onBackToProjects, op
       try {
         await exportWordReport(meta, categories, assets);
       } catch (err) {
-        alert(`导出失败：${err instanceof Error ? err.message : '未知错误'}`);
+        showToast(`导出失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
       }
     }
-  }, [meta, categories, assets]);
+  }, [meta, categories, assets, showToast]);
 
   const handleSaveTemplates = useCallback(
     (categoryId: string, items: CheckItemTemplate[]) => {
@@ -114,9 +116,9 @@ const AppContent: React.FC<AppContentProps> = ({ projectId, onBackToProjects, op
     try {
       await exportWordReport(meta, categories, assets);
     } catch (err) {
-      alert(`导出失败：${err instanceof Error ? err.message : '未知错误'}`);
+      showToast(`导出失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     }
-  }, [meta, categories, assets]);
+  }, [meta, categories, assets, showToast]);
 
   if (!loaded) {
     return (

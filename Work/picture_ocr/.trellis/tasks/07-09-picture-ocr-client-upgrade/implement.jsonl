@@ -1,0 +1,8 @@
+{"file":".trellis/tasks/07-09-picture-ocr-client-upgrade/prd.md","reason":"User-approved requirements and acceptance criteria for multi-project/client upgrade"}
+{"file":".trellis/tasks/07-09-picture-ocr-client-upgrade/design.md","reason":"Technical design for multi-project persistence, UI boundaries, import/export, and desktop packaging"}
+{"file":".trellis/tasks/07-09-picture-ocr-client-upgrade/implement.md","reason":"Ordered implementation checklist and validation plan"}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend guideline index and local facts"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"React component and interaction conventions for project list/dialog/sidebar changes"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Context/reducer/persistence conventions for multi-project state"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Strict TypeScript and import boundary validation standards"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Build verification and browser-side quality expectations"}

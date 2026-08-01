@@ -1,0 +1,8 @@
+{"file": ".trellis/tasks/07-09-eval-evidence-tool/design.md", "reason": "Technical design with component tree, data model, data flow, and key decisions"}
+{"file": ".trellis/tasks/07-09-eval-evidence-tool/implement.md", "reason": "Ordered implementation checklist with validation steps per milestone"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend dev guidelines entry point"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component patterns and conventions for UI components"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "State management patterns matching our Context+Reducer approach"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Code quality standards and forbidden patterns"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "TypeScript type patterns for data layer"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Module organization and file layout"}

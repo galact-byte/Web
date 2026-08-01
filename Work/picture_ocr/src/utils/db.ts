@@ -345,9 +345,10 @@ function groupProjectSummaries(groups: ProjectGroup[], systems: ProjectSummary[]
       summaries.push({ id: groupId, group: null, systems: orphanedSystems.sort((a, b) => b.updatedAt - a.updatedAt) });
     }
   });
-  if (ungrouped.length > 0) {
-    summaries.push({ id: 'ungrouped', group: null, systems: ungrouped.sort((a, b) => b.updatedAt - a.updatedAt) });
-  }
+  // 未分组的独立系统各自成为一行，避免多个互不相关的单系统被合并成一个“未分组/单系统项目”伪分组。
+  ungrouped.forEach((system) => {
+    summaries.push({ id: system.id, group: null, systems: [system] });
+  });
   return summaries.sort((a, b) => getGroupUpdatedAt(b) - getGroupUpdatedAt(a));
 }
 

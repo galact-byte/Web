@@ -1,0 +1,7 @@
+{"file":".trellis/tasks/07-09-picture-ocr-client-upgrade/prd.md","reason":"Acceptance criteria to verify final behavior"}
+{"file":".trellis/tasks/07-09-picture-ocr-client-upgrade/design.md","reason":"Technical design to check implementation against"}
+{"file":".trellis/tasks/07-09-picture-ocr-client-upgrade/implement.md","reason":"Validation steps and risk controls"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify component structure, interactions, and Chinese UI text consistency"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Verify reducer purity, provider persistence, and IndexedDB boundaries"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify domain model and imported data handling under strict TypeScript"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Verify npm build and browser resource practices"}

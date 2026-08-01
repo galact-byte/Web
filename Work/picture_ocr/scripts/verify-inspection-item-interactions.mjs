@@ -66,8 +66,11 @@ try {
     payload: { assetId: 'asset-1', itemIds: ['item-1', 'item-2', 'unknown-item'] },
   }), state, '包含未知项的排序 ID 列表不得改变领域状态');
 
-  const contentAreaSource = fs.readFileSync(path.join(projectRoot, 'src/components/ContentArea.tsx'), 'utf8');
-  const itemCardSource = fs.readFileSync(path.join(projectRoot, 'src/components/ItemCard.tsx'), 'utf8');
+  // Windows 开发机 core.autocrlf=true 时工作区为 CRLF，先归一化为 LF，
+  // 避免下方多行源码契约正则（如 \n);\n\n）因行尾差异误报。
+  const readSource = (relativePath) => fs.readFileSync(path.join(projectRoot, relativePath), 'utf8').replace(/\r\n/g, '\n');
+  const contentAreaSource = readSource('src/components/ContentArea.tsx');
+  const itemCardSource = readSource('src/components/ItemCard.tsx');
   assert.match(contentAreaSource, /调整顺序/, '普通模式必须提供排序入口');
   assert.match(contentAreaSource, /完成排序/, '排序模式必须提供明确退出按钮');
   assert.match(itemCardSource, /onPointerDown/, '排序必须从 Pointer Events 手柄发起');

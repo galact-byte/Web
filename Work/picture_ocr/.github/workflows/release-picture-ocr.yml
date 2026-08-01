@@ -49,14 +49,8 @@ jobs:
           Copy-Item README.md release-web/README.md
           if (Test-Path '启动测评证据采集工具.bat') { Copy-Item '启动测评证据采集工具.bat' release-web/ }
           if (Test-Path 'start-server.ps1') { Copy-Item 'start-server.ps1' release-web/ }
-          @"
-          测评证据采集工具 ${{ steps.vars.outputs.tag }}
-
-          本次更新摘要：
-          - 修复点击“导出数据包”时报错“导出失败：Failed to fetch”的问题：含较多实拍大图的系统此前在桌面版和网页版都可能导出失败，现改为本地直接解码，不再依赖网络请求。
-          - 加密采集包（.evidence）导出走同一逻辑，一并修复。
-          - 纯前端修复，数据格式不变，无需迁移；客户端升级不影响已采集数据（数据保存在 %APPDATA%\picture_ocr，与版本和存放位置无关）。
-          "@ | Set-Content -Encoding UTF8 release-web/RELEASE-NOTES.txt
+          # 发布说明统一以 RELEASE-NOTES.md 为唯一来源，Web ZIP 和 GitHub Release 正文均直接引用，避免每版重复手抄。
+          Copy-Item RELEASE-NOTES.md release-web/RELEASE-NOTES.md
           Compress-Archive -Path release-web/* -DestinationPath "${{ steps.vars.outputs.web_zip }}" -Force
 
       - name: Build Windows desktop client
@@ -69,17 +63,7 @@ jobs:
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: 测评证据采集工具 ${{ steps.vars.outputs.tag }}
-          body: |
-            ## 🛠️ 修复导出数据包失败
-
-            - 修复点击“导出数据包”时报错 `导出失败：Failed to fetch` 的问题。含较多实拍大图的系统在导出时，程序把图片从 base64 还原为文件的方式，在桌面客户端（`file://` 环境读取大图）和网页版（CSP 限制 `data:` 请求）下都会失败，导致整包导出中断。
-            - 现改为在本地直接解码 base64，不再发起网络请求，导出不再受图片大小、运行环境或安全策略影响。加密采集包（`.evidence`）导出走的是同一段逻辑，一并修复。
-
-            ## 🔄 兼容性说明
-
-            - 纯前端修复，数据格式完全不变，无需迁移；现有项目、分类、资产、检查项与截图全部兼容。
-            - Windows 客户端升级不会丢失已采集的数据：数据保存在当前用户目录 `%APPDATA%\picture_ocr`，与程序版本和存放位置无关，替换新版 exe 后原有项目与图片仍在（建议升级前先备份该目录，并在同一 Windows 账户下运行）。
-            - Web 静态版 ZIP 与 Windows Electron 客户端为同一套实现，刷新 Web 页面或替换客户端后生效。
+          body_path: RELEASE-NOTES.md
           files: |
             ${{ steps.vars.outputs.web_zip }}
             desktop-dist/*
