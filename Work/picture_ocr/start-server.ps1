@@ -8,6 +8,8 @@ $script:MaxPendingUploads = 8
 $script:AllowedImageTypes = @('image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp')
 $script:StaticCsp = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; media-src 'none'"
 $script:Session = $null; $script:SessionLock = [object]::new()
+# 固定的本机端口：保证浏览器来源(协议+主机+端口)稳定，IndexedDB 项目数据不会因端口漂移而“消失”。故意不再用 Get-FreePort 动态挡端口。
+$script:DefaultPort = 51730
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'dist')); $indexFile = Join-Path $root 'index.html'
 if (-not (Test-Path -LiteralPath $indexFile -PathType Leaf)) { throw '未找到 dist\index.html。请解压完整 Release 压缩包，不要只复制启动脚本。' }
 
@@ -135,9 +137,13 @@ function Serve-Static { param($Request,$Path)
     if($Request.method -notin @('GET','HEAD')){Send-Error $Request 405 '仅支持读取静态资源。';return};try{$decoded=[Uri]::UnescapeDataString($Path)}catch{Send-Error $Request 400 '无效路径。';return};if($decoded -eq '/'){$file=$indexFile}else{$relative=$decoded.TrimStart('/').Replace('/','\');if($relative.Contains('..')){Send-Error $Request 403 '禁止访问该路径。';return};$file=[IO.Path]::GetFullPath((Join-Path $root $relative));if(-not $file.StartsWith("$root$([IO.Path]::DirectorySeparatorChar)",[StringComparison]::OrdinalIgnoreCase)-or -not(Test-Path -LiteralPath $file -PathType Leaf)){Send-Error $Request 404 '资源不存在。';return}};$headers=@{'Cache-Control'=$(if($file -eq $indexFile){'no-store'}else{'public, max-age=3600'});'Cross-Origin-Resource-Policy'='same-origin';'Content-Security-Policy'=$script:StaticCsp};Send-Response $Request 200 (Get-ContentType $file) ([IO.File]::ReadAllBytes($file)) $headers
 }
 
-$addresses=@(Get-PrivateLanAddresses);$script:ListenPort=if($Port -gt 0){$Port}else{Get-FreePort};$script:Listeners=[Collections.Generic.List[Net.Sockets.TcpListener]]::new()
+$addresses=@(Get-PrivateLanAddresses);$script:ListenPort=if($Port -gt 0){$Port}else{$script:DefaultPort};$script:Listeners=[Collections.Generic.List[Net.Sockets.TcpListener]]::new()
+# 固定端口绑定：若端口已被占用，多半是上一个实例仍在运行——直接打开现有页面并退出，绝不改用新端口另开一个空的 IndexedDB。
+$listener=$null
+try { $listener=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,$script:ListenPort);$listener.Start() }
+catch { $existing="http://127.0.0.1:$script:ListenPort/";Write-Host '';Write-Host "端口 $script:ListenPort 已被占用，可能已有一个本工具实例在运行。" -ForegroundColor Yellow;Write-Host "已为你打开现有页面：$existing" -ForegroundColor Cyan;Write-Host '你的项目数据就保存在这个地址下。如需彻底重启，请先关闭所有本工具的命令行窗口，再启动。' -ForegroundColor Yellow;if(-not $NoBrowser){Start-Process $existing};exit 0 }
+$script:Listeners.Add($listener)
 try {
-    $listener=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,$script:ListenPort);$listener.Start();$script:Listeners.Add($listener)
     $url="http://127.0.0.1:$script:ListenPort/";Write-Host '';Write-Host 'Picture OCR 已启动：Web ZIP 支持手机局域网实时采集。' -ForegroundColor Green;Write-Host "电脑浏览器：$url" -ForegroundColor Cyan;if($addresses.Count -gt 0){Write-Host "可用局域网地址：$(@($addresses | ForEach-Object { $_.address }) -join '、')" -ForegroundColor Cyan}else{Write-Host '当前未检测到私有局域网 IPv4；仍可正常使用电脑端，连接 Wi-Fi 或手机热点后可再启动手机采集。' -ForegroundColor Yellow};Write-Host '请保持此窗口打开；手机采集会话只能从网页中的“手机局域网采集”启动。' -ForegroundColor Yellow;Write-Host '';if(-not $NoBrowser){Start-Process $url}
     while($true){$client=$null;foreach($listener in $script:Listeners){if($listener.Pending()){$client=$listener.AcceptTcpClient();$client.ReceiveTimeout=15000;$client.SendTimeout=15000;break}};if(-not $client){Start-Sleep -Milliseconds 25;continue};try{$request=Read-HttpRequest $client;if($request){$uri=Get-RequestUri $request;$path=$uri.AbsolutePath;if($path.StartsWith('/api/control/')){Handle-Control $request $path}elseif($path.StartsWith('/api/')){Handle-TokenApi $request $uri $path}else{Serve-Static $request $path}}}catch{Write-Host "[REQUEST ERROR] $($_.Exception.Message)" -ForegroundColor Yellow;try{if($request){Send-Error $request 500 '服务器处理请求失败。'}}catch{}}finally{try{$client.Close()}catch{}}}
 } catch { Write-Host "[SERVER ERROR] 无法监听本机地址：$($_.Exception.Message)" -ForegroundColor Red;exit 1 } finally { Stop-LanSession;foreach($listener in $script:Listeners){try{$listener.Stop()}catch{}} }
