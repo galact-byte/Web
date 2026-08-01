@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { decryptEvidenceBlob, encryptEvidenceBlob } from './evidencePackage';
+import { saveBlob, type SaveOutcome } from './saveBlob';
 import type {
   ProjectMeta,
   Category,
@@ -104,10 +105,10 @@ export async function exportDataPackage(
   meta: ProjectMeta,
   categories: Category[],
   assets: Asset[]
-): Promise<void> {
+): Promise<SaveOutcome> {
   const content = await createDataPackageBlob(meta, categories, assets);
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  downloadBlob(content, `测评证据_${meta.unitName || '未命名'}_${dateStr}.zip`);
+  return saveBlob(content, `测评证据_${meta.unitName || '未命名'}_${dateStr}.zip`);
 }
 
 export async function exportEncryptedDataPackage(
@@ -115,11 +116,11 @@ export async function exportEncryptedDataPackage(
   categories: Category[],
   assets: Asset[],
   password: string
-): Promise<void> {
+): Promise<SaveOutcome> {
   const zip = await createDataPackageBlob(meta, categories, assets);
   const encryptedPackage = await encryptEvidenceBlob(zip, password);
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  downloadBlob(encryptedPackage, `测评采集包_${meta.systemName || meta.projectName || '未命名系统'}_${dateStr}.evidence`);
+  return saveBlob(encryptedPackage, `测评采集包_${meta.systemName || meta.projectName || '未命名系统'}_${dateStr}.evidence`);
 }
 
 // ==================== Import ====================
@@ -278,17 +279,6 @@ export async function importEncryptedDataPackage(
 }
 
 // ==================== Helpers ====================
-
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
 
 function base64ToBlob(dataUrl: string): Promise<Blob> {
   // 手动解码 base64，避免 fetch(data:) 在 file:// 大图或 CSP connect-src 下抛 "Failed to fetch"

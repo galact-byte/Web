@@ -40,6 +40,22 @@ interface LanSessionStatus {
   addresses: LanAddress[];
 }
 
+interface DataLocationInfo {
+  current: string;
+  isDefault: boolean;
+  defaultDir: string;
+  startupWarning?: string;
+  backup?: { dir: string; createdAt: number; remainingDays: number };
+}
+
+interface DataLocationChangeResult {
+  changed: boolean;
+  dataDir?: string;
+  needRestart?: boolean;
+  reason?: string;
+  error?: string;
+}
+
 interface Window {
   evidenceLan?: {
     startSession: (snapshot: LanCollectorSnapshot, selectedAddress?: string) => Promise<LanSessionStatus>;
@@ -48,5 +64,12 @@ interface Window {
     getStatus: () => Promise<LanSessionStatus>;
     onImage: (listener: (upload: LanImageUpload) => void) => () => void;
     confirmImageSaved: (requestId: string, outcome: { success: boolean; message?: string }) => void;
+  };
+  evidenceData?: {
+    getLocation: () => Promise<DataLocationInfo>;
+    chooseLocation: () => Promise<DataLocationChangeResult>;
+    resetLocation: () => Promise<DataLocationChangeResult>;
+    deleteBackup: () => Promise<{ deleted: boolean; error?: string }>;
+    relaunch: () => Promise<void>;
   };
 }

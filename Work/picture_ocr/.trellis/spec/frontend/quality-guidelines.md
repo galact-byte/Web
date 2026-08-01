@@ -12,6 +12,9 @@ npm run verify:lan-server
 npm run verify:lan-mobile-picker
 node scripts/verify-inspection-item-interactions.mjs
 node scripts/verify-inspection-item-pointer-drag.mjs
+npm run verify:data-location
+npm run verify:storage-estimate
+npm run verify:save-blob
 npm run build
 npm run verify:web-lan-server
 npm run verify:pwa-build
@@ -22,6 +25,12 @@ git diff --check
 - `scripts/verify-evidence-package.mjs` 使用 Node `assert` 验证加密格式、往返解密与错误密码拒绝。
 - `scripts/verify-lan-server.cjs` 验证 Electron 局域网服务安全边界；`scripts/verify-lan-mobile-picker.mjs` 用源码断言守护移动端图片来源、会话同步、可访问对话框和项目列表响应式契约。
 - 移动端采集或项目列表相关改动运行 `npm run verify:lan-mobile-picker`（`scripts/verify-lan-mobile-picker.mjs`）；检查项新增、状态或排序改动运行 `node scripts/verify-inspection-item-interactions.mjs`，涉及 Pointer 拖拽、实时预览或边缘自动滚动时再运行 `node scripts/verify-inspection-item-pointer-drag.mjs`（生产预览 Chrome 回归）；构建或 PWA 改动后运行 `npm run verify:pwa-build`（`scripts/verify-pwa-build.mjs`）；Web LAN 启动器改动后运行 `npm run verify:web-lan-server`（`scripts/verify-web-lan-server.ps1`）。不要把这些脚本当作通用单元测试框架。
+
+## 存储位置与导出保存（缓解 C 盘膨胀）
+
+- 桌面版数据目录可迁移：主进程 `electron/dataLocation.cjs` 管理“指针/数据本体分离”（`%APPDATA%\<应用名>\data-location.json` 只存路径），在 `app.whenReady()` 之前 `init()` 应用指针；目录复制在“下次启动、store 未打开前”进行（运行中只写 migration 标记并重启），避免复制占用中的 IndexedDB。旧数据作“临时备份”保留默认 7 天后自动清理。新增数据目录 IPC 走 `window.evidenceData`（preload 桥接），主进程侧沿用 `isExpectedRenderer` 校验。
+- 导出落盘统一走 `src/utils/saveBlob.ts` 的 `saveBlob()`：支持 `showSaveFilePicker`（Chromium + 安全上下文）且偏好开启时弹原生保存框，否则回退 `<a download>`；返回 `'saved'|'downloaded'|'cancelled'`，`cancelled` 不报错。不要在导出处再自写 `URL.createObjectURL` 下载逻辑。Web 用量展示用 `src/utils/storageEstimate.ts`。
+- “存储设置”入口（`src/components/StorageSettingsDialog.tsx`）环境自适应：有 `window.evidenceData` → 桌面迁移 UI；否则 → Web 用量 + 导出偏好。
 
 ## 代码与错误处理
 

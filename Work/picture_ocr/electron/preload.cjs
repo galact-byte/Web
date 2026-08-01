@@ -12,3 +12,11 @@ contextBridge.exposeInMainWorld('evidenceLan', {
   },
   confirmImageSaved: (requestId, outcome) => ipcRenderer.send('lan:image-saved', requestId, outcome),
 });
+
+contextBridge.exposeInMainWorld('evidenceData', {
+  getLocation: () => ipcRenderer.invoke('data:get-location'),
+  chooseLocation: () => ipcRenderer.invoke('data:choose-location'),
+  resetLocation: () => ipcRenderer.invoke('data:reset-location'),
+  deleteBackup: () => ipcRenderer.invoke('data:delete-backup'),
+  relaunch: () => ipcRenderer.invoke('data:relaunch'),
+});
