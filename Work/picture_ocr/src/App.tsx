@@ -97,9 +97,7 @@ const AppContent: React.FC<AppContentProps> = ({ projectId, onBackToProjects, op
       setValidationOpen(true);
     } else {
       try {
-        const outcome = await exportWordReport(meta, categories, assets);
-        if (outcome === 'saved') showToast('Word 文档已保存到所选位置', 'success');
-        else if (outcome === 'downloaded') showToast('Word 文档已开始下载', 'success');
+        await exportWordReport(meta, categories, assets);
       } catch (err) {
         showToast(`导出失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
       }
@@ -116,9 +114,7 @@ const AppContent: React.FC<AppContentProps> = ({ projectId, onBackToProjects, op
   const handleContinueExport = useCallback(async () => {
     setValidationOpen(false);
     try {
-      const outcome = await exportWordReport(meta, categories, assets);
-      if (outcome === 'saved') showToast('Word 文档已保存到所选位置', 'success');
-      else if (outcome === 'downloaded') showToast('Word 文档已开始下载', 'success');
+      await exportWordReport(meta, categories, assets);
     } catch (err) {
       showToast(`导出失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     }

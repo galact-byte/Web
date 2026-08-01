@@ -99,11 +99,8 @@ const MobileCollector: React.FC<MobileCollectorProps> = ({ projectId, onBack }) 
 
   const handleExport = async (password: string) => {
     if (!document) return;
-    const outcome = await exportEncryptedDataPackage(document.meta, document.categories, document.assets, password);
-    if (outcome === 'cancelled') { setMessage('已取消保存。'); return; }
-    setMessage(outcome === 'saved'
-      ? '加密采集包已保存到所选位置，再用 USB 回传电脑。'
-      : '已生成加密采集包，请通过浏览器下载列表保存文件，再用 USB 回传电脑。');
+    await exportEncryptedDataPackage(document.meta, document.categories, document.assets, password);
+    setMessage('已生成加密采集包。请通过浏览器下载列表保存文件，再用 USB 回传电脑。');
   };
 
   if (!document) return <main className="min-h-screen bg-slate-100 p-5 text-sm text-slate-600">{message || '正在加载采集项目...'}</main>;

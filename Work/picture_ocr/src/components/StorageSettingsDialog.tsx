@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useToast } from './Toast';
 import { useConfirmDialog } from './ConfirmDialog';
 import { formatBytes, getStorageEstimate, STORAGE_WARN_RATIO, type StorageEstimateResult } from '../utils/storageEstimate';
-import { getExportAskLocation, isSaveFilePickerSupported, setExportAskLocation } from '../utils/exportPreference';
 
 interface StorageSettingsDialogProps {
   onClose: () => void;
@@ -109,19 +108,11 @@ const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }
 
   // Web 态
   const [estimate, setEstimate] = useState<StorageEstimateResult | null>(null);
-  const [askLocation, setAskLocation] = useState<boolean>(() => getExportAskLocation());
-  const pickerSupported = isSaveFilePickerSupported();
 
   useEffect(() => {
     if (desktop) return;
     void getStorageEstimate().then(setEstimate);
   }, [desktop]);
-
-  const toggleAsk = () => {
-    const next = !askLocation;
-    setAskLocation(next);
-    setExportAskLocation(next);
-  };
 
   const highUsage = estimate?.ratio != null && estimate.ratio >= STORAGE_WARN_RATIO;
 
@@ -231,36 +222,8 @@ const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }
                   <p className="mt-1 text-xs text-slate-500">当前浏览器不支持存储用量查询。</p>
                 )}
                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                  网页版数据存在浏览器本地，无法由应用迁移到其它盘。可通过“导出到非 C 盘 + 删除旧项目”控制占用。
+                  网页版数据存在浏览器本地，无法由应用迁移到其它盘。如需控制 C 盘占用，可先将旧项目导出备份到非 C 盘，确认备份可用后再从项目列表删除。长期大量使用建议改用桌面版（可将数据目录迁移到 D 盘）。
                 </p>
-              </div>
-
-              <div className="border-t border-slate-200 pt-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-700">导出时询问保存位置</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      {pickerSupported
-                        ? '开启后，导出数据包 / 加密包 / Word 时会弹出保存框，可直接选择 D 盘等目录。'
-                        : '当前浏览器不支持选择保存位置，导出将存入浏览器默认下载目录，可在浏览器设置中修改。'}
-                    </p>
-                  </div>
-                  <button
-                    role="switch"
-                    aria-checked={askLocation && pickerSupported}
-                    disabled={!pickerSupported}
-                    onClick={toggleAsk}
-                    className={`relative mt-0.5 h-6 w-11 flex-shrink-0 rounded-full transition-colors ${
-                      askLocation && pickerSupported ? 'bg-blue-600' : 'bg-slate-300'
-                    } disabled:cursor-not-allowed disabled:opacity-50`}
-                  >
-                    <span
-                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
-                        askLocation && pickerSupported ? 'left-[22px]' : 'left-0.5'
-                      }`}
-                    />
-                  </button>
-                </div>
               </div>
             </div>
           )}
