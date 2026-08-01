@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { ProjectMeta } from '../types';
 import { useAppContext, useAppState } from '../context/AppContext';
+import { useToast } from './Toast';
 
 interface ProjectInfoDialogProps {
   open: boolean;
@@ -10,6 +11,7 @@ interface ProjectInfoDialogProps {
 const ProjectInfoDialog: React.FC<ProjectInfoDialogProps> = ({ open, onClose }) => {
   const { meta } = useAppState();
   const { updateProjectMeta } = useAppContext();
+  const showToast = useToast();
   const [form, setForm] = useState<ProjectMeta>({ ...meta });
   const [errors, setErrors] = useState<{ unitName?: string; systemName?: string }>({});
   const [saving, setSaving] = useState(false);
@@ -44,7 +46,7 @@ const ProjectInfoDialog: React.FC<ProjectInfoDialogProps> = ({ open, onClose }) 
       });
       onClose();
     } catch (err) {
-      alert(`保存项目信息失败：${err instanceof Error ? err.message : '未知错误'}`);
+      showToast(`保存项目信息失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     } finally {
       setSaving(false);
     }

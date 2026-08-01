@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/07-09-eval-evidence-tool/prd.md", "reason": "Requirements and acceptance criteria to verify against"}
+{"file": ".trellis/tasks/07-09-eval-evidence-tool/design.md", "reason": "Technical design to verify implementation matches"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Code quality standards to enforce during review"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component pattern compliance verification"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "TypeScript type safety validation"}

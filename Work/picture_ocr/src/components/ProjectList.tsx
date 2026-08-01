@@ -18,6 +18,7 @@ import ImportDialog from './ImportDialog';
 import ProjectListHeader from './project-list/ProjectListHeader';
 import ProjectGroupDialog, { type ProjectGroupDialogMode } from './project-list/ProjectGroupDialog';
 import { useConfirmDialog } from './ConfirmDialog';
+import { useToast } from './Toast';
 interface ProjectListProps {
   onOpenProject: (projectId: string, isNewProject?: boolean) => void;
 }
@@ -68,6 +69,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const [saving, setSaving] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
+  const showToast = useToast();
 
   const refreshProjects = async () => {
     setLoading(true);
@@ -81,7 +83,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
         return next;
       });
     } catch (err) {
-      alert(`加载项目列表失败：${err instanceof Error ? err.message : '未知错误'}`);
+      showToast(`加载项目列表失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -94,6 +96,11 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
   const selectedSystems = useMemo(() => groups.flatMap((group) => group.systems).filter((system) => selectedProjectIds.has(system.id)), [groups, selectedProjectIds]);
   const allFilteredSelected = filteredSystems.length > 0 && filteredSystems.every((system) => selectedProjectIds.has(system.id));
   const importTarget = groups.flatMap((group) => group.systems).find((system) => system.id === importTargetId);
+
+  const getImportTargetName = (system: ProjectSummary): string => {
+    const parentGroup = system.groupId ? groups.find((group) => group.id === system.groupId)?.group : null;
+    return parentGroup ? `${getGroupDisplayName({ id: parentGroup.id, group: parentGroup, systems: [] })} / ${getSystemDisplayName(system)}` : getSystemDisplayName(system);
+  };
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroupIds((current) => {
@@ -130,7 +137,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
       setSelectedProjectIds(new Set());
       await refreshProjects();
     } catch (err) {
-      alert(`删除选中系统失败：${err instanceof Error ? err.message : '未知错误'}`);
+      showToast(`删除选中系统失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     }
   };
 
@@ -141,7 +148,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
       setSelectedProjectIds((current) => { const next = new Set(current); next.delete(system.id); return next; });
       await refreshProjects();
     } catch (err) {
-      alert(`删除系统失败：${err instanceof Error ? err.message : '未知错误'}`);
+      showToast(`删除系统失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     }
   };
 
@@ -157,29 +164,29 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
       });
       await refreshProjects();
     } catch (err) {
-      alert(`删除项目组失败：${err instanceof Error ? err.message : '未知错误'}`);
+      showToast(`删除项目组失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     }
   };
 
   const handleExportSystem = async (system: ProjectSummary) => {
     try {
       const document = await loadProject(system.id);
-      if (!document) return alert('导出失败：系统不存在或已被删除');
+      if (!document) { showToast('导出失败：系统不存在或已被删除', 'error'); return; }
       await exportDataPackage(document.meta, document.categories, document.assets);
     } catch (err) {
-      alert(`导出失败：${err instanceof Error ? err.message : '未知错误'}`);
+      showToast(`导出失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     }
   };
 
-  const importIntoSystem = async (file: File, password: string, mode: 'overwrite' | 'merge'): Promise<boolean> => {
-    if (!importTargetId) return false;
+  const importIntoSystem = async (file: File, password: string, mode: 'overwrite' | 'merge'): Promise<{ success: boolean; message: string }> => {
+    if (!importTargetId) return { success: false, message: '导入失败：未指定目标系统' };
     try {
       const targetDocument = await loadProject(importTargetId);
-      if (!targetDocument) { alert('导入失败：目标系统不存在或已被删除'); return false; }
+      if (!targetDocument) return { success: false, message: '导入失败：目标系统不存在或已被删除' };
       const result = isEvidencePackageFile(file)
         ? await importEncryptedDataPackage(file, password, mode, targetDocument.assets, targetDocument.categories, targetDocument.meta)
         : await importDataPackage(file, mode, targetDocument.assets, targetDocument.categories, targetDocument.meta);
-      if (!result.success || !result.data) { alert(result.message); return false; }
+      if (!result.success || !result.data) return { success: false, message: result.message };
       const group = targetDocument.groupId ? await getGroupForSystem(targetDocument.groupId) : null;
       const meta: ProjectMeta = group && mode === 'overwrite'
         ? { ...result.data.meta, projectCode: group.projectCode, projectName: group.projectName, unitName: group.unitName, reportDate: group.reportDate }
@@ -195,11 +202,9 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
       };
       await saveProject(nextDocument);
       await refreshProjects();
-      alert(result.message);
-      return true;
+      return { success: true, message: result.message };
     } catch (err) {
-      alert(`导入失败：${err instanceof Error ? err.message : '未知错误'}`);
-      return false;
+      return { success: false, message: `导入失败：${err instanceof Error ? err.message : '未知错误'}` };
     }
   };
 
@@ -232,7 +237,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
         });
       } else if (dialogState.mode === 'edit-system' && dialogState.system) {
         const document = await loadProject(dialogState.system.id);
-        if (!document) { alert('保存失败：目标系统不存在或已被删除'); return false; }
+        if (!document) { showToast('保存失败：目标系统不存在或已被删除', 'error'); return false; }
         const meta = dialogState.group
           ? {
               ...document.meta,
@@ -248,7 +253,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
       await refreshProjects();
       return true;
     } catch (err) {
-      alert(`保存失败：${err instanceof Error ? err.message : '未知错误'}`);
+      showToast(`保存失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
       return false;
     } finally {
       setSaving(false);
@@ -299,7 +304,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
         </section>
       </main>
       <ProjectGroupDialog open={!!dialogState} mode={dialogState?.mode ?? 'create-group'} group={dialogState?.group ?? null} system={dialogState?.system?.meta ?? null} onClose={() => { if (!saving) setDialogState(null); }} onSave={handleSaveDialog} />
-      <ImportDialog isOpen={!!importTargetId} targetProjectName={importTarget ? `${getGroupDisplayName(groups.find((group) => group.id === importTarget.groupId) ?? { id: 'ungrouped', group: null, systems: [importTarget] })} / ${getSystemDisplayName(importTarget)}` : '未知系统'} onClose={() => setImportTargetId(null)} onImportOverwrite={(file, password) => importIntoSystem(file, password, 'overwrite')} onImportMerge={(file, password) => importIntoSystem(file, password, 'merge')} />
+      <ImportDialog isOpen={!!importTargetId} targetProjectName={importTarget ? getImportTargetName(importTarget) : '未知系统'} onClose={() => setImportTargetId(null)} onImportOverwrite={(file, password) => importIntoSystem(file, password, 'overwrite')} onImportMerge={(file, password) => importIntoSystem(file, password, 'merge')} />
       {dialog}
     </div>
   );
