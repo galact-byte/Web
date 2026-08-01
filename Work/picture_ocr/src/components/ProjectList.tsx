@@ -15,6 +15,7 @@ import {
 import { exportDataPackage, importDataPackage, importEncryptedDataPackage } from '../utils/exportImport';
 import { isEvidencePackageFile } from '../utils/evidencePackage';
 import ImportDialog from './ImportDialog';
+import StorageSettingsDialog from './StorageSettingsDialog';
 import ProjectListHeader from './project-list/ProjectListHeader';
 import ProjectGroupDialog, { type ProjectGroupDialogMode } from './project-list/ProjectGroupDialog';
 import { useConfirmDialog } from './ConfirmDialog';
@@ -68,8 +69,17 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
   const [importTargetId, setImportTargetId] = useState<string | null>(null);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [storageSettingsOpen, setStorageSettingsOpen] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
   const showToast = useToast();
+
+  // 桌面版：启动时若自定义数据目录不可用已回退默认，提示一次。
+  useEffect(() => {
+    if (!window.evidenceData) return;
+    void window.evidenceData.getLocation()
+      .then((location) => { if (location.startupWarning) showToast(location.startupWarning, 'error'); })
+      .catch(() => { /* 忽略 */ });
+  }, [showToast]);
 
   const refreshProjects = async () => {
     setLoading(true);
@@ -172,7 +182,9 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
     try {
       const document = await loadProject(system.id);
       if (!document) { showToast('导出失败：系统不存在或已被删除', 'error'); return; }
-      await exportDataPackage(document.meta, document.categories, document.assets);
+      const outcome = await exportDataPackage(document.meta, document.categories, document.assets);
+      if (outcome === 'saved') showToast('数据包已保存到所选位置', 'success');
+      else if (outcome === 'downloaded') showToast('数据包已开始下载', 'success');
     } catch (err) {
       showToast(`导出失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     }
@@ -262,7 +274,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <ProjectListHeader search={search} selectedCount={selectedSystems.length} onSearchChange={setSearch} onDeleteSelected={handleDeleteSelectedProjects} onCreateProject={() => setDialogState({ mode: 'create-group', group: null, system: null })} />
+      <ProjectListHeader search={search} selectedCount={selectedSystems.length} onSearchChange={setSearch} onDeleteSelected={handleDeleteSelectedProjects} onCreateProject={() => setDialogState({ mode: 'create-group', group: null, system: null })} onOpenStorageSettings={() => setStorageSettingsOpen(true)} />
       <main className="mx-auto max-w-[1280px] px-8 py-8">
         <section className="mb-6 flex items-end justify-between gap-6 border-b border-slate-300 pb-4">
           <div><h2 className="text-2xl font-extrabold text-slate-950">项目管理中心</h2></div>
@@ -305,6 +317,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject }) => {
       </main>
       <ProjectGroupDialog open={!!dialogState} mode={dialogState?.mode ?? 'create-group'} group={dialogState?.group ?? null} system={dialogState?.system?.meta ?? null} onClose={() => { if (!saving) setDialogState(null); }} onSave={handleSaveDialog} />
       <ImportDialog isOpen={!!importTargetId} targetProjectName={importTarget ? getImportTargetName(importTarget) : '未知系统'} onClose={() => setImportTargetId(null)} onImportOverwrite={(file, password) => importIntoSystem(file, password, 'overwrite')} onImportMerge={(file, password) => importIntoSystem(file, password, 'merge')} />
+      {storageSettingsOpen && <StorageSettingsDialog onClose={() => setStorageSettingsOpen(false)} />}
       {dialog}
     </div>
   );

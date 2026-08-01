@@ -4,6 +4,10 @@ const os = require('node:os');
 const path = require('node:path');
 const { fileURLToPath } = require('node:url');
 const { createLanCollectorServer } = require('./lanServer.cjs');
+const dataLocation = require('./dataLocation.cjs');
+
+// 必须在 app ready、任何 store 打开之前应用数据目录指针。
+dataLocation.init();
 
 const indexPath = path.resolve(__dirname, '..', 'dist', 'index.html');
 let mainWindow = null;
@@ -191,8 +195,32 @@ ipcMain.handle('lan:start-session', async (event, snapshot, selectedAddress) => 
   return getLanStatus();
 });
 
+ipcMain.handle('data:get-location', (event) => {
+  if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可查询数据存储位置。');
+  return dataLocation.getLocationInfo();
+});
+ipcMain.handle('data:choose-location', async (event) => {
+  if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可更改数据存储位置。');
+  return dataLocation.chooseLocation(mainWindow);
+});
+ipcMain.handle('data:reset-location', (event) => {
+  if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可恢复默认数据存储位置。');
+  return dataLocation.resetLocation();
+});
+ipcMain.handle('data:delete-backup', (event) => {
+  if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可删除数据备份。');
+  return dataLocation.deleteBackup();
+});
+ipcMain.handle('data:relaunch', (event) => {
+  if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可重启应用。');
+  app.relaunch();
+  app.exit(0);
+});
+
 app.whenReady().then(() => {
   mainWindow = createWindow();
+  // 备份过期清理放后台，不阻塞启动。
+  setTimeout(() => dataLocation.cleanupExpiredBackup(), 3000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();

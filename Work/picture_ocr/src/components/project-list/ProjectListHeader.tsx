@@ -6,6 +6,7 @@ interface ProjectListHeaderProps {
   onSearchChange: (value: string) => void;
   onDeleteSelected: () => void;
   onCreateProject: () => void;
+  onOpenStorageSettings: () => void;
 }
 
 const ProjectListHeader: React.FC<ProjectListHeaderProps> = ({
@@ -14,6 +15,7 @@ const ProjectListHeader: React.FC<ProjectListHeaderProps> = ({
   onSearchChange,
   onDeleteSelected,
   onCreateProject,
+  onOpenStorageSettings,
 }) => {
   return (
     <header className="border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-8">
@@ -53,6 +55,17 @@ const ProjectListHeader: React.FC<ProjectListHeaderProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.8 12.1A2 2 0 0116.2 21H7.8a2 2 0 01-2-1.9L5 7m5 4v6m4-6v6M9 7V4h6v3M4 7h16" />
             </svg>
             删除选中{selectedCount > 0 ? ` ${selectedCount}` : ''}
+          </button>
+          <button
+            onClick={onOpenStorageSettings}
+            className="inline-flex h-11 min-w-11 items-center justify-center gap-2 border border-slate-300 bg-white px-3 text-sm text-slate-700 transition-colors hover:bg-slate-50"
+            title="存储设置"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.2.61.74 1.05 1.38 1.15" />
+            </svg>
+            <span className="hidden sm:inline">存储设置</span>
           </button>
           <button
             onClick={onCreateProject}
