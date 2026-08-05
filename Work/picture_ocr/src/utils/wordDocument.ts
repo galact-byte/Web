@@ -67,6 +67,35 @@ async function convertDataUriToPngBuffer(dataUri: string): Promise<{ buffer: Arr
   return { buffer: await blob.arrayBuffer(), type: 'png' };
 }
 
+// 证据图改为“一行一张、铺满正文宽度”显示：正文可用宽约 538px（主表 8296dxa 减去单元格内边距），
+// 取 525px 留余量；高度上限防止竖图过高撑破一页。
+const MAX_IMAGE_DISPLAY_WIDTH = 525;
+const MAX_IMAGE_DISPLAY_HEIGHT = 640;
+
+// 按原图真实宽高比把图片等比缩放进显示框，避免把宽终端截图硬压成固定 4:3 而拉伸变形、
+// 在 Word/WPS 里放大后显得模糊。图像数据本身仍是全分辨率原图，这里只改文档中的显示尺寸。
+// 用 Math.min(..., 1) 兜底：绝不把小图放大超过原始像素，防止上采样反而更糊。
+async function resolveImageDisplaySize(dataUri: string): Promise<{ width: number; height: number }> {
+  const fallback = { width: MAX_IMAGE_DISPLAY_WIDTH, height: MAX_IMAGE_DISPLAY_HEIGHT };
+  try {
+    const image = await loadImage(dataUri);
+    const naturalWidth = image.naturalWidth || image.width;
+    const naturalHeight = image.naturalHeight || image.height;
+    if (!naturalWidth || !naturalHeight) return fallback;
+    const scale = Math.min(
+      MAX_IMAGE_DISPLAY_WIDTH / naturalWidth,
+      MAX_IMAGE_DISPLAY_HEIGHT / naturalHeight,
+      1
+    );
+    return {
+      width: Math.max(1, Math.round(naturalWidth * scale)),
+      height: Math.max(1, Math.round(naturalHeight * scale)),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -245,31 +274,15 @@ function buildCheckItemParagraph(label: string): Paragraph {
 }
 
 async function buildImageGridTable(images: ImageData[]): Promise<Table> {
+  // 一行一张：每张证据图独占一整行、铺满正文宽度，密集配置截图的文字更大更清晰。
   const rows: TableRow[] = [];
-  for (let i = 0; i < images.length; i += 2) {
-    const rowImages = images.slice(i, i + 2);
-    const cells: TableCell[] = [];
-
-    for (const image of rowImages) {
-      cells.push(await buildImageCell(image));
-    }
-
-    if (rowImages.length === 1) {
-      cells.push(
-        new docx.TableCell({
-          width: { size: 4148, type: docx.WidthType.DXA },
-          children: [new docx.Paragraph({})],
-          borders: noBorders(),
-        })
-      );
-    }
-
-    rows.push(new docx.TableRow({ children: cells }));
+  for (const image of images) {
+    rows.push(new docx.TableRow({ children: [await buildImageCell(image)] }));
   }
 
   return new docx.Table({
     width: { size: 100, type: docx.WidthType.PERCENTAGE },
-    columnWidths: [4148, 4148],
+    columnWidths: [MAIN_TABLE_WIDTH_DXA],
     borders: noTableBorders(),
     rows,
   });
@@ -277,9 +290,10 @@ async function buildImageGridTable(images: ImageData[]): Promise<Table> {
 
 async function buildImageCell(image: ImageData): Promise<TableCell> {
   const { buffer, type } = await parseImageData(image.data);
+  const { width, height } = await resolveImageDisplaySize(image.data);
   const imageRun = new docx.ImageRun({
     data: buffer,
-    transformation: { width: 280, height: 210 },
+    transformation: { width, height },
     type,
   });
 
@@ -302,7 +316,7 @@ async function buildImageCell(image: ImageData): Promise<TableCell> {
   }
 
   return new docx.TableCell({
-    width: { size: 4148, type: docx.WidthType.DXA },
+    width: { size: MAIN_TABLE_WIDTH_DXA, type: docx.WidthType.DXA },
     children,
     borders: noBorders(),
   });
