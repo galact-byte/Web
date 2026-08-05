@@ -48,11 +48,12 @@ function sanitizeFileNamePart(value: string, fallback: string): string {
 
 export function buildReportFileName(meta: ProjectMeta): string {
   const systemName = sanitizeFileNamePart(meta.systemName, '未命名系统');
-  // 未填项目名时用单位名兜底，避免生成“未命名项目_xxx”这种难看的文件名；
-  // 项目名和单位名都为空时才回退到“未命名”。
-  const rawPrefix = meta.projectName?.trim() ? meta.projectName : meta.unitName;
-  const prefix = sanitizeFileNamePart(rawPrefix, '未命名');
-  return `${prefix}_${systemName}_测评证据.docx`;
+  // 填了项目名：项目名_系统名；没填项目名：直接用系统名，不加多余前缀。
+  const projectName = meta.projectName?.trim()
+    ? sanitizeFileNamePart(meta.projectName, '')
+    : '';
+  const prefix = projectName ? `${projectName}_` : '';
+  return `${prefix}${systemName}_测评证据.docx`;
 }
 
 /**
