@@ -61,15 +61,18 @@ try {
     }
 
     $selectedAddress = [string]$status.Body.addresses[0].address
-    $invalidSnapshotStart = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/start" -Body @{ selectedAddress = $selectedAddress; snapshot = @{ projectId = 'verify-project'; categories = @(); assets = @() } }
-    Assert-That ($invalidSnapshotStart.StatusCode -eq 400 -and $invalidSnapshotStart.Body.message -match '采集快照缺少可用分类或资产') '快照校验失败必须返回明确错误。'
+    $invalidSnapshotStart = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/start" -Body @{ selectedAddress = $selectedAddress; snapshot = @{ groupId = 'verify-group'; groupTitle = '验证组'; systems = @(@{ projectId = 'verify-project'; title = '空系统'; categories = @(); assets = @() }) } }
+    Assert-That ($invalidSnapshotStart.StatusCode -eq 400 -and $invalidSnapshotStart.Body.message -match '采集快照缺少可用系统') '快照校验失败必须返回明确错误。'
     $statusAfterInvalidStart = Invoke-JsonRequest -Method GET -Uri "$baseUrl/api/control/status"
     Assert-That (-not $statusAfterInvalidStart.Body.running) '快照校验失败不得创建会话或遗留 LAN 监听。'
 
     $snapshot = @{
-        projectId = 'verify-project'; title = 'Web LAN 验证系统'
-        categories = @(@{ id = 'cat-1'; name = '验证分类' })
-        assets = @(@{ id = 'asset-1'; name = '验证资产'; categoryId = 'cat-1'; items = @(@{ id = 'item-1'; label = '验证检查项'; required = $true; imageCount = 0 }) })
+        groupId = 'verify-group'; groupTitle = 'Web LAN 验证项目组'
+        systems = @(@{
+            projectId = 'verify-project'; title = 'Web LAN 验证系统'
+            categories = @(@{ id = 'cat-1'; name = '验证分类' })
+            assets = @(@{ id = 'asset-1'; name = '验证资产'; categoryId = 'cat-1'; items = @(@{ id = 'item-1'; label = '验证检查项'; required = $true; imageCount = 0 }) })
+        })
     }
     $started = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/start" -Body @{ snapshot = $snapshot; selectedAddress = $selectedAddress }
     Assert-That ($started.StatusCode -eq 200 -and $started.Body.url -match "^http://$([regex]::Escape($selectedAddress))`:$port/#/lan/") "启动会话必须返回所选 LAN IP 的手机 URL；状态：$($started.StatusCode)，响应：$($started.Body | ConvertTo-Json -Compress)"
@@ -83,17 +86,18 @@ try {
     Assert-That ((Invoke-JsonRequest -Method GET -Uri "$lanBaseUrl/api/session?token=wrong-token").StatusCode -eq 401) '错误 token 必须被拒绝。'
     Assert-That ((Invoke-JsonRequest -Method GET -Uri "$lanBaseUrl/api/session?token=$token").StatusCode -eq 200) '正确 token 必须读取采集快照。'
     Assert-That ((Invoke-JsonRequest -Method GET -Uri "$baseUrl/api/session?token=$token").StatusCode -eq 401) '手机 token API 必须只在会话绑定的私有地址上有效。'
-    Assert-That ((Invoke-JsonRequest -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&assetId=missing&itemId=item-1").StatusCode -eq 403) '不在白名单内的资产必须被拒绝。'
+    Assert-That ((Invoke-JsonRequest -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&projectId=verify-project&assetId=missing&itemId=item-1").StatusCode -eq 403) '不在白名单内的资产必须被拒绝。'
+    Assert-That ((Invoke-JsonRequest -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&projectId=missing&assetId=asset-1&itemId=item-1").StatusCode -eq 403) '缺少或错误的系统标识必须被拒绝。'
 
     $png = [Convert]::FromBase64String('iVBORw0KGgo=')
-    try { $badStatus = [int](Invoke-WebRequest -UseBasicParsing -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&assetId=asset-1&itemId=item-1" -Headers @{ 'Content-Type' = 'text/plain' } -Body 'not-image').StatusCode } catch { $badStatus = [int]$_.Exception.Response.StatusCode }
+    try { $badStatus = [int](Invoke-WebRequest -UseBasicParsing -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&projectId=verify-project&assetId=asset-1&itemId=item-1" -Headers @{ 'Content-Type' = 'text/plain' } -Body 'not-image').StatusCode } catch { $badStatus = [int]$_.Exception.Response.StatusCode }
     Assert-That ($badStatus -eq 415) '非图片上传必须被拒绝。'
 
     $encodedFileName = [Uri]::EscapeDataString('现场截图.png')
-    $accepted = Invoke-WebRequest -UseBasicParsing -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&assetId=asset-1&itemId=item-1" -Headers @{ 'Content-Type' = 'image/png'; 'X-File-Name' = $encodedFileName } -Body $png
+    $accepted = Invoke-WebRequest -UseBasicParsing -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&projectId=verify-project&assetId=asset-1&itemId=item-1" -Headers @{ 'Content-Type' = 'image/png'; 'X-File-Name' = $encodedFileName } -Body $png
     Assert-That ($accepted.StatusCode -eq 202) '图片必须先进入待确认队列，不能在浏览器落盘前报告成功。'
     $pending = Invoke-JsonRequest -Method GET -Uri "$baseUrl/api/control/pending"
-    Assert-That ($pending.Body.upload.requestId -and $pending.Body.upload.assetId -eq 'asset-1') '浏览器控制端必须能轮询到待确认图片。'
+    Assert-That ($pending.Body.upload.requestId -and $pending.Body.upload.assetId -eq 'asset-1' -and $pending.Body.upload.projectId -eq 'verify-project') '浏览器控制端必须能轮询到带系统标识的待确认图片。'
     Assert-That ($pending.Body.upload.image.fileName -eq '现场截图.png') '手机上传的 URL 编码中文文件名必须先解码再保存。'
     $confirmed = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/confirm" -Body @{ requestId = $pending.Body.upload.requestId; success = $true }
     Assert-That ($confirmed.StatusCode -eq 200) '浏览器 IndexedDB 成功确认必须被接受。'
@@ -103,19 +107,32 @@ try {
     try { $missingUpdateHeaderStatus = [int](Invoke-WebRequest -UseBasicParsing -Method POST -Uri "$baseUrl/api/control/update" -ContentType 'application/json; charset=utf-8' -Body (@{ snapshot = $snapshot } | ConvertTo-Json -Depth 12 -Compress)).StatusCode } catch { $missingUpdateHeaderStatus = [int]$_.Exception.Response.StatusCode }
     Assert-That ($missingUpdateHeaderStatus -eq 403) '更新接口缺少本机应用标识时必须被拒绝。'
     $updatedSnapshot = @{
-        projectId = 'verify-project'; title = '已更新 Web LAN 验证系统'
-        categories = @(@{ id = 'cat-1'; name = '验证分类' })
-        assets = @(@{ id = 'asset-2'; name = '新增验证资产'; categoryId = 'cat-1'; items = @(@{ id = 'item-2'; label = '新增验证检查项'; required = $false; imageCount = 0 }) })
+        groupId = 'verify-group'; groupTitle = '已更新 Web LAN 验证项目组'
+        systems = @(@{
+            projectId = 'verify-project'; title = '已更新 Web LAN 验证系统'
+            categories = @(@{ id = 'cat-1'; name = '验证分类' })
+            assets = @(@{ id = 'asset-2'; name = '新增验证资产'; categoryId = 'cat-1'; items = @(@{ id = 'item-2'; label = '新增验证检查项'; required = $false; imageCount = 0 }) })
+        })
     }
     $updated = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/update" -Body @{ snapshot = $updatedSnapshot }
-    Assert-That ($updated.StatusCode -eq 200 -and $updated.Body.running) '同项目快照更新必须保持当前会话运行。'
+    Assert-That ($updated.StatusCode -eq 200 -and $updated.Body.running) '组快照更新必须保持当前会话运行。'
     $updatedSession = Invoke-JsonRequest -Method GET -Uri "$lanBaseUrl/api/session?token=$token"
-    Assert-That ($updatedSession.StatusCode -eq 200 -and $updatedSession.Body.assets[0].id -eq 'asset-2') '手机会话必须返回最新快照。'
-    Assert-That ((Invoke-JsonRequest -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&assetId=asset-1&itemId=item-1").StatusCode -eq 403) '快照更新后旧白名单必须立即失效。'
-    $otherProjectSnapshot = $updatedSnapshot.Clone()
-    $otherProjectSnapshot.projectId = 'other-project'
-    $otherProjectUpdate = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/update" -Body @{ snapshot = $otherProjectSnapshot }
-    Assert-That ($otherProjectUpdate.StatusCode -eq 409) '不同项目不得更新当前采集会话。'
+    Assert-That ($updatedSession.StatusCode -eq 200 -and $updatedSession.Body.systems[0].assets[0].id -eq 'asset-2') '手机会话必须返回最新组快照。'
+    Assert-That ((Invoke-JsonRequest -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&projectId=verify-project&assetId=asset-1&itemId=item-1").StatusCode -eq 403) '快照更新后旧白名单必须立即失效。'
+    # 组可多系统：更新为双系统应被接受，且跨系统三元组必须校验。
+    $multiSnapshot = @{
+        groupId = 'verify-group'; groupTitle = '双系统验证项目组'
+        systems = @(
+            @{ projectId = 'verify-project'; title = '系统一'; categories = @(@{ id = 'cat-1'; name = '验证分类' }); assets = @(@{ id = 'asset-2'; name = '新增验证资产'; categoryId = 'cat-1'; items = @(@{ id = 'item-2'; label = '新增验证检查项'; required = $false; imageCount = 0 }) }) },
+            @{ projectId = 'second-project'; title = '系统二'; categories = @(@{ id = 'cat-2'; name = '分类二' }); assets = @(@{ id = 'asset-3'; name = '资产三'; categoryId = 'cat-2'; items = @(@{ id = 'item-3'; label = '检查项三'; required = $true; imageCount = 0 }) }) }
+        )
+    }
+    $multiUpdate = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/update" -Body @{ snapshot = $multiSnapshot }
+    Assert-That ($multiUpdate.StatusCode -eq 200 -and $multiUpdate.Body.running) '组内新增系统的快照更新必须被接受。'
+    $multiSession = Invoke-JsonRequest -Method GET -Uri "$lanBaseUrl/api/session?token=$token"
+    Assert-That ($multiSession.StatusCode -eq 200 -and $multiSession.Body.systems.Count -eq 2) '手机会话必须返回组内全部系统。'
+    Assert-That ((Invoke-JsonRequest -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&projectId=verify-project&assetId=asset-3&itemId=item-3").StatusCode -eq 403) '跨系统（资产不属于该系统）的上传必须被拒绝。'
+    Assert-That ((Invoke-WebRequest -UseBasicParsing -Method POST -Uri "$lanBaseUrl/api/upload?token=$token&projectId=second-project&assetId=asset-3&itemId=item-3" -Headers @{ 'Content-Type' = 'image/png' } -Body $png).StatusCode -eq 202) '同一会话内第二个系统的合法上传必须被受理。'
 
     Assert-That ((Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/stop" -Body @{}).StatusCode -eq 200) '控制端必须能停止会话。'
     $stoppedUpdate = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/update" -Body @{ snapshot = $updatedSnapshot }

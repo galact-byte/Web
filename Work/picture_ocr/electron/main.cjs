@@ -81,8 +81,10 @@ function getLanStatus() {
   return { running: true, url: lanSession.url, addresses: getLanIPv4Addresses() };
 }
 
-function normalizeSnapshot(value) {
-  if (!value || typeof value !== 'object' || !Array.isArray(value.categories) || !Array.isArray(value.assets)) throw new Error('采集快照无效。');
+// 单个系统结构校验：无效或无可用分类/资产时返回 null（由上层过滤），避免一个空系统阻断整组会话。
+function normalizeSystem(value) {
+  if (!value || typeof value !== 'object' || !Array.isArray(value.categories) || !Array.isArray(value.assets)) return null;
+  if (typeof value.projectId !== 'string' || value.projectId.length === 0 || value.projectId.length > 200) return null;
   const categories = value.categories
     .filter((category) => category && typeof category.id === 'string' && typeof category.name === 'string')
     .map((category) => ({ id: category.id, name: category.name.slice(0, 200) }));
@@ -97,9 +99,25 @@ function normalizeSnapshot(value) {
         .filter((item) => item && typeof item.id === 'string' && typeof item.label === 'string' && typeof item.required === 'boolean' && Number.isInteger(item.imageCount))
         .map((item) => ({ id: item.id, label: item.label.slice(0, 300), required: item.required, imageCount: Math.max(0, item.imageCount) })),
     }));
-  if (categories.length === 0 || assets.length === 0) throw new Error('采集快照缺少可用分类或资产。');
-  if (typeof value.projectId !== 'string' || value.projectId.length === 0 || value.projectId.length > 200) throw new Error('采集快照缺少项目标识。');
+  if (categories.length === 0 || assets.length === 0) return null;
   return { projectId: value.projectId, title: typeof value.title === 'string' ? value.title.slice(0, 200) : '未命名采集系统', categories, assets };
+}
+
+// 项目组级快照：携带组内全部可用系统，去重系统标识。
+function normalizeSnapshot(value) {
+  if (!value || typeof value !== 'object' || !Array.isArray(value.systems)) throw new Error('采集快照无效。');
+  const systems = [];
+  const seenIds = new Set();
+  for (const rawSystem of value.systems) {
+    const system = normalizeSystem(rawSystem);
+    if (!system || seenIds.has(system.projectId)) continue;
+    seenIds.add(system.projectId);
+    systems.push(system);
+  }
+  if (systems.length === 0) throw new Error('采集快照缺少可用系统。');
+  const groupId = typeof value.groupId === 'string' && value.groupId.length > 0 && value.groupId.length <= 200 ? value.groupId : null;
+  const groupTitle = typeof value.groupTitle === 'string' && value.groupTitle.trim() ? value.groupTitle.slice(0, 200) : '未命名项目组';
+  return { groupId, groupTitle, systems };
 }
 
 async function stopLanSession() {
@@ -154,7 +172,6 @@ ipcMain.handle('lan:update-session', (event, snapshot) => {
   if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可更新局域网采集会话。');
   if (!lanSession) throw new Error('采集会话已结束。');
   const normalizedSnapshot = normalizeSnapshot(snapshot);
-  if (normalizedSnapshot.projectId !== lanSession.projectId) throw new Error('不能用其他项目更新当前采集会话。');
   lanSession.server.updateSnapshot(normalizedSnapshot);
   return getLanStatus();
 });
@@ -183,7 +200,8 @@ ipcMain.handle('lan:start-session', async (event, snapshot, selectedAddress) => 
     host: ip,
     onImage: async (payload) => {
       if (lanSession?.server !== server) throw new Error('采集会话已结束。');
-      await requestImageSave({ ...payload, projectId: lanSession.projectId });
+      // payload.projectId 已由服务端校验属于本会话某个系统，直接透传用于分流落库。
+      await requestImageSave({ ...payload });
     },
   });
   const url = `http://${ip}:${server.port}/#/lan/${server.token}`;
@@ -191,7 +209,7 @@ ipcMain.handle('lan:start-session', async (event, snapshot, selectedAddress) => 
     if (lanSession?.server === server) void stopLanSession();
   }, 2 * 60 * 60 * 1000);
   expiryTimer.unref();
-  lanSession = { server, url, expiryTimer, projectId: normalizedSnapshot.projectId };
+  lanSession = { server, url, expiryTimer, groupId: normalizedSnapshot.groupId };
   return getLanStatus();
 });
 

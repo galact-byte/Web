@@ -7,6 +7,12 @@ interface LanMobileCollectorProps {
 type CaptureSourceMode = 'system' | 'separate';
 type CaptureTarget = { assetId: string; itemId: string };
 
+interface ResolvedSelection {
+  systemId: string | null;
+  categoryId: string | null;
+  assetId: string | null;
+}
+
 const ACCEPTED_IMAGE_TYPES = 'image/png,image/jpeg,image/gif,image/webp,image/bmp';
 const CAPTURE_SOURCE_MODE_KEY = 'lan-capture-source-mode';
 
@@ -14,8 +20,27 @@ function getCaptureSourceMode(): CaptureSourceMode {
   return window.localStorage.getItem(CAPTURE_SOURCE_MODE_KEY) === 'separate' ? 'separate' : 'system';
 }
 
+/** 由组快照与上一次选择解析出稳定的“系统 → 分类 → 资产”选择，尽量保持已选、缺失才回退首项。 */
+function resolveSelection(
+  snapshot: LanCollectorSnapshot,
+  prevSystemId: string | null,
+  prevCategoryId: string | null,
+  prevAssetId: string | null
+): ResolvedSelection {
+  const system = snapshot.systems.find((entry) => entry.projectId === prevSystemId) ?? snapshot.systems[0] ?? null;
+  if (!system) return { systemId: null, categoryId: null, assetId: null };
+  const categoryId = system.categories.some((category) => category.id === prevCategoryId)
+    ? prevCategoryId
+    : system.categories[0]?.id ?? null;
+  const assetId = system.assets.some((asset) => asset.id === prevAssetId && asset.categoryId === categoryId)
+    ? prevAssetId
+    : system.assets.find((asset) => asset.categoryId === categoryId)?.id ?? null;
+  return { systemId: system.projectId, categoryId, assetId };
+}
+
 const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
   const [snapshot, setSnapshot] = useState<LanCollectorSnapshot | null>(null);
+  const [activeSystemId, setActiveSystemId] = useState<string | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null);
   const [message, setMessage] = useState('正在验证采集会话...');
@@ -31,18 +56,22 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const snapshotRef = useRef<LanCollectorSnapshot | null>(null);
+  const activeSystemIdRef = useRef<string | null>(null);
   const activeCategoryIdRef = useRef<string | null>(null);
   const activeAssetIdRef = useRef<string | null>(null);
   const refreshInFlightRef = useRef(false);
 
-  const activeAsset = useMemo(() => snapshot?.assets.find((asset) => asset.id === activeAssetId) ?? null, [snapshot, activeAssetId]);
-  const visibleAssets = useMemo(() => snapshot?.assets.filter((asset) => asset.categoryId === activeCategoryId) ?? [], [snapshot, activeCategoryId]);
+  const activeSystem = useMemo(() => snapshot?.systems.find((system) => system.projectId === activeSystemId) ?? null, [snapshot, activeSystemId]);
+  const activeAsset = useMemo(() => activeSystem?.assets.find((asset) => asset.id === activeAssetId) ?? null, [activeSystem, activeAssetId]);
+  const visibleAssets = useMemo(() => activeSystem?.assets.filter((asset) => asset.categoryId === activeCategoryId) ?? [], [activeSystem, activeCategoryId]);
 
-  const setSelection = useCallback((categoryId: string | null, assetId: string | null) => {
-    activeCategoryIdRef.current = categoryId;
-    activeAssetIdRef.current = assetId;
-    setActiveCategoryId(categoryId);
-    setActiveAssetId(assetId);
+  const applySelection = useCallback((selection: ResolvedSelection) => {
+    activeSystemIdRef.current = selection.systemId;
+    activeCategoryIdRef.current = selection.categoryId;
+    activeAssetIdRef.current = selection.assetId;
+    setActiveSystemId(selection.systemId);
+    setActiveCategoryId(selection.categoryId);
+    setActiveAssetId(selection.assetId);
   }, []);
 
   const stopCameraStream = useCallback(() => {
@@ -60,19 +89,18 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
       if (!response.ok) throw new Error((await response.json().catch(() => ({ message: '会话无效或已结束。' }))).message);
       const nextSnapshot = await response.json() as LanCollectorSnapshot;
       if (signal?.aborted) return;
-      const previousCategoryId = activeCategoryIdRef.current;
-      const previousAssetId = activeAssetIdRef.current;
-      const nextCategoryId = nextSnapshot.categories.some((category) => category.id === previousCategoryId)
-        ? previousCategoryId
-        : nextSnapshot.categories[0]?.id ?? null;
-      const nextAssetId = nextSnapshot.assets.some((asset) => asset.id === previousAssetId && asset.categoryId === nextCategoryId)
-        ? previousAssetId
-        : nextSnapshot.assets.find((asset) => asset.categoryId === nextCategoryId)?.id ?? null;
-      const selectionChanged = !initialLoad && (nextCategoryId !== previousCategoryId || nextAssetId !== previousAssetId);
+      if (!Array.isArray(nextSnapshot.systems)) throw new Error('采集会话返回的项目结构无效。');
+      const previousSystemId = activeSystemIdRef.current;
+      const selection = resolveSelection(nextSnapshot, previousSystemId, activeCategoryIdRef.current, activeAssetIdRef.current);
+      const selectionChanged = !initialLoad && (
+        selection.systemId !== previousSystemId
+        || selection.categoryId !== activeCategoryIdRef.current
+        || selection.assetId !== activeAssetIdRef.current
+      );
 
       snapshotRef.current = nextSnapshot;
       setSnapshot(nextSnapshot);
-      setSelection(nextCategoryId, nextAssetId);
+      applySelection(selection);
       if (initialLoad) setMessage('');
       else if (selectionChanged) setMessage('电脑端项目结构已更新，当前选择已调整。');
     } catch (error) {
@@ -80,11 +108,11 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, [setSelection, token]);
+  }, [applySelection, token]);
 
   useEffect(() => {
     snapshotRef.current = null;
-    setSelection(null, null);
+    applySelection({ systemId: null, categoryId: null, assetId: null });
     setSnapshot(null);
     setMessage('正在验证采集会话...');
     const controller = new AbortController();
@@ -94,7 +122,7 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
       window.clearInterval(timer);
       controller.abort();
     };
-  }, [refreshSnapshot, setSelection]);
+  }, [refreshSnapshot, applySelection]);
 
   useEffect(() => {
     if (!cameraTarget) return;
@@ -133,9 +161,17 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
 
   useEffect(() => () => stopCameraStream(), [stopCameraStream]);
 
+  const selectSystem = (systemId: string) => {
+    const system = snapshotRef.current?.systems.find((entry) => entry.projectId === systemId) ?? null;
+    const categoryId = system?.categories[0]?.id ?? null;
+    const assetId = system?.assets.find((asset) => asset.categoryId === categoryId)?.id ?? null;
+    applySelection({ systemId, categoryId, assetId });
+  };
+
   const selectCategory = (categoryId: string) => {
-    const assetId = snapshotRef.current?.assets.find((asset) => asset.categoryId === categoryId)?.id ?? null;
-    setSelection(categoryId, assetId);
+    const system = snapshotRef.current?.systems.find((entry) => entry.projectId === activeSystemIdRef.current) ?? null;
+    const assetId = system?.assets.find((asset) => asset.categoryId === categoryId)?.id ?? null;
+    applySelection({ systemId: activeSystemIdRef.current, categoryId, assetId });
   };
 
   const selectAsset = (assetId: string) => {
@@ -155,14 +191,14 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
     throw new Error('等待电脑端保存图片超时，请确认工作台仍保持打开。');
   };
 
-  const uploadImage = async (assetId: string, itemId: string, file: File | undefined) => {
+  const uploadImage = async (systemId: string, assetId: string, itemId: string, file: File | undefined) => {
     if (!file || uploadingItemId) return;
     if (!file.type.startsWith('image/')) { setMessage('只能上传图片文件。'); return; }
     if (file.size > 10 * 1024 * 1024) { setMessage('图片不能超过 10MB。'); return; }
     setUploadingItemId(itemId);
     setMessage('');
     try {
-      const response = await fetch(`/api/upload?token=${encodeURIComponent(token)}&assetId=${encodeURIComponent(assetId)}&itemId=${encodeURIComponent(itemId)}`, {
+      const response = await fetch(`/api/upload?token=${encodeURIComponent(token)}&projectId=${encodeURIComponent(systemId)}&assetId=${encodeURIComponent(assetId)}&itemId=${encodeURIComponent(itemId)}`, {
         method: 'POST',
         headers: { 'content-type': file.type, 'x-file-name': encodeURIComponent(file.name) },
         body: file,
@@ -178,7 +214,10 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
       }
       setSnapshot((current) => current ? {
         ...current,
-        assets: current.assets.map((asset) => asset.id !== assetId ? asset : { ...asset, items: asset.items.map((item) => item.id === itemId ? { ...item, imageCount: item.imageCount + 1 } : item) }),
+        systems: current.systems.map((system) => system.projectId !== systemId ? system : {
+          ...system,
+          assets: system.assets.map((asset) => asset.id !== assetId ? asset : { ...asset, items: asset.items.map((item) => item.id === itemId ? { ...item, imageCount: item.imageCount + 1 } : item) }),
+        }),
       } : current);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '上传失败，请检查电脑端会话是否仍在运行。');
@@ -236,8 +275,9 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
 
   const captureCameraFrame = () => {
     const target = cameraTarget;
+    const systemId = activeSystemIdRef.current;
     const video = cameraVideoRef.current;
-    if (!target || !video || !cameraReady || uploadingItemId) return;
+    if (!target || !systemId || !video || !cameraReady || uploadingItemId) return;
     const width = video.videoWidth;
     const height = video.videoHeight;
     if (!width || !height) {
@@ -260,21 +300,26 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
       }
       const file = new File([blob], `mobile-camera-${Date.now()}.jpg`, { type: 'image/jpeg' });
       closeCameraPreview();
-      void uploadImage(target.assetId, target.itemId, file);
+      void uploadImage(systemId, target.assetId, target.itemId, file);
     }, 'image/jpeg', 0.92);
   };
 
   if (!snapshot) return <main className="min-h-dvh bg-slate-100 p-5 text-base text-slate-700"><div className="mx-auto max-w-xl border border-slate-200 bg-white p-4" role="status">{message}</div></main>;
 
+  const multiSystem = snapshot.systems.length > 1;
+
   return (
     <main className="min-h-dvh bg-slate-100 pb-8 text-slate-950">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3 shadow-sm"><div className="mx-auto max-w-3xl"><h1 className="truncate text-lg font-bold">{snapshot.title}</h1><p className="mt-1 text-sm text-slate-600">局域网实时采集 · 图片会同步到电脑</p></div></header>
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3 shadow-sm"><div className="mx-auto max-w-3xl"><h1 className="truncate text-lg font-bold">{snapshot.groupTitle}</h1><p className="mt-1 text-sm text-slate-600">局域网实时采集 · 图片会同步到电脑{activeSystem ? ` · 当前系统：${activeSystem.title}` : ''}</p></div></header>
       <div className="mx-auto max-w-3xl space-y-4 px-4 pt-4">
         {message && <p role="status" className="border border-slate-200 bg-white p-3 text-sm text-slate-700">{message}</p>}
+        {snapshot.systems.length === 0 ? <p className="border border-slate-200 bg-white p-4 text-sm text-slate-600">电脑端项目组暂无系统，请先在电脑端创建系统。</p> : <>
+        {multiSystem && <section aria-labelledby="system-picker-title" className="border border-slate-200 bg-white p-3"><h2 id="system-picker-title" className="text-sm font-semibold text-slate-800">采集系统</h2><nav aria-label="选择系统" className="mt-2 flex gap-2 overflow-x-auto pb-1">{snapshot.systems.map((system) => <button key={system.projectId} type="button" onClick={() => selectSystem(system.projectId)} aria-pressed={system.projectId === activeSystemId} className={`min-h-11 shrink-0 border px-3 text-sm font-medium ${system.projectId === activeSystemId ? 'border-sky-700 bg-sky-50 font-semibold text-sky-950' : 'border-slate-300 bg-white text-slate-700'}`}>{system.title}</button>)}</nav></section>}
         <section aria-labelledby="capture-source-mode-title" className="border border-slate-200 bg-white p-3"><h2 id="capture-source-mode-title" className="text-sm font-semibold text-slate-800">图片来源方式</h2><div className="mt-2 grid gap-2 sm:grid-cols-2"><button type="button" onClick={() => setSourceMode('system')} aria-pressed={captureSourceMode === 'system'} className={`min-h-11 border px-3 text-left text-sm ${captureSourceMode === 'system' ? 'border-sky-700 bg-sky-50 font-semibold text-sky-950' : 'border-slate-300 bg-white text-slate-700'}`}>系统选择（推荐）<span className="mt-1 block text-xs font-normal text-slate-600">适合微信、华为和雨云等会自行提供拍照或选图的浏览器。</span></button><button type="button" onClick={() => setSourceMode('separate')} aria-pressed={captureSourceMode === 'separate'} className={`min-h-11 border px-3 text-left text-sm ${captureSourceMode === 'separate' ? 'border-sky-700 bg-sky-50 font-semibold text-sky-950' : 'border-slate-300 bg-white text-slate-700'}`}>拍照/相册分开选择<span className="mt-1 block text-xs font-normal text-slate-600">拍照优先尝试网页相机，适合 Chrome 等需要明确选择的浏览器。</span></button></div></section>
-        <nav aria-label="检查分类" className="flex gap-2 overflow-x-auto pb-1">{snapshot.categories.map((category) => <button key={category.id} type="button" onClick={() => selectCategory(category.id)} className={`min-h-11 shrink-0 border px-3 text-sm font-medium ${category.id === activeCategoryId ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700'}`}>{category.name}</button>)}</nav>
+        <nav aria-label="检查分类" className="flex gap-2 overflow-x-auto pb-1">{(activeSystem?.categories ?? []).map((category) => <button key={category.id} type="button" onClick={() => selectCategory(category.id)} className={`min-h-11 shrink-0 border px-3 text-sm font-medium ${category.id === activeCategoryId ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700'}`}>{category.name}</button>)}</nav>
         <section aria-label="资产" className="grid grid-cols-2 gap-2 sm:grid-cols-3">{visibleAssets.map((asset) => <button key={asset.id} type="button" onClick={() => selectAsset(asset.id)} className={`min-h-16 border p-3 text-left text-sm ${asset.id === activeAsset?.id ? 'border-sky-700 bg-sky-50 font-semibold text-sky-950' : 'border-slate-200 bg-white'}`}><span className="block break-words">{asset.name}</span><span className="mt-1 block text-xs font-normal text-slate-600">{asset.items.length} 项</span></button>)}</section>
-        {!activeAsset ? <p className="border border-slate-200 bg-white p-4 text-sm text-slate-600">请选择资产。</p> : <section className="space-y-3">{activeAsset.items.length === 0 ? <p className="border border-slate-200 bg-white p-4 text-sm text-slate-600">此资产暂无检查项，请联系电脑端补充。</p> : activeAsset.items.map((item) => <article key={item.id} className="border border-slate-200 bg-white p-4"><div className="flex items-start justify-between gap-3"><h2 className="text-base font-semibold leading-6">{item.label}</h2>{item.required && <span className="shrink-0 border border-red-300 bg-red-50 px-2 py-1 text-xs font-medium text-red-800">必填</span>}</div><p className="mt-2 text-sm text-slate-600">已同步 {item.imageCount} 张</p><input ref={(node) => { inputRefs.current[item.id] = node; }} type="file" accept={ACCEPTED_IMAGE_TYPES} className="hidden" onChange={(event) => { void uploadImage(activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><input ref={(node) => { cameraInputRefs.current[item.id] = node; }} type="file" accept={ACCEPTED_IMAGE_TYPES} capture="environment" className="hidden" onChange={(event) => { void uploadImage(activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><input ref={(node) => { galleryInputRefs.current[item.id] = node; }} type="file" accept={ACCEPTED_IMAGE_TYPES} className="hidden" onChange={(event) => { void uploadImage(activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><button type="button" onClick={() => openImagePicker(activeAsset.id, item.id)} disabled={uploadingItemId !== null} className="mt-3 min-h-11 w-full border border-sky-700 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50">{uploadingItemId === item.id ? '正在同步...' : '拍照 / 选择图片'}</button>{captureSourceMode === 'system' && <p className="mt-2 text-xs leading-5 text-slate-500">若未出现拍照选项，请切换“拍照/相册分开选择”；vivo 自带浏览器仍可能只提供相册。</p>}</article>)}</section>}
+        {(!activeAsset || !activeSystem) ? <p className="border border-slate-200 bg-white p-4 text-sm text-slate-600">请选择资产。</p> : <section className="space-y-3">{activeAsset.items.length === 0 ? <p className="border border-slate-200 bg-white p-4 text-sm text-slate-600">此资产暂无检查项，请联系电脑端补充。</p> : activeAsset.items.map((item) => <article key={item.id} className="border border-slate-200 bg-white p-4"><div className="flex items-start justify-between gap-3"><h2 className="text-base font-semibold leading-6">{item.label}</h2>{item.required && <span className="shrink-0 border border-red-300 bg-red-50 px-2 py-1 text-xs font-medium text-red-800">必填</span>}</div><p className="mt-2 text-sm text-slate-600">已同步 {item.imageCount} 张</p><input ref={(node) => { inputRefs.current[item.id] = node; }} type="file" accept={ACCEPTED_IMAGE_TYPES} className="hidden" onChange={(event) => { void uploadImage(activeSystem.projectId, activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><input ref={(node) => { cameraInputRefs.current[item.id] = node; }} type="file" accept={ACCEPTED_IMAGE_TYPES} capture="environment" className="hidden" onChange={(event) => { void uploadImage(activeSystem.projectId, activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><input ref={(node) => { galleryInputRefs.current[item.id] = node; }} type="file" accept={ACCEPTED_IMAGE_TYPES} className="hidden" onChange={(event) => { void uploadImage(activeSystem.projectId, activeAsset.id, item.id, event.target.files?.[0]); event.currentTarget.value = ''; }} /><button type="button" onClick={() => openImagePicker(activeAsset.id, item.id)} disabled={uploadingItemId !== null} className="mt-3 min-h-11 w-full border border-sky-700 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50">{uploadingItemId === item.id ? '正在同步...' : '拍照 / 选择图片'}</button>{captureSourceMode === 'system' && <p className="mt-2 text-xs leading-5 text-slate-500">若未出现拍照选项，请切换“拍照/相册分开选择”；vivo 自带浏览器仍可能只提供相册。</p>}</article>)}</section>}
+        </>}
       </div>
       {captureSourceMode === 'separate' && captureTarget && <div className="fixed inset-0 z-20 flex items-end bg-slate-950/50 p-4 sm:items-center sm:justify-center"><section role="dialog" aria-modal="true" aria-labelledby="capture-source-title" className="w-full max-w-sm border border-slate-300 bg-white p-4 shadow-lg"><h2 id="capture-source-title" className="text-base font-semibold text-slate-950">选择图片来源</h2><p className="mt-1 text-sm text-slate-600">{cameraFallbackAvailable ? '网页相机不可用，可使用系统相机回退或从相册选择。' : '拍照会优先尝试网页相机；从相册选择不受相机权限影响。'}</p><div className="mt-4 grid gap-2">{cameraFallbackAvailable ? <button type="button" onClick={useCameraInputFallback} disabled={uploadingItemId !== null} className="min-h-11 border border-sky-700 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 disabled:opacity-50">使用系统相机回退</button> : <button type="button" onClick={startWebCamera} disabled={uploadingItemId !== null} className="min-h-11 border border-sky-700 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 disabled:opacity-50">拍照</button>}<button type="button" onClick={chooseGallery} disabled={uploadingItemId !== null} className="min-h-11 border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50">从相册选择</button><button type="button" onClick={() => { setCaptureTarget(null); setCameraFallbackAvailable(false); }} disabled={uploadingItemId !== null} className="min-h-11 border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50">取消</button></div></section></div>}
       {cameraTarget && <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/75 p-4"><section role="dialog" aria-modal="true" aria-labelledby="camera-preview-title" className="w-full max-w-lg border border-slate-300 bg-white p-4 shadow-lg"><h2 id="camera-preview-title" className="text-base font-semibold text-slate-950">相机预览</h2><p className="mt-1 text-sm text-slate-600">确认画面后点击“确认拍照”。</p><video ref={cameraVideoRef} autoPlay muted playsInline onLoadedMetadata={(event) => { void event.currentTarget.play().then(() => setCameraReady(true)).catch(() => setMessage('相机预览无法播放，请改用系统相机或从相册选择。')); }} className="mt-4 aspect-[4/3] w-full bg-slate-950 object-cover" /><div className="mt-4 grid gap-2 sm:grid-cols-2"><button type="button" onClick={captureCameraFrame} disabled={!cameraReady || uploadingItemId !== null} className="min-h-11 border border-sky-700 bg-sky-700 px-4 text-sm font-semibold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50">确认拍照</button><button type="button" onClick={closeCameraPreview} disabled={uploadingItemId !== null} className="min-h-11 border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50">取消</button></div></section></div>}

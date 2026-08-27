@@ -18,6 +18,7 @@
     "verify:data-location": "node scripts/verify-data-location.cjs",
     "verify:storage-estimate": "node scripts/verify-storage-estimate.mjs",
     "verify:evidence-package": "node scripts/verify-evidence-package.mjs",
+    "verify:lan-image-sink": "node scripts/verify-lan-image-sink.mjs",
     "verify:lan-server": "node scripts/verify-lan-server.cjs",
     "verify:lan-mobile-picker": "node scripts/verify-lan-mobile-picker.mjs",
     "verify:web-lan-server": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-web-lan-server.ps1",

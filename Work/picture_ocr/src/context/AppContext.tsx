@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
 import type { ProjectDocument } from '../types';
 import { appReducer, createInitialState, AppState, AppAction } from './appReducer';
 import { saveProject, loadProject, createProjectDocument, loadProjectGroup, updateProjectGroupAndSystems } from '../utils/db';
@@ -111,7 +111,7 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
     };
   }, []);
 
-  const addImageAndSave = async (payload: Extract<AppAction, { type: 'ADD_IMAGE' }>['payload']) => {
+  const addImageAndSave = useCallback(async (payload: Extract<AppAction, { type: 'ADD_IMAGE' }>['payload']) => {
     if (!loadedRef.current) throw new Error('当前项目尚未加载完成。');
     const targetItem = stateRef.current.assets
       .find((asset) => asset.id === payload.assetId)
@@ -137,7 +137,7 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
     await enqueueProjectSave(document);
     onProjectSaved?.();
     dispatch(action);
-  };
+  }, [projectId, onProjectSaved]);
 
   const updateProjectMeta = async (meta: AppState['meta']) => {
     const groupId = projectGroupIdRef.current;
