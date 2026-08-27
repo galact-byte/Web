@@ -33,6 +33,8 @@ function resolveGroupTitle(groupTitle: string | null | undefined, systems: LanCo
 export interface BuildGroupSnapshotOptions {
   groupId: string | null;
   groupTitle?: string | null;
+  /** 显式指定组内系统 id（例如从项目列表启动时）；提供时优先使用，以兼容未分组单系统。 */
+  systemIds?: string[] | null;
   /** 当前打开系统的实时快照，用于覆盖 db 版本，避免自动保存去抖导致的滞后。 */
   openSystemOverride?: LanCollectorSystem | null;
 }
@@ -42,11 +44,16 @@ export interface BuildGroupSnapshotOptions {
  * 当前打开系统若提供实时覆盖，则以覆盖为准。
  */
 export async function buildGroupSnapshot(options: BuildGroupSnapshotOptions): Promise<LanCollectorSnapshot> {
-  const { groupId, groupTitle, openSystemOverride } = options;
-  const summaries = await listProjects();
-  const memberIds = summaries
-    .filter((summary) => (groupId ? summary.groupId === groupId : summary.id === openSystemOverride?.projectId))
-    .map((summary) => summary.id);
+  const { groupId, groupTitle, systemIds, openSystemOverride } = options;
+  let memberIds: string[];
+  if (systemIds && systemIds.length > 0) {
+    memberIds = systemIds;
+  } else {
+    const summaries = await listProjects();
+    memberIds = summaries
+      .filter((summary) => (groupId ? summary.groupId === groupId : summary.id === openSystemOverride?.projectId))
+      .map((summary) => summary.id);
+  }
 
   // groupId 为空（独立系统）时，至少纳入覆盖系统自身。
   const idsToLoad = memberIds.length > 0

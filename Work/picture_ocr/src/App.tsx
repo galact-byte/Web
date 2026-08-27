@@ -186,7 +186,7 @@ function useLanGroupSession(bridge: LanBridge | null) {
   const [snapshot, setSnapshot] = useState<LanCollectorSnapshot | null>(null);
   const [notice, setNotice] = useState('');
   const bindingRef = useRef<OpenSystemBinding | null>(null);
-  const activeGroupRef = useRef<{ groupId: string | null; groupTitle: string } | null>(null);
+  const activeGroupRef = useRef<{ groupId: string | null; groupTitle: string; systemIds?: string[] | null } | null>(null);
   const runningRef = useRef(false);
   const rebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -199,6 +199,7 @@ function useLanGroupSession(bridge: LanBridge | null) {
       const next = await buildGroupSnapshot({
         groupId: group.groupId,
         groupTitle: group.groupTitle,
+        systemIds: group.systemIds ?? null,
         openSystemOverride: bindingRef.current?.liveSystem ?? null,
       });
       setSnapshot(next);
@@ -246,7 +247,7 @@ function useLanGroupSession(bridge: LanBridge | null) {
     });
   }, [bridge, scheduleRebuild]);
 
-  const prepareForGroup = useCallback((group: { groupId: string | null; groupTitle: string }) => {
+  const prepareForGroup = useCallback((group: { groupId: string | null; groupTitle: string; systemIds?: string[] | null }) => {
     activeGroupRef.current = group;
     void rebuildNow();
   }, [rebuildNow]);
@@ -318,6 +319,12 @@ const App: React.FC = () => {
     setLanDialogOpen(true);
   }, []);
 
+  const { prepareForGroup } = lan;
+  const startLanForGroup = useCallback((groupId: string | null, groupTitle: string, systemIds: string[]) => {
+    prepareForGroup({ groupId, groupTitle, systemIds });
+    setLanDialogOpen(true);
+  }, [prepareForGroup]);
+
   const mobileProjectId = getMobileProjectId();
   const lanToken = getLanToken();
   if (lanToken) return <LanMobileCollector token={lanToken} />;
@@ -345,7 +352,7 @@ const App: React.FC = () => {
   if (!activeProjectId) {
     return (
       <>
-        <ProjectList key={projectListRefreshKey} onOpenProject={handleOpenProject} />
+        <ProjectList key={projectListRefreshKey} onOpenProject={handleOpenProject} onStartLanCollector={lanBridge ? startLanForGroup : undefined} />
         {lanDialog}
       </>
     );
