@@ -50,7 +50,9 @@ assert.match(collectorSource, /window\.setInterval\(\(\) => void refreshSnapshot
 assert.match(collectorSource, /当前选择已调整/, '手机端删除当前选择时必须给出更新说明。');
 assert.match(toolbarSource, /采集中/, '活动会话必须在工作台工具栏显示状态标识。');
 assert.match(dialogSource, /关闭此窗口不会停止手机采集/, '关闭弹窗必须明确说明会话仍会继续。');
-assert.doesNotMatch(projectListSource, /手机局域网采集/, '项目列表不应保留局域网采集入口。');
+assert.match(projectListSource, /onStartLanCollector/, '项目列表必须提供项目组级手机采集入口（放外边）。');
+assert.match(projectListSource, />手机采集</, '项目列表必须展示“手机采集”操作。');
+assert.match(appSource, /onStartLanCollector=\{lanBridge \? startLanForGroup : undefined\}/, 'App 必须仅在存在局域网桥时下发组级启动入口。');
 assert.match(appSource, /function useLanGroupSession\(/, '局域网会话必须由 App 层组级会话管理器统一持有。');
 assert.match(appSource, /buildGroupSnapshot/, 'App 层必须按项目组构建组快照。');
 assert.match(appSource, /saveLanImageToProject/, 'App 层 onImage 必须能把图片直写到非当前打开系统。');
