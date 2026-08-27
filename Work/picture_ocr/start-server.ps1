@@ -79,18 +79,36 @@ function Send-Error { param($Request,[int]$Status,[string]$Message) Send-Json $R
 function Get-RequestUri { param($Request) try { [Uri]::new("http://localhost$($Request.rawTarget)") } catch { throw 'URL 无效。' } }
 function Test-LoopbackRequest { param($Request) [Net.IPAddress]::IsLoopback($Request.remote.Address) }
 
-function ConvertTo-NormalizedSnapshot {
+# 单个系统结构校验：无效或无可用分类/资产时返回 $null（由上层过滤）。
+function ConvertTo-NormalizedSystem {
     param($Value)
-    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value.projectId) -or $null -eq $Value.categories -or $null -eq $Value.assets) { throw '采集快照无效。' }
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value.projectId) -or ([string]$Value.projectId).Length -gt 200 -or $null -eq $Value.categories -or $null -eq $Value.assets) { return $null }
     $categories = [Collections.Generic.List[object]]::new(); $categoryIds = [Collections.Generic.HashSet[string]]::new()
     foreach ($category in @($Value.categories)) { if ($category -and -not [string]::IsNullOrWhiteSpace([string]$category.id) -and -not [string]::IsNullOrWhiteSpace([string]$category.name) -and $category.id.Length -le 200 -and $category.name.Length -le 200 -and $categoryIds.Add([string]$category.id)) { $categories.Add([pscustomobject]@{id=[string]$category.id;name=[string]$category.name}) } }
-    $assets = [Collections.Generic.List[object]]::new(); $allowed = @{}
+    $assets = [Collections.Generic.List[object]]::new(); $assetAllowed = @{}
     foreach ($asset in @($Value.assets)) {
         if (-not $asset -or -not $categoryIds.Contains([string]$asset.categoryId) -or [string]::IsNullOrWhiteSpace([string]$asset.id) -or [string]::IsNullOrWhiteSpace([string]$asset.name) -or $asset.id.Length -gt 200 -or $asset.name.Length -gt 200) { continue }; $items = [Collections.Generic.List[object]]::new(); $itemIds = [Collections.Generic.HashSet[string]]::new()
-        foreach ($item in @($asset.items)) { if ($item -and -not [string]::IsNullOrWhiteSpace([string]$item.id) -and -not [string]::IsNullOrWhiteSpace([string]$item.label) -and $item.id.Length -le 200 -and $item.label.Length -le 300 -and $itemIds.Add([string]$item.id)) { $items.Add([pscustomobject]@{id=[string]$item.id;label=[string]$item.label;required=[bool]$item.required;imageCount=[Math]::Max(0,[int]$item.imageCount)}) } }; $assets.Add([pscustomobject]@{id=[string]$asset.id;name=[string]$asset.name;categoryId=[string]$asset.categoryId;items=@($items)}); $allowed[[string]$asset.id] = $itemIds
+        foreach ($item in @($asset.items)) { if ($item -and -not [string]::IsNullOrWhiteSpace([string]$item.id) -and -not [string]::IsNullOrWhiteSpace([string]$item.label) -and $item.id.Length -le 200 -and $item.label.Length -le 300 -and $itemIds.Add([string]$item.id)) { $items.Add([pscustomobject]@{id=[string]$item.id;label=[string]$item.label;required=[bool]$item.required;imageCount=[Math]::Max(0,[int]$item.imageCount)}) } }; $assets.Add([pscustomobject]@{id=[string]$asset.id;name=[string]$asset.name;categoryId=[string]$asset.categoryId;items=@($items)}); $assetAllowed[[string]$asset.id] = $itemIds
     }
-    if ($categories.Count -eq 0 -or $assets.Count -eq 0) { throw '采集快照缺少可用分类或资产。' }
-    [pscustomobject]@{snapshot=[pscustomobject]@{projectId=([string]$Value.projectId).Substring(0,[Math]::Min(200,([string]$Value.projectId).Length));title=$(if([string]::IsNullOrWhiteSpace([string]$Value.title)){'未命名采集系统'}else{([string]$Value.title).Substring(0,[Math]::Min(200,([string]$Value.title).Length))});categories=@($categories);assets=@($assets)};allowed=$allowed}
+    if ($categories.Count -eq 0 -or $assets.Count -eq 0) { return $null }
+    [pscustomobject]@{system=[pscustomobject]@{projectId=([string]$Value.projectId).Substring(0,[Math]::Min(200,([string]$Value.projectId).Length));title=$(if([string]::IsNullOrWhiteSpace([string]$Value.title)){'未命名采集系统'}else{([string]$Value.title).Substring(0,[Math]::Min(200,([string]$Value.title).Length))});categories=@($categories);assets=@($assets)};allowed=$assetAllowed}
+}
+# 项目组级快照：携带组内全部可用系统；allowed 为 projectId -> (assetId -> HashSet(itemId)) 三层白名单。
+function ConvertTo-NormalizedSnapshot {
+    param($Value)
+    if ($null -eq $Value -or $null -eq $Value.systems) { throw '采集快照无效。' }
+    $systems = [Collections.Generic.List[object]]::new(); $allowed = @{}; $seenIds = [Collections.Generic.HashSet[string]]::new()
+    foreach ($rawSystem in @($Value.systems)) {
+        $normalizedSystem = ConvertTo-NormalizedSystem $rawSystem
+        if ($null -eq $normalizedSystem) { continue }
+        $systemId = [string]$normalizedSystem.system.projectId
+        if (-not $seenIds.Add($systemId)) { continue }
+        $systems.Add($normalizedSystem.system); $allowed[$systemId] = $normalizedSystem.allowed
+    }
+    if ($systems.Count -eq 0) { throw '采集快照缺少可用系统。' }
+    $groupId = $(if([string]::IsNullOrWhiteSpace([string]$Value.groupId)){$null}else{([string]$Value.groupId).Substring(0,[Math]::Min(200,([string]$Value.groupId).Length))})
+    $groupTitle = $(if([string]::IsNullOrWhiteSpace([string]$Value.groupTitle)){'未命名项目组'}else{([string]$Value.groupTitle).Substring(0,[Math]::Min(200,([string]$Value.groupTitle).Length))})
+    [pscustomobject]@{snapshot=[pscustomobject]@{groupId=$groupId;groupTitle=$groupTitle;systems=@($systems)};allowed=$allowed}
 }
 function Handle-Control { param($Request,$Path)
     if (-not (Test-LoopbackRequest $Request)) { Send-Error $Request 403 '控制接口仅允许本机浏览器访问。'; return }
@@ -108,8 +126,6 @@ function Handle-Control { param($Request,$Path)
             try {
                 if (-not $script:Session -or $script:Session.token -ne $session.token) {
                     $outcome = @{ status = 409; message = '采集会话已结束。' }
-                } elseif ($normalized.snapshot.projectId -ne $script:Session.snapshot.projectId) {
-                    $outcome = @{ status = 409; message = '不能用其他项目更新当前采集会话。' }
                 } else {
                     $script:Session.snapshot = $normalized.snapshot
                     $script:Session.allowed = $normalized.allowed
@@ -129,7 +145,7 @@ function Handle-Control { param($Request,$Path)
 function Handle-TokenApi { param($Request,$Uri,$Path)
     $session=Get-ActiveSession;if(-not $session -or $Request.local.Address.ToString() -ne $session.address -or $Uri.Query -notmatch "(?:^|[?&])token=$([regex]::Escape($session.token))(?:&|$)"){Send-Error $Request 401 '采集会话无效或已结束。';return}
     if($Path -eq '/api/session' -and $Request.method -eq 'GET'){Send-Json $Request 200 $session.snapshot;return}
-    if($Path -eq '/api/upload' -and $Request.method -eq 'POST'){$asset=[string]$Uri.Query -replace '^.*(?:\?|&)assetId=([^&]*).*$','$1';$item=[string]$Uri.Query -replace '^.*(?:\?|&)itemId=([^&]*).*$','$1';try{$asset=[Uri]::UnescapeDataString($asset);$item=[Uri]::UnescapeDataString($item)}catch{};if(-not $session.allowed.ContainsKey($asset)-or -not $session.allowed[$asset].Contains($item)){Send-Error $Request 403 '目标资产或检查项不属于本次采集会话。';return};$type=(([string]$Request.headers['content-type'] -split ';')[0].Trim().ToLowerInvariant());if($script:AllowedImageTypes -notcontains $type){Send-Error $Request 415 '仅支持 PNG、JPEG、GIF、WebP 或 BMP 图片。';return};if(-not(Test-ImageSignature $type $Request.body)){Send-Error $Request 415 '图片内容与声明类型不一致，上传已拒绝。';return};[Threading.Monitor]::Enter($script:SessionLock);try{if($session.pending.Count -ge $script:MaxPendingUploads){Send-Error $Request 429 '待保存图片过多，请等待电脑端完成当前图片后重试。';return}}finally{[Threading.Monitor]::Exit($script:SessionLock)};$id=ConvertTo-Base64Url([Guid]::NewGuid().ToByteArray());$upload=[pscustomobject]@{requestId=$id;projectId=$session.snapshot.projectId;assetId=$asset;itemId=$item;image=[pscustomobject]@{fileName=(Get-SafeFileName $Request.headers['x-file-name']);data="data:$type;base64,$([Convert]::ToBase64String($Request.body))";mimeType=$type}};[Threading.Monitor]::Enter($script:SessionLock);try{$session.pending[$id]=$upload}finally{[Threading.Monitor]::Exit($script:SessionLock)};Send-Json $Request 202 @{requestId=$id;message='图片已收到，正在等待电脑端保存。'};return}
+    if($Path -eq '/api/upload' -and $Request.method -eq 'POST'){$project=[string]$Uri.Query -replace '^.*(?:\?|&)projectId=([^&]*).*$','$1';$asset=[string]$Uri.Query -replace '^.*(?:\?|&)assetId=([^&]*).*$','$1';$item=[string]$Uri.Query -replace '^.*(?:\?|&)itemId=([^&]*).*$','$1';try{$project=[Uri]::UnescapeDataString($project);$asset=[Uri]::UnescapeDataString($asset);$item=[Uri]::UnescapeDataString($item)}catch{};if(-not $session.allowed.ContainsKey($project)-or -not $session.allowed[$project].ContainsKey($asset)-or -not $session.allowed[$project][$asset].Contains($item)){Send-Error $Request 403 '目标系统、资产或检查项不属于本次采集会话。';return};$type=(([string]$Request.headers['content-type'] -split ';')[0].Trim().ToLowerInvariant());if($script:AllowedImageTypes -notcontains $type){Send-Error $Request 415 '仅支持 PNG、JPEG、GIF、WebP 或 BMP 图片。';return};if(-not(Test-ImageSignature $type $Request.body)){Send-Error $Request 415 '图片内容与声明类型不一致，上传已拒绝。';return};[Threading.Monitor]::Enter($script:SessionLock);try{if($session.pending.Count -ge $script:MaxPendingUploads){Send-Error $Request 429 '待保存图片过多，请等待电脑端完成当前图片后重试。';return}}finally{[Threading.Monitor]::Exit($script:SessionLock)};$id=ConvertTo-Base64Url([Guid]::NewGuid().ToByteArray());$upload=[pscustomobject]@{requestId=$id;projectId=$project;assetId=$asset;itemId=$item;image=[pscustomobject]@{fileName=(Get-SafeFileName $Request.headers['x-file-name']);data="data:$type;base64,$([Convert]::ToBase64String($Request.body))";mimeType=$type}};[Threading.Monitor]::Enter($script:SessionLock);try{$session.pending[$id]=$upload}finally{[Threading.Monitor]::Exit($script:SessionLock)};Send-Json $Request 202 @{requestId=$id;message='图片已收到，正在等待电脑端保存。'};return}
     if($Path -eq '/api/upload-status' -and $Request.method -eq 'GET'){$id=[string]$Uri.Query -replace '^.*(?:\?|&)requestId=([^&]*).*$','$1';[Threading.Monitor]::Enter($script:SessionLock);try{if($session.pending.Contains($id)){Send-Json $Request 202 @{message='正在等待电脑端保存。'};return};if($session.completed.Contains($id)){$outcome=$session.completed[$id];if([DateTime]::UtcNow -ge $outcome.expiresAt){$session.completed.Remove($id);Send-Error $Request 404 '上传结果已过期。';return};Send-Json $Request $(if($outcome.success){201}else{503}) @{message=$outcome.message};return}}finally{[Threading.Monitor]::Exit($script:SessionLock)};Send-Error $Request 404 '上传请求不存在。';return}
     Send-Error $Request 405 '不支持的采集接口或请求方法。'
 }

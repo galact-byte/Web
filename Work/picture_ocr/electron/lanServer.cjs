@@ -80,10 +80,15 @@ function collectBody(request) {
   });
 }
 
+// 三层白名单：projectId(系统) -> assetId -> Set(itemId)，用于校验上传三元组属于本会话。
 function createAllowedItems(snapshot) {
   const allowedItems = new Map();
-  for (const asset of snapshot.assets) {
-    allowedItems.set(asset.id, new Set(asset.items.map((item) => item.id)));
+  for (const system of snapshot.systems) {
+    const assetMap = new Map();
+    for (const asset of system.assets) {
+      assetMap.set(asset.id, new Set(asset.items.map((item) => item.id)));
+    }
+    allowedItems.set(system.projectId, assetMap);
   }
   return allowedItems;
 }
@@ -135,9 +140,10 @@ async function createLanCollectorServer({ staticDir, snapshot, onImage, port = 0
     }
     if (requestUrl.pathname === '/api/upload') {
       if (request.method !== 'POST') { sendJson(response, 405, { message: '不支持的请求方法' }); return; }
+      const projectId = requestUrl.searchParams.get('projectId') || '';
       const assetId = requestUrl.searchParams.get('assetId') || '';
       const itemId = requestUrl.searchParams.get('itemId') || '';
-      if (!currentAllowedItems.get(assetId)?.has(itemId)) { sendJson(response, 403, { message: '目标资产或检查项不属于本次采集会话。' }); return; }
+      if (!currentAllowedItems.get(projectId)?.get(assetId)?.has(itemId)) { sendJson(response, 403, { message: '目标系统、资产或检查项不属于本次采集会话。' }); return; }
       const contentType = (request.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       if (!IMAGE_TYPES.has(contentType)) { sendJson(response, 415, { message: '仅支持 PNG、JPEG、GIF、WebP 或 BMP 图片。' }); return; }
       if (activeUploads >= MAX_CONCURRENT_UPLOADS) {
@@ -154,7 +160,7 @@ async function createLanCollectorServer({ staticDir, snapshot, onImage, port = 0
           data: `data:${contentType};base64,${bytes.toString('base64')}`,
           mimeType: contentType,
         };
-        const queuedUpload = uploadQueue.then(() => onImage({ assetId, itemId, image }));
+        const queuedUpload = uploadQueue.then(() => onImage({ projectId, assetId, itemId, image }));
         // 即使当前上传失败，也要继续处理后续上传，避免一个失败永久阻塞会话。
         uploadQueue = queuedUpload.catch(() => undefined);
         await queuedUpload;

@@ -16,6 +16,12 @@ assert.match(collectorSource, /const ACCEPTED_IMAGE_TYPES = 'image\/png,image\/j
 assert.match(collectorSource, /localStorage\.getItem\(CAPTURE_SOURCE_MODE_KEY\)/, '手机采集必须读取本浏览器已保存的图片来源方式。');
 assert.match(collectorSource, /localStorage\.setItem\(CAPTURE_SOURCE_MODE_KEY, mode\)/, '切换图片来源方式后必须保存到本浏览器。');
 assert.match(collectorSource, /系统选择（推荐）/, '手机采集必须提供默认的系统选择方式。');
+// 组级采集：手机端先选系统，上传须携带目标系统标识。
+assert.match(collectorSource, /采集系统/, '手机采集页必须提供“采集系统”选择区。');
+assert.match(collectorSource, /const selectSystem = \(systemId: string\) =>/, '手机采集页必须支持切换采集系统。');
+assert.match(collectorSource, /snapshot\.systems/, '手机采集页必须基于组快照的多系统结构渲染。');
+assert.match(collectorSource, /projectId=\$\{encodeURIComponent\(systemId\)\}/, '手机上传必须携带目标系统标识 projectId。');
+assert.match(collectorSource, /snapshot\.groupTitle/, '手机采集页标题应展示项目组名称。');
 assert.match(collectorSource, /拍照\/相册分开选择/, '手机采集必须提供适合 Chrome 的分开选择方式。');
 assert.match(collectorSource, /cameraInputRefs/, '分开选择方式必须使用专用相机输入引用。');
 assert.match(collectorSource, /galleryInputRefs/, '分开选择方式必须使用专用相册输入引用。');
@@ -45,7 +51,10 @@ assert.match(collectorSource, /当前选择已调整/, '手机端删除当前选
 assert.match(toolbarSource, /采集中/, '活动会话必须在工作台工具栏显示状态标识。');
 assert.match(dialogSource, /关闭此窗口不会停止手机采集/, '关闭弹窗必须明确说明会话仍会继续。');
 assert.doesNotMatch(projectListSource, /手机局域网采集/, '项目列表不应保留局域网采集入口。');
-assert.match(appSource, /updateSession\(lanSnapshot\)/, '工作台会话运行期间必须提交最新快照。');
+assert.match(appSource, /function useLanGroupSession\(/, '局域网会话必须由 App 层组级会话管理器统一持有。');
+assert.match(appSource, /buildGroupSnapshot/, 'App 层必须按项目组构建组快照。');
+assert.match(appSource, /saveLanImageToProject/, 'App 层 onImage 必须能把图片直写到非当前打开系统。');
+assert.match(appSource, /bridge\.updateSession\(next\)/, '会话运行期间必须提交最新组快照。');
 assert.match(appSource, /function getDesktopProjectId\(\): string \| null/, '桌面项目必须从 URL hash 恢复项目标识。');
 assert.match(appSource, /window\.location\.hash = `\/project\/\$\{encodeURIComponent\(projectId\)\}`/, '打开桌面项目必须写入可刷新的项目 hash 路由。');
 assert.match(appSource, /window\.location\.hash = ''/, '返回项目列表时必须清除桌面项目 hash。');

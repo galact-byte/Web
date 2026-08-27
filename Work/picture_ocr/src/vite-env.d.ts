@@ -14,11 +14,17 @@ interface LanCollectorAssetSnapshot {
   items: LanCollectorItemSnapshot[];
 }
 
-interface LanCollectorSnapshot {
+interface LanCollectorSystem {
   projectId: string;
   title: string;
   categories: Array<{ id: string; name: string }>;
   assets: LanCollectorAssetSnapshot[];
+}
+
+interface LanCollectorSnapshot {
+  groupId: string | null;
+  groupTitle: string;
+  systems: LanCollectorSystem[];
 }
 
 interface LanImageUpload {

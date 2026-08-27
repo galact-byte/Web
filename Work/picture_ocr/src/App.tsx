@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { AppProvider, useAppContext, useAppState, useDispatch } from './context/AppContext';
 import Toolbar from './components/Toolbar';
 import Sidebar from './components/Sidebar';
@@ -15,30 +15,50 @@ import { exportWordReport, validateRequired } from './utils/wordExport';
 import type { CheckItemTemplate } from './types';
 import type { ValidationMissing } from './utils/wordExport';
 import { detectLanBridge } from './utils/lanBridge';
+import { buildGroupSnapshot } from './utils/lanGroupSnapshot';
+import { saveLanImageToProject } from './utils/lanImageSink';
 import { useToast } from './components/Toast';
-import type { LanBridge, LanCollectorSnapshot } from './utils/lanBridge';
+import type { LanBridge, LanCollectorSnapshot, LanCollectorSystem } from './utils/lanBridge';
+import type { LanImageSavePayload } from './utils/lanImageSink';
+
+/** 当前打开系统上报给 App 层 LAN 管理器的绑定：实时结构 + 该系统的落库入口。 */
+export interface OpenSystemBinding {
+  projectId: string;
+  groupId: string | null;
+  liveSystem: LanCollectorSystem;
+  saveImage: (payload: LanImageSavePayload) => Promise<void>;
+}
 
 interface AppContentProps {
   projectId: string;
   onBackToProjects: () => void;
   openProjectInfoOnMount: boolean;
-  lanBridge: LanBridge | null;
+  lanEnabled: boolean;
+  lanSessionRunning: boolean;
+  onOpenLanCollector: () => void;
+  onRegisterLanBinding: (binding: OpenSystemBinding | null) => void;
 }
 
-const AppContent: React.FC<AppContentProps> = ({ projectId, onBackToProjects, openProjectInfoOnMount, lanBridge }) => {
+const AppContent: React.FC<AppContentProps> = ({
+  projectId,
+  onBackToProjects,
+  openProjectInfoOnMount,
+  lanEnabled,
+  lanSessionRunning,
+  onOpenLanCollector,
+  onRegisterLanBinding,
+}) => {
   const { loaded, meta, categories, assets } = useAppState();
-  const { addImageAndSave } = useAppContext();
+  const { addImageAndSave, projectGroupId } = useAppContext();
   const dispatch = useDispatch();
   const showToast = useToast();
   const [projectInfoOpen, setProjectInfoOpen] = useState(openProjectInfoOnMount);
   const [validationMissing, setValidationMissing] = useState<ValidationMissing[]>([]);
   const [validationOpen, setValidationOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
-  const [lanCollectorOpen, setLanCollectorOpen] = useState(false);
-  const [lanSessionRunning, setLanSessionRunning] = useState(false);
-  const [lanSessionNotice, setLanSessionNotice] = useState('');
 
-  const lanSnapshot = useMemo<LanCollectorSnapshot>(() => ({
+  // 当前系统的实时结构快照（仅结构与张数，喂给 App 层组快照的“当前打开系统”覆盖）。
+  const liveSystem = useMemo<LanCollectorSystem>(() => ({
     projectId,
     title: meta.systemName.trim() || meta.projectName.trim() || '未命名采集系统',
     categories: categories.map((category) => ({ id: category.id, name: category.name })),
@@ -54,40 +74,12 @@ const AppContent: React.FC<AppContentProps> = ({ projectId, onBackToProjects, op
     if (openProjectInfoOnMount) setProjectInfoOpen(true);
   }, [openProjectInfoOnMount]);
 
+  // 向 App 层上报/撤销当前打开系统的绑定；App 层据此分流落库并保持组快照最新。
   useEffect(() => {
-    if (!loaded || !lanBridge || !lanSessionRunning) return;
-    void lanBridge.updateSession(lanSnapshot).then((status) => {
-      setLanSessionRunning(status.running);
-      if (!status.running) setLanSessionNotice('手机局域网采集会话已结束。');
-    }).catch((error: unknown) => {
-      setLanSessionNotice(`手机端同步最新项目结构失败：${error instanceof Error ? error.message : '未知错误'}。`);
-    });
-  }, [lanBridge, lanSessionRunning, lanSnapshot, loaded]);
-
-  const handleLanSessionStatusChange = useCallback((running: boolean) => {
-    setLanSessionRunning(running);
-    if (running) setLanSessionNotice('');
-  }, []);
-
-  useEffect(() => {
-    if (!lanBridge) return;
-    return lanBridge.onImage((upload) => {
-      if (upload.projectId !== projectId) {
-        lanBridge.confirmImageSaved(upload.requestId, { success: false, message: '当前工作台已切换项目，采集会话已结束。' });
-        return;
-      }
-      void addImageAndSave({
-        assetId: upload.assetId,
-        itemId: upload.itemId,
-        image: { id: `lan-${upload.requestId}`, fileName: upload.image.fileName, data: upload.image.data, caption: '', uploadedAt: new Date().toISOString() },
-      }).then(
-        () => lanBridge.confirmImageSaved(upload.requestId, { success: true }),
-        (error: unknown) => lanBridge.confirmImageSaved(upload.requestId, { success: false, message: error instanceof Error ? error.message : '电脑端未能保存图片。' })
-      );
-    });
-  }, [addImageAndSave, lanBridge, projectId]);
-
-  useEffect(() => () => { void lanBridge?.stopSession(); }, [lanBridge]);
+    if (!loaded) return;
+    onRegisterLanBinding({ projectId, groupId: projectGroupId, liveSystem, saveImage: addImageAndSave });
+    return () => onRegisterLanBinding(null);
+  }, [loaded, projectId, projectGroupId, liveSystem, addImageAndSave, onRegisterLanBinding]);
 
   // Word export
   const handleExportWord = useCallback(async () => {
@@ -140,19 +132,11 @@ const AppContent: React.FC<AppContentProps> = ({ projectId, onBackToProjects, op
           onOpenProjectInfo={() => setProjectInfoOpen(true)}
           onExportWord={handleExportWord}
           onManageTemplates={() => setTemplateDialogOpen(true)}
-          onOpenLanCollector={lanBridge ? () => setLanCollectorOpen(true) : undefined}
+          onOpenLanCollector={lanEnabled ? onOpenLanCollector : undefined}
           lanSessionRunning={lanSessionRunning}
         />
         <ContentArea />
       </div>
-      <LanCollectorDialog
-        open={lanCollectorOpen}
-        snapshot={lanSnapshot}
-        bridge={lanBridge}
-        sessionNotice={lanSessionNotice}
-        onClose={() => setLanCollectorOpen(false)}
-        onSessionStatusChange={handleLanSessionStatusChange}
-      />
       <ProjectInfoDialog
         open={projectInfoOpen}
         onClose={() => setProjectInfoOpen(false)}
@@ -193,12 +177,102 @@ function getDesktopProjectId(): string | null {
   }
 }
 
+/**
+ * App 层局域网组会话管理器：会话归属项目组、跨系统切换不中断；
+ * onImage 按目标系统分流落库（当前打开系统走内存 sink 实时刷新，其余系统直写 db）。
+ */
+function useLanGroupSession(bridge: LanBridge | null) {
+  const [running, setRunning] = useState(false);
+  const [snapshot, setSnapshot] = useState<LanCollectorSnapshot | null>(null);
+  const [notice, setNotice] = useState('');
+  const bindingRef = useRef<OpenSystemBinding | null>(null);
+  const activeGroupRef = useRef<{ groupId: string | null; groupTitle: string } | null>(null);
+  const runningRef = useRef(false);
+  const rebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { runningRef.current = running; }, [running]);
+
+  const rebuildNow = useCallback(async () => {
+    const group = activeGroupRef.current;
+    if (!group) return;
+    try {
+      const next = await buildGroupSnapshot({
+        groupId: group.groupId,
+        groupTitle: group.groupTitle,
+        openSystemOverride: bindingRef.current?.liveSystem ?? null,
+      });
+      setSnapshot(next);
+      if (runningRef.current && bridge) {
+        const status = await bridge.updateSession(next);
+        setRunning(status.running);
+        if (!status.running) setNotice('手机局域网采集会话已结束。');
+      }
+    } catch (error) {
+      setNotice(`同步项目结构失败：${error instanceof Error ? error.message : '未知错误'}。`);
+    }
+  }, [bridge]);
+
+  const scheduleRebuild = useCallback(() => {
+    if (rebuildTimerRef.current) clearTimeout(rebuildTimerRef.current);
+    rebuildTimerRef.current = setTimeout(() => { void rebuildNow(); }, 400);
+  }, [rebuildNow]);
+
+  const registerBinding = useCallback((binding: OpenSystemBinding | null) => {
+    bindingRef.current = binding;
+    // 未开会话时若尚无活动组，跟随当前打开系统的组，便于工作台内直接启动。
+    if (!activeGroupRef.current && binding) {
+      activeGroupRef.current = { groupId: binding.groupId, groupTitle: '' };
+    }
+    scheduleRebuild();
+  }, [scheduleRebuild]);
+
+  // onImage 分流：目标是当前打开系统 → 走内存 sink（UI 实时刷新）；否则直写 db。
+  useEffect(() => {
+    if (!bridge) return;
+    return bridge.onImage((upload) => {
+      const payload: LanImageSavePayload = {
+        assetId: upload.assetId,
+        itemId: upload.itemId,
+        image: { id: `lan-${upload.requestId}`, fileName: upload.image.fileName, data: upload.image.data, caption: '', uploadedAt: new Date().toISOString() },
+      };
+      const binding = bindingRef.current;
+      const save = binding && binding.projectId === upload.projectId
+        ? binding.saveImage
+        : (input: LanImageSavePayload) => saveLanImageToProject(upload.projectId, input);
+      void save(payload).then(
+        () => { bridge.confirmImageSaved(upload.requestId, { success: true }); scheduleRebuild(); },
+        (error: unknown) => bridge.confirmImageSaved(upload.requestId, { success: false, message: error instanceof Error ? error.message : '电脑端未能保存图片。' })
+      );
+    });
+  }, [bridge, scheduleRebuild]);
+
+  const prepareForGroup = useCallback((group: { groupId: string | null; groupTitle: string }) => {
+    activeGroupRef.current = group;
+    void rebuildNow();
+  }, [rebuildNow]);
+
+  const handleStatusChange = useCallback((isRunning: boolean) => {
+    setRunning(isRunning);
+    if (isRunning) setNotice('');
+  }, []);
+
+  useEffect(() => () => {
+    if (rebuildTimerRef.current) clearTimeout(rebuildTimerRef.current);
+    void bridge?.stopSession();
+  }, [bridge]);
+
+  return { running, snapshot, notice, registerBinding, prepareForGroup, handleStatusChange };
+}
+
 const App: React.FC = () => {
   const [hash, setHash] = useState(() => window.location.hash);
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
   const [newProjectInfoPrompt, setNewProjectInfoPrompt] = useState(false);
   const [projectListRefreshKey, setProjectListRefreshKey] = useState(0);
   const [lanBridge, setLanBridge] = useState<LanBridge | null>(null);
+  const [lanDialogOpen, setLanDialogOpen] = useState(false);
+
+  const lan = useLanGroupSession(lanBridge);
 
   useEffect(() => {
     void detectLanBridge().then(setLanBridge);
@@ -240,6 +314,10 @@ const App: React.FC = () => {
     window.location.hash = '';
   };
 
+  const openLanFromWorkbench = useCallback(() => {
+    setLanDialogOpen(true);
+  }, []);
+
   const mobileProjectId = getMobileProjectId();
   const lanToken = getLanToken();
   if (lanToken) return <LanMobileCollector token={lanToken} />;
@@ -252,23 +330,46 @@ const App: React.FC = () => {
 
   const desktopProjectId = getDesktopProjectId();
   const activeProjectId = desktopProjectId ?? openProjectId;
+
+  const lanDialog = lanBridge ? (
+    <LanCollectorDialog
+      open={lanDialogOpen}
+      snapshot={lan.snapshot}
+      bridge={lanBridge}
+      sessionNotice={lan.notice}
+      onClose={() => setLanDialogOpen(false)}
+      onSessionStatusChange={lan.handleStatusChange}
+    />
+  ) : null;
+
   if (!activeProjectId) {
-    return <ProjectList key={projectListRefreshKey} onOpenProject={handleOpenProject} />;
+    return (
+      <>
+        <ProjectList key={projectListRefreshKey} onOpenProject={handleOpenProject} />
+        {lanDialog}
+      </>
+    );
   }
 
   return (
-    <AppProvider
-      key={activeProjectId}
-      projectId={activeProjectId}
-      onProjectSaved={handleProjectSaved}
-    >
-      <AppContent
+    <>
+      <AppProvider
+        key={activeProjectId}
         projectId={activeProjectId}
-        onBackToProjects={handleBackToProjects}
-        openProjectInfoOnMount={newProjectInfoPrompt}
-        lanBridge={lanBridge}
-      />
-    </AppProvider>
+        onProjectSaved={handleProjectSaved}
+      >
+        <AppContent
+          projectId={activeProjectId}
+          onBackToProjects={handleBackToProjects}
+          openProjectInfoOnMount={newProjectInfoPrompt}
+          lanEnabled={Boolean(lanBridge)}
+          lanSessionRunning={lan.running}
+          onOpenLanCollector={openLanFromWorkbench}
+          onRegisterLanBinding={lan.registerBinding}
+        />
+      </AppProvider>
+      {lanDialog}
+    </>
   );
 };
 

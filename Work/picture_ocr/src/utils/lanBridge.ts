@@ -5,16 +5,26 @@ export interface LanCollectorItemSnapshot {
   imageCount: number;
 }
 
-export interface LanCollectorSnapshot {
+export interface LanCollectorAssetSnapshot {
+  id: string;
+  name: string;
+  categoryId: string;
+  items: LanCollectorItemSnapshot[];
+}
+
+/** 组快照中的单个系统结构（不含图片 data，仅结构与计数）。 */
+export interface LanCollectorSystem {
   projectId: string;
   title: string;
   categories: Array<{ id: string; name: string }>;
-  assets: Array<{
-    id: string;
-    name: string;
-    categoryId: string;
-    items: LanCollectorItemSnapshot[];
-  }>;
+  assets: LanCollectorAssetSnapshot[];
+}
+
+/** 项目组级采集快照：一次会话覆盖组内全部系统，手机端据此选系统。 */
+export interface LanCollectorSnapshot {
+  groupId: string | null;
+  groupTitle: string;
+  systems: LanCollectorSystem[];
 }
 
 export interface LanImageUpload {
