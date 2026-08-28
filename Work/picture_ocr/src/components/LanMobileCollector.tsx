@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { compressImageBlob, computeTargetSize, DEFAULT_COMPRESS_OPTIONS } from '../utils/imageCompression';
 
 interface LanMobileCollectorProps {
   token: string;
@@ -198,10 +199,15 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
     setUploadingItemId(itemId);
     setMessage('');
     try {
+      // 上传前等比压缩：手机原图可达 6-8MB，压缩后仅几百 KB，既省网络也避免电脑端存储膨胀。
+      const compressed = await compressImageBlob(file);
+      const uploadBlob = compressed.blob;
+      const uploadType = uploadBlob.type || file.type;
+      const uploadName = compressed.changed ? `${file.name.replace(/\.[^.]+$/, '')}.jpg` : file.name;
       const response = await fetch(`/api/upload?token=${encodeURIComponent(token)}&projectId=${encodeURIComponent(systemId)}&assetId=${encodeURIComponent(assetId)}&itemId=${encodeURIComponent(itemId)}`, {
         method: 'POST',
-        headers: { 'content-type': file.type, 'x-file-name': encodeURIComponent(file.name) },
-        body: file,
+        headers: { 'content-type': uploadType, 'x-file-name': encodeURIComponent(uploadName) },
+        body: uploadBlob,
       });
       const result = await response.json().catch(() => ({ message: '上传失败。', requestId: '' }));
       if (response.status === 202 && result.requestId) {
@@ -284,15 +290,17 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
       setMessage('相机预览尚未就绪，请稍后再试。');
       return;
     }
+    // 直接按目标长边缩放绘制，拍照即压缩，避免全分辨率大图。
+    const size = computeTargetSize(width, height, DEFAULT_COMPRESS_OPTIONS.maxEdge);
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = size.width;
+    canvas.height = size.height;
     const context = canvas.getContext('2d');
     if (!context) {
       setMessage('当前浏览器无法处理相机画面，请改用从相册选择。');
       return;
     }
-    context.drawImage(video, 0, 0, width, height);
+    context.drawImage(video, 0, 0, size.width, size.height);
     canvas.toBlob((blob) => {
       if (!blob) {
         setMessage('拍照失败，请重试或从相册选择。');
@@ -301,7 +309,7 @@ const LanMobileCollector: React.FC<LanMobileCollectorProps> = ({ token }) => {
       const file = new File([blob], `mobile-camera-${Date.now()}.jpg`, { type: 'image/jpeg' });
       closeCameraPreview();
       void uploadImage(systemId, target.assetId, target.itemId, file);
-    }, 'image/jpeg', 0.92);
+    }, 'image/jpeg', DEFAULT_COMPRESS_OPTIONS.quality);
   };
 
   if (!snapshot) return <main className="min-h-dvh bg-slate-100 p-5 text-base text-slate-700"><div className="mx-auto max-w-xl border border-slate-200 bg-white p-4" role="status">{message}</div></main>;

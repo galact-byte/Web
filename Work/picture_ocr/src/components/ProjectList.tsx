@@ -14,6 +14,8 @@ import {
 } from '../utils/db';
 import { exportDataPackage, importDataPackage, importEncryptedDataPackage } from '../utils/exportImport';
 import { isEvidencePackageFile } from '../utils/evidencePackage';
+import { compressProjectImages } from '../utils/imageCompression';
+import { formatBytes } from '../utils/storageEstimate';
 import ImportDialog from './ImportDialog';
 import StorageSettingsDialog from './StorageSettingsDialog';
 import ProjectListHeader from './project-list/ProjectListHeader';
@@ -72,6 +74,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const [saving, setSaving] = useState(false);
   const [storageSettingsOpen, setStorageSettingsOpen] = useState(false);
+  const [compressingSystemId, setCompressingSystemId] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const showToast = useToast();
 
@@ -190,6 +193,34 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
     }
   };
 
+  const handleCompressSystem = async (system: ProjectSummary) => {
+    if (compressingSystemId) return;
+    const ok = await confirm({
+      title: '压缩现有图片',
+      message: `将把系统“${getSystemDisplayName(system)}”中已存的图片就地压缩变小（长边 1920px、保持清晰），用于加快返回项目和导出报告。\n\n此操作会改写已存图片且不可撤销，导出报告的清晰度基本不变。是否继续？`,
+      confirmText: '开始压缩',
+      tone: 'default',
+    });
+    if (!ok) return;
+    setCompressingSystemId(system.id);
+    try {
+      const document = await loadProject(system.id);
+      if (!document) { showToast('压缩失败：系统不存在或已被删除', 'error'); return; }
+      const result = await compressProjectImages(document);
+      if (result.changedCount === 0) {
+        showToast('没有需要压缩的图片，所有图片都已足够小。', 'info');
+        return;
+      }
+      await saveProject(result.doc);
+      await refreshProjects();
+      showToast(`已压缩 ${result.changedCount} 张图片，节省 ${formatBytes(result.savedBytes)}。`, 'success');
+    } catch (err) {
+      showToast(`压缩失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
+    } finally {
+      setCompressingSystemId(null);
+    }
+  };
+
   const importIntoSystem = async (file: File, password: string, mode: 'overwrite' | 'merge'): Promise<{ success: boolean; message: string }> => {
     if (!importTargetId) return { success: false, message: '导入失败：未指定目标系统' };
     try {
@@ -295,7 +326,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
                   <label className="flex items-center justify-center" title="选择系统"><input type="checkbox" checked={selectedProjectIds.has(system.id)} onChange={() => toggleProjectSelection(system.id)} className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" /></label>
                   <div className={`min-w-0 ${indented ? 'border-l-2 border-blue-200 pl-3' : ''}`}><div className="break-words font-semibold text-slate-950">{getSystemDisplayName(system)}</div><div className="mt-1 text-xs leading-5 text-slate-500 lg:hidden">{system.meta.unitName || '未填写'} · {formatTime(system.updatedAt)} · {system.assetCount} 项资产</div></div>
                   <div className="hidden break-words leading-5 lg:block">{system.meta.unitName || '未填写'}</div><div className="hidden break-words leading-5 text-xs lg:block">{formatTime(system.updatedAt)}</div><div className="hidden text-center lg:block"><span className="inline-flex min-w-7 justify-center border border-blue-100 bg-blue-50 px-2 py-0.5 font-medium text-blue-700">{system.assetCount}</span></div>
-                  <div className="flex justify-end gap-2"><button onClick={() => onOpenProject(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>打开</button><div className="hidden 2xl:flex 2xl:gap-2">{!indented && onStartLanCollector && <button onClick={() => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id])} className={`${actionButton} border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100`}>手机采集</button>}<button onClick={() => setDialogState({ mode: 'edit-system', group, system })} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>编辑</button><button onClick={() => void handleExportSystem(system)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>导出数据包</button><button onClick={() => setImportTargetId(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>导入数据包</button><button onClick={() => void handleDeleteSystem(system)} className={`${actionButton} border-red-200 bg-white text-red-600 hover:bg-red-50`}>删除</button></div><details className="relative 2xl:hidden"><summary className={`${actionButton} cursor-pointer list-none border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>更多操作</summary><div className="absolute right-0 z-20 mt-2 grid w-36 gap-1 border border-slate-300 bg-white p-1 shadow-lg">{!indented && onStartLanCollector && <button onClick={() => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id])} className="min-h-11 px-3 text-left text-sm text-sky-700 hover:bg-sky-50">手机采集</button>}<button onClick={() => setDialogState({ mode: 'edit-system', group, system })} className="min-h-11 px-3 text-left text-sm text-slate-700 hover:bg-slate-100">编辑</button><button onClick={() => void handleExportSystem(system)} className="min-h-11 px-3 text-left text-sm text-slate-700 hover:bg-slate-100">导出数据包</button><button onClick={() => setImportTargetId(system.id)} className="min-h-11 px-3 text-left text-sm text-slate-700 hover:bg-slate-100">导入数据包</button><button onClick={() => void handleDeleteSystem(system)} className="min-h-11 px-3 text-left text-sm text-red-600 hover:bg-red-50">删除</button></div></details></div>
+                  <div className="flex justify-end gap-2"><button onClick={() => onOpenProject(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>打开</button><div className="hidden 2xl:flex 2xl:gap-2">{!indented && onStartLanCollector && <button onClick={() => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id])} className={`${actionButton} border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100`}>手机采集</button>}<button onClick={() => setDialogState({ mode: 'edit-system', group, system })} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>编辑</button><button onClick={() => void handleExportSystem(system)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>导出数据包</button><button onClick={() => void handleCompressSystem(system)} disabled={compressingSystemId !== null} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50`}>{compressingSystemId === system.id ? '正在压缩…' : '压缩图片'}</button><button onClick={() => setImportTargetId(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>导入数据包</button><button onClick={() => void handleDeleteSystem(system)} className={`${actionButton} border-red-200 bg-white text-red-600 hover:bg-red-50`}>删除</button></div><details className="relative 2xl:hidden"><summary className={`${actionButton} cursor-pointer list-none border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>更多操作</summary><div className="absolute right-0 z-20 mt-2 grid w-36 gap-1 border border-slate-300 bg-white p-1 shadow-lg">{!indented && onStartLanCollector && <button onClick={() => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id])} className="min-h-11 px-3 text-left text-sm text-sky-700 hover:bg-sky-50">手机采集</button>}<button onClick={() => setDialogState({ mode: 'edit-system', group, system })} className="min-h-11 px-3 text-left text-sm text-slate-700 hover:bg-slate-100">编辑</button><button onClick={() => void handleExportSystem(system)} className="min-h-11 px-3 text-left text-sm text-slate-700 hover:bg-slate-100">导出数据包</button><button onClick={() => void handleCompressSystem(system)} disabled={compressingSystemId !== null} className="min-h-11 px-3 text-left text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50">{compressingSystemId === system.id ? '正在压缩…' : '压缩图片'}</button><button onClick={() => setImportTargetId(system.id)} className="min-h-11 px-3 text-left text-sm text-slate-700 hover:bg-slate-100">导入数据包</button><button onClick={() => void handleDeleteSystem(system)} className="min-h-11 px-3 text-left text-sm text-red-600 hover:bg-red-50">删除</button></div></details></div>
                 </div>
               );
 

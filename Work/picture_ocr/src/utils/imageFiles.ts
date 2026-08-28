@@ -1,22 +1,19 @@
 import { genId } from '../context/appReducer';
 import type React from 'react';
 import type { ImageData } from '../types';
+import { compressImageBlob, blobToDataUrl } from './imageCompression';
 
-export function readImageFile(file: File): Promise<ImageData> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      resolve({
-        id: genId(),
-        fileName: file.name || `clipboard-${Date.now()}.png`,
-        data: reader.result as string,
-        caption: '',
-        uploadedAt: new Date().toISOString(),
-      });
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
+export async function readImageFile(file: File): Promise<ImageData> {
+  // 入库前等比压缩；小截图命中跳过条件时原样保留，不会糊字。
+  const compressed = await compressImageBlob(file);
+  const data = await blobToDataUrl(compressed.blob);
+  return {
+    id: genId(),
+    fileName: file.name || `clipboard-${Date.now()}.png`,
+    data,
+    caption: '',
+    uploadedAt: new Date().toISOString(),
+  };
 }
 
 export async function readImageFiles(files: File[]): Promise<ImageData[]> {
