@@ -207,13 +207,20 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
       const document = await loadProject(system.id);
       if (!document) { showToast('压缩失败：系统不存在或已被删除', 'error'); return; }
       const result = await compressProjectImages(document);
-      if (result.changedCount === 0) {
-        showToast('没有需要压缩的图片，所有图片都已足够小。', 'info');
+      if (result.changedCount > 0) {
+        await saveProject(result.doc);
+        await refreshProjects();
+      }
+      if (result.changedCount === 0 && result.failedCount === 0) {
+        showToast(`共扫描 ${result.total} 张，没有需要压缩的图片，所有图片都已足够小。`, 'info');
         return;
       }
-      await saveProject(result.doc);
-      await refreshProjects();
-      showToast(`已压缩 ${result.changedCount} 张图片，节省 ${formatBytes(result.savedBytes)}。`, 'success');
+      if (result.changedCount === 0) {
+        showToast(`共扫描 ${result.total} 张，压缩失败：${result.failedCount} 张未能处理，原图已保留。`, 'error');
+        return;
+      }
+      const failNote = result.failedCount > 0 ? `，另有 ${result.failedCount} 张未能处理已保留原图` : '';
+      showToast(`共扫描 ${result.total} 张，压缩 ${result.changedCount} 张，节省 ${formatBytes(result.savedBytes)}${failNote}。`, 'success');
     } catch (err) {
       showToast(`压缩失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     } finally {

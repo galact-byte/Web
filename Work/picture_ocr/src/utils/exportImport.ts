@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { decryptEvidenceBlob, encryptEvidenceBlob } from './evidencePackage';
+import { blobToDataUrl, compressImageBlob, dataUrlToBlob } from './imageCompression';
 import type {
   ProjectMeta,
   Category,
@@ -57,8 +58,6 @@ export async function createDataPackageBlob(
     })),
   };
 
-  // Collect image files
-  const imageWritePromises: Promise<void>[] = [];
   const imageNameSet = new Set<string>();
 
   for (const asset of assets) {
@@ -83,16 +82,10 @@ export async function createDataPackageBlob(
           ref.path = `images/${fileName}`;
         }
 
-        // Convert base64 to blob and add to zip
-        const promise = base64ToBlob(img.data).then((blob) => {
-          imageFolder?.file(fileName, blob);
-        });
-        imageWritePromises.push(promise);
+        imageFolder?.file(fileName, dataUrlToBlob(img.data));
       }
     }
   }
-
-  await Promise.all(imageWritePromises);
 
   // Add manifest
   zip.file('manifest.json', JSON.stringify(exportPackage, null, 2));
@@ -181,32 +174,32 @@ export async function importDataPackage(
 
     for (const catExport of exportPkg.categories) {
       for (const assetExport of catExport.assets) {
-        const items = await Promise.all(
-          assetExport.items.map(async (itemExport) => {
-            const images: ImageData[] = [];
-            for (const ref of itemExport.images) {
-              const imageFile = zip.file(ref.path);
-              if (imageFile) {
-                const blob = await imageFile.async('blob');
-                const dataUrl = await blobToBase64(blob);
-                images.push({
-                  id: ref.id,
-                  fileName: ref.path.split('/').pop() || 'image.png',
-                  data: dataUrl,
-                  caption: ref.caption,
-                  uploadedAt: ref.uploadedAt,
-                });
-              }
-            }
-            return {
-              id: itemExport.id,
-              label: itemExport.label,
-              required: itemExport.required,
-              fromTemplateId: itemExport.fromTemplateId,
-              images,
-            };
-          })
-        );
+        const items: CheckItem[] = [];
+        for (const itemExport of assetExport.items) {
+          const images: ImageData[] = [];
+          for (const ref of itemExport.images) {
+            const imageFile = zip.file(ref.path);
+            if (!imageFile) continue;
+            const blob = await imageFile.async('blob');
+            // 导入是入库入口之一，必须压缩；失败时 compressImageBlob 会退回原图。
+            const compressed = await compressImageBlob(blob);
+            const dataUrl = await blobToDataUrl(compressed.blob);
+            images.push({
+              id: ref.id,
+              fileName: ref.path.split('/').pop() || 'image.png',
+              data: dataUrl,
+              caption: ref.caption,
+              uploadedAt: ref.uploadedAt,
+            });
+          }
+          items.push({
+            id: itemExport.id,
+            label: itemExport.label,
+            required: itemExport.required,
+            fromTemplateId: itemExport.fromTemplateId,
+            images,
+          });
+        }
 
         newAssets.push({
           id: assetExport.id,
@@ -288,27 +281,6 @@ function downloadBlob(blob: Blob, filename: string): void {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-}
-
-function base64ToBlob(dataUrl: string): Promise<Blob> {
-  // 手动解码 base64，避免 fetch(data:) 在 file:// 大图或 CSP connect-src 下抛 "Failed to fetch"
-  const commaIdx = dataUrl.indexOf(',');
-  const header = commaIdx >= 0 ? dataUrl.slice(0, commaIdx) : '';
-  const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
-  const mime = header.match(/^data:([^;]+)/)?.[1] || 'application/octet-stream';
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return Promise.resolve(new Blob([bytes], { type: mime }));
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
 }
 
 function mergeCategories(

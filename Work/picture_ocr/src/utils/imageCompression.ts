@@ -11,12 +11,15 @@ export interface CompressOptions {
   quality: number;
   /** 长边已达标且体积低于此值时跳过（字节） */
   skipBelowBytes: number;
+  /** 压缩后至少节省这么多字节才替换，避免 JPEG 二次编码抖出十几字节 */
+  minSaveBytes: number;
 }
 
 export const DEFAULT_COMPRESS_OPTIONS: CompressOptions = {
   maxEdge: 1920,
   quality: 0.82,
   skipBelowBytes: 600 * 1024,
+  minSaveBytes: 8 * 1024,
 };
 
 export interface TargetSize {
@@ -54,15 +57,25 @@ export interface SkipDecisionInput {
   width: number;
   height: number;
   bytes: number;
+  /** 源 MIME，如 image/jpeg；缺省时不按格式跳过 */
+  mime?: string;
+}
+
+function isJpegMime(mime: string | undefined): boolean {
+  if (!mime) return false;
+  const normalized = mime.toLowerCase();
+  return normalized === 'image/jpeg' || normalized === 'image/jpg' || normalized === 'image/pjpeg';
 }
 
 /**
  * 纯函数：是否跳过压缩。
  * 长边已 ≤ maxEdge 且体积 < skipBelowBytes 时跳过（小截图/已压缩图）；
  * 尺寸虽小但体积超阈值仍会重编码，以便把大 PNG 也压下来。
+ * 已是 JPEG 且长边已达标的图不再二次编码（避免每次只抖出十几字节）。
  */
 export function shouldSkipCompression(input: SkipDecisionInput, opts: CompressOptions): boolean {
   const longest = Math.max(input.width, input.height);
+  if (longest <= opts.maxEdge && isJpegMime(input.mime)) return true;
   return longest <= opts.maxEdge && input.bytes < opts.skipBelowBytes;
 }
 
@@ -74,6 +87,8 @@ export interface CompressBlobResult {
   height: number;
   /** 是否真的做了压缩替换（false 表示返回原图） */
   changed: boolean;
+  /** 解码/绘制失败时为 true，调用方应保留原图且不要当成「已足够小」 */
+  failed?: boolean;
 }
 
 interface DecodedImage {
@@ -121,7 +136,7 @@ export async function compressImageBlob(input: Blob, options?: Partial<CompressO
   try {
     decoded = await decodeImage(input);
     const { width, height } = decoded;
-    if (shouldSkipCompression({ width, height, bytes: input.size }, opts)) {
+    if (shouldSkipCompression({ width, height, bytes: input.size, mime: input.type }, opts)) {
       return { blob: input, width, height, changed: false };
     }
     const target = computeTargetSize(width, height, opts.maxEdge);
@@ -129,15 +144,16 @@ export async function compressImageBlob(input: Blob, options?: Partial<CompressO
     canvas.width = target.width;
     canvas.height = target.height;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return { blob: input, width, height, changed: false };
+    if (!ctx) return { blob: input, width, height, changed: false, failed: true };
     ctx.drawImage(decoded.draw, 0, 0, target.width, target.height);
     const outBlob = await canvasToBlob(canvas, opts.quality);
-    if (!outBlob || outBlob.size >= input.size) {
+    if (!outBlob) return { blob: input, width, height, changed: false, failed: true };
+    if (outBlob.size >= input.size || input.size - outBlob.size < opts.minSaveBytes) {
       return { blob: input, width, height, changed: false };
     }
     return { blob: outBlob, width: target.width, height: target.height, changed: true };
   } catch {
-    return { blob: input, width: 0, height: 0, changed: false };
+    return { blob: input, width: 0, height: 0, changed: false, failed: true };
   } finally {
     decoded?.close();
   }
@@ -153,6 +169,21 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+/**
+ * 手动解码 data URL，避免 fetch(data:) 在 file:// 或 CSP connect-src 'self'
+ * （桌面 Electron / Web 都写了这条）下抛 "Failed to fetch"。
+ */
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const commaIdx = dataUrl.indexOf(',');
+  const header = commaIdx >= 0 ? dataUrl.slice(0, commaIdx) : '';
+  const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+  const mime = header.match(/^data:([^;]+)/)?.[1] || 'application/octet-stream';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
 export interface CompressDataUrlResult {
   dataUrl: string;
   changed: boolean;
@@ -160,22 +191,25 @@ export interface CompressDataUrlResult {
   before: number;
   /** 压缩后估算字节（未变时等于 before） */
   after: number;
+  /** 解码/绘制失败，应保留原图且不要报「已足够小」 */
+  failed?: boolean;
 }
 
 /** 存量批处理：压缩已存 data URL，仅在更小时替换。 */
 export async function compressDataUrl(dataUrl: string, options?: Partial<CompressOptions>): Promise<CompressDataUrlResult> {
   const before = estimateDataUrlBytes(dataUrl);
   try {
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
+    const blob = dataUrlToBlob(dataUrl);
     const result = await compressImageBlob(blob, options);
+    if (result.failed) return { dataUrl, changed: false, before, after: before, failed: true };
     if (!result.changed) return { dataUrl, changed: false, before, after: before };
     const nextDataUrl = await blobToDataUrl(result.blob);
     const after = estimateDataUrlBytes(nextDataUrl);
-    if (after >= before) return { dataUrl, changed: false, before, after: before };
+    const minSave = { ...DEFAULT_COMPRESS_OPTIONS, ...options }.minSaveBytes;
+    if (after >= before || before - after < minSave) return { dataUrl, changed: false, before, after: before };
     return { dataUrl: nextDataUrl, changed: true, before, after };
   } catch {
-    return { dataUrl, changed: false, before, after: before };
+    return { dataUrl, changed: false, before, after: before, failed: true };
   }
 }
 
@@ -186,13 +220,15 @@ export interface ProjectCompressionResult {
   total: number;
   /** 实际压缩替换的张数 */
   changedCount: number;
+  /** 解码/绘制失败的张数（已保留原图） */
+  failedCount: number;
   /** 估算节省字节 */
   savedBytes: number;
 }
 
 /**
  * 存量批量压缩：逐张重编码系统文档里的图片，保留 id/fileName/caption/uploadedAt，仅在变小时替换。
- * 逐张（非并发）处理，避免同时解码上百张 8MB 图导致内存尰峭。幂等：已压缩的图命中跳过条件不再处理。
+ * 逐张（非并发）处理，避免同时解码上百张 8MB 图导致内存陡升。幂等：已压缩的图命中跳过条件不再处理。
  */
 export async function compressProjectImages(
   doc: ProjectDocument,
@@ -202,6 +238,7 @@ export async function compressProjectImages(
   const total = doc.assets.reduce((sum, asset) => sum + asset.items.reduce((count, item) => count + item.images.length, 0), 0);
   let done = 0;
   let changedCount = 0;
+  let failedCount = 0;
   let savedBytes = 0;
   const assets = [];
   for (const asset of doc.assets) {
@@ -210,7 +247,10 @@ export async function compressProjectImages(
       const images = [];
       for (const image of item.images) {
         const result = await compressDataUrl(image.data, options);
-        if (result.changed) {
+        if (result.failed) {
+          failedCount += 1;
+          images.push(image);
+        } else if (result.changed) {
           changedCount += 1;
           savedBytes += result.before - result.after;
           images.push({ ...image, data: result.dataUrl });
@@ -224,5 +264,5 @@ export async function compressProjectImages(
     }
     assets.push({ ...asset, items });
   }
-  return { doc: { ...doc, assets, updatedAt: Date.now() }, total, changedCount, savedBytes };
+  return { doc: { ...doc, assets, updatedAt: Date.now() }, total, changedCount, failedCount, savedBytes };
 }

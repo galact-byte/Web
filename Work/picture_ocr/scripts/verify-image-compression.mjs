@@ -25,7 +25,17 @@ async function loadModule(relativeSource) {
 }
 
 const mod = await loadModule('src/utils/imageCompression.ts');
-const { computeTargetSize, estimateDataUrlBytes, shouldSkipCompression, DEFAULT_COMPRESS_OPTIONS } = mod;
+const {
+  computeTargetSize,
+  estimateDataUrlBytes,
+  shouldSkipCompression,
+  DEFAULT_COMPRESS_OPTIONS,
+  dataUrlToBlob,
+} = mod;
+
+function readSource(relativePath) {
+  return fs.readFileSync(path.join(root, relativePath), 'utf8').replace(/\r\n/g, '\n');
+}
 
 // computeTargetSize：只缩不放，长边等比缩到 maxEdge
 {
@@ -63,11 +73,47 @@ const { computeTargetSize, estimateDataUrlBytes, shouldSkipCompression, DEFAULT_
   // 12MP 手机照：尺寸超标 -> 不跳过
   assert.equal(shouldSkipCompression({ width: 4096, height: 3072, bytes: 8 * 1024 * 1024 }, opts), false, '大照片不跳过');
   // 尺寸达标但体积超阈值（大 PNG）-> 不跳过，仍重编码
-  assert.equal(shouldSkipCompression({ width: 1600, height: 900, bytes: 2 * 1024 * 1024 }, opts), false, '大体积小尺寸仍压缩');
+  assert.equal(shouldSkipCompression({ width: 1600, height: 900, bytes: 2 * 1024 * 1024, mime: 'image/png' }, opts), false, '大体积小尺寸仍压缩');
   // 边界：恰好等于阈值体积 -> 不跳过（< 才跳过）
   assert.equal(shouldSkipCompression({ width: 800, height: 600, bytes: opts.skipBelowBytes }, opts), false, '等于阈值不跳过');
   // 边界：尺寸恰好等于 maxEdge 且体积略低 -> 跳过
   assert.equal(shouldSkipCompression({ width: 1920, height: 1080, bytes: opts.skipBelowBytes - 1 }, opts), true, '达标且体积略低应跳过');
+  // 已是 JPEG 且长边达标：无论体积多大都不二次编码
+  assert.equal(shouldSkipCompression({ width: 1920, height: 1440, bytes: 900 * 1024, mime: 'image/jpeg' }, opts), true, '已压过的 JPEG 不再二次编码');
+  assert.equal(shouldSkipCompression({ width: 1440, height: 1920, bytes: 2 * 1024 * 1024, mime: 'image/jpg' }, opts), true, 'jpg 别名同样跳过');
+  // 超长边的 JPEG 仍压缩
+  assert.equal(shouldSkipCompression({ width: 4096, height: 3072, bytes: 8 * 1024 * 1024, mime: 'image/jpeg' }, opts), false, '超长边 JPEG 仍压缩');
+}
+
+// dataUrlToBlob：不经 fetch，按 MIME 还原字节（桌面 CSP connect-src 'self' 会拦截 fetch(data:)）
+{
+  const dataUrl = 'data:image/jpeg;base64,AAAA';
+  const blob = dataUrlToBlob(dataUrl);
+  assert.equal(blob.type, 'image/jpeg', '应保留 data URL 的 MIME');
+  assert.equal(blob.size, 3, '4 字符无填充=3 字节');
+  assert.equal(blob.size, estimateDataUrlBytes(dataUrl), 'Blob 体积应与估算一致');
+}
+
+{
+  const compressionSource = readSource('src/utils/imageCompression.ts');
+  assert.match(compressionSource, /export function dataUrlToBlob/, '存量压缩必须提供不经 fetch 的 data URL 解码');
+  assert.match(compressionSource, /dataUrlToBlob\(dataUrl\)/, 'compressDataUrl 必须走 dataUrlToBlob');
+  assert.doesNotMatch(compressionSource, /await fetch\(dataUrl\)/, '存量压缩不得 fetch(data URL)，桌面 CSP 会失败并被吞成已足够小');
+  assert.match(compressionSource, /failedCount/, '批量压缩必须单独统计失败张数');
+}
+
+{
+  const exportSource = readSource('src/utils/exportImport.ts');
+  assert.match(exportSource, /compressImageBlob\(blob\)/, '数据包导入是入库入口，必须压缩图片');
+  assert.match(exportSource, /dataUrlToBlob\(img\.data\)/, '导出数据包必须手动解码 data URL，不得 fetch');
+  assert.doesNotMatch(exportSource, /function base64ToBlob/, 'data URL 解码应复用 imageCompression.dataUrlToBlob');
+}
+
+{
+  const projectListSource = readSource('src/components/ProjectList.tsx');
+  assert.match(projectListSource, /result\.failedCount/, '压缩按钮必须区分失败与跳过');
+  assert.match(projectListSource, /未能处理/, '压缩失败不得报成所有图片都已足够小');
+  assert.match(projectListSource, /共扫描 \$\{result\.total\} 张/, '压缩结果必须显示扫描张数');
 }
 
 console.log('verify-image-compression: 所有断言通过');
