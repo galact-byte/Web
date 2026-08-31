@@ -1,7 +1,35 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import { getAssetsForCategory } from '../context/appReducer';
 import { useConfirmDialog } from './ConfirmDialog';
+
+const SIDEBAR_WIDTH_KEY = 'sidebar-width';
+const SIDEBAR_DEFAULT_WIDTH = 288;
+const SIDEBAR_MIN_WIDTH = 224;
+const SIDEBAR_MAX_WIDTH = 560;
+const SIDEBAR_KEYBOARD_STEP = 16;
+
+function clampSidebarWidth(value: number): number {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(value)));
+}
+
+function readStoredSidebarWidth(): number {
+  try {
+    const parsed = Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    if (!Number.isFinite(parsed)) return SIDEBAR_DEFAULT_WIDTH;
+    return clampSidebarWidth(parsed);
+  } catch {
+    return SIDEBAR_DEFAULT_WIDTH;
+  }
+}
+
+function persistSidebarWidth(width: number): void {
+  try {
+    window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width));
+  } catch {
+    // 隐私模式或配额不足时忽略，宽度仍可在当前会话使用。
+  }
+}
 
 function renderCategoryIcon(categoryId: string): React.ReactNode {
   const commonProps = { strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, strokeWidth: 2 };
@@ -39,6 +67,10 @@ const Sidebar: React.FC = () => {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(activeCategoryId ? [activeCategoryId] : [])
   );
+  const [sidebarWidth, setSidebarWidth] = useState(readStoredSidebarWidth);
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarWidthRef = useRef(sidebarWidth);
+  const resizeSessionRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
   const { confirm, dialog } = useConfirmDialog();
 
   // Ensure active category is always expanded without updating state during render.
@@ -49,6 +81,18 @@ const Sidebar: React.FC = () => {
       return new Set([...prev, activeCategoryId]);
     });
   }, [activeCategoryId]);
+
+  useEffect(() => {
+    if (!isResizing) return;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+  }, [isResizing]);
 
   const toggleCategory = (catId: string) => {
     const next = new Set(expandedCategories);
@@ -102,9 +146,71 @@ const Sidebar: React.FC = () => {
     setRenameValue('');
   };
 
+  const applySidebarWidth = (nextWidth: number, persist = false) => {
+    const clamped = clampSidebarWidth(nextWidth);
+    sidebarWidthRef.current = clamped;
+    setSidebarWidth(clamped);
+    if (persist) persistSidebarWidth(clamped);
+    return clamped;
+  };
+
+  const stopResizing = (pointerId?: number) => {
+    const session = resizeSessionRef.current;
+    if (!session) return;
+    if (pointerId !== undefined && session.pointerId !== pointerId) return;
+    resizeSessionRef.current = null;
+    setIsResizing(false);
+    persistSidebarWidth(sidebarWidthRef.current);
+  };
+
+  const handleResizePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeSessionRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: sidebarWidth,
+    };
+    setIsResizing(true);
+  };
+
+  const handleResizePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const session = resizeSessionRef.current;
+    if (!session || session.pointerId !== event.pointerId) return;
+    applySidebarWidth(session.startWidth + (event.clientX - session.startX));
+  };
+
+  const handleResizePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    stopResizing(event.pointerId);
+  };
+
+  const handleResizeKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      applySidebarWidth(sidebarWidth - SIDEBAR_KEYBOARD_STEP, true);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      applySidebarWidth(sidebarWidth + SIDEBAR_KEYBOARD_STEP, true);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      applySidebarWidth(SIDEBAR_MIN_WIDTH, true);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      applySidebarWidth(SIDEBAR_MAX_WIDTH, true);
+    }
+  };
+
   return (
-    <aside className="w-72 border-r border-slate-800 bg-slate-900 flex flex-col h-full overflow-y-auto text-slate-300 shadow-sm">
-      <div className="flex items-center gap-3 border-b border-slate-800 px-6 py-5">
+    <aside
+      className={`relative shrink-0 border-r border-slate-800 bg-slate-900 flex h-full text-slate-300 shadow-sm ${isResizing ? 'select-none' : ''}`}
+      style={{ width: sidebarWidth }}
+    >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+        <div className="flex items-center gap-3 border-b border-slate-800 px-6 py-5">
         <div className="flex h-8 w-8 items-center justify-center border border-cyan-400/50 bg-cyan-500/10 text-cyan-300">
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h9M4 12h7M4 17h9" />
@@ -133,7 +239,7 @@ const Sidebar: React.FC = () => {
             <div
               className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors select-none
                 ${isActive
-                  ? 'bg-slate-800 text-white border-r-2 border-blue-400'
+                  ? 'bg-slate-800 text-white'
                   : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
                 }`}
               onClick={() => toggleCategory(cat.id)}
@@ -147,7 +253,7 @@ const Sidebar: React.FC = () => {
                 >
                   {renderCategoryIcon(cat.id)}
                 </svg>
-                <span className="font-medium truncate">{cat.name}</span>
+                <span className="font-medium truncate" title={cat.name}>{cat.name}</span>
                 {catAssets.length > 0 && (
                   <span className="text-xs text-slate-300 bg-slate-800 rounded-[2px] px-2 py-0.5">
                     {catAssets.length}
@@ -246,7 +352,7 @@ const Sidebar: React.FC = () => {
                             renderCategoryIcon(cat.id)
                           )}
                         </svg>
-                        <span className="truncate font-medium">{asset.name}</span>
+                        <span className="truncate font-medium" title={asset.name}>{asset.name}</span>
                         {/* Missing required indicator */}
                         {asset.items.filter((i) => i.required && i.images.length === 0).length > 0 && (
                           <span className="text-xs text-red-400 flex-shrink-0" title="有未完成的必填项">●</span>
@@ -280,7 +386,27 @@ const Sidebar: React.FC = () => {
           </div>
         );
       })}
+      </div>
       {dialog}
+      <button
+        type="button"
+        aria-label="拖动调整侧栏宽度"
+        aria-valuemin={SIDEBAR_MIN_WIDTH}
+        aria-valuemax={SIDEBAR_MAX_WIDTH}
+        aria-valuenow={sidebarWidth}
+        onPointerDown={handleResizePointerDown}
+        onPointerMove={handleResizePointerMove}
+        onPointerUp={handleResizePointerUp}
+        onPointerCancel={handleResizePointerUp}
+        onLostPointerCapture={() => stopResizing()}
+        onKeyDown={handleResizeKeyDown}
+        className="group/resize absolute inset-y-0 right-0 z-10 w-3 translate-x-1/2 cursor-col-resize touch-none border-0 bg-transparent p-0 focus:outline-none"
+      >
+        <span
+          className={`pointer-events-none absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 ${isResizing ? 'bg-blue-400' : 'bg-transparent group-hover/resize:bg-blue-400 group-focus-visible/resize:bg-blue-400'}`}
+          aria-hidden="true"
+        />
+      </button>
     </aside>
   );
 };
