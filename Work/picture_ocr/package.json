@@ -20,6 +20,8 @@
     "verify:evidence-package": "node scripts/verify-evidence-package.mjs",
     "verify:lan-image-sink": "node scripts/verify-lan-image-sink.mjs",
     "verify:image-compression": "node scripts/verify-image-compression.mjs",
+    "verify:list-summary-store": "node scripts/verify-list-summary-store.mjs",
+    "verify:error-report": "node scripts/verify-error-report.mjs",
     "verify:lan-server": "node scripts/verify-lan-server.cjs",
     "verify:lan-mobile-picker": "node scripts/verify-lan-mobile-picker.mjs",
     "verify:web-lan-server": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-web-lan-server.ps1",

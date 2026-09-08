@@ -36,6 +36,18 @@ dispatch({ type: 'REORDER_ITEMS', payload: { assetId: asset.id, itemIds } });
 - 普通编辑经 500ms 防抖调用 `saveProject`；`saveQueueRef` 串行化保存，避免异步写入逆序。不要在组件额外复制这个防抖保存流程。
 - 需要服务端/LAN 确认的图片采用 `addImageAndSave`：先基于当前 reducer 状态生成 document、等待 IndexedDB 成功保存、再 dispatch，确保移动端不会提前报告成功。
 
+## 项目列表与摘要 store
+
+- 图片以 Base64 内联在 `ProjectDocument.assets[].items[].images[].data`。**列表加载绝不得读取完整项目文档**（会把数百 MB Base64 载入内存 + 深拷贝，导致主线程卡死/OOM）。
+- 列表只读轻量摘要 store `projectSummaries`（`id/groupId/meta/assetCount/createdAt/updatedAt`，无图片字节），见 `db.ts` 的 `listProjects` / `listProjectGroups`。
+- 所有写/删/迁移项目的函数必须在**同一事务**内同步维护 `projectSummaries`（`saveProject`、`createProjectGroupWithSystems`、`updateProjectGroupAndSystems`、`deleteProject`、`deleteProjectGroup`、`migrateLegacyProjectIfNeeded`），否则列表与真实数据会漂移。新增写入路径时一并追加摘要维护。
+- `DB_VERSION` 升级需在 `onupgradeneeded` 里回填存量；大库回填用**逐条游标**（峰值仅一条文档），不得 `getAll` 一次载入。DB 版本一旦发布不可降级回旧代码。
+
+## 存储操作超时与报错采集
+
+- `db.ts` 用 `withTimeout` 包裹 `openDB` 与各事务，卡死超时以明确错误 reject（openDB 兜底更长，兼容首次升级回填），避免 UI 无限转圈。
+- 全局报错采集统一走 `src/utils/errorLog.ts`：`main.tsx` 开场 `installGlobalErrorHandlers()`，`App` 用 `setErrorNotifier` 接入 Toast（仅未捕获错误弹窗）。`recordError` 只写 localStorage 环形缓冲（不弹窗，避免与组件 catch 重复）。设计新存储失败分支时，优先在 db 层 `recordError` 以保证进诊断包。
+
 ## 局部与派生状态
 
 - 仅由一个视图使用的输入、弹窗、loading、错误消息、Set 选择状态保留在该组件中；如 `ProjectList.tsx`。

@@ -18,6 +18,7 @@ import { detectLanBridge } from './utils/lanBridge';
 import { buildGroupSnapshot } from './utils/lanGroupSnapshot';
 import { saveLanImageToProject } from './utils/lanImageSink';
 import { useToast } from './components/Toast';
+import { setErrorNotifier } from './utils/errorLog';
 import type { LanBridge, LanCollectorSnapshot, LanCollectorSystem } from './utils/lanBridge';
 import type { LanImageSavePayload } from './utils/lanImageSink';
 
@@ -266,7 +267,13 @@ function useLanGroupSession(bridge: LanBridge | null) {
 }
 
 const App: React.FC = () => {
+  const showToast = useToast();
   const [hash, setHash] = useState(() => window.location.hash);
+
+  // 将未捕获错误（全局 error / unhandledrejection）以 Toast 提示，避免静默假死。
+  useEffect(() => {
+    setErrorNotifier((message) => showToast(`发生错误：${message}`, 'error'));
+  }, [showToast]);
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
   const [newProjectInfoPrompt, setNewProjectInfoPrompt] = useState(false);
   const [projectListRefreshKey, setProjectListRefreshKey] = useState(0);
