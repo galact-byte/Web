@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useToast } from './Toast';
 import { useConfirmDialog } from './ConfirmDialog';
 import { formatBytes, getStorageEstimate, STORAGE_WARN_RATIO, type StorageEstimateResult } from '../utils/storageEstimate';
+import { clearErrorLog, downloadDiagnostics, getErrorLog } from '../utils/errorLog';
 
 interface StorageSettingsDialogProps {
   onClose: () => void;
@@ -104,6 +105,37 @@ const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }
     } finally {
       setBusy(false);
     }
+  };
+
+  // 诊断与报错（桌面/Web 通用）
+  const [errorCount, setErrorCount] = useState(() => getErrorLog().length);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportDiagnostics = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await downloadDiagnostics();
+      showToast('诊断包已导出，请把该文件发给技术支持。', 'success');
+    } catch (err) {
+      showToast(`导出诊断包失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleClearErrors = async () => {
+    const ok = await confirm({
+      title: '清空错误记录',
+      message: '将清除本机保存的最近错误日志（不影响项目数据）。是否继续？',
+      confirmText: '清空',
+      cancelText: '取消',
+      tone: 'default',
+    });
+    if (!ok) return;
+    clearErrorLog();
+    setErrorCount(0);
+    showToast('错误记录已清空', 'success');
   };
 
   // Web 态
@@ -227,6 +259,32 @@ const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }
               </div>
             </div>
           )}
+
+          <div className="mt-5 border-t border-slate-200 pt-5">
+            <p className="text-sm font-medium text-slate-700">诊断与报错</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              遇到卡住、无响应或异常时，导出诊断包（含最近错误、版本、存储用量与项目规模）发给技术支持，便于定位问题。诊断包仅保存在本地，导出时由浏览器下载。
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleExportDiagnostics}
+                disabled={exporting}
+                className="border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {exporting ? '导出中…' : '导出诊断包'}
+              </button>
+              <button
+                onClick={handleClearErrors}
+                disabled={errorCount === 0}
+                className="border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                清空错误记录
+              </button>
+              <span className="text-xs text-slate-500">
+                {errorCount > 0 ? `已记录 ${errorCount} 条错误` : '暂无错误记录'}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div className="flex justify-end border-t border-slate-200 px-6 py-4">

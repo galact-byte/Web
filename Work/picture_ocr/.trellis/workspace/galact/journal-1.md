@@ -24,3 +24,14 @@
 - 确认 web 导出 `Failed to fetch` 已随 0.4.6 的 `4246f4b` 修复，旧构建才有；客户端与网页版同一构建产物。
 - 发布说明改为统一读取 `RELEASE-NOTES.md`（workflow `body_path` + web ZIP 直接拷贝），以后每版只改这一个文件。
 - 全验证基线绿（build / evidence-package / lan-server / lan-mobile-picker / pwa-build / inspection-item 两项 / web-lan-server / `git diff --check`）。版本 0.4.6 → 0.4.7，工作提交 `697d787`，tag `picture-ocr-v0.4.7` 移至该提交重跑 CI 覆盖发布。
+
+---
+
+## 2026-09-08 — 列表加载卡死修复与客户端报错采集
+
+- 根因：图片以 Base64 内联在 `ProjectDocument`，`listProjectGroups`/`listProjects` 用 `getAll()` 全量读文档再 `cloneAssets` 深拷贝，仅为取 `assetCount`。~500 图数百 MB Base64 在主线程读一遍+拷一遍 → UI 卡死/渲染进程 OOM。对应「正在加载项目列表…」与「保存中…」两处永久转圈（保存后 await 刷新列表卡同一步）。
+- 修复：`db.ts` 升 `DB_VERSION=4`，新增轻量 `projectSummaries` store（无图片字节）。列表只读摘要；所有写/删/迁移函数同事务维护摘要；`onupgradeneeded` 用逐条游标回填存量（峰值仅一条文档，避免 OOM）。
+- 兜底：`withTimeout` 包裹 openDB(60s)/各事务(15s)，卡死变明确错误 reject，不再无限转圈。
+- 报错采集：新增 `src/utils/errorLog.ts`（环形缓冲 localStorage 最近 50 条 + 诊断报告 + `<a download>` 导出）；`main.tsx` 装全局 `error`/`unhandledrejection` handler；`App` 用 `setErrorNotifier` 把未捕获错误弹 Toast；db 层超时/失败统一 `recordError`（被 catch 的也进诊断包）。存储设置面板加「导出诊断包/清空错误记录」入口（桌面+Web 通用）。vite 注入 `__APP_VERSION__`。
+- 验证：`npm run build` 通过；新增 `verify:list-summary-store`(19/19)、`verify:error-report`(19/19)；回归 image-compression / lan-image-sink / evidence-package / storage-estimate 全绿。
+- 已知点：DB v4 单向升级，发布后不可回退 v3 代码（数据不丢）。运行时 IndexedDB 行为未在无浏览器环境实测，建议桌面构建冒烟后再发版。

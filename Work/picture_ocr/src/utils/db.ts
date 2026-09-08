@@ -8,16 +8,46 @@ import type {
   ProjectSummary,
 } from '../types';
 import defaultCategories, { createDefaultMeta, createPresetAssets } from '../data/defaults';
+import { recordError } from './errorLog';
 
 const DB_NAME = 'evidence-collector-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const LEGACY_STORE_NAME = 'project';
 const PROJECTS_STORE_NAME = 'projects';
 const PROJECT_GROUPS_STORE_NAME = 'projectGroups';
+const PROJECT_SUMMARIES_STORE_NAME = 'projectSummaries';
 const LEGACY_PROJECT_ID = 'current';
 
+// 存储操作超时兜底：卡死超过该阈值时以明确错误返回，避免 UI 无限转圈。
+const DB_OP_TIMEOUT_MS = 15000;
+// openDB 首次打开可能伴随 v3→v4 逐条回填摘要，放宽超时避免大库迁移被误断。
+const DB_OPEN_TIMEOUT_MS = 60000;
+
+function withTimeout<T>(op: Promise<T>, label: string, timeoutMs = DB_OP_TIMEOUT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const error = new Error(`IndexedDB 操作超时（${label}），数据量过大或数据库被占用`);
+      recordError({ type: 'manual', message: error.message, context: `db:${label}` });
+      reject(error);
+    }, timeoutMs);
+    op.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => {
+        clearTimeout(timer);
+        recordError({
+          type: 'manual',
+          message: `IndexedDB 操作失败（${label}）：${error instanceof Error ? error.message : String(error)}`,
+          stack: error instanceof Error ? error.stack : undefined,
+          context: `db:${label}`,
+        });
+        reject(error);
+      }
+    );
+  });
+}
+
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  return withTimeout(new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -39,10 +69,23 @@ function openDB(): Promise<IDBDatabase> {
         const groupsStore = db.createObjectStore(PROJECT_GROUPS_STORE_NAME, { keyPath: 'id' });
         groupsStore.createIndex('updatedAt', 'updatedAt', { unique: false });
       }
+      // v3 → v4：新增轻量摘要 store，列表加载只读它，避免全量载入内联 Base64 图片。
+      if (!db.objectStoreNames.contains(PROJECT_SUMMARIES_STORE_NAME)) {
+        const summariesStore = db.createObjectStore(PROJECT_SUMMARIES_STORE_NAME, { keyPath: 'id' });
+        summariesStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+        // 存量补建：逐条游标，峰值内存仅一条文档，避免一次性载入全部 Base64 造成 OOM。
+        const projectsStore = request.transaction!.objectStore(PROJECTS_STORE_NAME);
+        projectsStore.openCursor().onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+          if (!cursor) return;
+          summariesStore.put(summaryFromRaw(cursor.value));
+          cursor.continue();
+        };
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
-  });
+  }), 'openDB', DB_OPEN_TIMEOUT_MS);
 }
 
 export function createProjectDocument(
@@ -106,33 +149,32 @@ export function normalizeProjectGroup(group: Partial<ProjectGroup> & { id?: stri
 export async function listProjects(): Promise<ProjectSummary[]> {
   await migrateLegacyProjectIfNeeded();
   const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(PROJECTS_STORE_NAME, 'readonly');
-    const request = tx.objectStore(PROJECTS_STORE_NAME).getAll();
+  return withTimeout(new Promise<ProjectSummary[]>((resolve, reject) => {
+    const tx = db.transaction(PROJECT_SUMMARIES_STORE_NAME, 'readonly');
+    const request = tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).getAll();
     request.onsuccess = () => {
       db.close();
-      resolve((request.result as ProjectDocument[])
-        .map((doc) => toProjectSummary(normalizeProjectDocument(doc)))
+      resolve((request.result as ProjectSummary[])
+        .map(normalizeSummary)
         .sort((a, b) => b.updatedAt - a.updatedAt));
     };
     request.onerror = () => {
       db.close();
       reject(request.error);
     };
-  });
+  }), 'listProjects');
 }
 
 export async function listProjectGroups(): Promise<ProjectGroupSummary[]> {
   await migrateLegacyProjectIfNeeded();
   const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_GROUPS_STORE_NAME], 'readonly');
-    const projectsRequest = tx.objectStore(PROJECTS_STORE_NAME).getAll();
+  return withTimeout(new Promise<ProjectGroupSummary[]>((resolve, reject) => {
+    const tx = db.transaction([PROJECT_SUMMARIES_STORE_NAME, PROJECT_GROUPS_STORE_NAME], 'readonly');
+    const summariesRequest = tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).getAll();
     const groupsRequest = tx.objectStore(PROJECT_GROUPS_STORE_NAME).getAll();
     tx.oncomplete = () => {
       db.close();
-      const systems = (projectsRequest.result as ProjectDocument[])
-        .map((doc) => toProjectSummary(normalizeProjectDocument(doc)));
+      const systems = (summariesRequest.result as ProjectSummary[]).map(normalizeSummary);
       const groups = (groupsRequest.result as ProjectGroup[]).map(normalizeProjectGroup);
       resolve(groupProjectSummaries(groups, systems));
     };
@@ -140,29 +182,30 @@ export async function listProjectGroups(): Promise<ProjectGroupSummary[]> {
       db.close();
       reject(tx.error);
     };
-  });
+  }), 'listProjectGroups');
 }
 
 export async function saveProject(doc: ProjectDocument): Promise<void> {
   const db = await openDB();
   const normalizedDoc = normalizeProjectDocument(doc);
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(PROJECTS_STORE_NAME, 'readwrite');
+  return withTimeout(new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
     tx.objectStore(PROJECTS_STORE_NAME).put(normalizedDoc);
+    tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(normalizedDoc));
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  });
+  }), 'saveProject');
 }
 
 export async function saveProjectGroup(group: ProjectGroup): Promise<void> {
   const db = await openDB();
   const normalizedGroup = normalizeProjectGroup(group);
-  return new Promise((resolve, reject) => {
+  return withTimeout(new Promise<void>((resolve, reject) => {
     const tx = db.transaction(PROJECT_GROUPS_STORE_NAME, 'readwrite');
     tx.objectStore(PROJECT_GROUPS_STORE_NAME).put(normalizedGroup);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  });
+  }), 'saveProjectGroup');
 }
 
 export function splitSystemNames(value: string): string[] {
@@ -189,14 +232,18 @@ export async function createProjectGroupWithSystems(
   const group = createProjectGroup(groupValues);
   const projects = systemNames.map((systemName) => createProjectDocument({ ...group, systemName }, group.id));
   const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction([PROJECT_GROUPS_STORE_NAME, PROJECTS_STORE_NAME], 'readwrite');
+  return withTimeout(new Promise<ProjectDocument[]>((resolve, reject) => {
+    const tx = db.transaction([PROJECT_GROUPS_STORE_NAME, PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
     tx.objectStore(PROJECT_GROUPS_STORE_NAME).put(group);
     const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
-    projects.forEach((project) => projectsStore.put(project));
+    const summariesStore = tx.objectStore(PROJECT_SUMMARIES_STORE_NAME);
+    projects.forEach((project) => {
+      projectsStore.put(project);
+      summariesStore.put(toProjectSummary(project));
+    });
     tx.oncomplete = () => { db.close(); resolve(projects); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  });
+  }), 'createProjectGroupWithSystems');
 }
 
 export async function createSystemForGroup(group: ProjectGroup, systemName: string): Promise<ProjectDocument> {
@@ -215,16 +262,17 @@ export async function createSystemForGroup(group: ProjectGroup, systemName: stri
 export async function updateProjectGroupAndSystems(group: ProjectGroup): Promise<void> {
   const normalizedGroup = normalizeProjectGroup({ ...group, updatedAt: Date.now() });
   const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction([PROJECT_GROUPS_STORE_NAME, PROJECTS_STORE_NAME], 'readwrite');
+  return withTimeout(new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([PROJECT_GROUPS_STORE_NAME, PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
     const groupsStore = tx.objectStore(PROJECT_GROUPS_STORE_NAME);
     const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
+    const summariesStore = tx.objectStore(PROJECT_SUMMARIES_STORE_NAME);
     groupsStore.put(normalizedGroup);
     const matchingSystems = projectsStore.index('groupId').getAll(normalizedGroup.id);
     matchingSystems.onsuccess = () => {
       (matchingSystems.result as ProjectDocument[]).forEach((system) => {
         const normalizedSystem = normalizeProjectDocument(system);
-        projectsStore.put({
+        const updatedSystem: ProjectDocument = {
           ...normalizedSystem,
           meta: {
             ...normalizedSystem.meta,
@@ -234,19 +282,21 @@ export async function updateProjectGroupAndSystems(group: ProjectGroup): Promise
             reportDate: normalizedGroup.reportDate,
           },
           updatedAt: Date.now(),
-        });
+        };
+        projectsStore.put(updatedSystem);
+        summariesStore.put(toProjectSummary(updatedSystem));
       });
     };
     matchingSystems.onerror = () => reject(matchingSystems.error);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  });
+  }), 'updateProjectGroupAndSystems');
 }
 
 export async function loadProject(projectId: string): Promise<ProjectDocument | null> {
   await migrateLegacyProjectIfNeeded();
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return withTimeout(new Promise<ProjectDocument | null>((resolve, reject) => {
     const tx = db.transaction(PROJECTS_STORE_NAME, 'readonly');
     const request = tx.objectStore(PROJECTS_STORE_NAME).get(projectId);
     request.onsuccess = () => {
@@ -254,12 +304,12 @@ export async function loadProject(projectId: string): Promise<ProjectDocument | 
       resolve(request.result ? normalizeProjectDocument(request.result) : null);
     };
     request.onerror = () => { db.close(); reject(request.error); };
-  });
+  }), 'loadProject');
 }
 
 export async function loadProjectGroup(groupId: string): Promise<ProjectGroup | null> {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return withTimeout(new Promise<ProjectGroup | null>((resolve, reject) => {
     const tx = db.transaction(PROJECT_GROUPS_STORE_NAME, 'readonly');
     const request = tx.objectStore(PROJECT_GROUPS_STORE_NAME).get(groupId);
     request.onsuccess = () => {
@@ -267,59 +317,67 @@ export async function loadProjectGroup(groupId: string): Promise<ProjectGroup | 
       resolve(request.result ? normalizeProjectGroup(request.result) : null);
     };
     request.onerror = () => { db.close(); reject(request.error); };
-  });
+  }), 'loadProjectGroup');
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(PROJECTS_STORE_NAME, 'readwrite');
+  return withTimeout(new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
     tx.objectStore(PROJECTS_STORE_NAME).delete(projectId);
+    tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).delete(projectId);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  });
+  }), 'deleteProject');
 }
 
 export async function deleteProjectGroup(groupId: string): Promise<void> {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction([PROJECT_GROUPS_STORE_NAME, PROJECTS_STORE_NAME], 'readwrite');
+  return withTimeout(new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([PROJECT_GROUPS_STORE_NAME, PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
     tx.objectStore(PROJECT_GROUPS_STORE_NAME).delete(groupId);
     const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
+    const summariesStore = tx.objectStore(PROJECT_SUMMARIES_STORE_NAME);
     const matchingSystems = projectsStore.index('groupId').getAllKeys(groupId);
     matchingSystems.onsuccess = () => {
-      (matchingSystems.result as IDBValidKey[]).forEach((systemId) => projectsStore.delete(systemId));
+      (matchingSystems.result as IDBValidKey[]).forEach((systemId) => {
+        projectsStore.delete(systemId);
+        summariesStore.delete(systemId);
+      });
     };
     matchingSystems.onerror = () => reject(matchingSystems.error);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  });
+  }), 'deleteProjectGroup');
 }
 
 async function migrateLegacyProjectIfNeeded(): Promise<void> {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return withTimeout(new Promise<void>((resolve, reject) => {
     if (!db.objectStoreNames.contains(LEGACY_STORE_NAME)) {
       db.close();
       resolve();
       return;
     }
-    const tx = db.transaction([LEGACY_STORE_NAME, PROJECTS_STORE_NAME], 'readwrite');
+    const tx = db.transaction([LEGACY_STORE_NAME, PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
     const legacyStore = tx.objectStore(LEGACY_STORE_NAME);
     const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
+    const summariesStore = tx.objectStore(PROJECT_SUMMARIES_STORE_NAME);
     const countRequest = projectsStore.count();
     countRequest.onsuccess = () => {
       if (countRequest.result > 0) return;
       const legacyRequest = legacyStore.get(LEGACY_PROJECT_ID);
       legacyRequest.onsuccess = () => {
         if (!legacyRequest.result) return;
-        projectsStore.put(normalizeProjectDocument({ ...legacyRequest.result, id: LEGACY_PROJECT_ID, groupId: null }));
+        const migrated = normalizeProjectDocument({ ...legacyRequest.result, id: LEGACY_PROJECT_ID, groupId: null });
+        projectsStore.put(migrated);
+        summariesStore.put(toProjectSummary(migrated));
       };
       legacyRequest.onerror = () => reject(legacyRequest.error);
     };
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  });
+  }), 'migrateLegacyProjectIfNeeded');
 }
 
 function groupProjectSummaries(groups: ProjectGroup[], systems: ProjectSummary[]): ProjectGroupSummary[] {
@@ -380,6 +438,32 @@ function toProjectSummary(doc: ProjectDocument): ProjectSummary {
     assetCount: doc.assets.length,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+  };
+}
+
+/** 从摘要 store 读出的记录做一次防御性归一（补默认 meta / groupId / 计数），兼容旧记录。 */
+function normalizeSummary(summary: Partial<ProjectSummary> & { id: string }): ProjectSummary {
+  const now = Date.now();
+  return {
+    id: summary.id,
+    groupId: typeof summary.groupId === 'string' && summary.groupId.trim() ? summary.groupId : null,
+    meta: normalizeMeta(summary.meta),
+    assetCount: typeof summary.assetCount === 'number' && summary.assetCount >= 0 ? summary.assetCount : 0,
+    createdAt: summary.createdAt || summary.updatedAt || now,
+    updatedAt: summary.updatedAt || now,
+  };
+}
+
+/** 直接从未归一的原始文档记录派生摘要，不深拷贝 assets（仅取张数），供升级回填逐条游标使用。 */
+function summaryFromRaw(raw: Partial<ProjectDocument> & { id: string }): ProjectSummary {
+  const now = Date.now();
+  return {
+    id: raw.id,
+    groupId: typeof raw.groupId === 'string' && raw.groupId.trim() ? raw.groupId : null,
+    meta: normalizeMeta(raw.meta),
+    assetCount: Array.isArray(raw.assets) ? raw.assets.length : 0,
+    createdAt: raw.createdAt || raw.updatedAt || now,
+    updatedAt: raw.updatedAt || now,
   };
 }
 
