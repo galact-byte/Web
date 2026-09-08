@@ -50,42 +50,93 @@ function openDB(): Promise<IDBDatabase> {
   return withTimeout(new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
+      // 升级事务里只做「建表 / 建索引」等结构变更，绝不遍历数据。
+      // 任何在 versionchange 事务回调里抛出的异常都会中止整个升级并回滚版本，
+      // 使 DB 永久卡在旧版本、之后每次 open 都重跑并再次崩溃（v0.6.0 摘要回填游标即因坏记录读 .id 抛错触发此问题）。
+      // 因此摘要回填改到 openDB 成功后的普通事务（ensureSummariesBackfilled），并对结构变更整体做 try/catch 兜底。
       const db = request.result;
-      if (!db.objectStoreNames.contains(LEGACY_STORE_NAME)) {
-        const legacyStore = db.createObjectStore(LEGACY_STORE_NAME, { keyPath: 'id' });
-        legacyStore.createIndex('updatedAt', 'updatedAt', { unique: false });
-      }
-      if (!db.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
-        const projectsStore = db.createObjectStore(PROJECTS_STORE_NAME, { keyPath: 'id' });
-        projectsStore.createIndex('updatedAt', 'updatedAt', { unique: false });
-        projectsStore.createIndex('groupId', 'groupId', { unique: false });
-      } else {
-        const projectsStore = request.transaction!.objectStore(PROJECTS_STORE_NAME);
-        if (!projectsStore.indexNames.contains('groupId')) {
-          projectsStore.createIndex('groupId', 'groupId', { unique: false });
+      const tx = request.transaction!;
+      try {
+        if (!db.objectStoreNames.contains(LEGACY_STORE_NAME)) {
+          const legacyStore = db.createObjectStore(LEGACY_STORE_NAME, { keyPath: 'id' });
+          legacyStore.createIndex('updatedAt', 'updatedAt', { unique: false });
         }
-      }
-      if (!db.objectStoreNames.contains(PROJECT_GROUPS_STORE_NAME)) {
-        const groupsStore = db.createObjectStore(PROJECT_GROUPS_STORE_NAME, { keyPath: 'id' });
-        groupsStore.createIndex('updatedAt', 'updatedAt', { unique: false });
-      }
-      // v3 → v4：新增轻量摘要 store，列表加载只读它，避免全量载入内联 Base64 图片。
-      if (!db.objectStoreNames.contains(PROJECT_SUMMARIES_STORE_NAME)) {
-        const summariesStore = db.createObjectStore(PROJECT_SUMMARIES_STORE_NAME, { keyPath: 'id' });
-        summariesStore.createIndex('updatedAt', 'updatedAt', { unique: false });
-        // 存量补建：逐条游标，峰值内存仅一条文档，避免一次性载入全部 Base64 造成 OOM。
-        const projectsStore = request.transaction!.objectStore(PROJECTS_STORE_NAME);
-        projectsStore.openCursor().onsuccess = (event) => {
-          const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
-          if (!cursor) return;
-          summariesStore.put(summaryFromRaw(cursor.value));
-          cursor.continue();
-        };
+        if (!db.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
+          const projectsStore = db.createObjectStore(PROJECTS_STORE_NAME, { keyPath: 'id' });
+          projectsStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+          projectsStore.createIndex('groupId', 'groupId', { unique: false });
+        } else {
+          const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
+          if (!projectsStore.indexNames.contains('groupId')) {
+            projectsStore.createIndex('groupId', 'groupId', { unique: false });
+          }
+        }
+        if (!db.objectStoreNames.contains(PROJECT_GROUPS_STORE_NAME)) {
+          const groupsStore = db.createObjectStore(PROJECT_GROUPS_STORE_NAME, { keyPath: 'id' });
+          groupsStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+        }
+        // v3 → v4：只创建空的轻量摘要 store，存量回填延后到升级完成后执行（见 ensureSummariesBackfilled）。
+        if (!db.objectStoreNames.contains(PROJECT_SUMMARIES_STORE_NAME)) {
+          const summariesStore = db.createObjectStore(PROJECT_SUMMARIES_STORE_NAME, { keyPath: 'id' });
+          summariesStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+        }
+      } catch (error) {
+        recordError({
+          type: 'manual',
+          message: `IndexedDB 升级失败（onupgradeneeded）：${error instanceof Error ? error.message : String(error)}`,
+          stack: error instanceof Error ? error.stack : undefined,
+          context: 'db:onupgradeneeded',
+        });
+        try { tx.abort(); } catch { /* 事务可能已中止，忽略 */ }
       }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error('数据库升级被占用（onblocked），请关闭其他打开本工具的窗口后重试'));
   }), 'openDB', DB_OPEN_TIMEOUT_MS);
+}
+
+// 摘要 store 存量回填：在升级完成后的普通读写事务里逐条游标补建，跳过 null/缺 id 的坏记录，
+// 单条异常不再中止整库升级；幂等——摘要数已达项目数即认为已回填完成，直接跳过。
+let summariesBackfillDone = false;
+async function ensureSummariesBackfilled(): Promise<void> {
+  if (summariesBackfillDone) return;
+  const db = await openDB();
+  return withTimeout(new Promise<void>((resolve, reject) => {
+    if (!db.objectStoreNames.contains(PROJECTS_STORE_NAME) || !db.objectStoreNames.contains(PROJECT_SUMMARIES_STORE_NAME)) {
+      summariesBackfillDone = true;
+      db.close();
+      resolve();
+      return;
+    }
+    const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
+    const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
+    const summariesStore = tx.objectStore(PROJECT_SUMMARIES_STORE_NAME);
+    const projectsCount = projectsStore.count();
+    const summariesCount = summariesStore.count();
+    tx.oncomplete = () => { summariesBackfillDone = true; db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+    // 两个 count 请求先后发起，完成顺序不能依赖（若把一个 onsuccess 嵌在另一个里设置，
+    // 先完成的那个回调会错过）。各自回写结果，两者都就绪后由后完成的回调同步开游标，保证事务不提前提交。
+    let projectsTotal: number | undefined;
+    let summariesTotal: number | undefined;
+    const maybeBackfill = () => {
+      if (projectsTotal === undefined || summariesTotal === undefined) return;
+      // 摘要已齐（含两者都为 0 的空库）则无需回填，让事务自然完成。
+      if (summariesTotal >= projectsTotal) return;
+      projectsStore.openCursor().onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+        if (!cursor) return;
+        const raw = cursor.value as (Partial<ProjectDocument> & { id?: string }) | null;
+        if (raw && typeof raw.id === 'string' && raw.id) {
+          summariesStore.put(summaryFromRaw(raw as Partial<ProjectDocument> & { id: string }));
+        }
+        cursor.continue();
+      };
+    };
+    projectsCount.onsuccess = () => { projectsTotal = projectsCount.result; maybeBackfill(); };
+    summariesCount.onsuccess = () => { summariesTotal = summariesCount.result; maybeBackfill(); };
+  }), 'ensureSummariesBackfilled', DB_OPEN_TIMEOUT_MS);
 }
 
 export function createProjectDocument(
@@ -148,6 +199,7 @@ export function normalizeProjectGroup(group: Partial<ProjectGroup> & { id?: stri
 
 export async function listProjects(): Promise<ProjectSummary[]> {
   await migrateLegacyProjectIfNeeded();
+  await ensureSummariesBackfilled();
   const db = await openDB();
   return withTimeout(new Promise<ProjectSummary[]>((resolve, reject) => {
     const tx = db.transaction(PROJECT_SUMMARIES_STORE_NAME, 'readonly');
@@ -167,6 +219,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
 
 export async function listProjectGroups(): Promise<ProjectGroupSummary[]> {
   await migrateLegacyProjectIfNeeded();
+  await ensureSummariesBackfilled();
   const db = await openDB();
   return withTimeout(new Promise<ProjectGroupSummary[]>((resolve, reject) => {
     const tx = db.transaction([PROJECT_SUMMARIES_STORE_NAME, PROJECT_GROUPS_STORE_NAME], 'readonly');
