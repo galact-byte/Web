@@ -1,6 +1,7 @@
 import type {
   Asset,
   Category,
+  ImageData,
   ProjectDocument,
   ProjectGroup,
   ProjectGroupSummary,
@@ -11,9 +12,23 @@ import defaultCategories, { createDefaultMeta, createPresetAssets } from '../dat
 import { recordError } from './errorLog';
 import { trackWrite } from './pendingWrites';
 import { createEmptyRepairReport, planSummaryRepair, type SummaryRepairReport } from './summaryRepair';
+import {
+  IMAGES_PROJECT_INDEX,
+  IMAGES_STORE_NAME,
+  buildStoredImage,
+  collectImageRefs,
+  collectInlineImages,
+  imageRecordKey,
+  planImageReconcile,
+  planMigrationTargets,
+  stripInlineImageData,
+  type ImageReconcilePlan,
+  type MigrationState,
+  type StoredImage,
+} from './imageStore';
 
 const DB_NAME = 'evidence-collector-db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const LEGACY_STORE_NAME = 'project';
 const PROJECTS_STORE_NAME = 'projects';
 const PROJECT_GROUPS_STORE_NAME = 'projectGroups';
@@ -84,6 +99,11 @@ function openDB(): Promise<IDBDatabase> {
         if (!db.objectStoreNames.contains(PROJECT_SUMMARIES_STORE_NAME)) {
           const summariesStore = db.createObjectStore(PROJECT_SUMMARIES_STORE_NAME, { keyPath: 'id' });
           summariesStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+        }
+        // v4 → v5：只创建空的图片字节 store，存量内联图片的搬迁延后到 migrateInlineImages()。
+        if (!db.objectStoreNames.contains(IMAGES_STORE_NAME)) {
+          const imagesStore = db.createObjectStore(IMAGES_STORE_NAME, { keyPath: 'key' });
+          imagesStore.createIndex(IMAGES_PROJECT_INDEX, 'projectId', { unique: false });
         }
       } catch (error) {
         recordError({
@@ -197,6 +217,8 @@ export interface StoreDiagnostics {
   summaries: number;
   groups: number;
   legacy: number;
+  /** images store 里的图片字节条数。 */
+  images: number;
   /** 旧版单项目记录仍在 legacy store，且从未迁移进 projects store。 */
   legacyStranded: boolean;
 }
@@ -204,8 +226,8 @@ export interface StoreDiagnostics {
 export async function getStoreDiagnostics(): Promise<StoreDiagnostics> {
   const db = await openDB();
   return withTimeout(new Promise<StoreDiagnostics>((resolve, reject) => {
-    const result: StoreDiagnostics = { projects: 0, summaries: 0, groups: 0, legacy: 0, legacyStranded: false };
-    const names = [PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, PROJECT_GROUPS_STORE_NAME, LEGACY_STORE_NAME]
+    const result: StoreDiagnostics = { projects: 0, summaries: 0, groups: 0, legacy: 0, images: 0, legacyStranded: false };
+    const names = [PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, PROJECT_GROUPS_STORE_NAME, LEGACY_STORE_NAME, IMAGES_STORE_NAME]
       .filter((name) => db.objectStoreNames.contains(name));
     if (names.length === 0) {
       db.close();
@@ -222,6 +244,7 @@ export async function getStoreDiagnostics(): Promise<StoreDiagnostics> {
     countInto(PROJECT_SUMMARIES_STORE_NAME, (value) => { result.summaries = value; });
     countInto(PROJECT_GROUPS_STORE_NAME, (value) => { result.groups = value; });
     countInto(LEGACY_STORE_NAME, (value) => { result.legacy = value; });
+    countInto(IMAGES_STORE_NAME, (value) => { result.images = value; });
     if (names.includes(LEGACY_STORE_NAME) && names.includes(PROJECTS_STORE_NAME)) {
       const migratedKey = tx.objectStore(PROJECTS_STORE_NAME).getKey(LEGACY_PROJECT_ID);
       migratedKey.onsuccess = () => { result.legacyStranded = result.legacy > 0 && migratedKey.result === undefined; };
@@ -465,12 +488,21 @@ export async function loadProjectGroup(groupId: string): Promise<ProjectGroup | 
   }), 'loadProjectGroup');
 }
 
+/** 同事务内清理某个项目的全部图片字节，避免项目删了而几百 MB 字节永久残留。 */
+function deleteImagesOfProject(imagesStore: IDBObjectStore, projectId: string): void {
+  const keysRequest = imagesStore.index(IMAGES_PROJECT_INDEX).getAllKeys(projectId);
+  keysRequest.onsuccess = () => {
+    (keysRequest.result as IDBValidKey[]).forEach((key) => imagesStore.delete(key));
+  };
+}
+
 export async function deleteProject(projectId: string): Promise<void> {
   const db = await openDB();
   return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
-    const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
+    const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, IMAGES_STORE_NAME], 'readwrite');
     tx.objectStore(PROJECTS_STORE_NAME).delete(projectId);
     tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).delete(projectId);
+    deleteImagesOfProject(tx.objectStore(IMAGES_STORE_NAME), projectId);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
   }), 'deleteProject', DB_DOC_TIMEOUT_MS));
@@ -479,21 +511,417 @@ export async function deleteProject(projectId: string): Promise<void> {
 export async function deleteProjectGroup(groupId: string): Promise<void> {
   const db = await openDB();
   return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
-    const tx = db.transaction([PROJECT_GROUPS_STORE_NAME, PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
+    const tx = db.transaction([PROJECT_GROUPS_STORE_NAME, PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, IMAGES_STORE_NAME], 'readwrite');
     tx.objectStore(PROJECT_GROUPS_STORE_NAME).delete(groupId);
     const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
     const summariesStore = tx.objectStore(PROJECT_SUMMARIES_STORE_NAME);
+    const imagesStore = tx.objectStore(IMAGES_STORE_NAME);
     const matchingSystems = projectsStore.index('groupId').getAllKeys(groupId);
     matchingSystems.onsuccess = () => {
       (matchingSystems.result as IDBValidKey[]).forEach((systemId) => {
         projectsStore.delete(systemId);
         summariesStore.delete(systemId);
+        deleteImagesOfProject(imagesStore, String(systemId));
       });
     };
     matchingSystems.onerror = () => reject(matchingSystems.error);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
   }), 'deleteProjectGroup', DB_DOC_TIMEOUT_MS));
+}
+
+// ---------- 图片字节独立存储（v5） ----------
+
+/** 读一张图片的字节：未迁移的内联图直接用，已迁移的按主键去 images store 取。 */
+export async function resolveImageData(projectId: string, image: ImageData): Promise<string | null> {
+  if (typeof image.data === 'string' && image.data.length > 0) return image.data;
+  const db = await openDB();
+  return withTimeout(new Promise<string | null>((resolve, reject) => {
+    const tx = db.transaction(IMAGES_STORE_NAME, 'readonly');
+    const request = tx.objectStore(IMAGES_STORE_NAME).get(imageRecordKey(projectId, image.id));
+    request.onsuccess = () => {
+      db.close();
+      resolve((request.result as StoredImage | undefined)?.data ?? null);
+    };
+    request.onerror = () => { db.close(); reject(request.error); };
+  }), 'resolveImageData');
+}
+
+/** 一次性取出某项目的全部图片字节（报告导出、数据包导出用），避免逐张开事务。 */
+export async function resolveImagesForProject(projectId: string): Promise<Map<string, string>> {
+  const db = await openDB();
+  return withTimeout(new Promise<Map<string, string>>((resolve, reject) => {
+    const tx = db.transaction(IMAGES_STORE_NAME, 'readonly');
+    const request = tx.objectStore(IMAGES_STORE_NAME).index(IMAGES_PROJECT_INDEX).getAll(projectId);
+    request.onsuccess = () => {
+      const map = new Map<string, string>();
+      for (const record of (request.result as StoredImage[]) ?? []) {
+        if (record && typeof record.imageId === 'string' && typeof record.data === 'string') {
+          map.set(record.imageId, record.data);
+        }
+      }
+      db.close();
+      resolve(map);
+    };
+    request.onerror = () => { db.close(); reject(request.error); };
+  }), 'resolveImagesForProject', DB_DOC_TIMEOUT_MS);
+}
+
+/**
+ * 新增/替换一张图片：字节写 images store，文档只更新元数据引用。
+ * 文档从库里现读现改（不接受调用方内存里的整份快照），因此手机上传与电脑端并发写不会互相覆盖。
+ */
+export async function addImageToProject(
+  projectId: string,
+  assetId: string,
+  itemId: string,
+  image: ImageData
+): Promise<void> {
+  const record = buildStoredImage(projectId, image);
+  if (!record) throw new Error('图片没有内容，未写入');
+  const db = await openDB();
+  return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, IMAGES_STORE_NAME], 'readwrite');
+    const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
+    let failure: Error | null = null;
+    const docRequest = projectsStore.get(projectId);
+    docRequest.onsuccess = () => {
+      const raw = docRequest.result as ProjectDocument | undefined;
+      if (!raw) {
+        failure = new Error(`项目 ${projectId} 不存在，图片未保存`);
+        tx.abort();
+        return;
+      }
+      const doc = normalizeProjectDocument(raw);
+      const item = doc.assets.find((asset) => asset.id === assetId)?.items.find((entry) => entry.id === itemId);
+      if (!item) {
+        failure = new Error('检查项已不存在，图片未保存');
+        tx.abort();
+        return;
+      }
+      const { data: _inline, ...reference } = image;
+      const ref = reference as ImageData;
+      const existingIndex = item.images.findIndex((entry) => entry.id === image.id);
+      if (existingIndex >= 0) item.images[existingIndex] = ref;
+      else item.images.push(ref);
+      doc.updatedAt = Date.now();
+      tx.objectStore(IMAGES_STORE_NAME).put(record);
+      projectsStore.put(doc);
+      tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(doc));
+    };
+    docRequest.onerror = () => { failure = docRequest.error ?? new Error('读取项目失败'); };
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = () => { db.close(); reject(failure ?? tx.error ?? new Error('图片保存事务已中止')); };
+    tx.onerror = () => { db.close(); reject(failure ?? tx.error); };
+  }), 'addImageToProject', DB_DOC_TIMEOUT_MS));
+}
+
+/** 删除一张图片：同事务去掉文档引用与 images store 里的字节。 */
+export async function removeImageFromProject(
+  projectId: string,
+  assetId: string,
+  itemId: string,
+  imageId: string
+): Promise<void> {
+  const db = await openDB();
+  return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, IMAGES_STORE_NAME], 'readwrite');
+    const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
+    let failure: Error | null = null;
+    const docRequest = projectsStore.get(projectId);
+    docRequest.onsuccess = () => {
+      const raw = docRequest.result as ProjectDocument | undefined;
+      if (!raw) {
+        failure = new Error(`项目 ${projectId} 不存在`);
+        tx.abort();
+        return;
+      }
+      const doc = normalizeProjectDocument(raw);
+      const item = doc.assets.find((asset) => asset.id === assetId)?.items.find((entry) => entry.id === itemId);
+      if (item) item.images = item.images.filter((entry) => entry.id !== imageId);
+      doc.updatedAt = Date.now();
+      tx.objectStore(IMAGES_STORE_NAME).delete(imageRecordKey(projectId, imageId));
+      projectsStore.put(doc);
+      tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(doc));
+    };
+    docRequest.onerror = () => { failure = docRequest.error ?? new Error('读取项目失败'); };
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = () => { db.close(); reject(failure ?? tx.error ?? new Error('图片删除事务已中止')); };
+    tx.onerror = () => { db.close(); reject(failure ?? tx.error); };
+  }), 'removeImageFromProject', DB_DOC_TIMEOUT_MS));
+}
+
+/** 对账：文档引用的图片 vs images store 实际存在的字节，报出缺失与孤儿。 */
+export async function reconcileProjectImages(projectId: string): Promise<ImageReconcilePlan> {
+  const db = await openDB();
+  return withTimeout(new Promise<ImageReconcilePlan>((resolve, reject) => {
+    const tx = db.transaction([PROJECTS_STORE_NAME, IMAGES_STORE_NAME], 'readonly');
+    const docRequest = tx.objectStore(PROJECTS_STORE_NAME).get(projectId);
+    const keysRequest = tx.objectStore(IMAGES_STORE_NAME).index(IMAGES_PROJECT_INDEX).getAllKeys(projectId);
+    tx.oncomplete = () => {
+      db.close();
+      const raw = docRequest.result as ProjectDocument | undefined;
+      if (!raw) {
+        resolve({ missing: [], orphans: [] });
+        return;
+      }
+      // 未迁移的内联图片字节就在文档里，不算缺失。
+      const inlineIds = new Set(collectInlineImages(raw).map((entry) => entry.image.id));
+      const plan = planImageReconcile(projectId, collectImageRefs(raw), (keysRequest.result as IDBValidKey[]) ?? []);
+      resolve({
+        missing: plan.missing.filter((id) => !inlineIds.has(id)),
+        orphans: plan.orphans,
+      });
+    };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  }), 'reconcileProjectImages');
+}
+
+const MIGRATION_STATE_KEY = 'evidence-image-migration-v5';
+
+function readMigrationState(): MigrationState {
+  try {
+    const raw = localStorage.getItem(MIGRATION_STATE_KEY);
+    if (!raw) return { completedIds: [], damagedIds: [] };
+    const parsed = JSON.parse(raw) as Partial<MigrationState>;
+    return {
+      completedIds: Array.isArray(parsed?.completedIds) ? parsed.completedIds.map(String) : [],
+      damagedIds: Array.isArray(parsed?.damagedIds) ? parsed.damagedIds.map(String) : [],
+    };
+  } catch {
+    return { completedIds: [], damagedIds: [] };
+  }
+}
+
+function writeMigrationState(state: MigrationState): void {
+  try {
+    localStorage.setItem(MIGRATION_STATE_KEY, JSON.stringify(state));
+  } catch {
+    // 写不进（隐私模式/配额）只会导致下次重新扫描，不影响正确性。
+  }
+}
+
+async function listProjectKeys(): Promise<string[]> {
+  const db = await openDB();
+  return withTimeout(new Promise<string[]>((resolve, reject) => {
+    const tx = db.transaction(PROJECTS_STORE_NAME, 'readonly');
+    const request = tx.objectStore(PROJECTS_STORE_NAME).getAllKeys();
+    request.onsuccess = () => { db.close(); resolve(((request.result as IDBValidKey[]) ?? []).map(String)); };
+    request.onerror = () => { db.close(); reject(request.error); };
+  }), 'listProjectKeys');
+}
+
+/**
+ * 搬迁单个项目的内联图片：同一事务内「写字节 → 读回校验 → 通过后才剥离文档里的 data」。
+ * 任何一步失败都 abort，该项目原样保留内联字节，绝不会出现「字节没写成却把 data 删了」。
+ */
+async function migrateProjectImages(projectId: string): Promise<boolean> {
+  const db = await openDB();
+  return trackWrite(withTimeout(new Promise<boolean>((resolve, reject) => {
+    const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, IMAGES_STORE_NAME], 'readwrite');
+    const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
+    const imagesStore = tx.objectStore(IMAGES_STORE_NAME);
+    let migrated = false;
+    let failure: Error | null = null;
+    const docRequest = projectsStore.get(projectId);
+    docRequest.onsuccess = () => {
+      const raw = docRequest.result as ProjectDocument | undefined;
+      if (!raw) return; // 项目已删除，无需搬迁
+      const inline = collectInlineImages(raw);
+      if (inline.length === 0) return; // 已是引用形态
+
+      const verified = new Set<string>();
+      let pending = inline.length;
+      const finish = () => {
+        if (verified.size !== inline.length) {
+          failure = new Error(`项目 ${projectId} 有 ${inline.length - verified.size} 张图片写入后未通过校验`);
+          tx.abort();
+          return;
+        }
+        const strippedDoc = stripInlineImageData(raw, verified);
+        const normalized = normalizeProjectDocument(strippedDoc);
+        projectsStore.put(normalized);
+        tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(normalized));
+        migrated = true;
+      };
+      for (const entry of inline) {
+        const record = buildStoredImage(projectId, entry.image);
+        if (!record) {
+          pending -= 1;
+          continue;
+        }
+        imagesStore.put(record);
+        // 读回校验：字节确实落库了才允许剥离原始 data。
+        const readBack = imagesStore.get(record.key);
+        readBack.onsuccess = () => {
+          const stored = readBack.result as StoredImage | undefined;
+          if (stored && stored.data === record.data) verified.add(entry.image.id);
+          pending -= 1;
+          if (pending === 0) finish();
+        };
+        readBack.onerror = () => {
+          pending -= 1;
+          if (pending === 0) finish();
+        };
+      }
+      if (pending === 0) finish();
+    };
+    docRequest.onerror = () => { failure = docRequest.error ?? new Error('读取项目失败'); };
+    tx.oncomplete = () => { db.close(); resolve(migrated); };
+    tx.onabort = () => { db.close(); reject(failure ?? tx.error ?? new Error('图片搬迁事务已中止')); };
+    tx.onerror = () => { db.close(); reject(failure ?? tx.error); };
+  }), 'migrateProjectImages', DB_DOC_TIMEOUT_MS));
+}
+
+/**
+ * 把引用形态文档补齐成内联形态（导出报告、导出数据包、批量压缩用）。
+ * 结果只在内存中使用，不写回库，避免把字节又塞回文档。
+ */
+export async function hydrateAssets(projectId: string, assets: Asset[]): Promise<Asset[]> {
+  const needsBytes = assets.some((asset) =>
+    asset.items.some((item) => item.images.some((image) => typeof image.data !== 'string' || image.data.length === 0))
+  );
+  if (!needsBytes) return assets; // 全部尚未迁移，无需补齐
+  const bytes = await resolveImagesForProject(projectId);
+  return assets.map((asset) => ({
+    ...asset,
+    items: asset.items.map((item) => ({
+      ...item,
+      images: item.images.map((image) => {
+        if (typeof image.data === 'string' && image.data.length > 0) return image;
+        const data = bytes.get(image.id);
+        return data ? { ...image, data } : image;
+      }),
+    })),
+  }));
+}
+
+export async function hydrateProjectImages(doc: ProjectDocument): Promise<ProjectDocument> {
+  return { ...doc, assets: await hydrateAssets(doc.id, doc.assets) };
+}
+
+/**
+ * 保存一份可能含内联字节的文档（数据包导入、批量压缩回写等外部来源）：
+ * 同事务把字节拆进 images store，库里的文档只留引用，不会把上百 MB 的 Base64 写回项目文档。
+ */
+export async function saveProjectWithImages(doc: ProjectDocument): Promise<void> {
+  const inline = collectInlineImages(doc);
+  if (inline.length === 0) return saveProject(doc);
+
+  const records: StoredImage[] = [];
+  const migratedIds = new Set<string>();
+  for (const entry of inline) {
+    const record = buildStoredImage(doc.id, entry.image);
+    if (!record) continue;
+    records.push(record);
+    migratedIds.add(entry.image.id);
+  }
+  const stripped = normalizeProjectDocument(stripInlineImageData(doc, migratedIds));
+
+  const db = await openDB();
+  return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, IMAGES_STORE_NAME], 'readwrite');
+    const imagesStore = tx.objectStore(IMAGES_STORE_NAME);
+    for (const record of records) imagesStore.put(record);
+    tx.objectStore(PROJECTS_STORE_NAME).put(stripped);
+    tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(stripped));
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = () => { db.close(); reject(tx.error ?? new Error('保存事务已中止')); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  }), 'saveProjectWithImages', DB_DOC_TIMEOUT_MS));
+}
+
+/**
+ * 打开项目前的单项目搬迁：保证内存里的文档是轻量引用形态，后续每次自动保存只写 KB 级文档。
+ * 搬迁失败不阻塞打开：文档保持内联形态仍可正常使用（只是没享受到性能改善）。
+ */
+export async function ensureProjectImagesMigrated(projectId: string): Promise<boolean> {
+  try {
+    return await migrateProjectImages(projectId);
+  } catch (error) {
+    recordError({
+      type: 'manual',
+      message: `项目 ${projectId} 的图片搬迁未完成，已保持原有存储形态：${error instanceof Error ? error.message : String(error)}`,
+      context: 'db:ensureProjectImagesMigrated',
+    });
+    return false;
+  }
+}
+
+export interface ImageMigrationReport {
+  /** 本轮检查过的项目数。 */
+  scanned: number;
+  /** 实际发生搬迁的项目数。 */
+  migrated: number;
+  /** 搬迁失败、保持内联形态的项目。 */
+  damagedIds: string[];
+  /** 是否已把待办项目全部处理完。 */
+  done: boolean;
+}
+
+export interface ImageMigrationProgress {
+  /** 库里的系统总数。 */
+  total: number;
+  /** 已完成搬迁检查的系统数。 */
+  completed: number;
+  /** 搬迁失败、仍保持内联形态的系统数。 */
+  damaged: number;
+  /** 还没处理的系统数。 */
+  pending: number;
+}
+
+/** 给存储面板用的搬迁进度（不触发搬迁，只读状态）。 */
+export async function getImageMigrationProgress(): Promise<ImageMigrationProgress> {
+  const state = readMigrationState();
+  const keys = await listProjectKeys();
+  const known = new Set(keys);
+  const completed = state.completedIds.filter((id) => known.has(id)).length;
+  const damaged = state.damagedIds.filter((id) => known.has(id)).length;
+  const pending = planMigrationTargets(keys, state).length;
+  return { total: keys.length, completed, damaged, pending };
+}
+
+let migrationRunning = false;
+
+/**
+ * 存量内联图片搬迁：按项目逐个处理，每个项目一个事务，处理完立刻落盘进度。
+ * 中途强制退出最多损失当前这一个项目的进度（数据仍是完好的内联形态），重启后从断点继续。
+ */
+export async function migrateInlineImages(
+  force = false,
+  onProgress?: (done: number, total: number) => void
+): Promise<ImageMigrationReport> {
+  const report: ImageMigrationReport = { scanned: 0, migrated: 0, damagedIds: [], done: false };
+  if (migrationRunning) return report;
+  migrationRunning = true;
+  try {
+    const state = readMigrationState();
+    if (force) state.damagedIds = [];
+    const targets = planMigrationTargets(await listProjectKeys(), state);
+    onProgress?.(0, targets.length);
+    for (const projectId of targets) {
+      report.scanned += 1;
+      try {
+        if (await migrateProjectImages(projectId)) report.migrated += 1;
+        state.completedIds.push(projectId);
+      } catch (error) {
+        // 单个项目失败不影响其余：该项目保持内联形态照常可用，只是暂时享受不到性能改善。
+        state.damagedIds.push(projectId);
+        report.damagedIds.push(projectId);
+        recordError({
+          type: 'manual',
+          message: `项目 ${projectId} 的图片搬迁失败，已保持原样：${error instanceof Error ? error.message : String(error)}`,
+          context: 'db:migrateInlineImages',
+        });
+      }
+      writeMigrationState(state);
+      onProgress?.(report.scanned, targets.length);
+    }
+    report.done = true;
+  } finally {
+    migrationRunning = false;
+  }
+  return report;
 }
 
 async function migrateLegacyProjectIfNeeded(): Promise<void> {

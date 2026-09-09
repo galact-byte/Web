@@ -289,6 +289,21 @@ async function buildImageGridTable(images: ImageData[]): Promise<Table> {
 }
 
 async function buildImageCell(image: ImageData): Promise<TableCell> {
+  // 字节由调用方（exportWordReport）提前 hydrate；真的取不到时用文字占位，
+  // 导出不能因一张图缺失而整份报告生成失败。
+  if (!image.data) {
+    return new docx.TableCell({
+      width: { size: MAIN_TABLE_WIDTH_DXA, type: docx.WidthType.DXA },
+      children: [
+        new docx.Paragraph({
+          alignment: docx.AlignmentType.CENTER,
+          spacing: { before: 80, after: 80 },
+          children: [templateText(`[图片缺失：${image.fileName || image.id}]`, 20, '仿宋', false, '999999')],
+        }),
+      ],
+      borders: noTableBorders(),
+    });
+  }
   const { buffer, type } = await parseImageData(image.data);
   const { width, height } = await resolveImageDisplaySize(image.data);
   const imageRun = new docx.ImageRun({

@@ -91,12 +91,12 @@ const AppContent: React.FC<AppContentProps> = ({
       setValidationOpen(true);
     } else {
       try {
-        await exportWordReport(meta, categories, assets);
+        await exportWordReport(meta, categories, assets, projectId);
       } catch (err) {
         showToast(`导出失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
       }
     }
-  }, [meta, categories, assets, showToast]);
+  }, [meta, categories, assets, projectId, showToast]);
 
   const handleSaveTemplates = useCallback(
     (categoryId: string, items: CheckItemTemplate[]) => {
@@ -108,11 +108,11 @@ const AppContent: React.FC<AppContentProps> = ({
   const handleContinueExport = useCallback(async () => {
     setValidationOpen(false);
     try {
-      await exportWordReport(meta, categories, assets);
+      await exportWordReport(meta, categories, assets, projectId);
     } catch (err) {
       showToast(`导出失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     }
-  }, [meta, categories, assets, showToast]);
+  }, [meta, categories, assets, projectId, showToast]);
 
   if (!loaded) {
     return (

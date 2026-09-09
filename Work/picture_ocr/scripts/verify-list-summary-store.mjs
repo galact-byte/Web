@@ -24,7 +24,8 @@ const upgradeBody = body('function openDB(');
 const backfillBody = body('export async function ensureSummariesSynced(');
 
 const checks = [
-  ['DB_VERSION 升到 4', /const DB_VERSION\s*=\s*4\b/.test(src)],
+  // v5 拆出 images store 后版本号继续递增；这里只要求不低于引入摘要 store 的 4。
+  ['DB_VERSION 不低于 4', Number(/const DB_VERSION\s*=\s*(\d+)/.exec(src)?.[1] ?? 0) >= 4],
   ['定义 projectSummaries store 常量', /PROJECT_SUMMARIES_STORE_NAME\s*=\s*'projectSummaries'/.test(src)],
   ['升级新建 summaries store', /createObjectStore\(PROJECT_SUMMARIES_STORE_NAME/.test(upgradeBody)],
   ['升级事务不遍历数据（无 openCursor）', !/openCursor\(/.test(upgradeBody)],

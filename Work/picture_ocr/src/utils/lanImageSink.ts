@@ -1,5 +1,5 @@
 import type { ImageData, ProjectDocument } from '../types';
-import { loadProject, saveProject } from './db';
+import { addImageToProject } from './db';
 
 /** 手机局域网上传落库的载荷（与 appReducer 的 ADD_IMAGE payload 同构）。 */
 export interface LanImageSavePayload {
@@ -15,7 +15,8 @@ export interface LanImageApplyResult {
 }
 
 /**
- * 纯函数：把一张图片合并进目标系统文档。目标资产/检查项缺失时抛错；
+ * 纯函数：把一张图片合并进内存中的系统文档（界面态合并用；落库由 addImageToProject 负责）。
+ * 目标资产/检查项缺失时抛错；
  * 已存在同 id 图片时视为成功但不改动（changed=false）。不突变入参。
  */
 export function applyLanImageToDocument(
@@ -53,7 +54,7 @@ export function applyLanImageToDocument(
  * 与电脑端当前打开哪个系统无关。用于会话中非当前打开系统的目标。
  */
 export async function saveLanImageToProject(projectId: string, payload: LanImageSavePayload): Promise<void> {
-  const doc = await loadProject(projectId);
-  const { doc: nextDoc, changed } = applyLanImageToDocument(doc, payload);
-  if (changed) await saveProject(nextDoc);
+  // 字节写 images store、文档在同事务里现读现改：
+  // 不再把整份内存快照覆盖回库，手机与电脑端并发添图不会互相冲掉。
+  await addImageToProject(projectId, payload.assetId, payload.itemId, payload.image);
 }

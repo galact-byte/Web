@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { decryptEvidenceBlob, encryptEvidenceBlob } from './evidencePackage';
 import { blobToDataUrl, compressImageBlob, dataUrlToBlob } from './imageCompression';
+import { hydrateAssets } from './db';
 import type {
   ProjectMeta,
   Category,
@@ -82,7 +83,7 @@ export async function createDataPackageBlob(
           ref.path = `images/${fileName}`;
         }
 
-        imageFolder?.file(fileName, dataUrlToBlob(img.data));
+        if (img.data) imageFolder?.file(fileName, dataUrlToBlob(img.data));
       }
     }
   }
@@ -96,9 +97,11 @@ export async function createDataPackageBlob(
 export async function exportDataPackage(
   meta: ProjectMeta,
   categories: Category[],
-  assets: Asset[]
+  assets: Asset[],
+  projectId: string
 ): Promise<void> {
-  const content = await createDataPackageBlob(meta, categories, assets);
+  // 字节已拆到独立 store，导出前补齐，否则数据包里只有图片元数据。
+  const content = await createDataPackageBlob(meta, categories, await hydrateAssets(projectId, assets));
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   downloadBlob(content, `测评证据_${meta.unitName || '未命名'}_${dateStr}.zip`);
 }
@@ -107,9 +110,10 @@ export async function exportEncryptedDataPackage(
   meta: ProjectMeta,
   categories: Category[],
   assets: Asset[],
-  password: string
+  password: string,
+  projectId: string
 ): Promise<void> {
-  const zip = await createDataPackageBlob(meta, categories, assets);
+  const zip = await createDataPackageBlob(meta, categories, await hydrateAssets(projectId, assets));
   const encryptedPackage = await encryptEvidenceBlob(zip, password);
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   downloadBlob(encryptedPackage, `测评采集包_${meta.systemName || meta.projectName || '未命名系统'}_${dateStr}.evidence`);
@@ -375,7 +379,7 @@ function getImageDedupKeys(image: ImageData): string[] {
   // 文件名+时间戳只是补充启发式：同一毫秒批量粘贴的多张剪贴板图常常同名同时间戳，
   // 因此再带上数据长度作为区分，避免把内容不同的截图误判成重复而在合并导入时丢弃。
   if (image.fileName && image.uploadedAt) {
-    keys.push(`file-time:${image.fileName}::${image.uploadedAt}::${image.data.length}`);
+    keys.push(`file-time:${image.fileName}::${image.uploadedAt}::${(image.data ?? '').length}`);
   }
   return keys;
 }

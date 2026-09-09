@@ -61,3 +61,13 @@
 - 实现：`src/utils/pendingWrites.ts` 做写入引用计数（`trackWrite` 包住 db.ts 全部 5 个写路径）；`installUnloadGuard` 在有 pending 时 `preventDefault` beforeunload；Electron `win.on('close')` + `dialog` 三选项拦截（等写完自动关 / 取消 / 仍然退出，留逃生阀）；`App.tsx` 右下角"正在保存，请勿关闭窗口…"指示条。
 - 验证：`verify:pending-writes` 29/29；`npm run build` 通过；Playwright 真实浏览器 22MB 图片入库，保存中 beforeunload 被拦截 ✓ / 指示条出现 ✓ / 写完自动放行 ✓ / 刷新后图片仍在 ✓；测试数据已清除。
 - 未解决（P1-P3 继续）：写放大根因（每加一张图重写整份文档）仍在，v0.6.3 只保证不因关窗丢数据。
+
+## 2026-09-09 P1-P3：图片字节拆分独立 store（DB v5，v0.7.0）
+
+- 存储模型：新增 `images` store（keyPath `key` = `${projectId}:${imageId}`，索引 `by_project`），`ProjectDocument` 只留引用（`ImageData.data` 改可选，已迁移 undefined / 未迁移仍内联，迁移期两种形态共存）。`onupgradeneeded` 的 v4→v5 只建 store 与索引、绝不遍历数据（吸取 v0.6.0 升级中止全丢的教训）。
+- 写入：`addImageToProject` / `removeImageFromProject` 单事务覆盖 projects/summaries/images，从库里现读现改，不接受调用方内存快照 → 手机上传与电脑端并发写不再互相覆盖。所有写路径继续走 `trackWrite`。
+- 读取：`resolveImageData` / `resolveImagesForProject`（单事务批量建 Map）+ `hydrateAssets` / `hydrateProjectImages`（导出、报告、压缩前按需补齐，结果只在内存用、不写回库）；界面统一走 `useImageSrc` + `imageCache`（inflight 去重 + LRU 60 张，切项目 `clearImageCache`）。
+- 搬迁：`migrateInlineImages(force?)` 逐项目分批，单项目事务内「写字节 → 立刻读回校验 → 全部通过才 `stripInlineImageData` 剥离文档」，失败 abort 保持内联并记 `damagedIds`；进度写 localStorage `evidence-image-migration-v5`，每完成一个项目立即落盘可续跑。列表页后台触发、打开项目前触发单项目搬迁，存储面板展示进度与手动重试。
+- 验证：`verify:image-store` 76/76、`verify:pending-writes` 29/29、`verify:list-summary-store` 24/24、`tsc --noEmit` + `npm run build` 通过。
+- **大库真实演练（Playwright + 真实 IndexedDB，51730）**：造 8 个项目 × 6 张 × 8MB ≈ 385MB 未迁移库 → 刷新后台自动搬迁全部完成、0 损坏；再追加 2 个内联项目（481MB）验证增量搬迁同样完成。逐条比对 60 张图的长度+头尾字节：**60/60 完全一致**，文档内联残留 0 条，单份项目文档从约 48MB 降到 1.0KB。摘要读取 1ms、单张按需读图 16ms。大库下加一张新照片：从选中到落库 **82ms**，文档只增加一条引用（1135 字节）。
+- 发布 v0.7.0；RELEASE-NOTES 新写，含「升级后不建议回退 0.6.x」提示。
