@@ -3,7 +3,7 @@
   "name": "image-store-split",
   "title": "图片字节拆分独立 store，消除整份文档重写",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

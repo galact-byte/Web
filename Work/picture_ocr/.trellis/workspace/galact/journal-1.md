@@ -54,3 +54,10 @@
 - 验证：新增 `verify:summary-repair`（28/28，含用 tsc 单文件编译纯函数后真实调用；`--typeRoots ./no-such-types --skipLibCheck` 规避 @types 自动引入报错）；旧 `verify:list-summary-store` 同步更新（24/24）；error-report 19/19；build 通过。**真实浏览器端到端**：vite preview 固定 51730 + Playwright，构造「有文档无摘要」「有摘要无文档」两条脏数据 → 刷新后「丢失的系统」被找回并显示、幽灵条目消失，错误日志留下 `db:summaryRepair 补建 1 条，清理孤立摘要 1 条`；测试数据已清除。
 - 两端覆盖：`electron/main.cjs:155` 加载同一份 `dist/index.html`（局域网服务也用同一 dist），故桌面客户端与网页版同源生效。
 - 后续（未做）：图片字节仍内联在项目文档里，每加一张图都要重写整份文档（写放大 O(n²)），是大库变慢与保存超时的根因，应拆独立 images store 按需加载。
+
+## 2026-09-09 P0 止血：关窗保护（v0.6.3）
+
+- 根因确认（代码证据）：`AppContext` 保存是 debounce 500ms + 卸载 flush，两者都是"发起后不等待"的异步 IndexedDB 写；全项目无 `beforeunload`。大项目写十几秒，页面销毁即事务中止 → 刚拍的照片静默丢失。
+- 实现：`src/utils/pendingWrites.ts` 做写入引用计数（`trackWrite` 包住 db.ts 全部 5 个写路径）；`installUnloadGuard` 在有 pending 时 `preventDefault` beforeunload；Electron `win.on('close')` + `dialog` 三选项拦截（等写完自动关 / 取消 / 仍然退出，留逃生阀）；`App.tsx` 右下角"正在保存，请勿关闭窗口…"指示条。
+- 验证：`verify:pending-writes` 29/29；`npm run build` 通过；Playwright 真实浏览器 22MB 图片入库，保存中 beforeunload 被拦截 ✓ / 指示条出现 ✓ / 写完自动放行 ✓ / 刷新后图片仍在 ✓；测试数据已清除。
+- 未解决（P1-P3 继续）：写放大根因（每加一张图重写整份文档）仍在，v0.6.3 只保证不因关窗丢数据。

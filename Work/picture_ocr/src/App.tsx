@@ -19,6 +19,7 @@ import { buildGroupSnapshot } from './utils/lanGroupSnapshot';
 import { saveLanImageToProject } from './utils/lanImageSink';
 import { useToast } from './components/Toast';
 import { recordError, setErrorNotifier } from './utils/errorLog';
+import { getPendingWriteCount, subscribePendingWrites } from './utils/pendingWrites';
 import type { LanBridge, LanCollectorSnapshot, LanCollectorSystem } from './utils/lanBridge';
 import type { LanImageSavePayload } from './utils/lanImageSink';
 
@@ -370,6 +371,7 @@ const App: React.FC = () => {
       <>
         <ProjectList key={projectListRefreshKey} onOpenProject={handleOpenProject} onStartLanCollector={lanBridge ? startLanForGroup : undefined} />
         {lanDialog}
+        <PendingWritesIndicator />
       </>
     );
   }
@@ -392,7 +394,27 @@ const App: React.FC = () => {
         />
       </AppProvider>
       {lanDialog}
+      <PendingWritesIndicator />
     </>
+  );
+};
+
+/**
+ * 写入进行中的显式指示：大项目保存要数十秒，没有指示时用户会误以为卡死而强杀应用，
+ * 未提交的事务随之中止，刚拍的照片就没了。
+ */
+const PendingWritesIndicator: React.FC = () => {
+  const pending = React.useSyncExternalStore(subscribePendingWrites, getPendingWriteCount, () => 0);
+  if (pending <= 0) return null;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="pointer-events-none fixed bottom-4 left-1/2 z-[110] flex -translate-x-1/2 items-center gap-2 rounded-full bg-slate-900/90 px-4 py-2 text-sm text-white shadow-lg"
+    >
+      <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+      正在保存，请勿关闭窗口…
+    </div>
   );
 };
 
