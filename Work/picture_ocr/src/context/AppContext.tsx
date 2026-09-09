@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useRef, useCal
 import type { ProjectDocument } from '../types';
 import { appReducer, createInitialState, AppState, AppAction } from './appReducer';
 import { saveProject, loadProject, createProjectDocument, loadProjectGroup, updateProjectGroupAndSystems } from '../utils/db';
+import { reportCriticalError } from '../utils/errorLog';
 
 interface AppContextValue {
   state: AppState;
@@ -56,12 +57,15 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
         loadedRef.current = true;
       })
       .catch((err) => {
-        console.error('Failed to load from IndexedDB:', err);
-        const fallbackDoc = createProjectDocument();
-        createdAtRef.current = fallbackDoc.createdAt;
-        projectGroupIdRef.current = null;
-        dispatch({ type: 'LOAD_PROJECT', payload: { ...fallbackDoc, id: projectId} });
-        loadedRef.current = true;
+        // 关键：读失败时绝不能用空白模板顶替并进入可保存状态——旧逻辑会在 500ms 后把空文档写回去，
+        // 直接清空真实项目（大文档读取超时就会触发）。这里保持 loadedRef=false，禁掉自动保存。
+        loadedRef.current = false;
+        reportCriticalError({
+          type: 'manual',
+          message: `项目读取失败，已暂停自动保存以免覆盖原有数据，请重新打开该项目：${err instanceof Error ? err.message : String(err)}`,
+          stack: err instanceof Error ? err.stack : undefined,
+          context: 'app:loadProject',
+        });
       });
   }, [projectId]);
 
@@ -87,7 +91,13 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
       void enqueueProjectSave(doc)
         .then(() => onProjectSaved?.())
         .catch((err) => {
-          console.error('Failed to save to IndexedDB:', err);
+          // 保存失败必须让用户看到：否则刚拍的照片只存在内存里，关闭窗口就静默丢失。
+          reportCriticalError({
+            type: 'manual',
+            message: `项目保存失败，刚的修改可能未写入，请勿关闭窗口并重试：${err instanceof Error ? err.message : String(err)}`,
+            stack: err instanceof Error ? err.stack : undefined,
+            context: 'app:autoSave',
+          });
         });
     }, 500);
 
@@ -105,7 +115,12 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
       }
       if (latestDocRef.current) {
         void enqueueProjectSave({ ...latestDocRef.current, updatedAt: Date.now() }).catch((err) => {
-          console.error('Failed to flush project save on unmount:', err);
+          reportCriticalError({
+            type: 'manual',
+            message: `退出项目时的最后一次保存失败，请重新打开项目确认内容：${err instanceof Error ? err.message : String(err)}`,
+            stack: err instanceof Error ? err.stack : undefined,
+            context: 'app:flushSave',
+          });
         });
       }
     };

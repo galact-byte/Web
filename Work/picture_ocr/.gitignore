@@ -47,3 +47,6 @@ AGENTS.md
 # Local reference documents
 测评证据截图要求V1.0.docx
 测评证据采集工具-项目计划.md
+
+# Playwright MCP 调试产物
+.playwright-mcp/
