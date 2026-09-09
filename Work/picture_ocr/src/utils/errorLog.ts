@@ -1,4 +1,5 @@
-import { listProjectGroups } from './db';
+import { getLastSummaryRepairReport, getStoreDiagnostics, listProjectGroups, type StoreDiagnostics } from './db';
+import type { SummaryRepairReport } from './summaryRepair';
 import { getStorageEstimate } from './storageEstimate';
 
 /** 单条错误记录 */
@@ -69,6 +70,15 @@ export function recordError(entry: Omit<ErrorLogEntry, 'time'>): void {
   }
 }
 
+/**
+ * 记录并同时提示用户。用于「静默失败会直接丢数据」的关键路径（如项目自动保存）：
+ * 以前保存失败只写 console，用户看不到，刚拍的照片只存在内存里，关闭就没了。
+ */
+export function reportCriticalError(entry: Omit<ErrorLogEntry, 'time'>): void {
+  recordError(entry);
+  notifyUi(entry.message);
+}
+
 function notifyUi(message: string): void {
   if (!notifier) return;
   try {
@@ -122,12 +132,27 @@ export interface DiagnosticsReport {
   platform: 'desktop' | 'web';
   storage: { supported: boolean; usage: number | null; quota: number | null };
   counts: { groups: number; systems: number; assets: number };
+  /** 各 store 的真实条数：与 counts 对不上就说明有项目在库里但没进列表。 */
+  stores: StoreDiagnostics | null;
+  /** 最近一次存储自检修复结果（含无法读取的记录主键）。 */
+  repair: SummaryRepairReport | null;
+  /** 项目清单（不含图片字节），便于和用户描述的「少了哪个」逐条比对。 */
+  projects: Array<{
+    id: string;
+    groupId: string | null;
+    projectName: string;
+    systemName: string;
+    assetCount: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
   errors: ErrorLogEntry[];
 }
 
 export async function buildDiagnosticsReport(): Promise<DiagnosticsReport> {
   const desktop = typeof window !== 'undefined' && !!window.evidenceData;
   let counts = { groups: 0, systems: 0, assets: 0 };
+  let projects: DiagnosticsReport['projects'] = [];
   try {
     const groups = await listProjectGroups();
     const systems = groups.flatMap((group) => group.systems);
@@ -136,8 +161,24 @@ export async function buildDiagnosticsReport(): Promise<DiagnosticsReport> {
       systems: systems.length,
       assets: systems.reduce((sum, system) => sum + (system.assetCount ?? 0), 0),
     };
+    projects = systems.map((system) => ({
+      id: system.id,
+      groupId: system.groupId,
+      projectName: system.meta.projectName,
+      systemName: system.meta.systemName,
+      assetCount: system.assetCount,
+      createdAt: new Date(system.createdAt).toISOString(),
+      updatedAt: new Date(system.updatedAt).toISOString(),
+    }));
   } catch (err) {
     recordError({ type: 'manual', message: `诊断读取项目计数失败：${err instanceof Error ? err.message : String(err)}` });
+  }
+
+  let stores: StoreDiagnostics | null = null;
+  try {
+    stores = await getStoreDiagnostics();
+  } catch (err) {
+    recordError({ type: 'manual', message: `诊断读取存储条数失败：${err instanceof Error ? err.message : String(err)}` });
   }
 
   let storage: DiagnosticsReport['storage'] = { supported: false, usage: null, quota: null };
@@ -155,6 +196,9 @@ export async function buildDiagnosticsReport(): Promise<DiagnosticsReport> {
     platform: desktop ? 'desktop' : 'web',
     storage,
     counts,
+    stores,
+    repair: getLastSummaryRepairReport(),
+    projects,
     errors: getErrorLog(),
   };
 }

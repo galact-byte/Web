@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProjectDocument, ProjectGroup, ProjectGroupSummary, ProjectMeta, ProjectSummary } from '../types';
 import {
   createProjectGroupWithSystems,
@@ -7,6 +7,7 @@ import {
   splitSystemNames,
   deleteProject,
   deleteProjectGroup,
+  getLastSummaryRepairReport,
   listProjectGroups,
   loadProject,
   saveProject,
@@ -77,6 +78,8 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
   const [compressingSystemId, setCompressingSystemId] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const showToast = useToast();
+  // 自检提示每个会话只弹一次，避免每次刷新列表都刷屏。
+  const repairNoticeShownRef = useRef(false);
 
   // 桌面版：启动时若自定义数据目录不可用已回退默认，提示一次。
   useEffect(() => {
@@ -91,6 +94,17 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
     try {
       const nextGroups = await listProjectGroups();
       setGroups(nextGroups);
+      // 存储自检的结果必须让用户知道：被找回的项目、以及读不出来的坏记录都不能静默处理。
+      const repair = getLastSummaryRepairReport();
+      if (repair && !repairNoticeShownRef.current && (repair.repaired > 0 || repair.damagedIds.length > 0)) {
+        repairNoticeShownRef.current = true;
+        if (repair.repaired > 0) {
+          showToast(`存储自检：已找回 ${repair.repaired} 个未显示的项目。`, 'success');
+        }
+        if (repair.damagedIds.length > 0) {
+          showToast(`存储自检：有 ${repair.damagedIds.length} 条项目记录读不出内容，请到「存储设置→导出诊断包」发给技术支持。`, 'error');
+        }
+      }
       setExpandedGroupIds((current) => {
         const availableIds = new Set(nextGroups.map((group) => group.id));
         const next = new Set([...current].filter((id) => availableIds.has(id)));

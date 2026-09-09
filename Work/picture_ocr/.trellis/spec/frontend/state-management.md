@@ -41,11 +41,20 @@ dispatch({ type: 'REORDER_ITEMS', payload: { assetId: asset.id, itemIds } });
 - 图片以 Base64 内联在 `ProjectDocument.assets[].items[].images[].data`。**列表加载绝不得读取完整项目文档**（会把数百 MB Base64 载入内存 + 深拷贝，导致主线程卡死/OOM）。
 - 列表只读轻量摘要 store `projectSummaries`（`id/groupId/meta/assetCount/createdAt/updatedAt`，无图片字节），见 `db.ts` 的 `listProjects` / `listProjectGroups`。
 - 所有写/删/迁移项目的函数必须在**同一事务**内同步维护 `projectSummaries`（`saveProject`、`createProjectGroupWithSystems`、`updateProjectGroupAndSystems`、`deleteProject`、`deleteProjectGroup`、`migrateLegacyProjectIfNeeded`），否则列表与真实数据会漂移。新增写入路径时一并追加摘要维护。
-- `DB_VERSION` 升级需在 `onupgradeneeded` 里回填存量；大库回填用**逐条游标**（峰值仅一条文档），不得 `getAll` 一次载入。DB 版本一旦发布不可降级回旧代码。
+- `DB_VERSION` 升级的 `onupgradeneeded` **只做建表/建索引**（遍历数据报错会中止 versionchange 事务并回滚版本）；存量回填放到升级完成后的 `ensureSummariesSynced()`。DB 版本一旦发布不可降级回旧代码。
+- 摘要自检（`ensureSummariesSynced`）的不变量，改动时不得退化：
+  - 用 `projects` 与 `projectSummaries` 的 **`getAllKeys()` 主键求差**判定缺失，不得用「摘要数 >= 项目数」之类计数近似。
+  - 补建摘要的 `id` **以记录主键为权威**，不得依赖记录体里的 `raw.id`（否则 id 残缺的项目在列表里永久消失）。
+  - 缺失记录**逐条 `get`**（峰值仅一条文档），单条读失败在 `onerror` 里 `preventDefault()` 吸掉，不让一条坏记录中止整个修复事务。
+  - 读不出内容的记录计入 `damagedIds` 并进诊断包，**不得静默吞掉**；有摘要无文档的孤立索引反向清理。
+  - 修复报告经 `getLastSummaryRepairReport()` 暴露给列表 Toast 与存储设置面板（面板可 `ensureSummariesSynced(true)` 手动重跑）。
 
 ## 存储操作超时与报错采集
 
 - `db.ts` 用 `withTimeout` 包裹 `openDB` 与各事务，卡死超时以明确错误 reject（openDB 兜底更长，兼容首次升级回填），避免 UI 无限转圈。
+- **整份项目文档的读写（`loadProject`/`saveProject`/自检）用 `DB_DOC_TIMEOUT_MS`（较宽）**：文档内联 Base64，百 MB 级序列化在普通事务超时内完不成；超时只 reject Promise（底层事务仍在跑），会制造假失败。
+- **“静默失败会丢数据”的路径必须用 `reportCriticalError`（记录 + 弹 Toast），不得只 `console.error`**：项目自动保存失败、退出时 flush 失败均属此类；手机局域网上传落库失败至少 `recordError`。
+- **项目读取失败时绝不允许用空白文档顶替并进入可保存状态**（`AppContext` 保持 `loadedRef=false`）：否则 debounce 保存会把空文档写回去，直接清空真实项目。
 - 全局报错采集统一走 `src/utils/errorLog.ts`：`main.tsx` 开场 `installGlobalErrorHandlers()`，`App` 用 `setErrorNotifier` 接入 Toast（仅未捕获错误弹窗）。`recordError` 只写 localStorage 环形缓冲（不弹窗，避免与组件 catch 重复）。设计新存储失败分支时，优先在 db 层 `recordError` 以保证进诊断包。
 
 ## 局部与派生状态

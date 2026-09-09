@@ -3,6 +3,8 @@ import { useToast } from './Toast';
 import { useConfirmDialog } from './ConfirmDialog';
 import { formatBytes, getStorageEstimate, STORAGE_WARN_RATIO, type StorageEstimateResult } from '../utils/storageEstimate';
 import { clearErrorLog, downloadDiagnostics, getErrorLog } from '../utils/errorLog';
+import { ensureSummariesSynced, getStoreDiagnostics, type StoreDiagnostics } from '../utils/db';
+import type { SummaryRepairReport } from '../utils/summaryRepair';
 
 interface StorageSettingsDialogProps {
   onClose: () => void;
@@ -138,6 +140,37 @@ const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }
     showToast('错误记录已清空', 'success');
   };
 
+  // 存储自检（桌面/Web 通用）：列表只读摘要 store，若项目文档没有对应摘要就会「看不见」，这里提供人工核对与修复。
+  const [stores, setStores] = useState<StoreDiagnostics | null>(null);
+  const [repair, setRepair] = useState<SummaryRepairReport | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    void getStoreDiagnostics().then(setStores).catch(() => { /* 忽略：读不到保持空 */ });
+  }, []);
+
+  const handleSelfCheck = async () => {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const result = await ensureSummariesSynced(true);
+      setRepair(result);
+      setStores(await getStoreDiagnostics());
+      if (result.repaired > 0) {
+        showToast(`自检完成：找回 ${result.repaired} 个未显示的项目，请返回列表查看。`, 'success');
+      } else if (result.damagedIds.length > 0) {
+        showToast(`自检完成：${result.damagedIds.length} 条记录读不出内容，请导出诊断包发给技术支持。`, 'error');
+      } else {
+        showToast('自检完成：项目与列表一致，无需修复。', 'success');
+      }
+      setErrorCount(getErrorLog().length);
+    } catch (err) {
+      showToast(`自检失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
+    } finally {
+      setChecking(false);
+    }
+  };
+
   // Web 态
   const [estimate, setEstimate] = useState<StorageEstimateResult | null>(null);
 
@@ -259,6 +292,36 @@ const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }
               </div>
             </div>
           )}
+
+          <div className="mt-5 border-t border-slate-200 pt-5">
+            <p className="text-sm font-medium text-slate-700">存储自检</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              如果发现项目列表里少了项目，可先做一次自检：核对库里的项目文档与列表索引，把漏掉的项目重新加回列表（不会删除任何图片）。
+            </p>
+            <p className="mt-2 border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+              {stores
+                ? `项目文档 ${stores.projects} 条 · 列表索引 ${stores.summaries} 条 · 项目组 ${stores.groups} 个${stores.legacyStranded ? ' · 有旧版遗留记录未迁移' : ''}`
+                : '读取中…'}
+              {stores && stores.projects !== stores.summaries && (
+                <span className="ml-1 font-semibold text-amber-700">（数量不一致，建议立即自检）</span>
+              )}
+            </p>
+            {repair && (
+              <p className="mt-2 text-xs leading-5 text-slate-600">
+                上次自检：找回 {repair.repaired} 个项目、清理 {repair.removedOrphans} 条失效索引
+                {repair.damagedIds.length > 0 && (
+                  <span className="text-red-600">，{repair.damagedIds.length} 条记录读不出内容（{repair.damagedIds.join('、')}）</span>
+                )}
+              </p>
+            )}
+            <button
+              onClick={handleSelfCheck}
+              disabled={checking}
+              className="mt-2 border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {checking ? '自检中…' : '立即自检并修复'}
+            </button>
+          </div>
 
           <div className="mt-5 border-t border-slate-200 pt-5">
             <p className="text-sm font-medium text-slate-700">诊断与报错</p>

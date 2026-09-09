@@ -9,6 +9,7 @@ import type {
 } from '../types';
 import defaultCategories, { createDefaultMeta, createPresetAssets } from '../data/defaults';
 import { recordError } from './errorLog';
+import { createEmptyRepairReport, planSummaryRepair, type SummaryRepairReport } from './summaryRepair';
 
 const DB_NAME = 'evidence-collector-db';
 const DB_VERSION = 4;
@@ -22,6 +23,9 @@ const LEGACY_PROJECT_ID = 'current';
 const DB_OP_TIMEOUT_MS = 15000;
 // openDB 首次打开可能伴随 v3→v4 逐条回填摘要，放宽超时避免大库迁移被误断。
 const DB_OPEN_TIMEOUT_MS = 60000;
+// 写入整份项目文档（内联 Base64，可能上百 MB）耗时远超读取；用读操作的 15s 卡这里会把
+// 「还在写」误判成「保存失败」，而 withTimeout 只是 reject，底层事务并不会取消，因此写路径放宽。
+const DB_DOC_TIMEOUT_MS = 120000;
 
 function withTimeout<T>(op: Promise<T>, label: string, timeoutMs = DB_OP_TIMEOUT_MS): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -96,47 +100,134 @@ function openDB(): Promise<IDBDatabase> {
   }), 'openDB', DB_OPEN_TIMEOUT_MS);
 }
 
-// 摘要 store 存量回填：在升级完成后的普通读写事务里逐条游标补建，跳过 null/缺 id 的坏记录，
-// 单条异常不再中止整库升级；幂等——摘要数已达项目数即认为已回填完成，直接跳过。
-let summariesBackfillDone = false;
-async function ensureSummariesBackfilled(): Promise<void> {
-  if (summariesBackfillDone) return;
+// 摘要 store 自检修复：按主键集合求差，缺摘要的补、孤立摘要的删。
+// 不用「摘要数 >= 项目数」这种近似判断——数目相等也可能是「补了一条新的、漏了一条旧的」，
+// 那条漏掉的项目就会永久从列表消失（v0.6.1 跳过坏记录即造成用户少了一个项目）。
+let summariesSyncDone = false;
+let lastRepairReport: SummaryRepairReport | null = null;
+
+/** 最近一次存储自检结果，供启动提示与诊断包读取（尚未自检时为 null）。 */
+export function getLastSummaryRepairReport(): SummaryRepairReport | null {
+  return lastRepairReport;
+}
+
+export async function ensureSummariesSynced(force = false): Promise<SummaryRepairReport> {
+  if (summariesSyncDone && !force && lastRepairReport) return lastRepairReport;
   const db = await openDB();
-  return withTimeout(new Promise<void>((resolve, reject) => {
+  const report = await withTimeout(new Promise<SummaryRepairReport>((resolve, reject) => {
     if (!db.objectStoreNames.contains(PROJECTS_STORE_NAME) || !db.objectStoreNames.contains(PROJECT_SUMMARIES_STORE_NAME)) {
-      summariesBackfillDone = true;
       db.close();
-      resolve();
+      resolve(createEmptyRepairReport());
       return;
     }
+    const result = createEmptyRepairReport();
     const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
     const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
     const summariesStore = tx.objectStore(PROJECT_SUMMARIES_STORE_NAME);
-    const projectsCount = projectsStore.count();
-    const summariesCount = summariesStore.count();
-    tx.oncomplete = () => { summariesBackfillDone = true; db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-    // 两个 count 请求先后发起，完成顺序不能依赖（若把一个 onsuccess 嵌在另一个里设置，
-    // 先完成的那个回调会错过）。各自回写结果，两者都就绪后由后完成的回调同步开游标，保证事务不提前提交。
-    let projectsTotal: number | undefined;
-    let summariesTotal: number | undefined;
-    const maybeBackfill = () => {
-      if (projectsTotal === undefined || summariesTotal === undefined) return;
-      // 摘要已齐（含两者都为 0 的空库）则无需回填，让事务自然完成。
-      if (summariesTotal >= projectsTotal) return;
-      projectsStore.openCursor().onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
-        if (!cursor) return;
-        const raw = cursor.value as (Partial<ProjectDocument> & { id?: string }) | null;
-        if (raw && typeof raw.id === 'string' && raw.id) {
-          summariesStore.put(summaryFromRaw(raw as Partial<ProjectDocument> & { id: string }));
+    const projectKeysRequest = projectsStore.getAllKeys();
+    const summaryKeysRequest = summariesStore.getAllKeys();
+    let projectKeys: IDBValidKey[] | undefined;
+    let summaryKeys: IDBValidKey[] | undefined;
+
+    // 逐条补建：一次只把一条项目文档读进内存（文档内联 Base64，单条可能上百 MB），
+    // 并发发起全部 get 会造成内存尖峰甚至 OOM。
+    const repairNext = (queue: IDBValidKey[], index: number) => {
+      if (index >= queue.length) return;
+      const key = queue[index];
+      const getRequest = projectsStore.get(key);
+      getRequest.onsuccess = () => {
+        const raw = getRequest.result as (Partial<ProjectDocument> & { id?: string }) | null | undefined;
+        if (raw && typeof raw === 'object') {
+          // 记录体里的 id 可能缺失或损坏，主键才是权威来源；用主键兜底才不会让整条项目从列表消失。
+          summariesStore.put(summaryFromRaw({ ...raw, id: String(key) }));
+          result.repaired += 1;
+        } else {
+          result.damagedIds.push(String(key));
         }
-        cursor.continue();
+        repairNext(queue, index + 1);
+      };
+      getRequest.onerror = (event) => {
+        // 单条记录读失败（值已损坏）不能中止整个事务，否则一条坏记录会让其余修复全部回滚。
+        event.preventDefault();
+        event.stopPropagation();
+        result.damagedIds.push(String(key));
+        repairNext(queue, index + 1);
       };
     };
-    projectsCount.onsuccess = () => { projectsTotal = projectsCount.result; maybeBackfill(); };
-    summariesCount.onsuccess = () => { summariesTotal = summariesCount.result; maybeBackfill(); };
-  }), 'ensureSummariesBackfilled', DB_OPEN_TIMEOUT_MS);
+
+    // 两个 getAllKeys 完成顺序不可依赖，各自回写结果，齐了再由后完成的回调同步发起修复请求，
+    // 保证事务在补建期间保持活跃、不提前提交。
+    const maybeSync = () => {
+      if (!projectKeys || !summaryKeys) return;
+      result.projectCount = projectKeys.length;
+      result.summaryCount = summaryKeys.length;
+      const plan = planSummaryRepair(projectKeys, summaryKeys);
+      result.missing = plan.missing.length;
+      plan.orphans.forEach((key) => {
+        summariesStore.delete(key);
+        result.removedOrphans += 1;
+      });
+      repairNext(plan.missing, 0);
+    };
+
+    projectKeysRequest.onsuccess = () => { projectKeys = projectKeysRequest.result; maybeSync(); };
+    summaryKeysRequest.onsuccess = () => { summaryKeys = summaryKeysRequest.result; maybeSync(); };
+    tx.oncomplete = () => { db.close(); resolve(result); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  }), 'ensureSummariesSynced', DB_DOC_TIMEOUT_MS);
+
+  summariesSyncDone = true;
+  lastRepairReport = report;
+  if (report.missing > 0 || report.removedOrphans > 0 || report.damagedIds.length > 0) {
+    recordError({
+      type: 'manual',
+      message: `存储自检：项目 ${report.projectCount} 条 / 摘要 ${report.summaryCount} 条，补建 ${report.repaired} 条，`
+        + `清理孤立摘要 ${report.removedOrphans} 条，无法读取 ${report.damagedIds.length} 条`
+        + (report.damagedIds.length ? `（${report.damagedIds.join('、')}）` : ''),
+      context: 'db:summaryRepair',
+    });
+  }
+  return report;
+}
+
+/** 各 store 的真实条数与遗留数据状态，用于诊断「列表看不到但库里还在」这类漂移。 */
+export interface StoreDiagnostics {
+  projects: number;
+  summaries: number;
+  groups: number;
+  legacy: number;
+  /** 旧版单项目记录仍在 legacy store，且从未迁移进 projects store。 */
+  legacyStranded: boolean;
+}
+
+export async function getStoreDiagnostics(): Promise<StoreDiagnostics> {
+  const db = await openDB();
+  return withTimeout(new Promise<StoreDiagnostics>((resolve, reject) => {
+    const result: StoreDiagnostics = { projects: 0, summaries: 0, groups: 0, legacy: 0, legacyStranded: false };
+    const names = [PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, PROJECT_GROUPS_STORE_NAME, LEGACY_STORE_NAME]
+      .filter((name) => db.objectStoreNames.contains(name));
+    if (names.length === 0) {
+      db.close();
+      resolve(result);
+      return;
+    }
+    const tx = db.transaction(names, 'readonly');
+    const countInto = (name: string, assign: (value: number) => void) => {
+      if (!names.includes(name)) return;
+      const request = tx.objectStore(name).count();
+      request.onsuccess = () => assign(request.result);
+    };
+    countInto(PROJECTS_STORE_NAME, (value) => { result.projects = value; });
+    countInto(PROJECT_SUMMARIES_STORE_NAME, (value) => { result.summaries = value; });
+    countInto(PROJECT_GROUPS_STORE_NAME, (value) => { result.groups = value; });
+    countInto(LEGACY_STORE_NAME, (value) => { result.legacy = value; });
+    if (names.includes(LEGACY_STORE_NAME) && names.includes(PROJECTS_STORE_NAME)) {
+      const migratedKey = tx.objectStore(PROJECTS_STORE_NAME).getKey(LEGACY_PROJECT_ID);
+      migratedKey.onsuccess = () => { result.legacyStranded = result.legacy > 0 && migratedKey.result === undefined; };
+    }
+    tx.oncomplete = () => { db.close(); resolve(result); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  }), 'getStoreDiagnostics');
 }
 
 export function createProjectDocument(
@@ -199,7 +290,7 @@ export function normalizeProjectGroup(group: Partial<ProjectGroup> & { id?: stri
 
 export async function listProjects(): Promise<ProjectSummary[]> {
   await migrateLegacyProjectIfNeeded();
-  await ensureSummariesBackfilled();
+  await ensureSummariesSynced();
   const db = await openDB();
   return withTimeout(new Promise<ProjectSummary[]>((resolve, reject) => {
     const tx = db.transaction(PROJECT_SUMMARIES_STORE_NAME, 'readonly');
@@ -219,7 +310,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
 
 export async function listProjectGroups(): Promise<ProjectGroupSummary[]> {
   await migrateLegacyProjectIfNeeded();
-  await ensureSummariesBackfilled();
+  await ensureSummariesSynced();
   const db = await openDB();
   return withTimeout(new Promise<ProjectGroupSummary[]>((resolve, reject) => {
     const tx = db.transaction([PROJECT_SUMMARIES_STORE_NAME, PROJECT_GROUPS_STORE_NAME], 'readonly');
@@ -247,7 +338,7 @@ export async function saveProject(doc: ProjectDocument): Promise<void> {
     tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(normalizedDoc));
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'saveProject');
+  }), 'saveProject', DB_DOC_TIMEOUT_MS);
 }
 
 export async function saveProjectGroup(group: ProjectGroup): Promise<void> {
@@ -258,7 +349,7 @@ export async function saveProjectGroup(group: ProjectGroup): Promise<void> {
     tx.objectStore(PROJECT_GROUPS_STORE_NAME).put(normalizedGroup);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'saveProjectGroup');
+  }), 'saveProjectGroup', DB_DOC_TIMEOUT_MS);
 }
 
 export function splitSystemNames(value: string): string[] {
@@ -296,7 +387,7 @@ export async function createProjectGroupWithSystems(
     });
     tx.oncomplete = () => { db.close(); resolve(projects); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'createProjectGroupWithSystems');
+  }), 'createProjectGroupWithSystems', DB_DOC_TIMEOUT_MS);
 }
 
 export async function createSystemForGroup(group: ProjectGroup, systemName: string): Promise<ProjectDocument> {
@@ -343,7 +434,7 @@ export async function updateProjectGroupAndSystems(group: ProjectGroup): Promise
     matchingSystems.onerror = () => reject(matchingSystems.error);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'updateProjectGroupAndSystems');
+  }), 'updateProjectGroupAndSystems', DB_DOC_TIMEOUT_MS);
 }
 
 export async function loadProject(projectId: string): Promise<ProjectDocument | null> {
@@ -357,7 +448,7 @@ export async function loadProject(projectId: string): Promise<ProjectDocument | 
       resolve(request.result ? normalizeProjectDocument(request.result) : null);
     };
     request.onerror = () => { db.close(); reject(request.error); };
-  }), 'loadProject');
+  }), 'loadProject', DB_DOC_TIMEOUT_MS);
 }
 
 export async function loadProjectGroup(groupId: string): Promise<ProjectGroup | null> {
@@ -381,7 +472,7 @@ export async function deleteProject(projectId: string): Promise<void> {
     tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).delete(projectId);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'deleteProject');
+  }), 'deleteProject', DB_DOC_TIMEOUT_MS);
 }
 
 export async function deleteProjectGroup(groupId: string): Promise<void> {
@@ -401,7 +492,7 @@ export async function deleteProjectGroup(groupId: string): Promise<void> {
     matchingSystems.onerror = () => reject(matchingSystems.error);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'deleteProjectGroup');
+  }), 'deleteProjectGroup', DB_DOC_TIMEOUT_MS);
 }
 
 async function migrateLegacyProjectIfNeeded(): Promise<void> {
@@ -430,7 +521,7 @@ async function migrateLegacyProjectIfNeeded(): Promise<void> {
     };
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'migrateLegacyProjectIfNeeded');
+  }), 'migrateLegacyProjectIfNeeded', DB_DOC_TIMEOUT_MS);
 }
 
 function groupProjectSummaries(groups: ProjectGroup[], systems: ProjectSummary[]): ProjectGroupSummary[] {

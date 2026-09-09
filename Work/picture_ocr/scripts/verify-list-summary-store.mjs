@@ -21,7 +21,7 @@ function body(header) {
 const listProjectsBody = body('export async function listProjects(');
 const listGroupsBody = body('export async function listProjectGroups(');
 const upgradeBody = body('function openDB(');
-const backfillBody = body('async function ensureSummariesBackfilled(');
+const backfillBody = body('export async function ensureSummariesSynced(');
 
 const checks = [
   ['DB_VERSION 升到 4', /const DB_VERSION\s*=\s*4\b/.test(src)],
@@ -30,9 +30,10 @@ const checks = [
   ['升级事务不遍历数据（无 openCursor）', !/openCursor\(/.test(upgradeBody)],
   ['升级结构变更 try/catch 兜底并 abort', /try\s*{/.test(upgradeBody) && /\.abort\(\)/.test(upgradeBody)],
   ['升级处理 onblocked', /request\.onblocked\s*=/.test(upgradeBody)],
-  ['回填函数逐条游标并跳过坏记录', /openCursor\(\)\.onsuccess/.test(backfillBody) && /summaryFromRaw\(/.test(backfillBody) && /typeof raw\.id === 'string'/.test(backfillBody)],
-  ['listProjects 调用回填', /ensureSummariesBackfilled\(\)/.test(listProjectsBody)],
-  ['listProjectGroups 调用回填', /ensureSummariesBackfilled\(\)/.test(listGroupsBody)],
+  // 回填从「游标遍历+跳过坏记录」改为「主键求差+逐条补建」（详见 verify-summary-repair.mjs）。
+  ['自检函数逐条补建摘要', /summaryFromRaw\(/.test(backfillBody) && /projectsStore\.get\(/.test(backfillBody)],
+  ['listProjects 调用自检', /ensureSummariesSynced\(\)/.test(listProjectsBody)],
+  ['listProjectGroups 调用自检', /ensureSummariesSynced\(\)/.test(listGroupsBody)],
   ['summaryFromRaw 不深拷贝、仅取张数', /assetCount:\s*Array\.isArray\(raw\.assets\)\s*\?\s*raw\.assets\.length/.test(src)],
 
   ['listProjects 读摘要 store', /PROJECT_SUMMARIES_STORE_NAME/.test(listProjectsBody)],

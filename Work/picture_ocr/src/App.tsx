@@ -18,7 +18,7 @@ import { detectLanBridge } from './utils/lanBridge';
 import { buildGroupSnapshot } from './utils/lanGroupSnapshot';
 import { saveLanImageToProject } from './utils/lanImageSink';
 import { useToast } from './components/Toast';
-import { setErrorNotifier } from './utils/errorLog';
+import { recordError, setErrorNotifier } from './utils/errorLog';
 import type { LanBridge, LanCollectorSnapshot, LanCollectorSystem } from './utils/lanBridge';
 import type { LanImageSavePayload } from './utils/lanImageSink';
 
@@ -243,7 +243,16 @@ function useLanGroupSession(bridge: LanBridge | null) {
         : (input: LanImageSavePayload) => saveLanImageToProject(upload.projectId, input);
       void save(payload).then(
         () => { bridge.confirmImageSaved(upload.requestId, { success: true }); scheduleRebuild(); },
-        (error: unknown) => bridge.confirmImageSaved(upload.requestId, { success: false, message: error instanceof Error ? error.message : '电脑端未能保存图片。' })
+        (error: unknown) => {
+          // 手机端会看到失败提示，但电脑端也必须留下痕迹，否则这张图为什么没入库无从查起。
+          recordError({
+            type: 'manual',
+            message: `手机上传图片写入失败（系统 ${upload.projectId}）：${error instanceof Error ? error.message : String(error)}`,
+            stack: error instanceof Error ? error.stack : undefined,
+            context: 'lan:saveImage',
+          });
+          bridge.confirmImageSaved(upload.requestId, { success: false, message: error instanceof Error ? error.message : '电脑端未能保存图片。' });
+        }
       );
     });
   }, [bridge, scheduleRebuild]);
