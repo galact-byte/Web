@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
@@ -13,6 +13,12 @@ const indexPath = path.resolve(__dirname, '..', 'dist', 'index.html');
 let mainWindow = null;
 let lanSession = null;
 const pendingImageSaves = new Map();
+
+// 渲染进程上报的未完成 IndexedDB 写入数。大项目写一次要数十秒，窗口销毁会中止未提交事务，
+// 刚拍的照片就静默丢失，所以关窗前必须拦一道（同时留“仍然退出”逃生阀，不能把人锁在里面）。
+let pendingWriteCount = 0;
+let allowClose = false;
+let closeRequested = false;
 
 function isExpectedRenderer(sender) {
   if (sender !== mainWindow?.webContents) return false;
@@ -152,6 +158,42 @@ function createWindow() {
     if (!isAllowedNavigation(url)) event.preventDefault();
   });
   win.webContents.on('render-process-gone', () => { void stopLanSession(); });
+
+  win.on('close', (event) => {
+    if (allowClose || pendingWriteCount === 0) return;
+    event.preventDefault();
+    if (closeRequested) return; // 已在等待中，不重复弹框
+    closeRequested = true;
+    dialog
+      .showMessageBox(win, {
+        type: 'warning',
+        buttons: ['等保存完成后退出', '取消关闭', '仍然退出'],
+        defaultId: 0,
+        cancelId: 1,
+        title: '正在保存',
+        message: '正在保存刚刚的修改，请勿关闭窗口。',
+        detail: '现在退出会丢失尚未写入的照片。选“等保存完成后退出”会在写完后自动关闭。',
+      })
+      .then((result) => {
+        if (result.response === 2) {
+          allowClose = true;
+          win.close();
+          return;
+        }
+        if (result.response === 1) {
+          closeRequested = false;
+          return;
+        }
+        if (pendingWriteCount === 0) {
+          allowClose = true;
+          win.close();
+        }
+      })
+      .catch(() => {
+        closeRequested = false;
+      });
+  });
+
   win.loadFile(indexPath);
   win.on('closed', () => {
     rejectPendingImageSaves('桌面工作台已关闭。');
@@ -211,6 +253,17 @@ ipcMain.handle('lan:start-session', async (event, snapshot, selectedAddress) => 
   expiryTimer.unref();
   lanSession = { server, url, expiryTimer, groupId: normalizedSnapshot.groupId };
   return getLanStatus();
+});
+
+ipcMain.on('writes:pending', (event, pending) => {
+  if (!isExpectedRenderer(event.sender)) return;
+  const next = Number(pending);
+  pendingWriteCount = Number.isFinite(next) && next > 0 ? Math.floor(next) : 0;
+  // 用户选了“等保存完成后退出”，写完就自动关。
+  if (closeRequested && pendingWriteCount === 0 && mainWindow && !mainWindow.isDestroyed()) {
+    allowClose = true;
+    mainWindow.close();
+  }
 });
 
 ipcMain.handle('data:get-location', (event) => {

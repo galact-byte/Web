@@ -13,6 +13,11 @@ contextBridge.exposeInMainWorld('evidenceLan', {
   confirmImageSaved: (requestId, outcome) => ipcRenderer.send('lan:image-saved', requestId, outcome),
 });
 
+// 未完成写入计数同步给主进程：Electron 下浏览器级 beforeunload 不弹确认框，必须由主进程拦截 close。
+contextBridge.exposeInMainWorld('evidenceWrites', {
+  setPendingWrites: (pending) => ipcRenderer.send('writes:pending', pending),
+});
+
 contextBridge.exposeInMainWorld('evidenceData', {
   getLocation: () => ipcRenderer.invoke('data:get-location'),
   chooseLocation: () => ipcRenderer.invoke('data:choose-location'),

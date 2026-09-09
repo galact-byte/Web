@@ -4,11 +4,13 @@
 
 ## P0 止血（独立发版 v0.6.3）
 
-- [ ] 新增"待保存写入"计数/Promise 追踪（`AppContext` 的 `saveQueueRef` 已有队列，补一个 in-flight 标记）
-- [ ] 装 `beforeunload`：有未完成写入时 `preventDefault()` 阻止关闭，浏览器/Electron 弹确认
-- [ ] Electron 侧 `win.on('close')` 同步拦截：未完成写入时先提示"正在保存，请稍候"，写完再关
-- [ ] 界面显式"保存中"指示（避免用户误以为卡死而强杀）
-- [ ] 验证：造一个大项目 → 拍照后立即关窗 → 确认被拦截且重开后图片在
+- [x] `src/utils/pendingWrites.ts`：写入追踪（`trackWrite` 包裹 db 写路径，引用计数 + 订阅）
+- [x] `db.ts`：`saveProject` / `saveProjectGroup` / `updateProjectGroupAndSystems` / `deleteProject` / `deleteProjectGroup` 全部走 `trackWrite`
+- [x] 装 `beforeunload`（`installUnloadGuard`，`main.tsx` 调用）：有未完成写入时 `preventDefault()`
+- [x] Electron 侧 `win.on('close')` 拦截 + `dialog` 三选项（等待写完自动关 / 取消 / 仍然退出），`writes:pending` IPC 上报
+- [x] 界面"正在保存，请勿关闭窗口…"指示条（`App.tsx`，`useSyncExternalStore`）
+- [x] RED→GREEN：`scripts/verify-pending-writes.mjs` 29 项断言全绿
+- [x] 真实浏览器验证（Playwright + 22MB 图片入库）：保存中拦截关闭 ✓、指示出现 ✓、写完自动放行 ✓、刷新后图片仍在 ✓
 - [ ] 发版：新写 RELEASE-NOTES → push main → tag `picture-ocr-v0.6.3`
 
 ## P1 存储模型

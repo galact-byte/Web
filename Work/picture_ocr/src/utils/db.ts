@@ -9,6 +9,7 @@ import type {
 } from '../types';
 import defaultCategories, { createDefaultMeta, createPresetAssets } from '../data/defaults';
 import { recordError } from './errorLog';
+import { trackWrite } from './pendingWrites';
 import { createEmptyRepairReport, planSummaryRepair, type SummaryRepairReport } from './summaryRepair';
 
 const DB_NAME = 'evidence-collector-db';
@@ -332,24 +333,24 @@ export async function listProjectGroups(): Promise<ProjectGroupSummary[]> {
 export async function saveProject(doc: ProjectDocument): Promise<void> {
   const db = await openDB();
   const normalizedDoc = normalizeProjectDocument(doc);
-  return withTimeout(new Promise<void>((resolve, reject) => {
+  return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
     const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
     tx.objectStore(PROJECTS_STORE_NAME).put(normalizedDoc);
     tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(normalizedDoc));
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'saveProject', DB_DOC_TIMEOUT_MS);
+  }), 'saveProject', DB_DOC_TIMEOUT_MS));
 }
 
 export async function saveProjectGroup(group: ProjectGroup): Promise<void> {
   const db = await openDB();
   const normalizedGroup = normalizeProjectGroup(group);
-  return withTimeout(new Promise<void>((resolve, reject) => {
+  return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
     const tx = db.transaction(PROJECT_GROUPS_STORE_NAME, 'readwrite');
     tx.objectStore(PROJECT_GROUPS_STORE_NAME).put(normalizedGroup);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'saveProjectGroup', DB_DOC_TIMEOUT_MS);
+  }), 'saveProjectGroup', DB_DOC_TIMEOUT_MS));
 }
 
 export function splitSystemNames(value: string): string[] {
@@ -406,7 +407,7 @@ export async function createSystemForGroup(group: ProjectGroup, systemName: stri
 export async function updateProjectGroupAndSystems(group: ProjectGroup): Promise<void> {
   const normalizedGroup = normalizeProjectGroup({ ...group, updatedAt: Date.now() });
   const db = await openDB();
-  return withTimeout(new Promise<void>((resolve, reject) => {
+  return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
     const tx = db.transaction([PROJECT_GROUPS_STORE_NAME, PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
     const groupsStore = tx.objectStore(PROJECT_GROUPS_STORE_NAME);
     const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
@@ -434,7 +435,7 @@ export async function updateProjectGroupAndSystems(group: ProjectGroup): Promise
     matchingSystems.onerror = () => reject(matchingSystems.error);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'updateProjectGroupAndSystems', DB_DOC_TIMEOUT_MS);
+  }), 'updateProjectGroupAndSystems', DB_DOC_TIMEOUT_MS));
 }
 
 export async function loadProject(projectId: string): Promise<ProjectDocument | null> {
@@ -466,18 +467,18 @@ export async function loadProjectGroup(groupId: string): Promise<ProjectGroup | 
 
 export async function deleteProject(projectId: string): Promise<void> {
   const db = await openDB();
-  return withTimeout(new Promise<void>((resolve, reject) => {
+  return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
     const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
     tx.objectStore(PROJECTS_STORE_NAME).delete(projectId);
     tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).delete(projectId);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'deleteProject', DB_DOC_TIMEOUT_MS);
+  }), 'deleteProject', DB_DOC_TIMEOUT_MS));
 }
 
 export async function deleteProjectGroup(groupId: string): Promise<void> {
   const db = await openDB();
-  return withTimeout(new Promise<void>((resolve, reject) => {
+  return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
     const tx = db.transaction([PROJECT_GROUPS_STORE_NAME, PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
     tx.objectStore(PROJECT_GROUPS_STORE_NAME).delete(groupId);
     const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
@@ -492,7 +493,7 @@ export async function deleteProjectGroup(groupId: string): Promise<void> {
     matchingSystems.onerror = () => reject(matchingSystems.error);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'deleteProjectGroup', DB_DOC_TIMEOUT_MS);
+  }), 'deleteProjectGroup', DB_DOC_TIMEOUT_MS));
 }
 
 async function migrateLegacyProjectIfNeeded(): Promise<void> {

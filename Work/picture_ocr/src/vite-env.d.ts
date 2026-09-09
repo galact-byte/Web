@@ -74,6 +74,9 @@ interface Window {
     onImage: (listener: (upload: LanImageUpload) => void) => () => void;
     confirmImageSaved: (requestId: string, outcome: { success: boolean; message?: string }) => void;
   };
+  evidenceWrites?: {
+    setPendingWrites: (pending: number) => void;
+  };
   evidenceData?: {
     getLocation: () => Promise<DataLocationInfo>;
     chooseLocation: () => Promise<DataLocationChangeResult>;
