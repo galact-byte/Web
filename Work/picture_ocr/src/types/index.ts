@@ -27,7 +27,12 @@ export interface Category {
 export interface ImageData {
   id: string;
   fileName: string;
-  data: string; // Base64
+  /**
+   * Base64 字节。v5 起图片字节改存独立的 images store，文档里只留引用，因此这里为可选：
+   * - 已迁移：undefined，需经 resolveImageData(projectId, image) 取字节
+   * - 未迁移：仍为内联 Base64（老项目）
+   */
+  data?: string;
   caption: string;
   uploadedAt: string; // ISO timestamp
 }

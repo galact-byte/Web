@@ -1,15 +1,28 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
-import type { ProjectDocument } from '../types';
+import type { ImageData, ProjectDocument } from '../types';
 import { appReducer, createInitialState, AppState, AppAction } from './appReducer';
-import { saveProject, loadProject, createProjectDocument, loadProjectGroup, updateProjectGroupAndSystems } from '../utils/db';
+import {
+  saveProject,
+  loadProject,
+  createProjectDocument,
+  loadProjectGroup,
+  updateProjectGroupAndSystems,
+  addImageToProject,
+  removeImageFromProject,
+  ensureProjectImagesMigrated,
+} from '../utils/db';
+import { clearImageCache, invalidateImage, primeImageCache } from '../utils/imageCache';
 import { reportCriticalError } from '../utils/errorLog';
 
 interface AppContextValue {
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
+  /** 当前打开的项目 id：图片字节按 `${projectId}:${imageId}` 存放，显示时必须带上。 */
+  projectId: string;
   projectGroupId: string | null;
   updateProjectMeta: (meta: AppState['meta']) => Promise<void>;
   addImageAndSave: (payload: Extract<AppAction, { type: 'ADD_IMAGE' }>['payload']) => Promise<void>;
+  removeImageAndSave: (assetId: string, itemId: string, imageId: string) => Promise<void>;
 }
 
 interface AppProviderProps {
@@ -39,10 +52,25 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
     return operation;
   };
 
+  /** 从某个状态快照构造待保存文档：图片此时只有元数据引用，文档体积回到 KB 级。 */
+  const buildDocument = (snapshot: AppState): ProjectDocument => ({
+    id: projectId,
+    groupId: projectGroupIdRef.current,
+    meta: snapshot.meta,
+    categories: snapshot.categories,
+    assets: snapshot.assets,
+    createdAt: createdAtRef.current,
+    updatedAt: Date.now(),
+  });
+
   // Load selected project from IndexedDB.
   useEffect(() => {
     loadedRef.current = false;
-    loadProject(projectId)
+    // 打开前先把内联图片字节搬到独立 store：之后每次自动保存只重写轻量文档，
+    // 不再把整份上百 MB 的 Base64 重新写一遍（这正是拍照时卡死的根因）。
+    ensureProjectImagesMigrated(projectId)
+      .catch(() => false)
+      .then(() => loadProject(projectId))
       .then((doc) => {
         if (doc) {
           createdAtRef.current = doc.createdAt;
@@ -67,21 +95,17 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
           context: 'app:loadProject',
         });
       });
+    return () => {
+      // 切走项目时释放图片缓存，避免多个项目的 Base64 常驻内存。
+      clearImageCache(projectId);
+    };
   }, [projectId]);
 
   // Auto-save to IndexedDB (debounced 500ms)
   useEffect(() => {
     if (!loadedRef.current) return; // don't save before first load
 
-    const doc: ProjectDocument = {
-      id: projectId,
-      groupId: projectGroupIdRef.current,
-      meta: state.meta,
-      categories: state.categories,
-      assets: state.assets,
-      createdAt: createdAtRef.current,
-      updatedAt: Date.now(),
-    };
+    const doc = buildDocument(state);
     latestDocRef.current = doc;
 
     if (saveTimerRef.current) {
@@ -134,25 +158,32 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
     if (!targetItem) throw new Error('目标资产或检查项已不存在，请在电脑端重新开启采集会话。');
     if (targetItem.images.some((image) => image.id === payload.image.id)) return;
 
-    const action: AppAction = { type: 'ADD_IMAGE', payload };
-    const nextState = appReducer(stateRef.current, action);
+    // 字节单独入库、文档在库里现读现改：不再用内存快照整份覆盖，
+    // 因此手机上传与电脑端同时添加图片不会互相把对方的照片冲掉。
+    await addImageToProject(projectId, payload.assetId, payload.itemId, payload.image);
+    if (typeof payload.image.data === 'string' && payload.image.data.length > 0) {
+      primeImageCache(projectId, new Map([[payload.image.id, payload.image.data]]));
+    }
 
-    const document: ProjectDocument = {
-      id: projectId,
-      groupId: projectGroupIdRef.current,
-      meta: nextState.meta,
-      categories: nextState.categories,
-      assets: nextState.assets,
-      createdAt: createdAtRef.current,
-      updatedAt: Date.now(),
-    };
+    const { data: _inline, ...reference } = payload.image;
+    const action: AppAction = { type: 'ADD_IMAGE', payload: { ...payload, image: reference as ImageData } };
+    const nextState = appReducer(stateRef.current, action);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     stateRef.current = nextState;
-    latestDocRef.current = document;
-    await enqueueProjectSave(document);
+    latestDocRef.current = buildDocument(nextState);
     onProjectSaved?.();
     dispatch(action);
   }, [projectId, onProjectSaved]);
+
+  const removeImageAndSave = useCallback(async (assetId: string, itemId: string, imageId: string) => {
+    // 同事务删掉文档引用与字节，避免删完图片字节仍占着几十 MB 空间。
+    await removeImageFromProject(projectId, assetId, itemId, imageId);
+    invalidateImage(projectId, imageId);
+    const action: AppAction = { type: 'REMOVE_IMAGE', payload: { assetId, itemId, imageId } };
+    stateRef.current = appReducer(stateRef.current, action);
+    latestDocRef.current = buildDocument(stateRef.current);
+    dispatch(action);
+  }, [projectId]);
 
   const updateProjectMeta = async (meta: AppState['meta']) => {
     const groupId = projectGroupIdRef.current;
@@ -173,7 +204,7 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
   };
 
   return (
-    <AppContext.Provider value={{ state, dispatch, projectGroupId: projectGroupIdRef.current, updateProjectMeta, addImageAndSave }}>
+    <AppContext.Provider value={{ state, dispatch, projectId, projectGroupId: projectGroupIdRef.current, updateProjectMeta, removeImageAndSave, addImageAndSave }}>
       {children}
     </AppContext.Provider>
   );

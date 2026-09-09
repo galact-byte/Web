@@ -246,8 +246,9 @@ export async function compressProjectImages(
     for (const item of asset.items) {
       const images = [];
       for (const image of item.images) {
-        const result = await compressDataUrl(image.data, options);
-        if (result.failed) {
+        // 字节可能已拆到独立 store；调用方需先 hydrate，拿不到字节的图计入失败而不静默丢弃。
+        const result = image.data ? await compressDataUrl(image.data, options) : null;
+        if (!result || result.failed) {
           failedCount += 1;
           images.push(image);
         } else if (result.changed) {

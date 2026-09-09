@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useAppState, useDispatch } from '../context/AppContext';
+import { useAppContext, useAppState, useDispatch } from '../context/AppContext';
+import { reportCriticalError } from '../utils/errorLog';
 import { getAssetById } from '../context/appReducer';
 import { getImageFilesFromClipboard, readImageFiles } from '../utils/imageFiles';
 import ItemCard from './ItemCard';
@@ -43,6 +44,7 @@ function isTextEditingElement(element: Element | null): boolean {
 const ContentArea: React.FC = () => {
   const { assets, activeAssetId, categories } = useAppState();
   const dispatch = useDispatch();
+  const { addImageAndSave, removeImageAndSave } = useAppContext();
   const [newItemLabel, setNewItemLabel] = useState('');
   const [pasteTargetItemId, setPasteTargetItemId] = useState<string | null>(null);
   const [isSortingItems, setIsSortingItems] = useState(false);
@@ -505,18 +507,27 @@ const ContentArea: React.FC = () => {
                     payload: { assetId: activeAsset.id, itemId },
                   })
                 }
-                onAddImage={(assetId, itemId, image) =>
-                  dispatch({
-                    type: 'ADD_IMAGE',
-                    payload: { assetId, itemId, image },
-                  })
-                }
-                onRemoveImage={(assetId, itemId, imageId) =>
-                  dispatch({
-                    type: 'REMOVE_IMAGE',
-                    payload: { assetId, itemId, imageId },
-                  })
-                }
+                onAddImage={(assetId, itemId, image) => {
+                  // 字节先入库再进入界面：写失败会弹提示，不会出现「界面有图、库里没图」。
+                  void addImageAndSave({ assetId, itemId, image }).catch((err) =>
+                    reportCriticalError({
+                      type: 'manual',
+                      message: `图片保存失败，请重试：${err instanceof Error ? err.message : String(err)}`,
+                      stack: err instanceof Error ? err.stack : undefined,
+                      context: 'ui:addImage',
+                    })
+                  );
+                }}
+                onRemoveImage={(assetId, itemId, imageId) => {
+                  void removeImageAndSave(assetId, itemId, imageId).catch((err) =>
+                    reportCriticalError({
+                      type: 'manual',
+                      message: `图片删除失败，请重试：${err instanceof Error ? err.message : String(err)}`,
+                      stack: err instanceof Error ? err.stack : undefined,
+                      context: 'ui:removeImage',
+                    })
+                  );
+                }}
                 onUpdateCaption={(assetId, itemId, imageId, caption) =>
                   dispatch({
                     type: 'UPDATE_IMAGE_CAPTION',

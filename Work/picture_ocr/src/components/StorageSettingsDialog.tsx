@@ -3,7 +3,14 @@ import { useToast } from './Toast';
 import { useConfirmDialog } from './ConfirmDialog';
 import { formatBytes, getStorageEstimate, STORAGE_WARN_RATIO, type StorageEstimateResult } from '../utils/storageEstimate';
 import { clearErrorLog, downloadDiagnostics, getErrorLog } from '../utils/errorLog';
-import { ensureSummariesSynced, getStoreDiagnostics, type StoreDiagnostics } from '../utils/db';
+import {
+  ensureSummariesSynced,
+  getStoreDiagnostics,
+  getImageMigrationProgress,
+  migrateInlineImages,
+  type StoreDiagnostics,
+  type ImageMigrationProgress,
+} from '../utils/db';
 import type { SummaryRepairReport } from '../utils/summaryRepair';
 
 interface StorageSettingsDialogProps {
@@ -171,6 +178,38 @@ const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }
     }
   };
 
+  // 图片存储优化（v5 拆分）：存量内联字节搬到独立 store，进度可见、失败可重试。
+  const [migration, setMigration] = useState<ImageMigrationProgress | null>(null);
+  const [migrating, setMigrating] = useState(false);
+  const [migrateDone, setMigrateDone] = useState(0);
+
+  useEffect(() => {
+    void getImageMigrationProgress().then(setMigration).catch(() => { /* 忽略：读不到保持空 */ });
+  }, []);
+
+  const handleMigrateImages = async (force: boolean) => {
+    if (migrating) return;
+    setMigrating(true);
+    setMigrateDone(0);
+    try {
+      const report = await migrateInlineImages(force, (done) => setMigrateDone(done));
+      setMigration(await getImageMigrationProgress());
+      setStores(await getStoreDiagnostics());
+      if (report.damagedIds.length > 0) {
+        showToast(`优化完成：${report.migrated} 个系统已优化，${report.damagedIds.length} 个未能处理（图片完好保留，可稍后重试）。`, 'error');
+      } else if (report.migrated > 0) {
+        showToast(`优化完成：${report.migrated} 个系统的图片已拆分存储，拍照保存会快很多。`, 'success');
+      } else {
+        showToast('所有系统都已是优化后的存储形态，无需处理。', 'success');
+      }
+      setErrorCount(getErrorLog().length);
+    } catch (err) {
+      showToast(`优化失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   // Web 态
   const [estimate, setEstimate] = useState<StorageEstimateResult | null>(null);
 
@@ -321,6 +360,40 @@ const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }
             >
               {checking ? '自检中…' : '立即自检并修复'}
             </button>
+          </div>
+
+          <div className="mt-5 border-t border-slate-200 pt-5">
+            <p className="text-sm font-medium text-slate-700">图片存储优化</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              旧版本把图片和项目内容存在一起，每拍一张都要重写整个项目，图多了就会越来越卡。优化会把图片单独存放（不会压缩、不会删图），逐个系统处理，中途关闭下次会接着做。
+            </p>
+            <p className="mt-2 border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+              {migration
+                ? `已优化 ${migration.completed} / ${migration.total} 个系统${migration.pending > 0 ? ` · 待处理 ${migration.pending} 个` : ' · 已全部完成'}`
+                : '读取中…'}
+              {migration && migration.damaged > 0 && (
+                <span className="ml-1 font-semibold text-amber-700">（{migration.damaged} 个未能处理，图片仍完好保留，可重试）</span>
+              )}
+            </p>
+            {migrating && <p className="mt-2 text-xs text-slate-600">正在优化，已处理 {migrateDone} 个系统，请勿关闭窗口…</p>}
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                onClick={() => void handleMigrateImages(false)}
+                disabled={migrating || (migration !== null && migration.pending === 0)}
+                className="border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {migrating ? '优化中…' : '立即优化'}
+              </button>
+              {migration && migration.damaged > 0 && (
+                <button
+                  onClick={() => void handleMigrateImages(true)}
+                  disabled={migrating}
+                  className="border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  重试未完成的系统
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="mt-5 border-t border-slate-200 pt-5">

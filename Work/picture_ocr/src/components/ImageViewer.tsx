@@ -1,5 +1,7 @@
 import React, { useEffect, useCallback } from 'react';
 import type { ImageData } from '../types';
+import { useAppContext } from '../context/AppContext';
+import { useImageSrc } from '../hooks/useImageSrc';
 
 interface ImageViewerProps {
   images: ImageData[];
@@ -15,6 +17,8 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
   onNavigate,
 }) => {
   const currentImage = images[currentIndex];
+  const { projectId } = useAppContext();
+  const src = useImageSrc(projectId, currentImage);
 
   const goNext = useCallback(() => {
     if (currentIndex < images.length - 1) {
@@ -97,13 +101,17 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
       )}
 
       {/* Image */}
-      <img
-        src={currentImage.data}
-        alt={currentImage.fileName}
-        className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
-        onClick={(e) => e.stopPropagation()}
-        draggable={false}
-      />
+      {src ? (
+        <img
+          src={src}
+          alt={currentImage.fileName}
+          className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
+          onClick={(e) => e.stopPropagation()}
+          draggable={false}
+        />
+      ) : (
+        <div className="flex h-40 w-64 items-center justify-center rounded-lg bg-black/40 text-sm text-white/80">图片加载中…</div>
+      )}
 
       {/* Next button */}
       {currentIndex < images.length - 1 && (

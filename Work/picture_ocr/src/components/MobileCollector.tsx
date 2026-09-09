@@ -3,7 +3,10 @@ import type { Asset, Category, ImageData, ProjectDocument } from '../types';
 import { importEncryptedDataPackage, exportEncryptedDataPackage } from '../utils/exportImport';
 import { isEvidencePackageFile } from '../utils/evidencePackage';
 import { readImageFiles } from '../utils/imageFiles';
-import { loadProject, saveProject } from '../utils/db';
+import { loadProject, saveProjectWithImages, addImageToProject, removeImageFromProject } from '../utils/db';
+import { stripInlineImageData } from '../utils/imageStore';
+import { invalidateImage, primeImageCache } from '../utils/imageCache';
+import { useImageSrc } from '../hooks/useImageSrc';
 import EncryptedExportDialog from './EncryptedExportDialog';
 import PwaReadinessCard from './PwaReadinessCard';
 
@@ -15,6 +18,13 @@ interface MobileCollectorProps {
 function projectName(document: ProjectDocument): string {
   return document.meta.systemName.trim() || document.meta.projectName.trim() || '未命名采集项目';
 }
+
+/** 手机端缩略图：字节在独立 store，按需取，避免把整份采集包的 Base64 常驻手机内存。 */
+const MobileImage: React.FC<{ projectId: string; image: ImageData; className: string }> = ({ projectId, image, className }) => {
+  const src = useImageSrc(projectId, image);
+  if (!src) return <div className={`${className} flex items-center justify-center bg-slate-100 text-xs text-slate-400`}>加载中…</div>;
+  return <img src={src} alt={image.fileName} className={className} />;
+};
 
 const MobileCollector: React.FC<MobileCollectorProps> = ({ projectId, onBack }) => {
   const [document, setDocument] = useState<ProjectDocument | null>(null);
@@ -42,10 +52,19 @@ const MobileCollector: React.FC<MobileCollectorProps> = ({ projectId, onBack }) 
     }).catch((err) => setMessage(`加载项目失败：${err instanceof Error ? err.message : '未知错误'}`));
   }, [projectId]);
 
+  /** 整份替换的保存（导入采集包）：写入时拆字节，内存态只留引用。 */
   const persist = async (nextDocument: ProjectDocument) => {
     const next = { ...nextDocument, updatedAt: Date.now() };
-    setDocument(next);
-    await saveProject(next);
+    await saveProjectWithImages(next);
+    const inlineIds = new Set<string>();
+    for (const asset of next.assets) {
+      for (const item of asset.items) {
+        for (const image of item.images) {
+          if (typeof image.data === 'string' && image.data.length > 0) inlineIds.add(image.id);
+        }
+      }
+    }
+    setDocument(stripInlineImageData(next, inlineIds) as ProjectDocument);
   };
 
   const handleImages = async (asset: Asset, itemId: string, files: FileList | null) => {
@@ -54,13 +73,22 @@ const MobileCollector: React.FC<MobileCollectorProps> = ({ projectId, onBack }) 
     if (imageFiles.length === 0) return setMessage('请选择图片文件。');
     try {
       const images = await readImageFiles(imageFiles);
-      await persist({
-        ...document,
-        assets: document.assets.map((candidate) => candidate.id !== asset.id ? candidate : {
+      // 逐张入库（同事务写字节+引用）：拍一张写一张，不再把整份文档重写一遍。
+      const references: ImageData[] = [];
+      for (const image of images) {
+        await addImageToProject(projectId, asset.id, itemId, image);
+        if (image.data) primeImageCache(projectId, new Map([[image.id, image.data]]));
+        const { data: _inline, ...reference } = image;
+        references.push(reference as ImageData);
+      }
+      setDocument((current) => current && ({
+        ...current,
+        updatedAt: Date.now(),
+        assets: current.assets.map((candidate) => candidate.id !== asset.id ? candidate : {
           ...candidate,
-          items: candidate.items.map((item) => item.id === itemId ? { ...item, images: [...item.images, ...images] } : item),
+          items: candidate.items.map((item) => item.id === itemId ? { ...item, images: [...item.images, ...references] } : item),
         }),
-      });
+      }));
       setMessage(`已归档 ${images.length} 张图片。`);
     } catch (err) {
       setMessage(`读取图片失败：${err instanceof Error ? err.message : '未知错误'}`);
@@ -69,13 +97,16 @@ const MobileCollector: React.FC<MobileCollectorProps> = ({ projectId, onBack }) 
 
   const removeImage = async (assetId: string, itemId: string, imageId: string) => {
     if (!document || !window.confirm('确定删除这张图片吗？')) return;
-    await persist({
-      ...document,
-      assets: document.assets.map((asset) => asset.id !== assetId ? asset : {
+    await removeImageFromProject(projectId, assetId, itemId, imageId);
+    invalidateImage(projectId, imageId);
+    setDocument((current) => current && ({
+      ...current,
+      updatedAt: Date.now(),
+      assets: current.assets.map((asset) => asset.id !== assetId ? asset : {
         ...asset,
         items: asset.items.map((item) => item.id !== itemId ? item : { ...item, images: item.images.filter((image) => image.id !== imageId) }),
       }),
-    });
+    }));
   };
 
   const handleImportFile = async (file: File | undefined) => {
@@ -99,7 +130,7 @@ const MobileCollector: React.FC<MobileCollectorProps> = ({ projectId, onBack }) 
 
   const handleExport = async (password: string) => {
     if (!document) return;
-    await exportEncryptedDataPackage(document.meta, document.categories, document.assets, password);
+    await exportEncryptedDataPackage(document.meta, document.categories, document.assets, password, document.id);
     setMessage('已生成加密采集包。请通过浏览器下载列表保存文件，再用 USB 回传电脑。');
   };
 
@@ -120,10 +151,10 @@ const MobileCollector: React.FC<MobileCollectorProps> = ({ projectId, onBack }) 
         </section>
         <section className="flex gap-2 overflow-x-auto pb-1">{document.categories.map((category: Category) => <button key={category.id} onClick={() => { setActiveCategoryId(category.id); setActiveAssetId(document.assets.find((asset) => asset.categoryId === category.id)?.id ?? null); }} className={`shrink-0 border px-3 py-2 text-sm ${category.id === activeCategoryId ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-300 bg-white'}`}>{category.name}</button>)}</section>
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-3">{visibleAssets.map((asset) => <button key={asset.id} onClick={() => setActiveAssetId(asset.id)} className={`min-h-16 border p-3 text-left text-sm ${asset.id === activeAsset?.id ? 'border-blue-500 bg-blue-50 font-semibold text-blue-800' : 'border-slate-200 bg-white'}`}>{asset.name}<span className="mt-1 block text-xs text-slate-500">{asset.items.length} 项</span></button>)}</section>
-        {activeAsset ? <section className="space-y-3">{activeAsset.items.length === 0 ? <p className="border border-slate-200 bg-white p-5 text-sm text-slate-500">此资产暂无检查项，请在桌面工作台添加后再采集。</p> : activeAsset.items.map((item) => <article key={item.id} className="border border-slate-200 bg-white p-4"><div className="flex items-start justify-between gap-3"><h2 className="font-semibold">{item.label}</h2>{item.required && <span className="shrink-0 border border-red-200 bg-red-50 px-2 py-0.5 text-xs text-red-600">必填</span>}</div><div className="mt-3 grid grid-cols-3 gap-2">{item.images.map((image) => <div key={image.id} className="relative aspect-square overflow-hidden border border-slate-200"><button onClick={() => setViewingImage(image)} className="h-full w-full"><img src={image.data} alt={image.fileName} className="h-full w-full object-cover" /></button><button onClick={() => void removeImage(activeAsset.id, item.id, image.id)} className="absolute right-1 top-1 bg-slate-950/70 px-1.5 py-0.5 text-xs text-white">删除</button></div>)}<label className="flex aspect-square cursor-pointer flex-col items-center justify-center border-2 border-dashed border-blue-300 bg-blue-50 p-2 text-center text-sm text-blue-700"><span>拍照/选图</span><input type="file" accept="image/*" capture="environment" multiple onChange={(event) => { void handleImages(activeAsset, item.id, event.target.files); event.currentTarget.value = ''; }} className="hidden" /></label></div></article>)}</section> : <p className="border border-slate-200 bg-white p-5 text-sm text-slate-500">请选择资产。</p>}
+        {activeAsset ? <section className="space-y-3">{activeAsset.items.length === 0 ? <p className="border border-slate-200 bg-white p-5 text-sm text-slate-500">此资产暂无检查项，请在桌面工作台添加后再采集。</p> : activeAsset.items.map((item) => <article key={item.id} className="border border-slate-200 bg-white p-4"><div className="flex items-start justify-between gap-3"><h2 className="font-semibold">{item.label}</h2>{item.required && <span className="shrink-0 border border-red-200 bg-red-50 px-2 py-0.5 text-xs text-red-600">必填</span>}</div><div className="mt-3 grid grid-cols-3 gap-2">{item.images.map((image) => <div key={image.id} className="relative aspect-square overflow-hidden border border-slate-200"><button onClick={() => setViewingImage(image)} className="h-full w-full"><MobileImage projectId={projectId} image={image} className="h-full w-full object-cover" /></button><button onClick={() => void removeImage(activeAsset.id, item.id, image.id)} className="absolute right-1 top-1 bg-slate-950/70 px-1.5 py-0.5 text-xs text-white">删除</button></div>)}<label className="flex aspect-square cursor-pointer flex-col items-center justify-center border-2 border-dashed border-blue-300 bg-blue-50 p-2 text-center text-sm text-blue-700"><span>拍照/选图</span><input type="file" accept="image/*" capture="environment" multiple onChange={(event) => { void handleImages(activeAsset, item.id, event.target.files); event.currentTarget.value = ''; }} className="hidden" /></label></div></article>)}</section> : <p className="border border-slate-200 bg-white p-5 text-sm text-slate-500">请选择资产。</p>}
       </div>
       <EncryptedExportDialog open={exportOpen} title="导出手机加密采集包" onClose={() => setExportOpen(false)} onExport={handleExport} />
-      {viewingImage && <div role="dialog" aria-modal="true" className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4" onClick={() => setViewingImage(null)}><img src={viewingImage.data} alt={viewingImage.fileName} className="max-h-full max-w-full object-contain" /></div>}
+      {viewingImage && <div role="dialog" aria-modal="true" className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4" onClick={() => setViewingImage(null)}><MobileImage projectId={projectId} image={viewingImage} className="max-h-full max-w-full object-contain" /></div>}
     </main>
   );
 };

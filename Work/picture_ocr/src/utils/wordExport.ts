@@ -1,4 +1,5 @@
 import type { Asset, Category, ProjectMeta } from '../types';
+import { hydrateAssets } from './db';
 
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -63,14 +64,17 @@ export function buildReportFileName(meta: ProjectMeta): string {
 export async function exportWordReport(
   meta: ProjectMeta,
   categories: Category[],
-  assets: Asset[]
+  assets: Asset[],
+  projectId: string
 ): Promise<void> {
+  // 图片字节存在独立 store，导出前先按需补齐，保证报告内嵌的是完整分辨率原图。
+  const hydratedAssets = await hydrateAssets(projectId, assets);
   let createWordReportBlob: (typeof import('./wordDocument'))['createWordReportBlob'];
   try {
     ({ createWordReportBlob } = await import('./wordDocument'));
   } catch {
     throw new Error('无法加载 Word 导出组件，请确认应用文件完整后重试。');
   }
-  const blob = await createWordReportBlob(meta, categories, assets);
+  const blob = await createWordReportBlob(meta, categories, hydratedAssets);
   downloadBlob(blob, buildReportFileName(meta));
 }

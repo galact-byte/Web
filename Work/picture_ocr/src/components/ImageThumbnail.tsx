@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import type { ImageData } from '../types';
 import { useConfirmDialog } from './ConfirmDialog';
+import { useAppContext } from '../context/AppContext';
+import { useImageSrc } from '../hooks/useImageSrc';
 
 interface ImageThumbnailProps {
   image: ImageData;
@@ -24,6 +26,9 @@ const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
   const [editingCaption, setEditingCaption] = useState(false);
   const [captionValue, setCaptionValue] = useState(image.caption);
   const { confirm, dialog } = useConfirmDialog();
+  const { projectId } = useAppContext();
+  // 图片字节存在独立 store，按需取；未迁移的老项目会直接命中内联字节。
+  const src = useImageSrc(projectId, image);
 
   const handleFinishCaption = () => {
     if (captionValue.trim() !== image.caption) {
@@ -51,12 +56,16 @@ const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
         className="relative h-40 w-40 overflow-hidden border border-slate-200 bg-slate-50 p-1 cursor-pointer"
         onClick={() => onClick(image.id)}
       >
-        <img
-          src={image.data}
-          alt={image.fileName}
-          className="h-full w-full object-cover"
-          draggable={false}
-        />
+        {src ? (
+          <img
+            src={src}
+            alt={image.fileName}
+            className="h-full w-full object-cover"
+            draggable={false}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-slate-100 text-xs text-slate-400">加载中…</div>
+        )}
 
         {/* Hover overlay */}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-200 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">

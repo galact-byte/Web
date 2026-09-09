@@ -8,9 +8,12 @@ import {
   deleteProject,
   deleteProjectGroup,
   getLastSummaryRepairReport,
+  migrateInlineImages,
   listProjectGroups,
   loadProject,
   saveProject,
+  saveProjectWithImages,
+  hydrateProjectImages,
   updateProjectGroupAndSystems,
 } from '../utils/db';
 import { exportDataPackage, importDataPackage, importEncryptedDataPackage } from '../utils/exportImport';
@@ -120,6 +123,19 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
 
   useEffect(() => { void refreshProjects(); }, []);
 
+  // 存量图片后台搬迁：只在列表页（没打开项目时）跑，避开编辑中的自动保存；
+  // 延迟启动让首屏列表先渲染完，逐项目事务 + 进度可续跑，中途关窗不会损坏数据。
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void migrateInlineImages().then((report) => {
+        if (report.migrated > 0) {
+          showToast(`已优化 ${report.migrated} 个系统的图片存储，之后拍照保存会快很多。`, 'success');
+        }
+      }).catch(() => { /* 搬迁失败不影响使用，错误已进诊断包 */ });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [showToast]);
+
   const filteredGroups = useMemo(() => groups.filter((group) => matchesSearch(group, search)), [groups, search]);
   const filteredSystems = useMemo(() => filteredGroups.flatMap((group) => group.systems), [filteredGroups]);
   const selectedSystems = useMemo(() => groups.flatMap((group) => group.systems).filter((system) => selectedProjectIds.has(system.id)), [groups, selectedProjectIds]);
@@ -201,7 +217,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
     try {
       const document = await loadProject(system.id);
       if (!document) { showToast('导出失败：系统不存在或已被删除', 'error'); return; }
-      await exportDataPackage(document.meta, document.categories, document.assets);
+      await exportDataPackage(document.meta, document.categories, document.assets, document.id);
     } catch (err) {
       showToast(`导出失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
     }
@@ -220,9 +236,10 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
     try {
       const document = await loadProject(system.id);
       if (!document) { showToast('压缩失败：系统不存在或已被删除', 'error'); return; }
-      const result = await compressProjectImages(document);
+      // 字节在独立 store：先补齐再压缩，写回时由 saveProjectWithImages 重新拆回 images store。
+      const result = await compressProjectImages(await hydrateProjectImages(document));
       if (result.changedCount > 0) {
-        await saveProject(result.doc);
+        await saveProjectWithImages(result.doc);
         await refreshProjects();
       }
       if (result.changedCount === 0 && result.failedCount === 0) {
@@ -264,7 +281,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
         createdAt: targetDocument.createdAt,
         updatedAt: Date.now(),
       };
-      await saveProject(nextDocument);
+      await saveProjectWithImages(nextDocument);
       await refreshProjects();
       return { success: true, message: result.message };
     } catch (err) {
