@@ -36,7 +36,18 @@ try {
     { cwd: root, stdio: 'pipe' }
   );
   const mod = await import(pathToFileURL(path.join(outDir, 'summaryRepair.js')).href);
-  const { planSummaryRepair } = mod;
+  const { planSummaryRepair, createEmptyRepairReport, claimSummaryRepairNotice } = mod;
+
+  const repaired = { ...createEmptyRepairReport(), repaired: 5 };
+  check('首次修复结果需要提示', claimSummaryRepairNotice(repaired));
+  check('返回列表再次读取同一结果不重复提示', !claimSummaryRepairNotice(repaired));
+  check('提示去重不修改诊断报告', repaired.repaired === 5);
+  check('尚未自检不提示', !claimSummaryRepairNotice(null));
+  check('手动自检无问题不提示', !claimSummaryRepairNotice(createEmptyRepairReport()));
+  check('新一轮修复即使数量相同仍提示', claimSummaryRepairNotice({ ...repaired }));
+  const damaged = { ...createEmptyRepairReport(), damagedIds: ['broken'] };
+  check('新发现的损坏记录仍提示', claimSummaryRepairNotice(damaged));
+  check('同份损坏报告不刷屏', !claimSummaryRepairNotice(damaged));
 
   const plan1 = planSummaryRepair(['a', 'b', 'c'], ['a']);
   check('缺摘要的项目被全部检出', JSON.stringify(plan1.missing) === JSON.stringify(['b', 'c']));
@@ -101,6 +112,9 @@ const appContext = read('src/context/AppContext.tsx');
 check('自动保存失败会上报并提示用户（不再只写 console）', /reportCriticalError\(/.test(appContext) && !/console\.error\('Failed to save/.test(appContext));
 check('读取失败时不用空模板顶替并自动保存（避免覆盖真实数据）', /loadedRef\.current = false;[\s\S]{0,400}app:loadProject/.test(appContext));
 check('errorLog 提供记录+提示的关键错误通道', /export function reportCriticalError\(/.test(read('src/utils/errorLog.ts')));
+
+const projectList = read('src/components/ProjectList.tsx');
+check('列表使用跨挂载的报告去重，不用组件 ref', /claimSummaryRepairNotice\(repair\)/.test(projectList) && !/repairNoticeShownRef/.test(projectList));
 
 let failed = 0;
 for (const [name, ok] of checks) {

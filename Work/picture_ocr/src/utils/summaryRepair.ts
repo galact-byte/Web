@@ -36,6 +36,15 @@ export interface SummaryRepairReport {
   damagedIds: string[];
 }
 
+// 与缓存报告同属页面会话生命周期，不能随列表组件卸载而重置。
+const notifiedReports = new WeakSet<SummaryRepairReport>();
+
+export function claimSummaryRepairNotice(report: SummaryRepairReport | null): boolean {
+  if (!report || notifiedReports.has(report) || (report.repaired === 0 && report.damagedIds.length === 0)) return false;
+  notifiedReports.add(report);
+  return true;
+}
+
 export function createEmptyRepairReport(): SummaryRepairReport {
   return { projectCount: 0, summaryCount: 0, missing: 0, repaired: 0, removedOrphans: 0, damagedIds: [] };
 }
