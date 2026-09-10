@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { ProjectDocument, ProjectGroup, ProjectGroupSummary, ProjectMeta, ProjectSummary } from '../types';
 import {
   createProjectGroupWithSystems,
@@ -19,6 +19,7 @@ import {
 import { exportDataPackage, importDataPackage, importEncryptedDataPackage } from '../utils/exportImport';
 import { isEvidencePackageFile } from '../utils/evidencePackage';
 import { compressProjectImages } from '../utils/imageCompression';
+import { claimSummaryRepairNotice } from '../utils/summaryRepair';
 import { formatBytes } from '../utils/storageEstimate';
 import ImportDialog from './ImportDialog';
 import StorageSettingsDialog from './StorageSettingsDialog';
@@ -81,8 +82,6 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
   const [compressingSystemId, setCompressingSystemId] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const showToast = useToast();
-  // 自检提示每个会话只弹一次，避免每次刷新列表都刷屏。
-  const repairNoticeShownRef = useRef(false);
 
   // 桌面版：启动时若自定义数据目录不可用已回退默认，提示一次。
   useEffect(() => {
@@ -99,8 +98,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
       setGroups(nextGroups);
       // 存储自检的结果必须让用户知道：被找回的项目、以及读不出来的坏记录都不能静默处理。
       const repair = getLastSummaryRepairReport();
-      if (repair && !repairNoticeShownRef.current && (repair.repaired > 0 || repair.damagedIds.length > 0)) {
-        repairNoticeShownRef.current = true;
+      if (repair && claimSummaryRepairNotice(repair)) {
         if (repair.repaired > 0) {
           showToast(`存储自检：已找回 ${repair.repaired} 个未显示的项目。`, 'success');
         }
