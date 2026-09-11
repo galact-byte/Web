@@ -22,6 +22,11 @@ export function planSummaryRepair(projectKeys: IDBValidKey[], summaryKeys: IDBVa
   };
 }
 
+/** 只记录失败类别和元信息，不携带项目正文或图片字节。 */
+export type DamagedSummaryRecord =
+  | { projectId: string; reason: 'invalid-value'; valueType: string }
+  | { projectId: string; reason: 'read-error'; errorName: string | null; errorMessage: string | null };
+
 /** 一次自检修复的结果，供启动提示与诊断包使用。 */
 export interface SummaryRepairReport {
   projectCount: number;
@@ -34,6 +39,8 @@ export interface SummaryRepairReport {
   removedOrphans: number;
   /** 内容读不出来的记录主键，需人工介入，不再静默跳过。 */
   damagedIds: string[];
+  /** 与 damagedIds 对应的读取详情，区分无效返回值与 IDB 请求失败。 */
+  damagedRecords: DamagedSummaryRecord[];
 }
 
 // 与缓存报告同属页面会话生命周期，不能随列表组件卸载而重置。
@@ -46,5 +53,5 @@ export function claimSummaryRepairNotice(report: SummaryRepairReport | null): bo
 }
 
 export function createEmptyRepairReport(): SummaryRepairReport {
-  return { projectCount: 0, summaryCount: 0, missing: 0, repaired: 0, removedOrphans: 0, damagedIds: [] };
+  return { projectCount: 0, summaryCount: 0, missing: 0, repaired: 0, removedOrphans: 0, damagedIds: [], damagedRecords: [] };
 }
