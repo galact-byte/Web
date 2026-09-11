@@ -1,4 +1,4 @@
-import { getLastSummaryRepairReport, getStoreDiagnostics, listProjectGroups, type StoreDiagnostics } from './db';
+import { getDamagedProjectDiagnostics, getLastSummaryRepairReport, getStoreDiagnostics, listDiagnosticProjectGroups, type DamagedProjectDiagnostics, type StoreDiagnostics } from './db';
 import type { SummaryRepairReport } from './summaryRepair';
 import { getStorageEstimate } from './storageEstimate';
 
@@ -136,6 +136,8 @@ export interface DiagnosticsReport {
   stores: StoreDiagnostics | null;
   /** 最近一次存储自检修复结果（含无法读取的记录主键）。 */
   repair: SummaryRepairReport | null;
+  /** 关联图片仅计数，不代表字节有效或可恢复。 */
+  damagedProjects?: DamagedProjectDiagnostics[];
   /** 项目清单（不含图片字节），便于和用户描述的「少了哪个」逐条比对。 */
   projects: Array<{
     id: string;
@@ -154,7 +156,7 @@ export async function buildDiagnosticsReport(): Promise<DiagnosticsReport> {
   let counts = { groups: 0, systems: 0, assets: 0 };
   let projects: DiagnosticsReport['projects'] = [];
   try {
-    const groups = await listProjectGroups();
+    const groups = await listDiagnosticProjectGroups();
     const systems = groups.flatMap((group) => group.systems);
     counts = {
       groups: groups.length,
@@ -189,6 +191,8 @@ export async function buildDiagnosticsReport(): Promise<DiagnosticsReport> {
     // 忽略：估算失败保持默认
   }
 
+  const repair = getLastSummaryRepairReport();
+  const damagedProjects = await getDamagedProjectDiagnostics(repair?.damagedIds ?? []);
   return {
     app: appVersion(),
     generatedAt: new Date().toISOString(),
@@ -197,7 +201,8 @@ export async function buildDiagnosticsReport(): Promise<DiagnosticsReport> {
     storage,
     counts,
     stores,
-    repair: getLastSummaryRepairReport(),
+    repair,
+    damagedProjects,
     projects,
     errors: getErrorLog(),
   };

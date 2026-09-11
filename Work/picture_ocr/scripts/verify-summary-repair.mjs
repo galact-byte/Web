@@ -157,7 +157,7 @@ check(
 // ---------- 3) errorLog.ts 契约 ----------
 const errorLog = read('src/utils/errorLog.ts');
 check('诊断包含各 store 真实条数', /stores:/.test(errorLog) && /getStoreDiagnostics\(/.test(errorLog));
-check('诊断直接携带完整自检报告及异常详情', /repair:\s*getLastSummaryRepairReport\(\)/.test(errorLog));
+check('诊断直接携带完整自检报告及异常详情', /const repair = getLastSummaryRepairReport\(\);/.test(errorLog) && /\n    repair,/.test(errorLog));
 check('诊断包含摘要修复报告', /repair:/.test(errorLog) && /getLastSummaryRepairReport\(/.test(errorLog));
 check('诊断包含项目清单便于比对缺失', /projects:\s*\[?/.test(errorLog) && /assetCount/.test(errorLog));
 
