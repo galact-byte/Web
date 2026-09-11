@@ -164,6 +164,11 @@ export async function ensureSummariesSynced(force = false): Promise<SummaryRepai
           result.repaired += 1;
         } else {
           result.damagedIds.push(String(key));
+          result.damagedRecords.push({
+            projectId: String(key),
+            reason: 'invalid-value',
+            valueType: raw === null ? 'null' : typeof raw,
+          });
         }
         repairNext(queue, index + 1);
       };
@@ -172,6 +177,12 @@ export async function ensureSummariesSynced(force = false): Promise<SummaryRepai
         event.preventDefault();
         event.stopPropagation();
         result.damagedIds.push(String(key));
+        result.damagedRecords.push({
+          projectId: String(key),
+          reason: 'read-error',
+          errorName: getRequest.error?.name ?? null,
+          errorMessage: getRequest.error?.message ?? null,
+        });
         repairNext(queue, index + 1);
       };
     };

@@ -9,6 +9,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
+import ts from 'typescript';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(path.join(root, rel), 'utf8').replace(/\r\n/g, '\n');
@@ -38,6 +39,7 @@ try {
   const mod = await import(pathToFileURL(path.join(outDir, 'summaryRepair.js')).href);
   const { planSummaryRepair, createEmptyRepairReport, claimSummaryRepairNotice } = mod;
 
+  check('新报告包含独立的空异常详情数组', Array.isArray(createEmptyRepairReport().damagedRecords) && createEmptyRepairReport().damagedRecords.length === 0);
   const repaired = { ...createEmptyRepairReport(), repaired: 5 };
   check('首次修复结果需要提示', claimSummaryRepairNotice(repaired));
   check('返回列表再次读取同一结果不重复提示', !claimSummaryRepairNotice(repaired));
@@ -82,6 +84,57 @@ const dbBody = (header) => {
 };
 const syncBody = dbBody('async function ensureSummariesSynced(');
 
+// 执行实际逐条修复回调，模拟 IDB 返回值与失败事件，不访问用户数据库。
+try {
+  const start = syncBody.indexOf('const repairNext =');
+  const end = syncBody.indexOf('\n    // 两个 getAllKeys', start);
+  if (start < 0 || end < 0) throw new Error('未找到逐条修复回调');
+  const callback = ts.transpileModule(syncBody.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const result = { damagedIds: [], damagedRecords: [], repaired: 0 };
+  const requests = [];
+  const summaries = [];
+  const projectsStore = { get: (key) => {
+    const request = { key };
+    requests.push(request);
+    return request;
+  } };
+  const repairNext = new Function('projectsStore', 'summariesStore', 'summaryFromRaw', 'result',
+    `${callback}\nreturn repairNext;`)(projectsStore, { put: (value) => summaries.push(value) }, (raw) => raw, result);
+  const values = [null, undefined, 'PRIVATE_IMAGE_CONTENT', 0, false];
+  const keys = ['null', 'undefined', 'string', 'number', 'boolean', 'failed', 'no-error', 'valid'];
+  repairNext(keys, 0);
+  for (const [index, value] of values.entries()) {
+    requests[index].result = value;
+    requests[index].onsuccess();
+  }
+  let prevented = 0;
+  let stopped = 0;
+  const event = { preventDefault: () => prevented++, stopPropagation: () => stopped++ };
+  requests[5].error = new DOMException('Unable to deserialize value', 'DataError');
+  requests[5].onerror(event);
+  requests[6].error = null;
+  requests[6].onerror(event);
+  requests[7].result = { id: 'wrong-id' };
+  requests[7].onsuccess();
+  const details = JSON.parse(JSON.stringify(result)).damagedRecords;
+  check('成功但值无效时记录类型，不包含原值', keys.slice(0, 5).every((key, i) =>
+    details[i]?.projectId === key && details[i]?.reason === 'invalid-value' && details[i]?.valueType === key)
+    && !JSON.stringify(result).includes('PRIVATE_IMAGE_CONTENT'));
+  check('读取失败记录 DOMException 名称与信息', details[5]?.reason === 'read-error'
+    && details[5]?.projectId === 'failed' && details[5]?.errorName === 'DataError'
+    && details[5]?.errorMessage === 'Unable to deserialize value');
+  check('缺少错误对象仍记录明确的空值', details[6]?.reason === 'read-error'
+    && details[6]?.errorName === null && details[6]?.errorMessage === null);
+  check('异常详情与旧 damagedIds 一一对应', JSON.stringify(result.damagedIds) === JSON.stringify(keys.slice(0, 7))
+    && details.length === 7);
+  check('单条失败后继续处理正常记录且不覆盖主文档', prevented === 2 && stopped === 2
+    && result.repaired === 1 && summaries.length === 1 && summaries[0].id === 'valid');
+} catch (error) {
+  check(`逐条修复回调可运行（${error.message}）`, false);
+}
+
 check('存在摘要自检函数 ensureSummariesSynced', syncBody.length > 0);
 check('自检按主键集合求差（getAllKeys）', /getAllKeys\(\)/.test(syncBody) && /planSummaryRepair\(/.test(syncBody));
 check('不再用计数近似判断是否已回填', !/summariesTotal\s*>=\s*projectsTotal/.test(db));
@@ -104,6 +157,7 @@ check(
 // ---------- 3) errorLog.ts 契约 ----------
 const errorLog = read('src/utils/errorLog.ts');
 check('诊断包含各 store 真实条数', /stores:/.test(errorLog) && /getStoreDiagnostics\(/.test(errorLog));
+check('诊断直接携带完整自检报告及异常详情', /repair:\s*getLastSummaryRepairReport\(\)/.test(errorLog));
 check('诊断包含摘要修复报告', /repair:/.test(errorLog) && /getLastSummaryRepairReport\(/.test(errorLog));
 check('诊断包含项目清单便于比对缺失', /projects:\s*\[?/.test(errorLog) && /assetCount/.test(errorLog));
 
