@@ -57,6 +57,41 @@ dispatch({ type: 'REORDER_ITEMS', payload: { assetId: asset.id, itemIds } });
 - **项目读取失败时绝不允许用空白文档顶替并进入可保存状态**（`AppContext` 保持 `loadedRef=false`）：否则 debounce 保存会把空文档写回去，直接清空真实项目。
 - 全局报错采集统一走 `src/utils/errorLog.ts`：`main.tsx` 开场 `installGlobalErrorHandlers()`，`App` 用 `setErrorNotifier` 接入 Toast（仅未捕获错误弹窗）。`recordError` 只写 localStorage 环形缓冲（不弹窗，避免与组件 catch 重复）。设计新存储失败分支时，优先在 db 层 `recordError` 以保证进诊断包。
 
+## 异常文档与只读诊断契约
+
+### 1. 范围与触发
+
+适用于 `db.ts` 图片迁移、图片对账及 `errorLog.ts` 诊断导出；避免把不可读取解释为成功或恢复。
+
+### 2. 接口
+
+- `getDamagedProjectDiagnostics(projectIds: string[]): Promise<DamagedProjectDiagnostics[]>`
+- `listDiagnosticProjectGroups()`：仅从摘要与分组 store 读取，不调用修复或迁移。
+- `reconcileProjectImages(projectId)`：成功返回差集；不存在、文档无效或读取失败时 reject。
+
+### 3. 数据契约
+
+诊断 `damagedProjects[]` 仅含 projectId、images、migration；images 使用 `by_project.count(id)`，不读取图片字节。`images.status=ok` 才有数字 count（可为 0），其他状态 count=null。migration 只输出相关 ID 的 completed/damaged 布尔值，不附整个 localStorage。诊断打开不指定版本，onupgradeneeded 中止建库；事务 readonly，超时/abort 释放连接，迟到连接关闭。
+
+### 4. 校验与错误矩阵
+
+- 无数据库：images missing；缺 store/索引：unsupported；打开/统计/超时失败：error。
+- 迁移状态无值：missing；JSON 或数组元素非法：invalid；localStorage 读取抛错：error。
+- null、非对象或不可遍历的 assets/items/images：不迁移、不对账成功。
+- 已知 damaged（状态或最近自检）必须从完成判定中排除，进度读取和实际迁移使用同一过滤逻辑，避免界面仍显示全部完成并禁用处理按钮；诊断保留原始矛盾状态。force 可重试 damaged。get 返回 undefined 视为未命中，与 null 分开。
+
+### 5. 正常与异常例
+
+正常关联记录返回 `{status:'ok',count:1}`；无关联返回 `{status:'ok',count:0}`；读取失败返回 `{status:'error',count:null,error:...}`，后续 ID 继续。失败不删除图、不覆盖文档、不生成伪摘要。
+
+### 6. 必须验证
+
+运行 `node scripts/verify-null-record-diagnosis.mjs`：隔离 Chrome/Electron 原生 IDB 正常路径，加受控 null/error/timeout 模拟；检查零字节读取、零用户数据写入、版本不变、失败保留原记录、旧 completed 重检与有效项目继续。模拟不是远程损坏复现。
+
+### 7. 错误与正确
+
+错误：`if (!raw) resolve({missing:[],orphans:[]})`，把无法判断伪装为一致。正确：先校验文档，无法检查则 reject；关联 count 只证明索引记录数量，不等于可恢复图片数量。
+
 ## 局部与派生状态
 
 - 仅由一个视图使用的输入、弹窗、loading、错误消息、Set 选择状态保留在该组件中；如 `ProjectList.tsx`。

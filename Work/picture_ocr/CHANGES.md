@@ -1,5 +1,29 @@
 # 修改记录 — Picture OCR
 
+## 2026-09-11 — 异常文档只读诊断与迁移判定
+
+### 背景与目标
+- 修复 null/非法文档被图片迁移记为完成、对账误报一致；诊断增加异常主键关联的独立图片条数及迁移状态。
+
+### 影响与兼容性
+- Web/Electron 共用数据库逻辑，DB_VERSION=5、store 与图片格式不变；诊断只读且不建库/升级，不触发摘要修复。
+- 图片计数失败为 null，明确区分缺库、不支持和错误；数量不等于可恢复图片数。旧 completed 中已知异常可重新检查。
+
+### 文件与实现
+| 操作 | 路径 | 说明 |
+|---|---|---|
+| 修改 | `src/utils/db.ts`、`src/utils/errorLog.ts` | 只读诊断连接及事务生命周期、关联计数、迁移状态与对账校验。 |
+| 新增 | `scripts/verify-null-record-diagnosis.mjs`、`scripts/diagnosis-browser-cases.mjs`、`scripts/diagnosis-electron.cjs` | 隔离 Chrome/Electron 原生 IDB 与受控异常模拟回归。 |
+| 修改 | `scripts/verify-summary-repair.mjs`、`.trellis/spec/frontend/state-management.md`、任务目录 | 更新报告引用契约断言、存储规范、审批与执行记录。 |
+
+### 验证
+- 新增回归两端各 32 项通过（含主会话补充的历史异常进度误判 RED/GREEN）；既有 summary-repair 44/44、error-report 19/19、image-store 76/76、data-location 29/29、list-summary-store 24/24、pending-writes 29/29。
+- `npm run build` 与 `git diff --check` 通过。
+
+### 已知限制与后续
+- null/非法返回、错误事件和超时为受控模拟，正常路径使用真实 IndexedDB；Electron 为隔离测试入口，不是完整打包应用 UI 验收。
+- 不接触客户真实库，不代表远程损坏复现或数据恢复；恢复仍需数据库副本或故障前备份。本任务不提交或发布。
+
 ## 2026-07-23 — v0.4.4 检查项排序与操作优化
 
 ### 背景与目标

@@ -234,18 +234,131 @@ export interface StoreDiagnostics {
   legacyStranded: boolean;
 }
 
-export async function getStoreDiagnostics(): Promise<StoreDiagnostics> {
-  const db = await openDB();
-  return withTimeout(new Promise<StoreDiagnostics>((resolve, reject) => {
-    const result: StoreDiagnostics = { projects: 0, summaries: 0, groups: 0, legacy: 0, images: 0, legacyStranded: false };
-    const names = [PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, PROJECT_GROUPS_STORE_NAME, LEGACY_STORE_NAME, IMAGES_STORE_NAME]
-      .filter((name) => db.objectStoreNames.contains(name));
-    if (names.length === 0) {
-      db.close();
-      resolve(result);
+/** 诊断专用打开：不指定版本；不存在时中止建库，迟到连接立即关闭。 */
+function openDiagnosticsDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finishError = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    };
+    const timer = setTimeout(() => finishError(new Error('诊断打开数据库超时')), DB_OPEN_TIMEOUT_MS);
+    let request: IDBOpenDBRequest;
+    try { request = indexedDB.open(DB_NAME); }
+    catch (error) {
+      finishError(error instanceof Error ? error : new Error(String(error)));
       return;
     }
-    const tx = db.transaction(names, 'readonly');
+    request.onupgradeneeded = () => {
+      request.transaction?.abort();
+      request.result.close();
+      finishError(new DOMException('数据库不存在', 'NotFoundError'));
+    };
+    request.onsuccess = () => {
+      if (settled) { request.result.close(); return; }
+      settled = true;
+      clearTimeout(timer);
+      resolve(request.result);
+    };
+    request.onerror = () => finishError(request.error ?? new Error('诊断打开数据库失败'));
+    request.onblocked = () => finishError(new Error('诊断打开数据库被占用'));
+  });
+}
+
+/** 有界只读事务：异常/超时中止事务并释放连接，不触发修复。 */
+function diagnosticRead<T>(db: IDBDatabase, stores: string[], read: (tx: IDBTransaction) => () => T): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let tx: IDBTransaction | undefined;
+    let settled = false;
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { tx?.abort(); } catch { /* 事务可能已结束 */ }
+      db.close();
+      reject(error);
+    };
+    const timer = setTimeout(() => fail(new Error('诊断读取超时')), DB_OP_TIMEOUT_MS);
+    try {
+      tx = db.transaction(stores, 'readonly');
+      const result = read(tx);
+      tx.oncomplete = () => {
+        if (settled) return;
+        try {
+          const value = result();
+          settled = true;
+          clearTimeout(timer);
+          db.close();
+          resolve(value);
+        } catch (error) { fail(error); }
+      };
+      tx.onabort = () => fail(tx?.error ?? new Error('诊断事务已中止'));
+      tx.onerror = () => fail(tx?.error ?? new Error('诊断读取失败'));
+    } catch (error) { fail(error); }
+  });
+}
+
+export async function listDiagnosticProjectGroups(): Promise<ProjectGroupSummary[]> {
+  const db = await openDiagnosticsDB();
+  return diagnosticRead(db, [PROJECT_SUMMARIES_STORE_NAME, PROJECT_GROUPS_STORE_NAME], (tx) => {
+    const summaries = tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).getAll();
+    const groups = tx.objectStore(PROJECT_GROUPS_STORE_NAME).getAll();
+    return () => groupProjectSummaries(groups.result.map(normalizeProjectGroup), summaries.result.map(normalizeSummary));
+  });
+}
+
+type DiagnosticImageCount =
+  | { status: 'ok'; count: number }
+  | { status: 'missing' | 'unsupported' | 'error'; count: null; error: string };
+type DiagnosticMigrationState =
+  | { status: 'ok'; completed: boolean; damaged: boolean }
+  | { status: 'missing' | 'invalid' | 'error' };
+export interface DamagedProjectDiagnostics {
+  projectId: string;
+  images: DiagnosticImageCount;
+  migration: DiagnosticMigrationState;
+}
+
+export async function getDamagedProjectDiagnostics(projectIds: string[]): Promise<DamagedProjectDiagnostics[]> {
+  const migration = readMigrationSnapshot();
+  const rows: DamagedProjectDiagnostics[] = [];
+  for (const projectId of new Set(projectIds)) {
+    let images: DiagnosticImageCount;
+    try {
+      const db = await openDiagnosticsDB();
+      if (!db.objectStoreNames.contains(IMAGES_STORE_NAME)) {
+        db.close();
+        images = { status: 'unsupported', count: null, error: 'images store 不存在' };
+      } else {
+        images = await diagnosticRead<DiagnosticImageCount>(db, [IMAGES_STORE_NAME], (tx) => {
+          const store = tx.objectStore(IMAGES_STORE_NAME);
+          if (!store.indexNames.contains(IMAGES_PROJECT_INDEX)) {
+            return () => ({ status: 'unsupported', count: null, error: 'by_project 索引不存在' });
+          }
+          const count = store.index(IMAGES_PROJECT_INDEX).count(projectId);
+          return () => ({ status: 'ok', count: count.result });
+        });
+      }
+    } catch (error) {
+      images = { status: error instanceof DOMException && error.name === 'NotFoundError' ? 'missing' : 'error', count: null,
+        error: error instanceof Error ? error.message : String(error) };
+    }
+    rows.push({ projectId, images, migration: migration.status === 'ok'
+      ? { status: 'ok', completed: migration.state.completedIds.includes(projectId), damaged: migration.state.damagedIds.includes(projectId) }
+      : { status: migration.status } });
+  }
+  return rows;
+}
+
+export async function getStoreDiagnostics(): Promise<StoreDiagnostics> {
+  const db = await openDiagnosticsDB();
+  const result: StoreDiagnostics = { projects: 0, summaries: 0, groups: 0, legacy: 0, images: 0, legacyStranded: false };
+  const names = [PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, PROJECT_GROUPS_STORE_NAME, LEGACY_STORE_NAME, IMAGES_STORE_NAME]
+    .filter((name) => db.objectStoreNames.contains(name));
+  if (names.length === 0) { db.close(); return result; }
+  return diagnosticRead(db, names, (tx) => {
     const countInto = (name: string, assign: (value: number) => void) => {
       if (!names.includes(name)) return;
       const request = tx.objectStore(name).count();
@@ -260,9 +373,8 @@ export async function getStoreDiagnostics(): Promise<StoreDiagnostics> {
       const migratedKey = tx.objectStore(PROJECTS_STORE_NAME).getKey(LEGACY_PROJECT_ID);
       migratedKey.onsuccess = () => { result.legacyStranded = result.legacy > 0 && migratedKey.result === undefined; };
     }
-    tx.oncomplete = () => { db.close(); resolve(result); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'getStoreDiagnostics');
+    return () => result;
+  });
 }
 
 export function createProjectDocument(
@@ -662,46 +774,52 @@ export async function removeImageFromProject(
   }), 'removeImageFromProject', DB_DOC_TIMEOUT_MS));
 }
 
-/** 对账：文档引用的图片 vs images store 实际存在的字节，报出缺失与孤儿。 */
+function isInspectableProject(raw: unknown): raw is ProjectDocument {
+  if (!raw || typeof raw !== 'object' || !('assets' in raw) || !Array.isArray(raw.assets)) return false;
+  return raw.assets.every(asset => asset && typeof asset === 'object' && Array.isArray(asset.items)
+    && asset.items.every((item: { images?: unknown }) => item && Array.isArray(item.images)
+      && item.images.every(image => image && typeof image === 'object' && typeof image.id === 'string')));
+}
+
+/** 对账失败以 reject 表示不可检查，绝不以空差集代表一致。 */
 export async function reconcileProjectImages(projectId: string): Promise<ImageReconcilePlan> {
-  const db = await openDB();
-  return withTimeout(new Promise<ImageReconcilePlan>((resolve, reject) => {
-    const tx = db.transaction([PROJECTS_STORE_NAME, IMAGES_STORE_NAME], 'readonly');
+  const db = await openDiagnosticsDB();
+  return diagnosticRead(db, [PROJECTS_STORE_NAME, IMAGES_STORE_NAME], (tx) => {
     const docRequest = tx.objectStore(PROJECTS_STORE_NAME).get(projectId);
     const keysRequest = tx.objectStore(IMAGES_STORE_NAME).index(IMAGES_PROJECT_INDEX).getAllKeys(projectId);
-    tx.oncomplete = () => {
-      db.close();
-      const raw = docRequest.result as ProjectDocument | undefined;
-      if (!raw) {
-        resolve({ missing: [], orphans: [] });
-        return;
-      }
-      // 未迁移的内联图片字节就在文档里，不算缺失。
+    return () => {
+      const raw: unknown = docRequest.result;
+      if (!isInspectableProject(raw)) throw new Error(`项目 ${projectId} 文档不存在或无效，无法对账`);
       const inlineIds = new Set(collectInlineImages(raw).map((entry) => entry.image.id));
-      const plan = planImageReconcile(projectId, collectImageRefs(raw), (keysRequest.result as IDBValidKey[]) ?? []);
-      resolve({
-        missing: plan.missing.filter((id) => !inlineIds.has(id)),
-        orphans: plan.orphans,
-      });
+      const plan = planImageReconcile(projectId, collectImageRefs(raw), keysRequest.result);
+      return { missing: plan.missing.filter(id => !inlineIds.has(id)), orphans: plan.orphans };
     };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  }), 'reconcileProjectImages');
+  });
 }
 
 const MIGRATION_STATE_KEY = 'evidence-image-migration-v5';
 
-function readMigrationState(): MigrationState {
+function readMigrationSnapshot(): { status: 'ok'; state: MigrationState } | { status: 'missing' | 'invalid' | 'error' } {
+  let raw: string | null;
+  try { raw = localStorage.getItem(MIGRATION_STATE_KEY); }
+  catch { return { status: 'error' }; }
+  if (raw === null) return { status: 'missing' };
   try {
-    const raw = localStorage.getItem(MIGRATION_STATE_KEY);
-    if (!raw) return { completedIds: [], damagedIds: [] };
-    const parsed = JSON.parse(raw) as Partial<MigrationState>;
-    return {
-      completedIds: Array.isArray(parsed?.completedIds) ? parsed.completedIds.map(String) : [],
-      damagedIds: Array.isArray(parsed?.damagedIds) ? parsed.damagedIds.map(String) : [],
-    };
-  } catch {
-    return { completedIds: [], damagedIds: [] };
-  }
+    const parsed = JSON.parse(raw) as Partial<MigrationState> | null;
+    if (!parsed || !Array.isArray(parsed.completedIds) || !Array.isArray(parsed.damagedIds)
+      || !parsed.completedIds.every(id => typeof id === 'string') || !parsed.damagedIds.every(id => typeof id === 'string')) {
+      return { status: 'invalid' };
+    }
+    return { status: 'ok', state: { completedIds: [...new Set(parsed.completedIds)], damagedIds: [...new Set(parsed.damagedIds)] } };
+  } catch { return { status: 'invalid' }; }
+}
+
+function readMigrationState(): MigrationState {
+  const snapshot = readMigrationSnapshot();
+  const state = snapshot.status === 'ok' ? snapshot.state : { completedIds: [], damagedIds: [] };
+  const knownDamaged = new Set([...state.damagedIds, ...(lastRepairReport?.damagedIds ?? [])]);
+  state.completedIds = state.completedIds.filter(id => !knownDamaged.has(id));
+  return state;
 }
 
 function writeMigrationState(state: MigrationState): void {
@@ -737,7 +855,12 @@ async function migrateProjectImages(projectId: string): Promise<boolean> {
     const docRequest = projectsStore.get(projectId);
     docRequest.onsuccess = () => {
       const raw = docRequest.result as ProjectDocument | undefined;
-      if (!raw) return; // 项目已删除，无需搬迁
+      if (raw === undefined) return; // get 未命中：项目已删除
+      if (!isInspectableProject(raw)) {
+        failure = new Error(`项目 ${projectId} 文档无效，未搬迁图片`);
+        tx.abort();
+        return;
+      }
       const inline = collectInlineImages(raw);
       if (inline.length === 0) return; // 已是引用形态
 
@@ -908,6 +1031,7 @@ export async function migrateInlineImages(
   try {
     const state = readMigrationState();
     if (force) state.damagedIds = [];
+    writeMigrationState(state);
     const targets = planMigrationTargets(await listProjectKeys(), state);
     onProgress?.(0, targets.length);
     for (const projectId of targets) {
