@@ -71,3 +71,24 @@
 - 验证：`verify:image-store` 76/76、`verify:pending-writes` 29/29、`verify:list-summary-store` 24/24、`tsc --noEmit` + `npm run build` 通过。
 - **大库真实演练（Playwright + 真实 IndexedDB，51730）**：造 8 个项目 × 6 张 × 8MB ≈ 385MB 未迁移库 → 刷新后台自动搬迁全部完成、0 损坏；再追加 2 个内联项目（481MB）验证增量搬迁同样完成。逐条比对 60 张图的长度+头尾字节：**60/60 完全一致**，文档内联残留 0 条，单份项目文档从约 48MB 降到 1.0KB。摘要读取 1ms、单张按需读图 16ms。大库下加一张新照片：从选中到落库 **82ms**，文档只增加一条引用（1135 字节）。
 - 发布 v0.7.0；RELEASE-NOTES 新写，含「升级后不建议回退 0.6.x」提示。
+
+
+## Session 1: 项目分类与组内导航，发布 v0.8.0
+
+**Date**: 2026-09-14
+**Task**: 项目分类与组内导航，发布 v0.8.0
+**Branch**: `main`
+
+### Summary
+
+完成多系统项目与独立系统页签、组内导航、返回搜索和滚动恢复、可见范围批量选择及更多菜单；Web 14/Electron 13 组隔离 UI 回归和发布基线通过。版本与发布说明同步 v0.8.0，用户已授权推送 main 和 picture-ocr-v0.8.0 标签，由 Actions 构建网页 ZIP 与 Windows 客户端，不等待 CI。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `624a8c3` | (see git log) |
+
+### Status
+
+[OK] **Completed**
