@@ -41,8 +41,9 @@ assert.doesNotMatch(dialogSource, />关闭<\/button>/, '会话对话框不应同
 assert.match(dialogSource, /'停止会话'/, '已启动会话时，底部应保留明确的“停止会话”操作。');
 // 分类导航、真实菜单和不同窗口尺寸由 verify-project-list-ui.mjs 验证；这里守护共享布局接线。
 assert.match(projectListUiSource, /export const SYSTEM_LIST_GRID/, '系统表头与行应复用共享网格。');
-assert.match(projectListUiSource, /export const GROUP_LIST_GRID/, '项目表头与行应复用共享网格。');
-assert.match(projectListSource, /isGroupList \? GROUP_LIST_GRID : SYSTEM_LIST_GRID/, '表头必须与当前列表类型的行使用同一布局。');
+assert.match(projectListUiSource, /export const GROUP_SYSTEM_LIST_GRID/, '组内系统表头与行应复用共享网格。');
+assert.match(projectListSource, /groupUnit !== undefined \? GROUP_SYSTEM_LIST_GRID : SYSTEM_LIST_GRID/, '系统行应根据所在范围选择与表头一致的网格。');
+assert.match(projectListSource, /data-system-header className=\{`grid \$\{GROUP_SYSTEM_LIST_GRID\}/, '组内表头复用组内系统网格。');
 assert.match(projectActionsSource, /<details[\s\S]*name="project-list-actions"/, '低频操作统一使用可展开菜单，同一时间只展开一个。');
 assert.doesNotMatch(projectListSource, /hidden 2xl:flex/, '宽屏也应收纳低频操作，避免所有按钮挤占名称空间。');
 assert.match(projectListHeaderSource, /flex-wrap/, '项目列表顶栏在低宽度下应允许搜索和操作按钮换行。');

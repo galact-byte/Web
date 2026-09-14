@@ -31,6 +31,9 @@ git diff --check
 - 先 `npm run build`，再 `node scripts/verify-project-list-ui.mjs`。生产构建运行于隔离 Chrome profile 和 Electron 正式 main/preload + 临时 userData；脚本输出报告及 375/768/1440px 截图到 `.trellis/.runtime/project-list-qa/`，不纳入版本控制。不使用用户真实库。
 - Web 无桥隐藏采集；有桥使用受控 HTTP control 接口验证真实 Web bridge 的范围、轮询及保存确认。Electron 使用正式 LAN 服务上传到临时数据目录。受控服务与故障注入不等同真实手机/Wi-Fi 验收。
 - 自动化键盘 Enter 通过 CDP 发送时带 `text: '\\r'`，保证浏览器收到激活键；不能用 `.click()` 冒充键盘可用证据。读取源码断言先归一化 CRLF。
+- 多项目原地展开回归覆盖首次全展开、全收起后成功刷新/工作区重挂载、搜索展开与清除恢复、单组选择交集、收起清选择、保存成功但刷新失败后的重试定位；组级采集在子系统搜索裁剪后仍须包含完整组。
+- 三档截图分别保留独立页与项目展开页；键盘测试用 CDP Enter/Space 激活真实项目按钮，确认 aria-expanded、组内显隐及收起焦点恢复。
+- 隔离 Electron 测试入口对测试窗口调用 `setBackgroundThrottling(false)`，避免终端遮挡测试窗口时页面计时器被节流；生产 main/preload 不改。CDP 命令设超时，连接关闭后立即 reject，失败截图也不能无限等待。可用 `--web-only` / `--desktop-only` 定位环境问题，完整验收仍跑无参数双端版本。
 - 模拟外部删除原组时让工作区打开另一系统，避免原系统卸载 flushSave 与夹具删除竞态；本测试验证列表落点，不声称解决跨窗口自动保存覆盖。
 
 ## 存储位置与导出保存（缓解 C 盘膨胀）
