@@ -47,7 +47,16 @@ async function connect(port) {
         socket.addEventListener('message', event => { const message = JSON.parse(event.data); const result = pending.get(message.id); if (!result) return; pending.delete(message.id); message.error ? result.reject(new Error(message.error.message)) : result.resolve(message.result); });
         socket.addEventListener('close', () => { for (const result of pending.values()) result.reject(new Error('测试浏览器连接已关闭')); pending.clear(); });
         await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
-        const send = (method, params = {}) => new Promise((resolve, reject) => { pending.set(++id, { resolve, reject }); socket.send(JSON.stringify({ id, method, params })); });
+        const send = (method, params = {}) => new Promise((resolve, reject) => {
+          if (socket.readyState !== WebSocket.OPEN) { reject(new Error(`测试浏览器已断连：${method}`)); return; }
+          const requestId = ++id;
+          const timeout = setTimeout(() => { pending.delete(requestId); reject(new Error(`浏览器命令超时：${method} ${params.expression?.slice(0, 100) ?? ''}`)); }, 30000);
+          pending.set(requestId, {
+            resolve: value => { clearTimeout(timeout); resolve(value); },
+            reject: error => { clearTimeout(timeout); reject(error); },
+          });
+          socket.send(JSON.stringify({ id: requestId, method, params }));
+        });
         return { send, close: () => socket.close(), evaluate: async expression => {
           const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
           if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
@@ -61,7 +70,7 @@ async function connect(port) {
 }
 const report = [];
 try {
-  for (const platform of (process.argv.includes('--web-only') ? ['web'] : ['web', 'desktop'])) {
+  for (const platform of (process.argv.includes('--web-only') ? ['web'] : process.argv.includes('--desktop-only') ? ['desktop'] : ['web', 'desktop'])) {
     const profile = mkdtempSync(path.join(tmpdir(), 'picture-ocr-project-list-'));
     // 仅测试进程使用随机调试端口，正式 Web 服务固定端口不变。
     const reservation = createServer(); await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve)); const port = reservation.address().port; await new Promise(resolve => reservation.close(resolve));
@@ -88,13 +97,17 @@ try {
       assert.deepEqual(await client.evaluate('window.listReads'), { documents: 0, images: 0 });
       pass('生产首屏只读摘要，无项目文档/图片读取');
       if (platform === 'web') { assert.equal(await client.evaluate('!!cases.button("手机采集")'), false); pass('无桥网页不显示手机采集'); }
-      for (const name of ['core', 'mutations', 'exportAndImport', 'failedLoad']) pass(await client.evaluate(`cases.${name}()`));
+      for (const name of ['core', 'mutations', 'exportAndImport', 'failedLoad', 'savedButRefreshFailed']) pass(await client.evaluate(`cases.${name}()`));
       for (const width of [375, 768, 1440]) {
         await client.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
         pass(`${width}px ${await client.evaluate('cases.layout()')}`);
         const screenshot = await client.send('Page.captureScreenshot', { format: 'png' });
         writeFileSync(path.join(output, `${platform}-${width}.png`), Buffer.from(screenshot.data, 'base64'));
+        pass(`${width}px ${await client.evaluate('cases.groupLayout()')}`);
+        const groupScreenshot = await client.send('Page.captureScreenshot', { format: 'png' });
+        writeFileSync(path.join(output, `${platform}-groups-${width}.png`), Buffer.from(groupScreenshot.data, 'base64'));
       }
+      await client.evaluate('cases.tab("independent")');
       await client.evaluate('document.querySelector("[data-system-id] summary").focus()');
       const key = async (key, code, virtual) => { await client.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: virtual, ...(key === 'Enter' ? { text: '\r' } : {}) }); await client.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: virtual }); };
       await key('Enter', 'Enter', 13); await delay(100);
@@ -104,6 +117,18 @@ try {
       assert.equal(await client.evaluate('document.activeElement.tagName'), 'SUMMARY');
       assert.equal(await client.evaluate('!!document.querySelector("details[open]")'), false);
       pass('真实 Enter/Tab/Escape 按键与焦点恢复');
+      await client.evaluate('cases.tab("groups")');
+      await client.evaluate('document.getElementById("group-toggle-multi").focus()');
+      assert.equal(await client.evaluate('document.activeElement.getAttribute("aria-expanded")'), 'true');
+      await key('Enter', 'Enter', 13); await delay(80);
+      assert.equal(await client.evaluate('document.activeElement.getAttribute("aria-expanded")'), 'false');
+      assert.equal(await client.evaluate('!!cases.systemRow("g1")'), false);
+      await key(' ', 'Space', 32); await delay(80);
+      assert.equal(await client.evaluate('document.activeElement.getAttribute("aria-expanded")'), 'true');
+      assert.equal(await client.evaluate('!!cases.systemRow("g1")'), true);
+      await client.evaluate('cases.systemRow("g1").querySelector("button").focus(); document.getElementById("group-toggle-multi").click()');
+      assert.equal(await client.evaluate('document.activeElement.id'), 'group-toggle-multi');
+      pass('项目 Enter/Space 原地展开收起，隐藏组内焦点返回项目按钮');
       if (platform === 'web') {
         webLanEnabled = true;
         await client.send('Page.reload', { ignoreCache: true }); await delay(400);
@@ -142,7 +167,11 @@ try {
       }
     } catch (error) {
       report.push({ platform, ok: false, name: error.stack });
-      if (client) { const image = await client.send('Page.captureScreenshot', { format: 'png' }).catch(() => null); if (image) writeFileSync(path.join(output, `${platform}-failure.png`), Buffer.from(image.data, 'base64')); }
+      if (client) {
+        console.error(await client.evaluate('({step: window.projectListTestStep, text: document.body.innerText.slice(-1800)})').catch(() => '无法读取失败页面'));
+        const image = await client.send('Page.captureScreenshot', { format: 'png' }).catch(() => null);
+        if (image) writeFileSync(path.join(output, `${platform}-failure.png`), Buffer.from(image.data, 'base64'));
+      }
       throw error;
     } finally {
       clearTimeout(timeout); client?.close(); child.kill(); await exited;

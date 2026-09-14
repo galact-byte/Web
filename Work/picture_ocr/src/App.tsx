@@ -288,7 +288,7 @@ const App: React.FC = () => {
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
   const [newProjectInfoPrompt, setNewProjectInfoPrompt] = useState(false);
   const [projectListRefreshKey, setProjectListRefreshKey] = useState(0);
-  const [projectListView, setProjectListView] = useState<ProjectListViewState>({ location: null, positions: {} });
+  const [projectListView, setProjectListView] = useState<ProjectListViewState>({ location: null, positions: {}, expandedGroupIds: null, searchExpandedGroupIds: null });
   const [lanBridge, setLanBridge] = useState<LanBridge | null>(null);
   const [lanDialogOpen, setLanDialogOpen] = useState(false);
 

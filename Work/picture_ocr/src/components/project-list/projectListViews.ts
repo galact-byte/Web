@@ -1,13 +1,15 @@
 import type { ProjectGroupSummary, ProjectSummary } from '../../types';
 
-export type ProjectListLocation = { kind: 'groups' } | { kind: 'independent' } | { kind: 'group'; groupId: string };
+export type ProjectListLocation = { kind: 'groups' } | { kind: 'independent' };
 export interface ProjectListViewState {
   location: ProjectListLocation | null;
   positions: Record<string, { search: string; scrollY: number }>;
+  expandedGroupIds: string[] | null;
+  searchExpandedGroupIds: string[] | null;
 }
 
 export function listLocationKey(location: ProjectListLocation): string {
-  return location.kind === 'group' ? `group:${location.groupId}` : location.kind;
+  return location.kind;
 }
 
 export function groupUpdatedAt(summary: ProjectGroupSummary): number {
@@ -32,10 +34,22 @@ export function filterSystems(systems: ProjectSummary[], search: string): Projec
   return systems.filter(system => systemSearchText(system).toLowerCase().includes(keyword));
 }
 
+function matchesGroup(summary: ProjectGroupSummary, search: string): boolean {
+  const meta = summary.group ?? summary.systems[0]?.meta;
+  return [meta?.projectCode, meta?.projectName, meta?.unitName].join(' ').toLowerCase().includes(search.trim().toLowerCase());
+}
+
+export function filterGroupSystems(summary: ProjectGroupSummary, search: string): ProjectSummary[] {
+  return matchesGroup(summary, search) ? summary.systems : filterSystems(summary.systems, search);
+}
+
 export function filterGroups(groups: ProjectGroupSummary[], search: string): ProjectGroupSummary[] {
-  const keyword = search.trim().toLowerCase();
-  return groups.filter(summary => [summary.group?.projectCode, summary.group?.projectName, summary.group?.unitName,
-    ...summary.systems.map(systemSearchText)].join(' ').toLowerCase().includes(keyword));
+  return groups.filter(summary => matchesGroup(summary, search) || filterSystems(summary.systems, search).length > 0);
+}
+
+export function syncExpandedGroups(ids: string[] | null, groups: ProjectGroupSummary[]): string[] {
+  const available = new Set(groups.map(group => group.id));
+  return ids === null ? [...available] : ids.filter(id => available.has(id));
 }
 
 export function selectedVisibleSystems(systems: ProjectSummary[], selectedIds: Set<string>): ProjectSummary[] {

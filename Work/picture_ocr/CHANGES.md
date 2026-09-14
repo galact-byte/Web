@@ -1,5 +1,35 @@
 # 修改记录 — Picture OCR
 
+## 2026-09-14 — 多系统项目恢复原地展开与收起
+
+### 背景与目标
+- 保留「多系统项目／独立系统」页签，项目名称和箭头直接展开组内系统，支持同时展开多个项目，取消进入详情再返回的步骤。
+- 保留去除重复分类标题的修正；项目采用清晰的标题栏，44px 展开区域和 20px 箭头，单位/系统总数/更新时间集中展示。组内系统有独立对齐表头，减少重复单位，保留不同单位；全选并入表头，仅选中后显示删除，减少空白工具栏。
+
+### 影响与兼容性
+- App 保存普通/搜索期间两套展开状态及每页签搜索、滚动。首次全展开；空数组代表全部收起，刷新不会重置。搜索项目字段展示全组，搜索系统字段只展示匹配系统，清除搜索恢复原展开状态。
+- 批量选择只属于一个项目；切组选择替换前组，收起、切页和搜索清空选择。组级手机采集始终包含完整项目，系统级仅包含所选系统。
+- 新建或添加保存成功后展开并定位新增系统；保存成功但摘要刷新失败保留原位置，重试成功再定位，不重复创建。数据库、系统归属、工作区 URL 及图片读取方式不变。
+
+### 文件与实现
+| 操作 | 路径 | 说明 |
+|---|---|---|
+| 修改 | `src/App.tsx`、`src/components/ProjectList.tsx`、`src/components/project-list/projectListViews.ts`、`projectListUi.ts` | 展开状态、分类搜索、单组选择、公共系统行、项目与系统布局及一次性新增定位。 |
+| 修改 | `scripts/verify-project-list-views.mjs`、`scripts/project-list-browser-cases.mjs`、`scripts/verify-project-list-ui.mjs`、`scripts/project-list-electron.cjs` | 替换详情导航断言，补充展开、故障和键盘回归；CDP 超时及断连处理，隔离桌面禁用后台计时器节流。 |
+| 修改 | `.trellis/spec/frontend/`、本任务目录 | 更新原地展开与选择/搜索契约、验证记录。 |
+
+### 验证
+- 纯逻辑 RED：新增 `filterGroupSystems` 缺失而失败；浏览器 RED：旧生产构建因不支持初次原地全展开而失败。
+- `node scripts/verify-project-list-views.mjs`、`npm run build`、`npm run verify:pwa-build` 通过。
+- `node scripts/verify-project-list-ui.mjs` 最终一次完整运行：网页端 19 组、Electron 18 组通过；375/768/1440px 独立/展开列表截图及菜单边界通过，真实 Enter/Space/Tab/Escape、焦点恢复通过。
+- 截图反馈后的布局修订：双端仍为 Web 19 / Electron 18 组全绿；增加长中文项目/系统名、不同单位保留、箭头/点击区域尺寸、表头列对齐与资产数不换行断言，人工查看更新后的桌面和窄屏截图。最终日志 `.trellis/.runtime/project-group-layout-final.log`。
+- `verify:lan-mobile-picker`、`verify:list-summary-store`（24/24）、`verify:summary-repair`（44/44）、`verify:pending-writes`（29/29）、`verify:evidence-package` 和 `git diff --check` 通过。
+
+### 已知限制与后续
+- 使用合成数据和隔离 profile/userData；Electron 正式 main/preload 加载生产 dist，未生成安装器。Web control 与保存/加载故障为受控模拟，不代表真实手机/Wi-Fi 或客户数据验收。
+- 桌面自动化曾因窗口遮挡的后台计时器节流超时；仅隔离测试入口禁用节流，应用代码不变。CDP 断连后不再无限等待截图。
+- 本次未提交或发布，待提交确认；回退只需回退展示、状态与测试改动，保留标题去重修正，不需要数据回滚。
+
 ## 2026-09-14 — v0.8.0 项目组与独立系统分开展示
 
 ### 背景与目标

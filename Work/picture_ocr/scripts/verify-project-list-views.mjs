@@ -3,7 +3,7 @@ import { build } from 'esbuild';
 
 // 直接运行生产派生逻辑，不复制实现；缺失实现时该测试应失败。
 const { outputFiles } = await build({ entryPoints: ['src/components/project-list/projectListViews.ts'], bundle: true, write: false, platform: 'node', format: 'esm' });
-const { splitProjectViews, filterSystems, filterGroups, selectedVisibleSystems, listLocationKey } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`);
+const { splitProjectViews, filterSystems, filterGroups, filterGroupSystems, syncExpandedGroups, selectedVisibleSystems, listLocationKey } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`);
 const system = (id, groupId, name, updatedAt = 1) => ({ id, groupId, meta: { systemName: name, projectName: '', projectCode: '', unitName: '测试单位', reportDate: '' }, assetCount: 0, createdAt: 1, updatedAt });
 const grouped = system('g1', 'multi', '交易平台');
 const solo = system('solo', null, '独立门户', 3);
@@ -26,5 +26,14 @@ assert.deepEqual(filterSystems(summaries[0].systems, '交易').map(s => s.id), [
 assert.deepEqual(filterSystems([solo], '不存在'), []);
 assert.deepEqual(selectedVisibleSystems([grouped], new Set(['g1', 'solo', 'deleted'])).map(s => s.id), ['g1'], '只允许当前可见选择');
 assert.equal(JSON.stringify(summaries), before, '分类与搜索不修改原摘要');
-assert.notEqual(listLocationKey({ kind: 'group', groupId: 'independent' }), listLocationKey({ kind: 'independent' }));
+assert.deepEqual(filterGroupSystems(summaries[0], '交易').map(s => s.id), ['g1'], '系统命中只展示匹配项');
+assert.deepEqual(filterGroupSystems(summaries[0], '公共资源').map(s => s.id), ['g1', 'g2'], '项目字段命中展示全组');
+assert.deepEqual(filterGroupSystems(summaries[3], '档案').map(s => s.id), ['orphan']);
+assert.deepEqual(syncExpandedGroups(null, views.projects), views.projects.map(g => g.id), '首次默认全部展开');
+assert.deepEqual(syncExpandedGroups([], views.projects), [], '全部收起后刷新不能重新展开');
+const expanded = ['multi', 'deleted'];
+assert.deepEqual(syncExpandedGroups(expanded, views.projects), ['multi'], '只清理已删除的项目');
+assert.deepEqual(expanded, ['multi', 'deleted'], '展开同步不修改输入');
+assert.equal(listLocationKey({ kind: 'groups' }), 'groups');
+assert.equal(listLocationKey({ kind: 'independent' }), 'independent');
 console.log('PASS 项目分类、单系统/空组/异常组、搜索范围、批量选择与输入不可变');

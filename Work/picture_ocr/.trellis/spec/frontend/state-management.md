@@ -8,7 +8,7 @@
 | --- | --- |
 | 工作台项目状态 | `src/context/appReducer.ts` 的 `AppState`（meta、categories、assets、当前选择） |
 | Provider/持久化协调 | `src/context/AppContext.tsx`（加载、500ms 防抖保存、保存队列、卸载刷新） |
-| 列表返回位置 | `src/App.tsx` 的 `ProjectListViewState`（页签/组 ID、各位置的搜索与滚动），跨列表重挂载保留 |
+| 列表返回位置 | `src/App.tsx` 的 `ProjectListViewState`（页签、搜索与滚动、普通/搜索期间展开 ID），跨列表重挂载保留 |
 | 瞬时页面 UI | 各组件的 `useState`，如 `src/components/ProjectList.tsx` 的选择集、对话框和保存中状态 |
 | 路由状态 | `src/App.tsx` 读取和写入 `window.location.hash` |
 | 本机偏好 | `LanMobileCollector.tsx` 使用 `localStorage` 保存图片来源方式 |
@@ -53,12 +53,12 @@ dispatch({ type: 'REORDER_ITEMS', payload: { assetId: asset.id, itemIds } });
 ## 项目列表分类与导航契约
 
 1. **范围**：桌面/Web 共用 `ProjectList`，列表只从 `listProjectGroups()` 派生，不改 DB 结构与系统归属。
-2. **接口**：`ProjectListViewState = { location: ProjectListLocation | null; positions: Record<string, {search: string; scrollY: number}> }`；`ProjectListLocation` 是 `groups` / `independent` / `group + groupId` 判别联合。App 持有状态，经 `viewState/onViewStateChange` 传入。
-3. **数据契约**：真实组与仍有 groupId 的异常组均属于项目页；没有 groupId 的系统属于独立页。真实组数与异常组数分开显示，组更新排序取组和系统最大时间。`listLocationKey()` 为组 ID 加 `group:` 前缀，避免与页签名冲突。工作区路由不变；刷新页面后不承诺恢复临时浏览位置。
-4. **校验与错误**：切页、进出组或修改搜索清空选择；删除目标取 `selectedVisibleSystems(visible, selectedIds)` 交集。仅加载成功且组确实消失才返回项目页，加载失败显示错误与重试，不能假装空库或清掉原导航。创建成功清空目标位置搜索并定位结果，取消或保存失败不跳转。
-5. **正常/边界**：一个或零个系统的真实组仍显示项目层；缺组记录保留入口与系统操作并提示异常，禁用依赖组记录的操作；项目顶层不允许跨组批量删除系统。
-6. **验证**：`node scripts/verify-project-list-views.mjs` 检查分类、搜索、选择交集和不修改输入；先 `npm run build` 再 `node scripts/verify-project-list-ui.mjs` 检查隔离 Chrome/Electron 导航、滚动、创建/删除/导入导出、失败及实际菜单操作。
-7. **反例**：错误是按 `systems.length === 1` 隐藏组头，或只把搜索留在会被 key 重挂载的 ProjectList 中；正确是按归属分类，App 保存 UI 位置，菜单/选择等留在列表组件内部。
+2. **接口**：`ProjectListViewState` 包含 `location: ProjectListLocation | null`、`positions: Record<string, {search: string; scrollY: number}>`、`expandedGroupIds: string[] | null` 和 `searchExpandedGroupIds: string[] | null`。位置只包含 `groups` / `independent`，App 持有状态；项目在原页展开，不再进入详情层级。
+3. **数据契约**：真实组与仍有 groupId 的异常组均属于项目页；没有 groupId 的系统属于独立页。真实组数与异常组数分开显示，组排序取组和系统最大更新时间。`syncExpandedGroups(null, projects)` 首次全展开，`[]` 表示全部收起，成功刷新只剔除无效 ID。项目字段搜索命中显示全组，系统字段命中只显示匹配系统；搜索变更初始化搜索展开 ID，清除搜索恢复普通展开 ID。工作区路由不变；刷新页面后不承诺恢复临时浏览位置。
+4. **校验与错误**：切页、搜索或收起所选组清空选择；选择另一个组替换前组选中项。删除目标仅为选中组已展开且可见系统与 `selectedIds` 的交集；独立页同样限制可见范围。加载失败保留状态并允许重试。新建/添加保存完成后关闭表单，保留一次性 `{groupId, systemId}` 定位目标；成功刷新后清空目标页搜索、展开该组并定位。保存成功但刷新失败不能误报保存失败或再次创建，重试成功后再定位。取消和保存失败不跳转。
+5. **正常/边界**：一个或零个系统的组仍显示项目行；缺组记录保留系统操作并提示异常，禁用依赖组记录的操作；批量删除只能作用于一个组。组级采集始终取原始 summary 的全部系统 ID，不受搜索裁剪。
+6. **验证**：`node scripts/verify-project-list-views.mjs` 检查分类、项目/系统搜索、首次与全部收起、无效 ID 修剪、选择交集和不可变性；`npm run build` 后运行 `node scripts/verify-project-list-ui.mjs` 检查隔离双端展开、返回、选择边界、新建/添加、保存/刷新失败、导入导出及采集。
+7. **反例**：错误是用展开集合为空判断首次加载，或直接用搜索裁剪后的系统发起组级采集；正确是以 null 区分初始化，保留空集合，以及从未裁剪 summary 生成组级采集范围。
 
 ## 存储操作超时与报错采集
 
