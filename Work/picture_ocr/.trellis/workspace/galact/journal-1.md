@@ -92,3 +92,24 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 2: 项目原地展开与排版优化，发布 v0.8.1
+
+**Date**: 2026-09-14
+**Task**: 项目原地展开与排版优化，发布 v0.8.1
+**Branch**: `main`
+
+### Summary
+
+恢复多项目原地展开，保留分类页签与搜索返回状态；按用户截图放大展开入口，重排项目标题栏与系统表头，减少重复单位和空白工具栏。Web 19/Electron 18 组完整回归及发布基线通过，版本与发布说明同步为 0.8.1。用户已批准提交推送与发布，随后推送 main 和 picture-ocr-v0.8.1 标签触发 Actions；不等待远端构建。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e6235dd` | (see git log) |
+
+### Status
+
+[OK] **Completed**
