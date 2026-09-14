@@ -1,5 +1,34 @@
 # 修改记录 — Picture OCR
 
+## 2026-09-14 — v0.8.0 项目组与独立系统分开展示
+
+### 背景与目标
+- 项目管理中心分为「多系统项目」「独立系统」，进入项目后只显示该项目的系统，减少混排和行内按钮拥挤。
+
+### 影响与兼容性
+- 按项目组归属分类：一个系统的组、空组仍在项目页；缺组记录保留异常入口。数据库、系统归属及工作区 URL 不变，列表继续只读摘要。
+- App 保存页签、组、搜索和滚动位置；切换范围清空选择，批量删除只取当前可见系统。新建成功自动定位结果，加载失败可重试。
+- 系统与项目组低频操作统一收纳，窄屏采集入口放进更多；键盘、焦点与窗口边界处理一致。
+
+### 文件与实现
+| 操作 | 路径 | 说明 |
+|---|---|---|
+| 修改 | `src/App.tsx`、`src/components/ProjectList.tsx` | 跨重挂载保存列表位置，分开项目/系统导航、搜索、选择和创建落点。 |
+| 新增/修改 | `src/components/project-list/ProjectActions.tsx`、`projectListViews.ts`、`ProjectListHeader.tsx`、`projectListUi.ts` | 纯派生分类、共享网格、更多菜单与语义入口。 |
+| 新增/修改 | `scripts/verify-project-list-views.mjs`、`verify-project-list-ui.mjs`、`project-list-browser-cases.mjs`、`project-list-electron.cjs`、`verify-lan-mobile-picker.mjs` | 真实分类测试、双端隔离交互、采集范围和旧布局断言更新。 |
+| 修改 | `.trellis/spec/frontend/`、本任务目录 | 记录分类/恢复/选择契约、菜单首次展开定位问题和执行证据。 |
+
+### 验证
+- 新增分类测试通过；生产 Chrome 14 组、Electron 13 组 UI 回归通过：分类/异常组、搜索与选择、创建/编辑/删除、ZIP 导出与合并/覆盖导入、加载/保存失败、导航与滚动、默认页签、采集目标和上传计数。
+- 375/768/1440px 无横向溢出；真实 Enter/Tab/Escape 和焦点恢复、底部向上展开均通过。回归发现首次展开菜单占流导致定位偏移，修复初始固定定位后双端全绿。
+- 既有摘要读取 24/24、自检修复 44/44、图片 store 76/76、pending-writes 29/29，以及图片压缩、采集 UI、加密数据包、PWA 检查通过；`npm run build` 和 `git diff --check` 通过。
+
+### 验证边界与交付状态
+- 使用合成数据与临时 profile/userData，未接触用户真实库。Electron 运行正式 main/preload 加载生产 dist，未生成安装器；Web 采集 HTTP control、保存/加载失败是受控夹具，不代替真实手机/Wi-Fi 验收。
+- 分类 RED 为真实 helper 缺失；旧浏览器混排由源码确认，未运行旧构建浏览器 RED。外部删除用例避开原系统卸载 flushSave，不覆盖跨窗口自动保存冲突。
+- 发布检查补充通过：v0.8.0 生产构建、Electron LAN 服务、Web ZIP PowerShell 宿主、检查项交互与真实 Pointer 拖拽、数据目录迁移 29/29、存储估算 9/9、PWA。
+- 用户已批准提交、推送和 Release；package.json、锁文件与人工发布说明统一为 v0.8.0，使用 `picture-ocr-v0.8.0` 标签触发现有发布工作流。
+
 ## 2026-09-11 — 异常文档只读诊断与迁移判定
 
 ### 背景与目标

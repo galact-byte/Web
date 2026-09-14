@@ -7,6 +7,7 @@ import ProjectInfoDialog from './components/ProjectInfoDialog';
 import ValidationDialog from './components/ValidationDialog';
 import TemplateDialog from './components/TemplateDialog';
 import ProjectList from './components/ProjectList';
+import type { ProjectListViewState } from './components/project-list/projectListViews';
 import MobileProjectList from './components/MobileProjectList';
 import MobileCollector from './components/MobileCollector';
 import LanMobileCollector from './components/LanMobileCollector';
@@ -287,6 +288,7 @@ const App: React.FC = () => {
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
   const [newProjectInfoPrompt, setNewProjectInfoPrompt] = useState(false);
   const [projectListRefreshKey, setProjectListRefreshKey] = useState(0);
+  const [projectListView, setProjectListView] = useState<ProjectListViewState>({ location: null, positions: {} });
   const [lanBridge, setLanBridge] = useState<LanBridge | null>(null);
   const [lanDialogOpen, setLanDialogOpen] = useState(false);
 
@@ -369,7 +371,7 @@ const App: React.FC = () => {
   if (!activeProjectId) {
     return (
       <>
-        <ProjectList key={projectListRefreshKey} onOpenProject={handleOpenProject} onStartLanCollector={lanBridge ? startLanForGroup : undefined} />
+        <ProjectList key={projectListRefreshKey} viewState={projectListView} onViewStateChange={setProjectListView} onOpenProject={handleOpenProject} onStartLanCollector={lanBridge ? startLanForGroup : undefined} />
         {lanDialog}
         <PendingWritesIndicator />
       </>

@@ -8,6 +8,8 @@ const collectorSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/co
 const dialogSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/components/LanCollectorDialog.tsx'), 'utf8');
 const projectListSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/components/ProjectList.tsx'), 'utf8');
 const projectListHeaderSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/components/project-list/ProjectListHeader.tsx'), 'utf8');
+const projectListUiSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/components/project-list/projectListUi.ts'), 'utf8').replace(/\r\n/g, '\n');
+const projectActionsSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/components/project-list/ProjectActions.tsx'), 'utf8').replace(/\r\n/g, '\n');
 const appSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/App.tsx'), 'utf8');
 const toolbarSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/components/Toolbar.tsx'), 'utf8');
 const bridgeSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/utils/lanBridge.ts'), 'utf8');
@@ -37,11 +39,12 @@ assert.match(collectorSource, />从相册选择<\//, '分开选择方式必须�
 assert.match(collectorSource, /若未出现拍照选项，请切换“拍照\/相册分开选择”；vivo 自带浏览器仍可能只提供相册。/, '系统选择方式必须说明切换方式和 vivo 浏览器的已知限制。');
 assert.doesNotMatch(dialogSource, />关闭<\/button>/, '会话对话框不应同时提供右上角 × 和重复的底部“关闭”按钮。');
 assert.match(dialogSource, /'停止会话'/, '已启动会话时，底部应保留明确的“停止会话”操作。');
-assert.match(projectListSource, /grid-cols-\[44px_minmax\(0,1fr\)_160px\]/, '窄窗口下项目列表应收敛为选择、系统名和固定宽度操作列。');
-assert.match(projectListSource, /const projectListGrid = 'grid-cols-\[44px_minmax\(0,1fr\)_160px\] lg:grid-cols-\[44px_minmax\(0,1\.3fr\)_minmax\(0,0\.85fr\)_minmax\(0,0\.95fr\)_64px_160px\] 2xl:grid-cols-\[44px_minmax\(0,1\.3fr\)_minmax\(0,0\.85fr\)_minmax\(0,0\.95fr\)_64px_448px\]';/, '表头与数据行必须复用按断点预留操作列宽度的同一网格模板。');
-assert.match(projectListSource, /className=\{`grid \$\{projectListGrid\}/, '项目列表表头和数据行必须以 grid 容器引用共享模板，避免列宽漂移或纵向堆叠。');
-assert.match(projectListSource, /<details className="relative 2xl:hidden">/, '中等宽度下低频系统操作应收纳在“更多操作”菜单中。');
-assert.match(projectListSource, /hidden 2xl:flex/, '宽屏应保留完整的快捷操作按钮。');
+// 分类导航、真实菜单和不同窗口尺寸由 verify-project-list-ui.mjs 验证；这里守护共享布局接线。
+assert.match(projectListUiSource, /export const SYSTEM_LIST_GRID/, '系统表头与行应复用共享网格。');
+assert.match(projectListUiSource, /export const GROUP_LIST_GRID/, '项目表头与行应复用共享网格。');
+assert.match(projectListSource, /isGroupList \? GROUP_LIST_GRID : SYSTEM_LIST_GRID/, '表头必须与当前列表类型的行使用同一布局。');
+assert.match(projectActionsSource, /<details[\s\S]*name="project-list-actions"/, '低频操作统一使用可展开菜单，同一时间只展开一个。');
+assert.doesNotMatch(projectListSource, /hidden 2xl:flex/, '宽屏也应收纳低频操作，避免所有按钮挤占名称空间。');
 assert.match(projectListHeaderSource, /flex-wrap/, '项目列表顶栏在低宽度下应允许搜索和操作按钮换行。');
 assert.match(projectListHeaderSource, /basis-full/, '项目列表搜索框在窄窗口下应占满一行。');
 assert.match(projectListHeaderSource, /xl:w-\[320px\]/, '项目列表搜索框只可在宽屏恢复固定宽度。');

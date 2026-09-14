@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ProjectDocument, ProjectGroup, ProjectGroupSummary, ProjectMeta, ProjectSummary } from '../types';
 import {
   createProjectGroupWithSystems,
@@ -24,10 +24,15 @@ import { formatBytes } from '../utils/storageEstimate';
 import ImportDialog from './ImportDialog';
 import StorageSettingsDialog from './StorageSettingsDialog';
 import ProjectListHeader from './project-list/ProjectListHeader';
+import ProjectActions, { type ProjectListAction } from './project-list/ProjectActions';
+import { GROUP_LIST_GRID, SYSTEM_LIST_GRID, LIST_ACTION_CLASS as actionButton } from './project-list/projectListUi';
+import { splitProjectViews, filterGroups, filterSystems, selectedVisibleSystems, listLocationKey, groupUpdatedAt, type ProjectListLocation, type ProjectListViewState } from './project-list/projectListViews';
 import ProjectGroupDialog, { type ProjectGroupDialogMode } from './project-list/ProjectGroupDialog';
 import { useConfirmDialog } from './ConfirmDialog';
 import { useToast } from './Toast';
 interface ProjectListProps {
+  viewState: ProjectListViewState;
+  onViewStateChange: React.Dispatch<React.SetStateAction<ProjectListViewState>>;
   onOpenProject: (projectId: string, isNewProject?: boolean) => void;
   /** 启动项目组级手机局域网采集（仅在桌面/Web ZIP 存在桥时由 App 传入）。 */
   onStartLanCollector?: (groupId: string | null, groupTitle: string, systemIds: string[]) => void;
@@ -39,8 +44,6 @@ interface DialogState {
   system: ProjectSummary | null;
 }
 
-const actionButton = 'inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap border px-2.5 py-1.5 text-xs font-medium transition-colors';
-const projectListGrid = 'grid-cols-[44px_minmax(0,1fr)_160px] lg:grid-cols-[44px_minmax(0,1.3fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_64px_160px] 2xl:grid-cols-[44px_minmax(0,1.3fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_64px_448px]';
 
 function getSystemDisplayName(project: ProjectSummary): string {
   return project.meta.systemName.trim() || '未命名系统';
@@ -48,7 +51,7 @@ function getSystemDisplayName(project: ProjectSummary): string {
 
 function getGroupDisplayName(summary: ProjectGroupSummary): string {
   const group = summary.group;
-  if (!group) return summary.id === 'ungrouped' ? '未分组 / 单系统项目' : '项目组记录缺失';
+  if (!group) return summary.systems[0]?.meta.projectName.trim() || '项目组记录缺失';
   return group.projectName.trim() || group.unitName.trim() || '未命名项目组';
 }
 
@@ -58,22 +61,17 @@ function formatTime(timestamp: number): string {
     : '-';
 }
 
-function matchesSearch(summary: ProjectGroupSummary, keyword: string): boolean {
-  const normalizedKeyword = keyword.trim().toLowerCase();
-  if (!normalizedKeyword) return true;
-  return [
-    summary.group?.projectCode,
-    summary.group?.projectName,
-    summary.group?.unitName,
-    ...summary.systems.flatMap((system) => [system.meta.projectCode, system.meta.projectName, system.meta.unitName, system.meta.systemName]),
-  ].join(' ').toLowerCase().includes(normalizedKeyword);
-}
-
-const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanCollector }) => {
+const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange, onOpenProject, onStartLanCollector }) => {
   const [groups, setGroups] = useState<ProjectGroupSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(() => new Set());
+  const [loadError, setLoadError] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const restoredLocationRef = useRef<string | null>(null);
+  const { projects, independent } = useMemo(() => splitProjectViews(groups), [groups]);
+  const location = viewState.location ?? (projects.length === 0 && independent.length > 0 ? { kind: 'independent' as const } : { kind: 'groups' as const });
+  const locationKey = listLocationKey(location);
+  const search = viewState.positions[locationKey]?.search ?? '';
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => new Set());
   const [importTargetId, setImportTargetId] = useState<string | null>(null);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
@@ -93,9 +91,13 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
 
   const refreshProjects = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const nextGroups = await listProjectGroups();
       setGroups(nextGroups);
+      setLoaded(true);
+      const availableIds = new Set(nextGroups.flatMap(summary => summary.systems.map(system => system.id)));
+      setSelectedProjectIds(current => new Set([...current].filter(id => availableIds.has(id))));
       // 存储自检的结果必须让用户知道：被找回的项目、以及读不出来的坏记录都不能静默处理。
       const repair = getLastSummaryRepairReport();
       if (repair && claimSummaryRepairNotice(repair)) {
@@ -106,14 +108,10 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
           showToast(`存储自检：有 ${repair.damagedIds.length} 条项目记录读不出内容，请到「存储设置→导出诊断包」发给技术支持。`, 'error');
         }
       }
-      setExpandedGroupIds((current) => {
-        const availableIds = new Set(nextGroups.map((group) => group.id));
-        const next = new Set([...current].filter((id) => availableIds.has(id)));
-        if (current.size === 0) nextGroups.forEach((group) => next.add(group.id));
-        return next;
-      });
     } catch (err) {
-      showToast(`加载项目列表失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
+      const message = `加载项目列表失败：${err instanceof Error ? err.message : '未知错误'}`;
+      setLoadError(message);
+      showToast(message, 'error');
     } finally {
       setLoading(false);
     }
@@ -134,9 +132,10 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
     return () => clearTimeout(timer);
   }, [showToast]);
 
-  const filteredGroups = useMemo(() => groups.filter((group) => matchesSearch(group, search)), [groups, search]);
-  const filteredSystems = useMemo(() => filteredGroups.flatMap((group) => group.systems), [filteredGroups]);
-  const selectedSystems = useMemo(() => groups.flatMap((group) => group.systems).filter((system) => selectedProjectIds.has(system.id)), [groups, selectedProjectIds]);
+  const activeGroup = location.kind === 'group' ? projects.find(summary => summary.id === location.groupId) : undefined;
+  const filteredGroups = useMemo(() => filterGroups(projects, search), [projects, search]);
+  const filteredSystems = useMemo(() => filterSystems(location.kind === 'independent' ? independent : activeGroup?.systems ?? [], search), [location.kind, independent, activeGroup, search]);
+  const selectedSystems = useMemo(() => selectedVisibleSystems(filteredSystems, selectedProjectIds), [filteredSystems, selectedProjectIds]);
   const allFilteredSelected = filteredSystems.length > 0 && filteredSystems.every((system) => selectedProjectIds.has(system.id));
   const importTarget = groups.flatMap((group) => group.systems).find((system) => system.id === importTargetId);
 
@@ -145,13 +144,47 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
     return parentGroup ? `${getGroupDisplayName({ id: parentGroup.id, group: parentGroup, systems: [] })} / ${getSystemDisplayName(system)}` : getSystemDisplayName(system);
   };
 
-  const toggleGroup = (groupId: string) => {
-    setExpandedGroupIds((current) => {
-      const next = new Set(current);
-      if (next.has(groupId)) next.delete(groupId); else next.add(groupId);
-      return next;
-    });
+  const navigate = (nextLocation: ProjectListLocation, clearSearch = false) => {
+    setSelectedProjectIds(new Set());
+    onViewStateChange(current => ({
+      location: nextLocation,
+      positions: {
+        ...current.positions,
+        [locationKey]: { search, scrollY: window.scrollY },
+        ...(clearSearch ? { [listLocationKey(nextLocation)]: { search: '', scrollY: 0 } } : {}),
+      },
+    }));
+    if (listLocationKey(nextLocation) === locationKey && clearSearch) window.scrollTo(0, 0);
   };
+
+  const changeSearch = (value: string) => {
+    setSelectedProjectIds(new Set());
+    onViewStateChange(current => ({ ...current, location,
+      positions: { ...current.positions, [locationKey]: { search: value, scrollY: 0 } },
+    }));
+  };
+
+  const openSystem = (systemId: string) => {
+    onViewStateChange(current => ({ ...current, location,
+      positions: { ...current.positions, [locationKey]: { search, scrollY: window.scrollY } },
+    }));
+    onOpenProject(systemId);
+  };
+
+  useLayoutEffect(() => {
+    if (!loaded || loading || loadError) return;
+    if (location.kind === 'group' && !activeGroup) {
+      setSelectedProjectIds(new Set());
+      onViewStateChange(current => ({ ...current, location: { kind: 'groups' } }));
+      return;
+    }
+    if (!viewState.location) onViewStateChange(current => ({ ...current, location }));
+    if (restoredLocationRef.current !== locationKey) {
+      restoredLocationRef.current = locationKey;
+      headingRef.current?.focus({ preventScroll: true });
+      window.scrollTo(0, viewState.positions[locationKey]?.scrollY ?? 0);
+    }
+  }, [loaded, loading, loadError, location, locationKey, activeGroup, viewState, onViewStateChange]);
 
   const toggleProjectSelection = (projectId: string) => {
     setSelectedProjectIds((current) => {
@@ -296,15 +329,20 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
     if (!dialogState || saving) return false;
     setSaving(true);
     try {
+      let createdLocation: ProjectListLocation | null = null;
       if (dialogState.mode === 'create-group') {
         const systemNames = splitSystemNames(values.systemName);
         if (systemNames.length === 1) {
           await saveProject(createProjectDocument({ ...values, systemName: systemNames[0] }));
+          createdLocation = { kind: 'independent' };
         } else {
-          await createProjectGroupWithSystems(values, systemNames);
+          const systems = await createProjectGroupWithSystems(values, systemNames);
+          const groupId = systems[0]?.groupId;
+          if (groupId) createdLocation = { kind: 'group', groupId };
         }
       } else if (dialogState.mode === 'add-system' && dialogState.group) {
         await createSystemForGroup(dialogState.group, values.systemName);
+        createdLocation = { kind: 'group', groupId: dialogState.group.id };
       } else if (dialogState.mode === 'edit-group' && dialogState.group) {
         await updateProjectGroupAndSystems({
           ...dialogState.group,
@@ -330,6 +368,8 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
         await saveProject({ ...document, meta, updatedAt: Date.now() });
       }
       await refreshProjects();
+      if (createdLocation) navigate(createdLocation, true);
+      setDialogState(null);
       return true;
     } catch (err) {
       showToast(`保存失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
@@ -339,47 +379,98 @@ const ProjectList: React.FC<ProjectListProps> = ({ onOpenProject, onStartLanColl
     }
   };
 
+  const systemActions = (system: ProjectSummary): ProjectListAction[] => [
+    ...(onStartLanCollector ? [{ label: '手机采集', className: 'md:hidden', onClick: () => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id]) }] : []),
+    { label: '编辑', onClick: () => setDialogState({ mode: 'edit-system', group: activeGroup?.group ?? null, system }) },
+    { label: '导出数据包', onClick: () => void handleExportSystem(system) },
+    { label: compressingSystemId === system.id ? '正在压缩…' : '压缩图片', disabled: compressingSystemId !== null, onClick: () => void handleCompressSystem(system) },
+    { label: '导入数据包', onClick: () => setImportTargetId(system.id) },
+    { label: '删除', danger: true, onClick: () => void handleDeleteSystem(system) },
+  ];
+  const groupActions = (summary: ProjectGroupSummary): ProjectListAction[] => {
+    const group = summary.group;
+    return [
+      ...(onStartLanCollector ? [{ label: '手机采集', className: 'md:hidden', disabled: summary.systems.length === 0,
+        onClick: () => onStartLanCollector(summary.id, getGroupDisplayName(summary), summary.systems.map(system => system.id)) }] : []),
+      ...(group ? [
+        { label: '编辑项目组', onClick: () => setDialogState({ mode: 'edit-group', group, system: null }) },
+        { label: '删除项目组', danger: true, onClick: () => void handleDeleteGroup(summary) },
+      ] : []),
+    ];
+  };
+  const isGroupList = location.kind === 'groups';
+  const grid = isGroupList ? GROUP_LIST_GRID : SYSTEM_LIST_GRID;
+  const realGroupCount = projects.filter(summary => summary.group).length;
+  const orphanCount = projects.length - realGroupCount;
+  const title = activeGroup ? getGroupDisplayName(activeGroup) : isGroupList ? '多系统项目' : '独立系统';
+  const emptyMessage = search.trim() ? `没有找到匹配的${isGroupList ? '项目' : '系统'}`
+    : isGroupList ? '暂无多系统项目，新建项目时填写多个系统名称即可创建。'
+    : location.kind === 'group' ? '此项目暂无系统。' : '暂无独立系统，新建项目时填写一个系统名称即可创建。';
+
   return (
     <div className="min-h-screen bg-slate-100">
-      <ProjectListHeader search={search} selectedCount={selectedSystems.length} onSearchChange={setSearch} onDeleteSelected={handleDeleteSelectedProjects} onCreateProject={() => setDialogState({ mode: 'create-group', group: null, system: null })} onOpenStorageSettings={() => setStorageSettingsOpen(true)} />
-      <main className="mx-auto max-w-[1280px] px-8 py-8">
-        <section className="mb-6 flex items-end justify-between gap-6 border-b border-slate-300 pb-4">
-          <div><h2 className="text-2xl font-extrabold text-slate-950">项目管理中心</h2></div>
-          <div className="flex shrink-0 items-center gap-4"><div className="text-sm text-slate-500">共 {groups.length} 个项目组，{groups.flatMap((group) => group.systems).length} 个系统</div></div>
-        </section>
-        <section className="border border-slate-200 bg-white shadow-sm">
-          <div className={`grid ${projectListGrid} items-center gap-3 border-b border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 sm:px-6`}>
-            <label className="flex items-center justify-center" title="全选当前筛选结果"><input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFilteredProjects} disabled={filteredSystems.length === 0} className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" /></label>
-            <span>项目组 / 系统</span><span className="hidden lg:block">单位名称</span><span className="hidden lg:block">最后更新</span><span className="hidden lg:block text-center">资产数</span><span className="text-center">操作</span>
+      <ProjectListHeader search={search} searchLabel={isGroupList ? '搜索项目或组内系统' : '搜索当前列表的系统'} showSelection={!isGroupList} selectedCount={selectedSystems.length} onSearchChange={changeSearch} onDeleteSelected={handleDeleteSelectedProjects} onCreateProject={() => setDialogState({ mode: 'create-group', group: null, system: null })} onOpenStorageSettings={() => setStorageSettingsOpen(true)} />
+      <main className="mx-auto max-w-[1280px] px-4 py-6 sm:px-8">
+        <h2 className="mb-4 text-2xl font-bold text-slate-950">项目管理中心</h2>
+        <nav aria-label="项目分类" className="mb-6 flex flex-wrap gap-2 border-b border-slate-300">
+          <button type="button" aria-current={location.kind !== 'independent' ? 'page' : undefined} onClick={() => navigate({ kind: 'groups' })}
+            className={`${actionButton} rounded-none border-x-0 border-t-0 border-b-2 ${location.kind !== 'independent' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-600 hover:bg-slate-200'}`}>
+            多系统项目 <span className="ml-2 tabular-nums">{realGroupCount}</span>{orphanCount > 0 && <span className="ml-2 text-xs text-red-700">另有 {orphanCount} 个异常组</span>}
+          </button>
+          <button type="button" aria-current={location.kind === 'independent' ? 'page' : undefined} onClick={() => navigate({ kind: 'independent' })}
+            className={`${actionButton} rounded-none border-x-0 border-t-0 border-b-2 ${location.kind === 'independent' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-600 hover:bg-slate-200'}`}>
+            独立系统 <span className="ml-2 tabular-nums">{independent.length}</span>
+          </button>
+        </nav>
+        <section aria-labelledby="project-list-title">
+          {location.kind === 'group' && <button type="button" onClick={() => navigate({ kind: 'groups' })} className={`${actionButton} mb-3 border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}>返回项目管理</button>}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 id="project-list-title" ref={headingRef} tabIndex={-1} className="break-words text-lg font-semibold text-slate-900 focus-visible:outline focus-visible:outline-blue-600">{title}</h3>
+              {activeGroup && <p className="mt-1 break-words text-sm text-slate-600">{activeGroup.group?.unitName || activeGroup.systems[0]?.meta.unitName || '未填写单位'} · {activeGroup.systems.length} 个系统</p>}
+              {activeGroup && !activeGroup.group && <p className="mt-2 text-sm text-red-700">项目组记录缺失，系统数据仍保留，可打开或导出系统。</p>}
+            </div>
+            {activeGroup && <div className="flex flex-wrap gap-2">
+              {activeGroup.group && <button type="button" onClick={() => setDialogState({ mode: 'add-system', group: activeGroup.group, system: null })} className={`${actionButton} border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100`}>添加系统</button>}
+              {onStartLanCollector && <button type="button" disabled={activeGroup.systems.length === 0} onClick={() => onStartLanCollector(activeGroup.id, title, activeGroup.systems.map(system => system.id))} className={`${actionButton} border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100`}>手机采集</button>}
+              {activeGroup.group && <ProjectActions label={`${title}的项目操作`} actions={groupActions(activeGroup).filter(action => action.label !== '手机采集')} />}
+            </div>}
           </div>
-          {loading ? <div className="px-6 py-14 text-center text-sm text-slate-500">正在加载项目列表...</div> : filteredGroups.length === 0 ? <div className="px-6 py-14 text-center text-sm text-slate-500">{search.trim() ? '没有找到匹配的项目组或系统' : '暂无项目组，请点击右上角“新建项目”创建。'}</div> : (
-            <div>{filteredGroups.map((summary) => {
-              const isSingleSystem = summary.systems.length === 1;
-              const isExpanded = expandedGroupIds.has(summary.id);
-              const group = summary.group;
-              const renderSystemRow = (system: ProjectSummary, indented: boolean) => (
-                <div key={system.id} className={`grid ${projectListGrid} items-center gap-3 border-b border-slate-100 bg-white px-4 py-3 text-sm text-slate-700 last:border-b-0 hover:bg-slate-50 sm:px-6`}>
-                  <label className="flex items-center justify-center" title="选择系统"><input type="checkbox" checked={selectedProjectIds.has(system.id)} onChange={() => toggleProjectSelection(system.id)} className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" /></label>
-                  <div className={`min-w-0 ${indented ? 'border-l-2 border-blue-200 pl-3' : ''}`}><div className="break-words font-semibold text-slate-950">{getSystemDisplayName(system)}</div><div className="mt-1 text-xs leading-5 text-slate-500 lg:hidden">{system.meta.unitName || '未填写'} · {formatTime(system.updatedAt)} · {system.assetCount} 项资产</div></div>
-                  <div className="hidden break-words leading-5 lg:block">{system.meta.unitName || '未填写'}</div><div className="hidden break-words leading-5 text-xs lg:block">{formatTime(system.updatedAt)}</div><div className="hidden text-center lg:block"><span className="inline-flex min-w-7 justify-center border border-blue-100 bg-blue-50 px-2 py-0.5 font-medium text-blue-700">{system.assetCount}</span></div>
-                  <div className="flex justify-end gap-2"><button onClick={() => onOpenProject(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>打开</button><div className="hidden 2xl:flex 2xl:gap-2">{!indented && onStartLanCollector && <button onClick={() => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id])} className={`${actionButton} border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100`}>手机采集</button>}<button onClick={() => setDialogState({ mode: 'edit-system', group, system })} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>编辑</button><button onClick={() => void handleExportSystem(system)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>导出数据包</button><button onClick={() => void handleCompressSystem(system)} disabled={compressingSystemId !== null} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50`}>{compressingSystemId === system.id ? '正在压缩…' : '压缩图片'}</button><button onClick={() => setImportTargetId(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>导入数据包</button><button onClick={() => void handleDeleteSystem(system)} className={`${actionButton} border-red-200 bg-white text-red-600 hover:bg-red-50`}>删除</button></div><details className="relative 2xl:hidden"><summary className={`${actionButton} cursor-pointer list-none border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>更多操作</summary><div className="absolute right-0 z-20 mt-2 grid w-36 gap-1 border border-slate-300 bg-white p-1 shadow-lg">{!indented && onStartLanCollector && <button onClick={() => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id])} className="min-h-11 px-3 text-left text-sm text-sky-700 hover:bg-sky-50">手机采集</button>}<button onClick={() => setDialogState({ mode: 'edit-system', group, system })} className="min-h-11 px-3 text-left text-sm text-slate-700 hover:bg-slate-100">编辑</button><button onClick={() => void handleExportSystem(system)} className="min-h-11 px-3 text-left text-sm text-slate-700 hover:bg-slate-100">导出数据包</button><button onClick={() => void handleCompressSystem(system)} disabled={compressingSystemId !== null} className="min-h-11 px-3 text-left text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50">{compressingSystemId === system.id ? '正在压缩…' : '压缩图片'}</button><button onClick={() => setImportTargetId(system.id)} className="min-h-11 px-3 text-left text-sm text-slate-700 hover:bg-slate-100">导入数据包</button><button onClick={() => void handleDeleteSystem(system)} className="min-h-11 px-3 text-left text-sm text-red-600 hover:bg-red-50">删除</button></div></details></div>
+          {loadError && <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 border border-red-200 bg-red-50 p-4 text-red-800"><span>{loadError}{loaded ? '，下方保留上次成功加载的列表。' : ''}</span><button type="button" disabled={loading} onClick={() => void refreshProjects()} className={`${actionButton} border-red-300 bg-white`}>重试</button></div>}
+          <div key={locationKey + search} aria-busy={loading} className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className={`grid ${grid} items-center gap-3 border-b border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 sm:px-4`}>
+              {!isGroupList && <label className="flex min-h-11 items-center justify-center"><input aria-label="全选当前可见系统" type="checkbox" checked={allFilteredSelected} onChange={toggleAllFilteredProjects} disabled={filteredSystems.length === 0} className="h-4 w-4" /></label>}
+              <span>{isGroupList ? '项目名称' : '系统名称'}</span><span className="hidden lg:block">单位名称</span><span className="hidden lg:block">最后更新</span><span className="hidden text-center lg:block">{isGroupList ? '系统数' : '资产数'}</span><span className="hidden text-right md:block">操作</span>
+            </div>
+            {!loaded ? <p className="px-6 py-12 text-center text-sm text-slate-600">{loading ? '正在加载项目列表…' : '列表尚未加载，请重试。'}</p>
+              : (isGroupList ? filteredGroups.length : filteredSystems.length) === 0 ? <div className="px-6 py-12 text-center text-sm text-slate-600"><p>{emptyMessage}</p>{search.trim() && <button type="button" onClick={() => changeSearch('')} className={`${actionButton} mt-3 border-slate-300 text-slate-700 hover:bg-slate-100`}>清除搜索</button>}</div>
+              : isGroupList ? filteredGroups.map(summary => (
+                <div key={summary.id} data-group-id={summary.id} className={`grid ${GROUP_LIST_GRID} items-center gap-3 border-b border-slate-200 px-3 py-4 text-sm text-slate-700 last:border-b-0 hover:bg-slate-50 sm:px-4`}>
+                  <div className="min-w-0"><button type="button" onClick={() => navigate({ kind: 'group', groupId: summary.id })} className="min-h-11 break-words text-left font-semibold text-slate-950 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-blue-600">{getGroupDisplayName(summary)}</button>
+                    {!summary.group && <p className="text-xs text-red-700">项目组记录缺失 · 系统数据仍保留</p>}
+                    <p className="mt-1 break-words text-xs text-slate-600 lg:hidden">{summary.group?.unitName || summary.systems[0]?.meta.unitName || '未填写单位'} · {summary.systems.length} 个系统 · {formatTime(groupUpdatedAt(summary))}</p>
+                  </div>
+                  <span className="hidden break-words lg:block">{summary.group?.unitName || summary.systems[0]?.meta.unitName || '未填写'}</span>
+                  <span className="hidden text-xs lg:block">{formatTime(groupUpdatedAt(summary))}</span><span className="hidden text-center tabular-nums lg:block">{summary.systems.length}</span>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button type="button" onClick={() => navigate({ kind: 'group', groupId: summary.id })} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>进入项目</button>
+                    {onStartLanCollector && <button type="button" disabled={summary.systems.length === 0} onClick={() => onStartLanCollector(summary.id, getGroupDisplayName(summary), summary.systems.map(system => system.id))} className={`${actionButton} hidden border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 md:inline-flex`}>手机采集</button>}
+                    {groupActions(summary).length > 0 && <div className={!summary.group ? 'md:hidden' : undefined}><ProjectActions label={`${getGroupDisplayName(summary)}的项目操作`} actions={groupActions(summary)} /></div>}
+                  </div>
                 </div>
-              );
-
-              if (isSingleSystem) {
-                return renderSystemRow(summary.systems[0], false);
-              }
-
-              return <div key={summary.id} className="border-b border-slate-200 last:border-b-0">
-                <div className="flex items-center gap-3 bg-slate-50 px-6 py-3">
-                  <button onClick={() => toggleGroup(summary.id)} className="flex h-7 w-7 shrink-0 items-center justify-center border border-slate-300 bg-white text-slate-600 hover:bg-slate-100" title={isExpanded ? '折叠系统列表' : '展开系统列表'}>{isExpanded ? '−' : '+'}</button>
-                  <div className="min-w-0 flex-1"><div className="break-words font-bold text-slate-900">{getGroupDisplayName(summary)}</div><div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500"><span>编号：{group?.projectCode || summary.systems[0]?.meta.projectCode || '未填写'}</span><span>单位：{group?.unitName || summary.systems[0]?.meta.unitName || '未填写'}</span><span>日期：{group?.reportDate || summary.systems[0]?.meta.reportDate || '未填写'}</span><span>{summary.systems.length} 个系统</span></div></div>
-                  {group && <div className="flex shrink-0 flex-wrap justify-end gap-2">{onStartLanCollector && <button onClick={() => onStartLanCollector(group.id, getGroupDisplayName(summary), summary.systems.map((system) => system.id))} className={`${actionButton} border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100`}>手机采集</button>}<button onClick={() => setDialogState({ mode: 'add-system', group, system: null })} className={`${actionButton} border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100`}>添加系统</button><button onClick={() => setDialogState({ mode: 'edit-group', group, system: null })} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>编辑项目组</button><button onClick={() => void handleDeleteGroup(summary)} className={`${actionButton} border-red-200 bg-white text-red-600 hover:bg-red-50`}>删除项目组</button></div>}
+              )) : filteredSystems.map(system => (
+                <div key={system.id} data-system-id={system.id} className={`grid ${SYSTEM_LIST_GRID} items-center gap-3 border-b border-slate-200 px-3 py-4 text-sm text-slate-700 last:border-b-0 hover:bg-slate-50 sm:px-4`}>
+                  <label className="flex min-h-11 items-center justify-center"><input aria-label={`选择${getSystemDisplayName(system)}`} type="checkbox" checked={selectedProjectIds.has(system.id)} onChange={() => toggleProjectSelection(system.id)} className="h-4 w-4" /></label>
+                  <div className="min-w-0"><button type="button" onClick={() => openSystem(system.id)} className="min-h-11 break-words text-left font-semibold text-slate-950 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-blue-600">{getSystemDisplayName(system)}</button><p className="mt-1 break-words text-xs text-slate-600 lg:hidden">{system.meta.unitName || '未填写单位'} · {formatTime(system.updatedAt)} · {system.assetCount} 项资产</p></div>
+                  <span className="hidden break-words lg:block">{system.meta.unitName || '未填写'}</span><span className="hidden text-xs lg:block">{formatTime(system.updatedAt)}</span><span className="hidden text-center tabular-nums lg:block">{system.assetCount}</span>
+                  <div className="col-span-2 flex flex-wrap justify-end gap-2 md:col-span-1">
+                    <button type="button" onClick={() => openSystem(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>打开</button>
+                    {onStartLanCollector && <button type="button" onClick={() => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id])} className={`${actionButton} hidden border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 md:inline-flex`}>手机采集</button>}
+                    <ProjectActions label={`${getSystemDisplayName(system)}的系统操作`} actions={systemActions(system)} />
+                  </div>
                 </div>
-                {isExpanded && <div>{summary.systems.map((system) => renderSystemRow(system, true))}</div>}
-              </div>;
-            })}</div>
-          )}
+              ))}
+          </div>
         </section>
       </main>
       <ProjectGroupDialog open={!!dialogState} mode={dialogState?.mode ?? 'create-group'} group={dialogState?.group ?? null} system={dialogState?.system?.meta ?? null} onClose={() => { if (!saving) setDialogState(null); }} onSave={handleSaveDialog} />
