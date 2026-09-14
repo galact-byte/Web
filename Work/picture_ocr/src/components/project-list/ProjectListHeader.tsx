@@ -2,6 +2,8 @@ import React from 'react';
 
 interface ProjectListHeaderProps {
   search: string;
+  searchLabel: string;
+  showSelection: boolean;
   selectedCount: number;
   onSearchChange: (value: string) => void;
   onDeleteSelected: () => void;
@@ -11,6 +13,8 @@ interface ProjectListHeaderProps {
 
 const ProjectListHeader: React.FC<ProjectListHeaderProps> = ({
   search,
+  searchLabel,
+  showSelection,
   selectedCount,
   onSearchChange,
   onDeleteSelected,
@@ -41,25 +45,27 @@ const ProjectListHeader: React.FC<ProjectListHeaderProps> = ({
               type="search"
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search projects..."
+              placeholder={searchLabel}
+              aria-label={searchLabel}
               className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
             />
           </label>
-          <button
+          {showSelection && <button
             onClick={onDeleteSelected}
             disabled={selectedCount === 0}
             className="inline-flex h-11 min-w-[108px] items-center justify-center gap-2 border border-slate-300 bg-white px-3 text-sm text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
-            title="勾选项目后批量删除"
+            title="勾选系统后批量删除"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.8 12.1A2 2 0 0116.2 21H7.8a2 2 0 01-2-1.9L5 7m5 4v6m4-6v6M9 7V4h6v3M4 7h16" />
             </svg>
             删除选中{selectedCount > 0 ? ` ${selectedCount}` : ''}
-          </button>
+          </button>}
           <button
             onClick={onOpenStorageSettings}
             className="inline-flex h-11 min-w-11 items-center justify-center gap-2 border border-slate-300 bg-white px-3 text-sm text-slate-700 transition-colors hover:bg-slate-50"
             title="存储设置"
+            aria-label="存储设置"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15a3 3 0 100-6 3 3 0 000 6z" />

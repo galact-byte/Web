@@ -17,7 +17,8 @@
 
 - 直接在 `className` 使用 Tailwind 类，沿用现有的 slate/blue/red 色彩、边框、直角卡片和响应式断点写法。`src/components/project-list/ProjectTableRow.tsx` 和 `src/components/LanMobileCollector.tsx` 是代表例子。
 - 全局基础字体与 `.text-sm`/`.text-xs` 文字大小覆写只位于 `src/index.css`；除非确属全局基础规则，不要新增组件专属全局 CSS。
-- 重复的项目列表网格类抽到 `src/components/project-list/projectListUi.ts`，而不是复制到表头和表格行。
+- 重复的项目列表网格类抽到 `src/components/project-list/projectListUi.ts`，而不是复制到表头和表格行。实际列表共用 `SYSTEM_LIST_GRID` / `GROUP_LIST_GRID`；窄屏操作可换到下一行，名称不得被固定操作列挤出窗口。
+- 项目列表低频操作在所有宽度都通过 `ProjectActions` 的原生 `details/summary` 收纳：共用 name 保持单展开，普通按钮用 Tab 导航，不冒充 ARIA menu；Escape 关闭并聚焦 summary，操作后关闭，焦点离开/外部点击关闭。菜单初始样式即为 `position: fixed; visibility: hidden`，避免首次展开占据文档空间导致锚点偏移，再按窗口剩余空间上下展开，窗口滚动/缩放时关闭；只有展开时注册全局监听，卸载时清理。
 
 ## 可访问性与交互
 

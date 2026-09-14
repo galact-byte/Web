@@ -25,6 +25,14 @@ git diff --check
 - `scripts/verify-lan-server.cjs` 验证 Electron 局域网服务安全边界；`scripts/verify-lan-mobile-picker.mjs` 用源码断言守护移动端图片来源、会话同步、可访问对话框和项目列表响应式契约。
 - 移动端采集或项目列表相关改动运行 `npm run verify:lan-mobile-picker`（`scripts/verify-lan-mobile-picker.mjs`）；检查项新增、状态或排序改动运行 `node scripts/verify-inspection-item-interactions.mjs`，涉及 Pointer 拖拽、实时预览或边缘自动滚动时再运行 `node scripts/verify-inspection-item-pointer-drag.mjs`（生产预览 Chrome 回归）；构建或 PWA 改动后运行 `npm run verify:pwa-build`（`scripts/verify-pwa-build.mjs`）；Web LAN 启动器改动后运行 `npm run verify:web-lan-server`（`scripts/verify-web-lan-server.ps1`）。不要把这些脚本当作通用单元测试框架。
 
+## 项目列表回归
+
+- `node scripts/verify-project-list-views.mjs` 通过 esbuild 执行真实 TypeScript 派生逻辑，不复制实现。
+- 先 `npm run build`，再 `node scripts/verify-project-list-ui.mjs`。生产构建运行于隔离 Chrome profile 和 Electron 正式 main/preload + 临时 userData；脚本输出报告及 375/768/1440px 截图到 `.trellis/.runtime/project-list-qa/`，不纳入版本控制。不使用用户真实库。
+- Web 无桥隐藏采集；有桥使用受控 HTTP control 接口验证真实 Web bridge 的范围、轮询及保存确认。Electron 使用正式 LAN 服务上传到临时数据目录。受控服务与故障注入不等同真实手机/Wi-Fi 验收。
+- 自动化键盘 Enter 通过 CDP 发送时带 `text: '\\r'`，保证浏览器收到激活键；不能用 `.click()` 冒充键盘可用证据。读取源码断言先归一化 CRLF。
+- 模拟外部删除原组时让工作区打开另一系统，避免原系统卸载 flushSave 与夹具删除竞态；本测试验证列表落点，不声称解决跨窗口自动保存覆盖。
+
 ## 存储位置与导出保存（缓解 C 盘膨胀）
 
 - 桌面版数据目录可迁移：主进程 `electron/dataLocation.cjs` 管理“指针/数据本体分离”（`%APPDATA%\<应用名>\data-location.json` 只存路径），在 `app.whenReady()` 之前 `init()` 应用指针；目录复制在“下次启动、store 未打开前”进行（运行中只写 migration 标记并重启），避免复制占用中的 IndexedDB。旧数据作“临时备份”保留默认 7 天后自动清理。新增数据目录 IPC 走 `window.evidenceData`（preload 桥接），主进程侧沿用 `isExpectedRenderer` 校验。

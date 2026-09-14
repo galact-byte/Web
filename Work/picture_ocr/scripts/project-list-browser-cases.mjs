@@ -1,0 +1,224 @@
+import * as db from '../src/utils/db';
+import JSZip from 'jszip';
+
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+export async function until(check, label) {
+  for (let n = 0; n < 100; n++) { if (await check()) return; await pause(50); }
+  throw new Error(`等待超时：${label}；页面：${document.body.innerText.slice(-1800)}`);
+}
+const assert = (value, label) => { if (!value) throw new Error(label); };
+const rows = () => [...document.querySelectorAll('[data-system-id]')];
+const groups = () => [...document.querySelectorAll('[data-group-id]')];
+const button = (text, root = document) => [...root.querySelectorAll('button')].find(el => el.textContent.trim() === text);
+const click = async (text, root = document) => { const el = button(text, root); assert(el && !el.disabled, `按钮不可用：${text}`); el.click(); await pause(80); };
+const tab = async kind => { document.querySelectorAll('nav[aria-label="项目分类"] button')[kind === 'groups' ? 0 : 1].click(); await pause(100); };
+const systemRow = id => document.querySelector(`[data-system-id="${id}"]`);
+const groupRow = id => document.querySelector(`[data-group-id="${id}"]`);
+const dialog = () => document.querySelector('[role="dialog"]');
+function input(el, value) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })); }
+async function search(value) { input(document.querySelector('input[type="search"]'), value); await pause(80); }
+async function menu(id, text) { const root = systemRow(id); root.querySelector('summary').click(); await pause(80); await click(text, root); }
+async function back() { await click('返回项目列表'); await until(() => !!document.querySelector('#project-list-title'), '返回列表'); await until(() => document.querySelector('[aria-busy="false"]'), '摘要加载'); }
+const onePixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=';
+
+export async function seed() {
+  const base = { projectCode: 'QA', projectName: '', unitName: '测试单位', reportDate: '2026-09-14', createdAt: 1, updatedAt: 1 };
+  for (const [id, projectName] of [['multi', '公共资源中心'], ['single', '只有一个系统的项目'], ['empty', '空项目']]) await db.saveProjectGroup({ ...base, id, projectName });
+  const records = [['g1', 'multi', '交易平台'], ['g2', 'multi', '办公系统'], ['s1', 'single', '采购系统'], ['orphan', 'missing', '档案系统'],
+    ...Array.from({ length: 24 }, (_, i) => [`solo${i}`, null, `独立系统${String(i).padStart(2, '0')}——用于检查窄屏下很长的中文系统名称仍然完整可读`])];
+  for (const [id, groupId, systemName] of records) {
+    const doc = db.createProjectDocument({ ...base, systemName }, groupId);
+    doc.id = id; doc.createdAt = 1; doc.updatedAt = 1000 - records.findIndex(record => record[0] === id);
+    doc.assets = [{ id: 'asset', categoryId: doc.categories[0].id, name: '测试资产', items: [{ id: 'item', label: '截图', required: true, images: [] }] }];
+    await db.saveProject(doc);
+  }
+  localStorage.setItem('evidence-image-migration-v5', JSON.stringify({ completed: records.map(record => record[0]), damaged: [] }));
+}
+
+export function instrument() {
+  const reads = { documents: 0, images: 0 };
+  for (const method of ['get', 'getAll', 'openCursor']) {
+    const original = IDBObjectStore.prototype[method];
+    IDBObjectStore.prototype[method] = function (...args) {
+      if (this.name === 'projects') reads.documents++;
+      if (this.name === 'images') reads.images++;
+      return original.apply(this, args);
+    };
+  }
+  return reads;
+}
+
+export async function core() {
+  await until(() => groups().length === 4, '项目分类');
+  assert(rows().length === 0, '项目组顶层不得混排系统');
+  const nav = document.querySelector('nav').textContent;
+  assert(nav.includes('3') && nav.includes('24') && nav.includes('1 个异常组'), '真实组、独立系统和异常组计数');
+  assert(!button('删除选中'), '项目顶层不允许跨组批量删除');
+  await search('交易平台'); assert(groups().length === 1, '子系统搜索定位所属组');
+  await click('进入项目', groupRow('multi')); assert(rows().length === 2, '进入项目只列组内系统');
+  systemRow('g1').querySelector('input').click(); await pause(60);
+  await search('办公'); assert(rows().length === 1 && button('删除选中').disabled, '搜索清空选择且逐系统过滤');
+  document.querySelector('[aria-label="全选当前可见系统"]').click(); await pause(60);
+  await click('删除选中 1'); assert(dialog().textContent.includes('办公系统') && !dialog().textContent.includes('交易平台'), '确认框仅含可见选择'); await click('取消', dialog());
+  await click('返回项目管理'); assert(document.querySelector('input[type="search"]').value === '交易平台', '返回项目页恢复搜索');
+  await click('进入项目', groupRow('multi')); assert(rows().length === 1 && button('删除选中').disabled, '进入项目恢复搜索但不恢复选择');
+  await click('打开', systemRow('g2')); await until(() => !!button('返回项目列表'), '工作区'); await back();
+  assert(rows().length === 1 && !!systemRow('g2'), '组内工作区返回保留项目和搜索');
+  await click('返回项目管理'); await search('');
+  await click('进入项目', groupRow('single')); assert(rows().length === 1, '一个系统的项目仍保留层级');
+  await click('返回项目管理'); await click('进入项目', groupRow('empty')); assert(document.body.textContent.includes('此项目暂无系统'), '空组可进入');
+  await click('返回项目管理'); await click('进入项目', groupRow('missing')); assert(systemRow('orphan') && !button('添加系统'), '异常组可达且不允许修改组记录');
+  await click('打开', systemRow('orphan')); await until(() => !!button('返回项目列表'), '异常组系统可打开'); await back();
+  await tab('independent'); await until(() => rows().length === 24, '独立列表');
+  window.scrollTo(0, 850); await pause(100); const savedY = window.scrollY;
+  // 直接激活可见列表项，不引入浏览器自动滚动对返回值的干扰。
+  await click('打开', systemRow('solo7')); await until(() => !!button('返回项目列表'), '独立系统工作区'); await back(); await pause(150);
+  assert(Math.abs(window.scrollY - savedY) < 3, `独立列表滚动恢复：${savedY} -> ${window.scrollY}`);
+  systemRow('solo0').querySelector('input').click(); await pause(50); await tab('groups'); await tab('independent');
+  assert(button('删除选中').disabled, '切页清空选择');
+  window.scrollTo(0, 0);
+  return '分类、搜索、异常/空/单系统组、批量选择、组内/独立返回和滚动恢复';
+}
+
+export async function mutations() {
+  await tab('independent'); await search('不存在');
+  await click('新建项目'); await click('取消', dialog()); assert(document.querySelector('input[type="search"]').value === '不存在', '取消创建不跳转');
+  await click('新建项目');
+  let inputs = dialog().querySelectorAll('input'); input(inputs[2], '新增单位'); input(inputs[4], '新增独立系统');
+  const transaction = IDBDatabase.prototype.transaction;
+  IDBDatabase.prototype.transaction = function (names, mode, ...args) { if (mode === 'readwrite') throw new Error('受控保存失败'); return transaction.call(this, names, mode, ...args); };
+  try { await click('保存', dialog()); await until(() => document.body.textContent.includes('受控保存失败'), '保存失败反馈'); assert(!!dialog() && document.querySelector('input[type="search"]').value === '不存在', '保存失败不跳转'); }
+  finally { IDBDatabase.prototype.transaction = transaction; }
+  await click('保存', dialog()); await until(() => !dialog(), '保存单系统');
+  await until(() => rows().some(row => row.textContent.includes('新增独立系统')), '创建后清空过滤并定位独立列表');
+  await click('新建项目'); inputs = dialog().querySelectorAll('input'); input(inputs[1], '新增多系统项目'); input(inputs[2], '新增单位'); input(inputs[4], '新增甲系统、新增乙系统');
+  await click('保存', dialog()); await until(() => !dialog(), '保存多系统');
+  await until(() => rows().length === 2 && document.querySelector('#project-list-title').textContent === '新增多系统项目', '新建多系统定位组内');
+  await search('没有'); await click('添加系统'); input(dialog().querySelector('input'), '新增丙系统'); await click('保存', dialog());
+  await until(() => !dialog() && rows().length === 3, '添加系统清空过滤');
+  const originalIds = rows().map(row => row.dataset.systemId);
+  await menu(originalIds[0], '编辑'); input(dialog().querySelector('input'), '修改后的系统名称'); await click('保存', dialog());
+  await until(() => !dialog() && systemRow(originalIds[0]).textContent.includes('修改后的系统名称'), '编辑目标');
+  await menu(originalIds[0], '压缩图片'); assert(dialog().textContent.includes('修改后的系统名称'), '压缩确认目标'); await click('取消', dialog());
+  await menu(originalIds[0], '压缩图片'); await click('开始压缩', dialog()); await until(() => !dialog() && document.body.textContent.includes('已足够小'), '空图片压缩完成提示');
+  await menu(originalIds[0], '导入数据包'); assert(dialog().textContent.includes('修改后的系统名称'), '导入目标'); await click('取消', dialog());
+  await menu(originalIds[0], '删除'); await click('删除系统', dialog()); await until(() => !systemRow(originalIds[0]), '删除指定系统');
+  assert(rows().length === 2 && document.querySelector('#project-list-title').textContent === '新增多系统项目', '删除后留在原组');
+  document.querySelector('[aria-label="全选当前可见系统"]').click(); await pause(80);
+  await click('删除选中 2'); await click('删除系统', dialog()); await until(() => rows().length === 0, '批量删除组内最后系统');
+  assert(document.body.textContent.includes('此项目暂无系统'), '删除最后系统后仍是可管理的空组');
+  const details = document.querySelector('summary[aria-label$="的项目操作"]'); details.click(); await pause(80);
+  await click('删除项目组', details.parentElement); await click('删除项目组', dialog());
+  await until(() => document.querySelector('#project-list-title').textContent === '多系统项目', '删除当前项目退回有效列表');
+  assert(await db.loadProject('orphan'), '所有操作不改变异常组系统');
+  return '单/多系统新建定位、添加、编辑、压缩确认和完成、导入目标、删除系统与当前组';
+}
+
+export async function exportAndImport() {
+  await tab('groups'); await search(''); await click('进入项目', groupRow('missing'));
+  const objectUrls = new Map();
+  const createObjectURL = URL.createObjectURL;
+  URL.createObjectURL = value => { const url = createObjectURL(value); objectUrls.set(url, value); return url; };
+  const downloads = [];
+  const original = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () { if (this.download) downloads.push({ name: this.download, promise: Promise.resolve(objectUrls.get(this.href)) }); else original.call(this); };
+  try {
+    await menu('orphan', '导出数据包'); await until(() => downloads.length === 1, '异常组导出');
+    const exported = await JSZip.loadAsync(await downloads[0].promise);
+    assert(Object.keys(exported.files).length > 0, '导出有效 ZIP');
+  } finally { HTMLAnchorElement.prototype.click = original; }
+  await tab('independent');
+  const source = await db.loadProject('g1');
+  source.assets[0].items[0].images = [{ id: 'tiny', fileName: 'tiny.png', mimeType: 'image/png', data: onePixel, createdAt: 1 }];
+  await db.saveProject(source);
+  // 用生产导出生成导入夹具，断言目标归属不被来源覆盖。
+  let blob;
+  HTMLAnchorElement.prototype.click = function () { blob = Promise.resolve(objectUrls.get(this.href)); };
+  try { await tab('groups'); await click('进入项目', groupRow('multi')); await search(''); await menu('g1', '导出数据包'); await until(() => !!blob, '导入夹具导出'); }
+  finally { HTMLAnchorElement.prototype.click = original; }
+  const file = new File([await blob], 'fixture.zip', { type: 'application/zip' });
+  await tab('independent');
+  for (const mode of ['合并导入', '覆盖导入']) {
+    await menu('solo0', '导入数据包');
+    const transfer = new DataTransfer(); transfer.items.add(file);
+    const fileInput = dialog().querySelector('input[type="file"]'); fileInput.files = transfer.files; fileInput.dispatchEvent(new Event('change', { bubbles: true })); await pause(80);
+    const action = [...dialog().querySelectorAll('button')].find(el => el.textContent.includes(mode)); assert(action, mode); action.click();
+    await until(() => !!button('完成', dialog()), mode); await click('完成', dialog());
+    const target = await db.loadProject('solo0');
+    assert(target.groupId === null && target.assets[0].items[0].images.length === 1, `${mode}只写目标且保留归属`);
+  }
+  URL.createObjectURL = createObjectURL;
+  return '异常组真实 ZIP 导出、合并/覆盖导入及图片与归属检查';
+}
+
+export async function failedLoad() {
+  await tab('groups'); await search(''); await click('进入项目', groupRow('single')); await click('打开', systemRow('s1'));
+  await until(() => !!button('返回项目列表'), '工作区');
+  const transaction = IDBDatabase.prototype.transaction;
+  IDBDatabase.prototype.transaction = function (names, ...args) {
+    if ((Array.isArray(names) ? names : [names]).includes('projectGroups') && (!args[0] || args[0] === 'readonly')) throw new Error('受控摘要加载失败');
+    return transaction.call(this, names, ...args);
+  };
+  try { await click('返回项目列表'); await until(() => !!document.querySelector('[role="alert"]'), '加载失败反馈');
+    assert(!document.body.textContent.includes('此项目暂无系统'), '加载失败不伪装空项目');
+  } finally { IDBDatabase.prototype.transaction = transaction; }
+  await click('重试'); await until(() => !!systemRow('s1'), '失败重试保留原组');
+  // 另一个系统工作区期间删除原组，避免当前系统退出时的既有 flushSave 重建测试记录。
+  window.location.hash = '/project/solo1'; await until(() => !!button('返回项目列表'), '外部删除前工作区');
+  await db.deleteProjectGroup('single'); await back(); await until(() => document.querySelector('#project-list-title').textContent === '多系统项目', '外部删除后返回有效列表');
+  return '受控加载失败提示/重试、外部删除后导航修复';
+}
+
+export async function prepareDefault(kind) {
+  const summaries = await db.listProjectGroups();
+  for (const summary of summaries) {
+    if (summary.group) await db.deleteProjectGroup(summary.id);
+    else for (const system of summary.systems) await db.deleteProject(system.id);
+  }
+  if (kind === 'independent') await db.saveProject(db.createProjectDocument({ systemName: '默认独立系统', unitName: '测试单位' }));
+}
+
+export async function layout() {
+  await tab('independent'); await search(''); window.scrollTo(0, 0); await pause(100);
+  assert(document.documentElement.scrollWidth <= innerWidth, `列表横向溢出：${document.documentElement.scrollWidth}/${innerWidth}`);
+  const row = rows()[0]; const summary = row.querySelector('summary'); summary.click(); await pause(100);
+  const rect = summary.nextElementSibling.getBoundingClientRect();
+  assert(rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight, '菜单保持在窗口内');
+  document.querySelector('h2').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  assert(!summary.parentElement.open, '外部点击关闭菜单');
+  summary.click(); await pause(60);
+  const other = rows()[1].querySelector('summary'); other.click(); await pause(60);
+  assert(document.querySelectorAll('details[open]').length === 1, '同一时刻只展开一个菜单');
+  other.click(); await pause(60);
+  const last = rows().at(-1).querySelector('summary'); last.scrollIntoView({ block: 'end' }); await pause(80); last.click(); await pause(80);
+  const lastRect = last.nextElementSibling.getBoundingClientRect();
+  assert(lastRect.top >= 0 && lastRect.bottom <= innerHeight && lastRect.bottom <= last.getBoundingClientRect().top, '底部菜单向上展开');
+  last.click(); window.scrollTo(0, 0); await pause(100);
+  return '列表与菜单无溢出、外部点击关闭、单菜单与底部向上展开';
+}
+
+export async function startLan(scope) {
+  await until(() => document.querySelector('[aria-busy="false"]'), '采集前列表加载');
+  await tab('groups'); await search('');
+  if (scope === 'group') await click('手机采集', groupRow('multi'));
+  else { await click('进入项目', groupRow('multi')); await search(''); await click('手机采集', systemRow('g1')); }
+  await until(() => !!button('启动局域网采集'), '采集对话框');
+  // 等待 App 的异步组快照组装完成，再提交真实会话启动。
+  await pause(500); await click('启动局域网采集');
+  await until(() => !!button('停止会话'), '采集启动');
+  const text = document.querySelector('[aria-labelledby="lan-collector-title"]').textContent;
+  return text.match(/https?:\/\/[^\s]+\/#\/lan\/[A-Za-z0-9_-]+/)?.[0];
+}
+export async function stopLan() {
+  await click('停止会话'); await until(() => !!button('启动局域网采集'), '采集停止');
+  document.querySelector('[aria-label="收起手机局域网采集对话框"]').click(); await pause(80);
+}
+export async function verifyLanImage() {
+  const doc = await db.loadProject('g2');
+  assert(doc.assets[0].items[0].images.length === 1, '上传写入 g2');
+  const snapshot = await import('../src/utils/lanGroupSnapshot');
+  const data = await snapshot.buildGroupSnapshot({ groupId: 'multi', groupTitle: '公共资源中心', systemIds: ['g1', 'g2'], openSystemOverride: null });
+  assert(data.systems.find(system => system.projectId === 'g2').assets[0].items[0].imageCount === 1, '采集计数同步');
+}
+
+export { tab, search, click, button, systemRow, groupRow, pause };

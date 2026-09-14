@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"全范围前端规范检查"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"菜单键盘交互、布局一致性与响应式检查"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"分类不丢数据、状态恢复与摘要性能契约"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"构建与相关回归命令"}

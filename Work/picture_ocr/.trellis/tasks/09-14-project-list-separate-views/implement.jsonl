@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"前端规范入口与修改前检查"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"项目列表组件边界、共享网格与可访问性"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"轻量摘要读取与列表导航状态生命周期"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"验证脚本、双端回归与错误反馈"}

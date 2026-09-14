@@ -8,7 +8,8 @@
 | --- | --- |
 | 工作台项目状态 | `src/context/appReducer.ts` 的 `AppState`（meta、categories、assets、当前选择） |
 | Provider/持久化协调 | `src/context/AppContext.tsx`（加载、500ms 防抖保存、保存队列、卸载刷新） |
-| 瞬时页面 UI | 各组件的 `useState`，如 `src/components/ProjectList.tsx` 的搜索、展开集、对话框和保存中状态 |
+| 列表返回位置 | `src/App.tsx` 的 `ProjectListViewState`（页签/组 ID、各位置的搜索与滚动），跨列表重挂载保留 |
+| 瞬时页面 UI | 各组件的 `useState`，如 `src/components/ProjectList.tsx` 的选择集、对话框和保存中状态 |
 | 路由状态 | `src/App.tsx` 读取和写入 `window.location.hash` |
 | 本机偏好 | `LanMobileCollector.tsx` 使用 `localStorage` 保存图片来源方式 |
 
@@ -48,6 +49,16 @@ dispatch({ type: 'REORDER_ITEMS', payload: { assetId: asset.id, itemIds } });
   - 缺失记录**逐条 `get`**（峰值仅一条文档），单条读失败在 `onerror` 里 `preventDefault()` 吸掉，不让一条坏记录中止整个修复事务。
   - 读不出内容的记录计入 `damagedIds` 并进诊断包，**不得静默吞掉**；有摘要无文档的孤立索引反向清理。
   - 修复报告经 `getLastSummaryRepairReport()` 暴露给列表 Toast 与存储设置面板（面板可 `ensureSummariesSynced(true)` 手动重跑）。
+
+## 项目列表分类与导航契约
+
+1. **范围**：桌面/Web 共用 `ProjectList`，列表只从 `listProjectGroups()` 派生，不改 DB 结构与系统归属。
+2. **接口**：`ProjectListViewState = { location: ProjectListLocation | null; positions: Record<string, {search: string; scrollY: number}> }`；`ProjectListLocation` 是 `groups` / `independent` / `group + groupId` 判别联合。App 持有状态，经 `viewState/onViewStateChange` 传入。
+3. **数据契约**：真实组与仍有 groupId 的异常组均属于项目页；没有 groupId 的系统属于独立页。真实组数与异常组数分开显示，组更新排序取组和系统最大时间。`listLocationKey()` 为组 ID 加 `group:` 前缀，避免与页签名冲突。工作区路由不变；刷新页面后不承诺恢复临时浏览位置。
+4. **校验与错误**：切页、进出组或修改搜索清空选择；删除目标取 `selectedVisibleSystems(visible, selectedIds)` 交集。仅加载成功且组确实消失才返回项目页，加载失败显示错误与重试，不能假装空库或清掉原导航。创建成功清空目标位置搜索并定位结果，取消或保存失败不跳转。
+5. **正常/边界**：一个或零个系统的真实组仍显示项目层；缺组记录保留入口与系统操作并提示异常，禁用依赖组记录的操作；项目顶层不允许跨组批量删除系统。
+6. **验证**：`node scripts/verify-project-list-views.mjs` 检查分类、搜索、选择交集和不修改输入；先 `npm run build` 再 `node scripts/verify-project-list-ui.mjs` 检查隔离 Chrome/Electron 导航、滚动、创建/删除/导入导出、失败及实际菜单操作。
+7. **反例**：错误是按 `systems.length === 1` 隐藏组头，或只把搜索留在会被 key 重挂载的 ProjectList 中；正确是按归属分类，App 保存 UI 位置，菜单/选择等留在列表组件内部。
 
 ## 存储操作超时与报错采集
 
