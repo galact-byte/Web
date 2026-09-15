@@ -1,0 +1,7 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"验证与交付要求，不能只做源码正则检查"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"采集页恢复操作、现有样式与可访问性"}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"超时、abort、迟到回调、会话清理"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"持久化成功语义与 pendingWrites 生命周期"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"两端协议一致性与外部输入"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"同时核对 Web 与 Electron 的完整传输、入库和回执路径"}
+{"file":".trellis/tasks/09-15-lan-upload-stuck/research/findings.md","reason":"按真实缺陷证据回归，区分已复现问题与未证实现场诱因"}

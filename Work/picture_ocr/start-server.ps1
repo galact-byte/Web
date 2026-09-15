@@ -63,17 +63,102 @@ function Ensure-LanListener {
     }
 }
 
-function Read-ExactBytes { param([Net.Sockets.NetworkStream]$Stream, [int]$Length) $bytes = [byte[]]::new($Length); $offset = 0; while ($offset -lt $Length) { $read = $Stream.Read($bytes, $offset, $Length - $offset); if ($read -le 0) { throw '请求正文不完整。' }; $offset += $read }; $bytes }
-function Read-HttpRequest {
-    param([Net.Sockets.TcpClient]$Client)
-    $stream = $Client.GetStream(); $headerBytes = [Collections.Generic.List[byte]]::new(); $match = 0
-    while ($headerBytes.Count -lt 32768) { $next = $stream.ReadByte(); if ($next -lt 0) { return $null }; $headerBytes.Add([byte]$next); $match = if (($match -eq 0 -and $next -eq 13) -or ($match -eq 1 -and $next -eq 10) -or ($match -eq 2 -and $next -eq 13) -or ($match -eq 3 -and $next -eq 10)) { $match + 1 } elseif ($next -eq 13) { 1 } else { 0 }; if ($match -eq 4) { break } }
-    if ($match -ne 4) { throw 'HTTP 请求头过大或格式无效。' }; $text = [Text.Encoding]::ASCII.GetString($headerBytes.ToArray()); $lines = $text -split "`r`n"; $parts = $lines[0] -split ' '; if ($parts.Count -lt 2) { throw 'HTTP 请求行无效。' }; $headers = @{}
-    foreach ($line in $lines[1..($lines.Count-1)]) { $index = $line.IndexOf(':'); if ($index -gt 0) { $headers[$line.Substring(0,$index).Trim().ToLowerInvariant()] = $line.Substring($index+1).Trim() } }
-    $length = if ($headers.ContainsKey('content-length')) { [int]$headers['content-length'] } else { 0 }; if ($length -lt 0 -or $length -gt $script:MaxImageBytes) { throw '图片超过 10MB 限制。' }
-    return [pscustomobject]@{ method = $parts[0].ToUpperInvariant(); rawTarget = $parts[1]; headers = $headers; body = $(if ($length -gt 0) { Read-ExactBytes $stream $length } else { [byte[]]::new(0) }); stream = $stream; remote = $Client.Client.RemoteEndPoint; local = $Client.Client.LocalEndPoint }
+# 网络收发在 .NET 异步任务中完成；PowerShell 只处理已完整接收的请求和会话状态。
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+public sealed class LanConnection : IDisposable {
+    public readonly TcpClient Client;
+    public readonly Task<LanRequest> ReadTask;
+    public Task WriteTask;
+    public bool Dispatched;
+    public string Phase = "header";
+    public string Path = "unknown";
+    public bool Expired;
+    readonly NetworkStream stream;
+    readonly Timer deadline;
+    public LanConnection(TcpClient client) {
+        Client = client;
+        stream = client.GetStream();
+        deadline = new Timer(_ => { Expired = true; Client.Close(); }, null, 5000, Timeout.Infinite);
+        ReadTask = Read();
+    }
+    async Task<LanRequest> Read() {
+        var header = new MemoryStream();
+        var buffer = new byte[8192];
+        int end = -1;
+        while (end < 0) {
+            int count = await stream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+            if (count == 0) throw new IOException("incomplete header");
+            int previous = (int)header.Length;
+            header.Write(buffer, 0, count);
+            var bytes = header.GetBuffer();
+            for (int i = Math.Max(0, previous - 3); i + 3 < header.Length; i++) {
+                if (bytes[i] == 13 && bytes[i+1] == 10 && bytes[i+2] == 13 && bytes[i+3] == 10) { end = i + 4; break; }
+            }
+            if ((end < 0 && header.Length >= 32768) || end > 32768) throw new IOException("header too large");
+        }
+        var lines = Encoding.ASCII.GetString(header.GetBuffer(), 0, end).Split(new[] {"\r\n"}, StringSplitOptions.None);
+        var parts = lines[0].Split(' ');
+        if (parts.Length != 3 || !parts[1].StartsWith("/")) throw new IOException("invalid request");
+        var headers = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 1; i < lines.Length && lines[i].Length > 0; i++) {
+            int colon = lines[i].IndexOf(':');
+            if (colon <= 0) throw new IOException("invalid header");
+            string key = lines[i].Substring(0, colon).Trim();
+            if (headers.ContainsKey(key)) throw new IOException("duplicate header");
+            headers.Add(key, lines[i].Substring(colon + 1).Trim());
+        }
+        int length = 0;
+        string value;
+        if (headers.ContainsKey("transfer-encoding") || (headers.TryGetValue("content-length", out value) && (!Int32.TryParse(value, out length) || length < 0 || length > 10485760))) throw new IOException("invalid body length");
+        Phase = "body";
+        deadline.Change(45000, Timeout.Infinite);
+        var body = new byte[length];
+        int received = Math.Min(length, (int)header.Length - end);
+        Buffer.BlockCopy(header.GetBuffer(), end, body, 0, received);
+        header.Dispose();
+        while (received < length) {
+            int count = await stream.ReadAsync(body, received, length - received).ConfigureAwait(false);
+            if (count == 0) throw new IOException("incomplete body");
+            received += count;
+        }
+        Phase = "ready";
+        return new LanRequest { method = parts[0].ToUpperInvariant(), rawTarget = parts[1], headers = headers, body = body, connection = this, remote = (IPEndPoint)Client.Client.RemoteEndPoint, local = (IPEndPoint)Client.Client.LocalEndPoint };
+    }
+    public void Respond(byte[] header, byte[] body) {
+        Phase = "response";
+        deadline.Change(10000, Timeout.Infinite);
+        WriteTask = Send(header, body);
+    }
+    async Task Send(byte[] header, byte[] body) {
+        await stream.WriteAsync(header, 0, header.Length).ConfigureAwait(false);
+        if (body.Length > 0) await stream.WriteAsync(body, 0, body.Length).ConfigureAwait(false);
+    }
+    public void Dispose() { deadline.Dispose(); Client.Close(); }
 }
-function Send-Response { param($Request, [int]$Status, [string]$ContentType, [byte[]]$Body, [hashtable]$Headers = @{}) $reasons = @{200='OK';201='Created';202='Accepted';400='Bad Request';401='Unauthorized';403='Forbidden';404='Not Found';405='Method Not Allowed';409='Conflict';413='Payload Too Large';415='Unsupported Media Type';429='Too Many Requests';503='Service Unavailable'}; $header = "HTTP/1.1 $Status $($reasons[$Status])`r`nContent-Type: $ContentType`r`nContent-Length: $($Body.Length)`r`nConnection: close`r`nX-Content-Type-Options: nosniff`r`n"; foreach ($key in $Headers.Keys) { $header += "$key`: $($Headers[$key])`r`n" }; $header += "`r`n"; $headBytes = [Text.Encoding]::ASCII.GetBytes($header); $Request.stream.Write($headBytes,0,$headBytes.Length); if ($Request.method -ne 'HEAD' -and $Body.Length -gt 0) { $Request.stream.Write($Body,0,$Body.Length) } }
+public sealed class LanRequest {
+    public string method, rawTarget;
+    public Dictionary<string,string> headers;
+    public byte[] body;
+    public LanConnection connection;
+    public IPEndPoint remote, local;
+}
+'@
+function Send-Response {
+    param($Request, [int]$Status, [string]$ContentType, [byte[]]$Body, [hashtable]$Headers = @{})
+    $header = "HTTP/1.1 $Status Response`r`nContent-Type: $ContentType`r`nContent-Length: $($Body.Length)`r`nConnection: close`r`nX-Content-Type-Options: nosniff`r`n"
+    foreach ($key in $Headers.Keys) { $header += "$key`: $($Headers[$key])`r`n" }
+    $header += "`r`n"
+    if ($Request.method -eq 'HEAD') { $Body = [byte[]]::new(0) }
+    $Request.connection.Respond([Text.Encoding]::ASCII.GetBytes($header), $Body)
+}
 function Send-Json { param($Request,[int]$Status,[object]$Value) $body = [Text.Encoding]::UTF8.GetBytes(($Value | ConvertTo-Json -Depth 16 -Compress)); Send-Response $Request $Status 'application/json; charset=utf-8' $body @{ 'Cache-Control'='no-store' } }
 function Send-Error { param($Request,[int]$Status,[string]$Message) Send-Json $Request $Status @{message=$Message} }
 function Get-RequestUri { param($Request) try { [Uri]::new("http://localhost$($Request.rawTarget)") } catch { throw 'URL 无效。' } }
@@ -114,7 +199,7 @@ function Handle-Control { param($Request,$Path)
     if (-not (Test-LoopbackRequest $Request)) { Send-Error $Request 403 '控制接口仅允许本机浏览器访问。'; return }
     if ([string]$Request.headers['x-evidence-control'] -ne '1') { Send-Error $Request 403 '控制接口缺少本机应用标识。'; return }
     if ($Path -eq '/api/control/status' -and $Request.method -eq 'GET') { $session=Get-ActiveSession; Send-Json $Request 200 @{running=[bool]$session;url=$(if($session){$session.url}else{$null});addresses=@(Get-PrivateLanAddresses)}; return }
-    if ($Path -eq '/api/control/start' -and $Request.method -eq 'POST') { try { $payload=([Text.Encoding]::UTF8.GetString($Request.body)|ConvertFrom-Json);$addresses=@(Get-PrivateLanAddresses);$selected=[string]$payload.selectedAddress;if($addresses.Count -eq 0){throw '未检测到可用私有局域网 IPv4 地址。请连接同一 Wi-Fi 或启用电脑连接的手机热点后重试。'};if(@($addresses | ForEach-Object { $_.address }) -notcontains $selected){throw '请选择手机实际可访问的 Wi-Fi 或热点地址。'};$normalized=ConvertTo-NormalizedSnapshot $payload.snapshot;Stop-LanSession;Ensure-LanListener $selected;$token=New-SessionToken;$session=[pscustomobject]@{token=$token;address=$selected;snapshot=$normalized.snapshot;allowed=$normalized.allowed;pending=[ordered]@{};completed=[ordered]@{};expiresAt=[DateTime]::UtcNow.AddHours(2);url="http://$selected`:$script:ListenPort/#/lan/$token"};[Threading.Monitor]::Enter($script:SessionLock);try{$script:Session=$session}finally{[Threading.Monitor]::Exit($script:SessionLock)};Send-Json $Request 200 @{running=$true;url=$session.url;addresses=$addresses};return }catch{Send-Error $Request 400 $_.Exception.Message;return} }
+    if ($Path -eq '/api/control/start' -and $Request.method -eq 'POST') { try { $payload=([Text.Encoding]::UTF8.GetString($Request.body)|ConvertFrom-Json);$addresses=@(Get-PrivateLanAddresses);$selected=[string]$payload.selectedAddress;if($addresses.Count -eq 0){throw '未检测到可用私有局域网 IPv4 地址。请连接同一 Wi-Fi 或启用电脑连接的手机热点后重试。'};if(@($addresses | ForEach-Object { $_.address }) -notcontains $selected){throw '请选择手机实际可访问的 Wi-Fi 或热点地址。'};$normalized=ConvertTo-NormalizedSnapshot $payload.snapshot;Stop-LanSession;Ensure-LanListener $selected;$token=New-SessionToken;$session=[pscustomobject]@{token=$token;address=$selected;snapshot=$normalized.snapshot;allowed=$normalized.allowed;pending=[ordered]@{};completed=[ordered]@{};requests=@{};sessionId=[Guid]::NewGuid().ToString('N');expiresAt=[DateTime]::UtcNow.AddHours(2);url="http://$selected`:$script:ListenPort/#/lan/$token"};[Threading.Monitor]::Enter($script:SessionLock);try{$script:Session=$session}finally{[Threading.Monitor]::Exit($script:SessionLock)};Send-Json $Request 200 @{running=$true;url=$session.url;addresses=$addresses};return }catch{Send-Error $Request 400 $_.Exception.Message;return} }
     if ($Path -eq '/api/control/update' -and $Request.method -eq 'POST') {
         try {
             $payload = ([Text.Encoding]::UTF8.GetString($Request.body) | ConvertFrom-Json)
@@ -139,14 +224,69 @@ function Handle-Control { param($Request,$Path)
     }
     if ($Path -eq '/api/control/stop' -and $Request.method -eq 'POST') { Stop-LanSession;Send-Json $Request 200 @{running=$false;url=$null;addresses=@(Get-PrivateLanAddresses)};return }
     if ($Path -eq '/api/control/pending' -and $Request.method -eq 'GET') { $session=Get-ActiveSession;if(-not $session){Send-Json $Request 200 @{upload=$null};return};[Threading.Monitor]::Enter($script:SessionLock);try{$upload=@($session.pending.Values|Select-Object -First 1)[0];Send-Json $Request 200 @{upload=$upload}}finally{[Threading.Monitor]::Exit($script:SessionLock)};return }
-    if ($Path -eq '/api/control/confirm' -and $Request.method -eq 'POST') { try{$payload=([Text.Encoding]::UTF8.GetString($Request.body)|ConvertFrom-Json);$session=Get-ActiveSession;if(-not $session){Send-Error $Request 409 '采集会话已结束。';return};$id=[string]$payload.requestId;[Threading.Monitor]::Enter($script:SessionLock);try{if(-not $session.pending.Contains($id)){Send-Error $Request 404 '待确认图片不存在或已处理。';return};$session.pending.Remove($id);$session.completed[$id]=[pscustomobject]@{success=[bool]$payload.success;message=$(if($payload.success){'图片已写入电脑项目。'}elseif([string]::IsNullOrWhiteSpace([string]$payload.message)){'电脑端未能保存图片。'}else{[string]$payload.message});expiresAt=[DateTime]::UtcNow.AddMinutes(2)}}finally{[Threading.Monitor]::Exit($script:SessionLock)};Send-Json $Request 200 @{message='图片保存结果已确认。'};return}catch{Send-Error $Request 400 $_.Exception.Message;return} }
+    if ($Path -eq '/api/control/confirm' -and $Request.method -eq 'POST') {
+        try {
+            $payload = [Text.Encoding]::UTF8.GetString($Request.body) | ConvertFrom-Json
+            $session = Get-ActiveSession
+            if (-not $session -or ($payload.sessionId -and $payload.sessionId -ne $session.sessionId)) { Send-Error $Request 409 '采集会话已结束。'; return }
+            $id = [string]$payload.requestId
+            if (-not $session.requests.ContainsKey($id)) { Send-Error $Request 404 '待确认图片不存在。'; return }
+            $record = $session.requests[$id]
+            if ($payload.attempt -and $payload.attempt -ne $record.attempt) { Send-Error $Request 409 '此保存确认属于上一次尝试。'; return }
+            if ($session.completed.Contains($id)) {
+                if ($session.completed[$id].success -ne [bool]$payload.success) { Send-Error $Request 409 '保存结果已确认，不能覆盖。'; return }
+            } else {
+                $session.pending.Remove($id)
+                $record.state = if ($payload.success) { 'saved' } else { 'failed' }
+                $record.message = if ($payload.success) { '图片已写入电脑项目。' } else { '电脑端未能保存图片，请在电脑端查看错误后重试。' }
+                $session.completed[$id] = [pscustomobject]@{success=[bool]$payload.success}
+                Write-Host "[UPLOAD] phase=$($record.state) requestId=$id"
+            }
+            Send-Json $Request 200 @{message='图片保存结果已确认。'}
+        } catch { Send-Error $Request 400 '保存确认格式无效。' }
+        return
+    }
     Send-Error $Request 405 '不支持的控制接口或请求方法。'
+}
+function Send-UploadState { param($Request,[string]$Id,$Record)
+    $status = if ($Record.state -eq 'saved') { 201 } elseif ($Record.state -eq 'failed') { 503 } else { 202 }
+    Send-Json $Request $status @{requestId=$Id;state=$Record.state;message=$Record.message}
 }
 function Handle-TokenApi { param($Request,$Uri,$Path)
     $session=Get-ActiveSession;if(-not $session -or $Request.local.Address.ToString() -ne $session.address -or $Uri.Query -notmatch "(?:^|[?&])token=$([regex]::Escape($session.token))(?:&|$)"){Send-Error $Request 401 '采集会话无效或已结束。';return}
-    if($Path -eq '/api/session' -and $Request.method -eq 'GET'){Send-Json $Request 200 $session.snapshot;return}
-    if($Path -eq '/api/upload' -and $Request.method -eq 'POST'){$project=[string]$Uri.Query -replace '^.*(?:\?|&)projectId=([^&]*).*$','$1';$asset=[string]$Uri.Query -replace '^.*(?:\?|&)assetId=([^&]*).*$','$1';$item=[string]$Uri.Query -replace '^.*(?:\?|&)itemId=([^&]*).*$','$1';try{$project=[Uri]::UnescapeDataString($project);$asset=[Uri]::UnescapeDataString($asset);$item=[Uri]::UnescapeDataString($item)}catch{};if(-not $session.allowed.ContainsKey($project)-or -not $session.allowed[$project].ContainsKey($asset)-or -not $session.allowed[$project][$asset].Contains($item)){Send-Error $Request 403 '目标系统、资产或检查项不属于本次采集会话。';return};$type=(([string]$Request.headers['content-type'] -split ';')[0].Trim().ToLowerInvariant());if($script:AllowedImageTypes -notcontains $type){Send-Error $Request 415 '仅支持 PNG、JPEG、GIF、WebP 或 BMP 图片。';return};if(-not(Test-ImageSignature $type $Request.body)){Send-Error $Request 415 '图片内容与声明类型不一致，上传已拒绝。';return};[Threading.Monitor]::Enter($script:SessionLock);try{if($session.pending.Count -ge $script:MaxPendingUploads){Send-Error $Request 429 '待保存图片过多，请等待电脑端完成当前图片后重试。';return}}finally{[Threading.Monitor]::Exit($script:SessionLock)};$id=ConvertTo-Base64Url([Guid]::NewGuid().ToByteArray());$upload=[pscustomobject]@{requestId=$id;projectId=$project;assetId=$asset;itemId=$item;image=[pscustomobject]@{fileName=(Get-SafeFileName $Request.headers['x-file-name']);data="data:$type;base64,$([Convert]::ToBase64String($Request.body))";mimeType=$type}};[Threading.Monitor]::Enter($script:SessionLock);try{$session.pending[$id]=$upload}finally{[Threading.Monitor]::Exit($script:SessionLock)};Send-Json $Request 202 @{requestId=$id;message='图片已收到，正在等待电脑端保存。'};return}
-    if($Path -eq '/api/upload-status' -and $Request.method -eq 'GET'){$id=[string]$Uri.Query -replace '^.*(?:\?|&)requestId=([^&]*).*$','$1';[Threading.Monitor]::Enter($script:SessionLock);try{if($session.pending.Contains($id)){Send-Json $Request 202 @{message='正在等待电脑端保存。'};return};if($session.completed.Contains($id)){$outcome=$session.completed[$id];if([DateTime]::UtcNow -ge $outcome.expiresAt){$session.completed.Remove($id);Send-Error $Request 404 '上传结果已过期。';return};Send-Json $Request $(if($outcome.success){201}else{503}) @{message=$outcome.message};return}}finally{[Threading.Monitor]::Exit($script:SessionLock)};Send-Error $Request 404 '上传请求不存在。';return}
+    if ($Path -eq '/api/session' -and $Request.method -eq 'GET') { $snapshot=$session.snapshot; Send-Json $Request 200 @{groupId=$snapshot.groupId;groupTitle=$snapshot.groupTitle;systems=$snapshot.systems;uploadRecovery=1}; return }
+    if ($Path -eq '/api/upload' -and $Request.method -eq 'POST') {
+        $query = @{}
+        foreach ($pair in $Uri.Query.TrimStart('?').Split('&')) { $parts=$pair.Split('=',2); if($parts.Length -eq 2){$query[$parts[0]]=[Uri]::UnescapeDataString($parts[1])} }
+        $project=[string]$query.projectId; $asset=[string]$query.assetId; $item=[string]$query.itemId
+        if (-not $session.allowed.ContainsKey($project) -or -not $session.allowed[$project].ContainsKey($asset) -or -not $session.allowed[$project][$asset].Contains($item)) { Send-Error $Request 403 '目标系统、资产或检查项不属于本次采集会话。'; return }
+        $type=(([string]$Request.headers['content-type'] -split ';')[0].Trim().ToLowerInvariant())
+        if ($script:AllowedImageTypes -notcontains $type -or -not (Test-ImageSignature $type $Request.body)) { Send-Error $Request 415 '图片内容与声明类型不一致，上传已拒绝。'; return }
+        $id = [string]$query.requestId
+        if (-not $id) { $id=ConvertTo-Base64Url([Guid]::NewGuid().ToByteArray()) }
+        if ($id -cnotmatch '^[A-Za-z0-9_-]{16,80}$') { Send-Error $Request 400 '上传编号无效。'; return }
+        $hash=[Security.Cryptography.SHA256]::Create()
+        try { $fingerprint=[Convert]::ToBase64String($hash.ComputeHash($Request.body)) } finally { $hash.Dispose() }
+        $record=$session.requests[$id]
+        if ($record) {
+            if ($record.projectId -cne $project -or $record.assetId -cne $asset -or $record.itemId -cne $item -or $record.fingerprint -cne $fingerprint -or $record.mime -ne $type) { Send-Error $Request 409 '同一上传编号的图片或目标不一致。'; return }
+            if ($record.state -ne 'failed' -or $query.retry -ne '1') { Send-UploadState $Request $id $record; return }
+        }
+        if ($session.pending.Count -ge $script:MaxPendingUploads -or (-not $record -and $session.requests.Count -ge 4096)) { Send-Error $Request 429 '待保存图片过多或会话已达上限，请先完成当前图片。'; return }
+        if (-not $record) { $record=[pscustomobject]@{projectId=$project;assetId=$asset;itemId=$item;fingerprint=$fingerprint;mime=$type;state='pending';message='正在等待电脑端保存。';attempt=0};$session.requests[$id]=$record }
+        $record.attempt++; $record.state='pending'; $record.message='正在等待电脑端保存。'
+        $session.completed.Remove($id)
+        $session.pending[$id]=[pscustomobject]@{requestId=$id;sessionId=$session.sessionId;attempt=$record.attempt;projectId=$project;assetId=$asset;itemId=$item;image=[pscustomobject]@{fileName=(Get-SafeFileName $Request.headers['x-file-name']);data="data:$type;base64,$([Convert]::ToBase64String($Request.body))";mimeType=$type}}
+        Write-Host "[UPLOAD] phase=received requestId=$id"
+        Send-UploadState $Request $id $record
+        return
+    }
+    if ($Path -eq '/api/upload-status' -and $Request.method -eq 'GET') {
+        $id=[string]$Uri.Query -replace '^.*(?:\?|&)requestId=([^&]*).*$','$1'
+        $record=$session.requests[$id]
+        if ($record) { Send-UploadState $Request $id $record } else { Send-Json $Request 404 @{state='not_received';message='当前会话尚未接收此图片。'} }
+        return
+    }
     Send-Error $Request 405 '不支持的采集接口或请求方法。'
 }
 function Serve-Static { param($Request,$Path)
@@ -161,5 +301,35 @@ catch { $existing="http://127.0.0.1:$script:ListenPort/";Write-Host '';Write-Hos
 $script:Listeners.Add($listener)
 try {
     $url="http://127.0.0.1:$script:ListenPort/";Write-Host '';Write-Host 'Picture OCR 已启动：Web ZIP 支持手机局域网实时采集。' -ForegroundColor Green;Write-Host "电脑浏览器：$url" -ForegroundColor Cyan;if($addresses.Count -gt 0){Write-Host "可用局域网地址：$(@($addresses | ForEach-Object { $_.address }) -join '、')" -ForegroundColor Cyan}else{Write-Host '当前未检测到私有局域网 IPv4；仍可正常使用电脑端，连接 Wi-Fi 或手机热点后可再启动手机采集。' -ForegroundColor Yellow};Write-Host '请保持此窗口打开；手机采集会话只能从网页中的“手机局域网采集”启动。' -ForegroundColor Yellow;Write-Host '';if(-not $NoBrowser){Start-Process $url}
-    while($true){$client=$null;foreach($listener in $script:Listeners){if($listener.Pending()){$client=$listener.AcceptTcpClient();$client.ReceiveTimeout=15000;$client.SendTimeout=15000;break}};if(-not $client){Start-Sleep -Milliseconds 25;continue};try{$request=Read-HttpRequest $client;if($request){$uri=Get-RequestUri $request;$path=$uri.AbsolutePath;if($path.StartsWith('/api/control/')){Handle-Control $request $path}elseif($path.StartsWith('/api/')){Handle-TokenApi $request $uri $path}else{Serve-Static $request $path}}}catch{Write-Host "[REQUEST ERROR] $($_.Exception.Message)" -ForegroundColor Yellow;try{if($request){Send-Error $request 500 '服务器处理请求失败。'}}catch{}}finally{try{$client.Close()}catch{}}}
-} catch { Write-Host "[SERVER ERROR] 无法监听本机地址：$($_.Exception.Message)" -ForegroundColor Red;exit 1 } finally { Stop-LanSession;foreach($listener in $script:Listeners){try{$listener.Stop()}catch{}} }
+    $connections = [Collections.Generic.List[LanConnection]]::new()
+    while ($true) {
+        foreach ($listener in @($script:Listeners)) {
+            if ($listener.Pending()) {
+                $client = $listener.AcceptTcpClient()
+                $limit = if ([Net.IPAddress]::IsLoopback($client.Client.LocalEndPoint.Address)) { 32 } else { 28 }
+                if ($connections.Count -ge $limit) { $client.Close() } else { $connections.Add([LanConnection]::new($client)) }
+            }
+        }
+        foreach ($connection in @($connections)) {
+            try {
+                if (-not $connection.Dispatched -and $connection.ReadTask.IsCompleted) {
+                    $connection.Dispatched = $true
+                    $request = $connection.ReadTask.GetAwaiter().GetResult()
+                    $uri = Get-RequestUri $request; $path = $uri.AbsolutePath
+                    $connection.Path = if ($path -in @('/api/upload','/api/upload-status','/api/control/pending','/api/control/confirm')) { $path } else { 'other' }
+                    if ($path.StartsWith('/api/control/')) { Handle-Control $request $path }
+                    elseif ($path.StartsWith('/api/')) { Handle-TokenApi $request $uri $path }
+                    else { Serve-Static $request $path }
+                }
+                if ($connection.WriteTask -and $connection.WriteTask.IsCompleted) {
+                    [void]$connection.WriteTask.GetAwaiter().GetResult()
+                    $connection.Dispose(); [void]$connections.Remove($connection)
+                } elseif ($connection.Expired) { throw '连接超过总时限。' }
+            } catch {
+                Write-Host "[CONNECTION CLOSED] phase=$($connection.Phase) path=$($connection.Path) timeout=$($connection.Expired)" -ForegroundColor Yellow
+                $connection.Dispose(); [void]$connections.Remove($connection)
+            }
+        }
+        Start-Sleep -Milliseconds 10
+    }
+} catch { Write-Host "[SERVER ERROR] 无法监听本机地址：$($_.Exception.Message)" -ForegroundColor Red;exit 1 } finally { if ($connections) { foreach ($connection in $connections) { $connection.Dispose() } }; Stop-LanSession;foreach($listener in $script:Listeners){try{$listener.Stop()}catch{}} }

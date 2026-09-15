@@ -1,0 +1,9 @@
+{"file":".trellis/spec/frontend/index.md","reason":"项目入口与适用规范"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"采集页现有视觉、状态反馈与无障碍约定"}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"上传、轮询、卸载与异步资源生命周期"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"保存分流、真实持久化和状态同步"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"两端桥接类型与输入校验"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"构建及行为验证标准"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"手机、HTTP、桥接、IPC、IndexedDB 的完整回执链路"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"复用稳定图片 id、压缩和保存逻辑，避免新框架"}
+{"file":".trellis/tasks/09-15-lan-upload-stuck/research/findings.md","reason":"现场日志、隔离复现、代码证据和诊断限制；backend 索引适用声明已过时"}

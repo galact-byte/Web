@@ -25,6 +25,10 @@ git diff --check
 - `scripts/verify-lan-server.cjs` 验证 Electron 局域网服务安全边界；`scripts/verify-lan-mobile-picker.mjs` 用源码断言守护移动端图片来源、会话同步、可访问对话框和项目列表响应式契约。
 - 移动端采集或项目列表相关改动运行 `npm run verify:lan-mobile-picker`（`scripts/verify-lan-mobile-picker.mjs`）；检查项新增、状态或排序改动运行 `node scripts/verify-inspection-item-interactions.mjs`，涉及 Pointer 拖拽、实时预览或边缘自动滚动时再运行 `node scripts/verify-inspection-item-pointer-drag.mjs`（生产预览 Chrome 回归）；构建或 PWA 改动后运行 `npm run verify:pwa-build`（`scripts/verify-pwa-build.mjs`）；Web LAN 启动器改动后运行 `npm run verify:web-lan-server`（`scripts/verify-web-lan-server.ps1`）。不要把这些脚本当作通用单元测试框架。
 
+## LAN 上传恢复回归
+
+修改上传、确认、手机恢复或图片事务终态时，另遵守 [局域网上传恢复契约](../backend/lan-upload.md)。先构建，再运行 `node scripts/verify-lan-upload-ui.mjs`；使用真实 PowerShell 服务及正式 Electron main/preload，隔离数据库，核对真实图片引用与字节条数。截图与报告位于 `.trellis/.runtime/lan-upload-qa/`。网络预算仅在测试页面/临时脚本缩短，不能改变生产时限来让测试通过。
+
 ## 项目列表回归
 
 - `node scripts/verify-project-list-views.mjs` 通过 esbuild 执行真实 TypeScript 派生逻辑，不复制实现。

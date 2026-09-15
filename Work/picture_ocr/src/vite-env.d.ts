@@ -25,12 +25,15 @@ interface LanCollectorSystem {
 }
 
 interface LanCollectorSnapshot {
+  uploadRecovery?: number;
   groupId: string | null;
   groupTitle: string;
   systems: LanCollectorSystem[];
 }
 
 interface LanImageUpload {
+  sessionId?: string;
+  attempt?: number;
   requestId: string;
   projectId: string;
   assetId: string;
@@ -72,7 +75,7 @@ interface Window {
     updateSession: (snapshot: LanCollectorSnapshot) => Promise<LanSessionStatus>;
     getStatus: () => Promise<LanSessionStatus>;
     onImage: (listener: (upload: LanImageUpload) => void) => () => void;
-    confirmImageSaved: (requestId: string, outcome: { success: boolean; message?: string }) => void;
+    confirmImageSaved: (requestId: string, outcome: { success: boolean; message?: string; sessionId?: string; attempt?: number }) => void;
   };
   evidenceWrites?: {
     setPendingWrites: (pending: number) => void;
