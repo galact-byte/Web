@@ -113,3 +113,24 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 3: 修复局域网上传卡住并准备发布 v0.8.2
+
+**Date**: 2026-09-15
+**Task**: 修复局域网上传卡住并准备发布 v0.8.2
+**Branch**: `main`
+
+### Summary
+
+修复 Web PowerShell 异常连接阻塞，双端固定上传编号及真实保存回执，手机超时保留原图和核对重试。真实 PowerShell 与正式 Electron 隔离 UI 各7组通过，相关协议/存储/生命周期回归及发布构建检查通过。用户授权提交推送与发布，版本、锁文件、人工 RELEASE-NOTES 已同步为0.8.2；随后推送 main 与 picture-ocr-v0.8.2 标签触发自动发布，不等待 CI。未触碰真实用户数据，真机热点未测。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e632502` | (see git log) |
+
+### Status
+
+[OK] **Completed**
