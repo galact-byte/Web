@@ -1,5 +1,40 @@
 # 修改记录 — Picture OCR
 
+## 2026-09-15 — 手机局域网上传卡住与安全恢复
+
+### 背景与目标
+- 隔离复现了 Web PowerShell 服务被空闲 TCP 连接拖住的问题。改为有界异步收发；手机分别显示处理、上传和等待保存，超时后保留当前照片及原目标，允许核对、重试和下载原图。
+- 两端使用固定上传编号及服务端内容指纹，回执丢失后核对原请求，不重复入库；真实保存失败后允许人工重试。
+
+### 影响与兼容性
+- Web ZIP 与 Electron 同步更新上传、状态查询及保存回执。快照增加可选 `uploadRecovery: 1`；兼容无编号旧客户端，新客户端遇到旧宿主不承诺安全重试。
+- `addImageToProject` 超时请求 abort，以实际 complete/abort 结算并释放关闭保护；其他 DB 路径不顺手重构。保持来源端口 51730、数据库版本和现有三 store 结构，无数据迁移或新依赖。
+- 用户已授权提交、推送并发布 v0.8.2；版本号、锁文件与发布说明同步更新。回退应整体回退关联协议及前端修改，不清空用户库。
+
+### 文件与实现
+| 操作 | 路径 | 说明 |
+|---|---|---|
+| 修改 | `start-server.ps1` | 内嵌 C# 异步收发、连接与总时限边界、稳定编号及状态、幂等确认和脱敏日志。 |
+| 修改 | `electron/lanServer.cjs`、`electron/main.cjs` | 同 id 内容/目标校验、202/状态查询、保留真实保存回执关联，按会话/尝试隔离。 |
+| 新增/修改 | `src/utils/asyncDeadline.ts`、`lanUpload.ts`、`lanBridge.ts`、`src/vite-env.d.ts`、`src/App.tsx` | 含响应体的超时、前台恢复检查、固定身份、桥接超时/代际、请求与目标错误记录。 |
+| 修改 | `src/components/LanMobileCollector.tsx`、`src/utils/imageCompression.ts`、`src/utils/db.ts` | 单图恢复操作、原图生命周期、解码挂起回退与迟到资源释放、真实事务终态保护。 |
+| 新增/修改 | `scripts/verify-web-lan-connections.mjs`、`verify-lan-upload-recovery.mjs`、`verify-lan-deadlines.mjs`、`verify-lan-mobile-recovery.mjs`、`verify-lan-write-lifecycle.mjs`、`verify-lan-upload-ui.mjs` 及测试辅助文件 | 实际协议、网络故障、事务生命周期和隔离双端浏览器验证；更新旧源码定位断言。 |
+| 修改/新增 | `.trellis/spec/backend/`、前端状态/质量规范、任务目录 | 新协议与真实证据，修正 backend 索引过时的纯浏览器描述。 |
+
+### 验证
+- RED：旧服务空闲连接使控制请求超时；旧协议未声明 recovery 能力；事务测试捕获包装超时提前释放。对应回归现已通过。
+- `node scripts/verify-web-lan-connections.mjs`：空闲、半头、半正文、reset、慢读、非法 framing、头/正文总时限与 32 连接容量通过。
+- `node scripts/verify-lan-upload-recovery.mjs`：Web/Electron 同编号去重、内容/目标冲突、失败重试、重复/迟到回执和 8 张队列通过。
+- `verify-lan-deadlines.mjs`、`verify-lan-mobile-recovery.mjs`、`verify-lan-write-lifecycle.mjs`：响应体挂起、后台恢复、原图与目标保留、旧宿主/会话失效、真实事务终态和 pending 保护通过。
+- `npm run build` 与 `node scripts/verify-lan-upload-ui.mjs`：真实 PowerShell + Chrome、正式 Electron + 临时 userData，各 7 组通过。验证上传响应丢失、Web 确认响应丢失、实际 IDB 写路径失败、实际提交但完成事件延迟、解码挂起与迟到 bitmap 释放、token 切换隔离及卸载原图 URL 释放；核对引用及字节条数。375/768/1440px、44px 按钮和真实 Enter 通过。
+- 现有 `verify:lan-server`、`verify:web-lan-server`、`verify:lan-mobile-picker`、`verify:lan-image-sink`、`verify:image-compression`、`verify:image-store`（76/76）、`verify:pending-writes`（29/29）、`verify:error-report`（19/19）、`verify:pwa-build` 通过。
+
+### 已知限制与后续
+- 未接触现场真实库，无法据此判断或找回此前卡住的具体照片；没有实测手机、热点、系统相机权限或浏览器被回收。
+- 原图仅保留在当前页面内存，刷新/关闭前需自行保存原图；未增加离线队列。
+- 网络正文/发送预算仅在隔离副本缩短；本机慢读响应被 OS 缓冲完整接收，验证了不阻塞控制，未声称该次触发了发送截止时间。重试与保存故障为明确标注的受控注入。
+- 截图与 JSON 报告在 `.trellis/.runtime/lan-upload-qa/`；完整验收映射见任务 `verification.md`。
+
 ## 2026-09-14 — 多系统项目恢复原地展开与收起
 
 ### 背景与目标

@@ -3,6 +3,7 @@
  * 纯决策函数（尺寸/跳过/字节估算）与 canvas I/O 分离，前者可在 Node 下用 verify 脚本验证。
  */
 import type { ProjectDocument } from '../types';
+import { abortable, withDeadline } from './asyncDeadline';
 
 export interface CompressOptions {
   /** 目标长边像素，只缩不放 */
@@ -99,25 +100,28 @@ interface DecodedImage {
 }
 
 /** 解码为可绘制源并应用 EXIF 方向；优先 createImageBitmap，失败回退 <img>。 */
-async function decodeImage(blob: Blob): Promise<DecodedImage> {
+async function decodeImage(blob: Blob, signal: AbortSignal): Promise<DecodedImage> {
   if (typeof createImageBitmap === 'function') {
     try {
-      const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+      const bitmap = await abortable(createImageBitmap(blob, { imageOrientation: 'from-image' }), signal, bitmap => bitmap.close());
       return { draw: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
     } catch {
       // 回退到 <img>
     }
   }
+  if (signal.aborted) throw signal.reason;
   const url = URL.createObjectURL(blob);
+  const element = new Image();
   try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const element = new Image();
+    const img = await abortable(new Promise<HTMLImageElement>((resolve, reject) => {
       element.onload = () => resolve(element);
       element.onerror = () => reject(new Error('图片解码失败。'));
       element.src = url;
-    });
-    return { draw: img, width: img.naturalWidth, height: img.naturalHeight, close: () => undefined };
+    }), signal);
+    return { draw: img, width: img.naturalWidth, height: img.naturalHeight, close: () => { img.src = ''; } };
   } finally {
+    element.onload = null; element.onerror = null;
+    if (signal.aborted) element.src = '';
     URL.revokeObjectURL(url);
   }
 }
@@ -130,11 +134,16 @@ function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob 
  * 压缩 File/Blob。跳过或压缩后不更小时返回原 blob（changed=false）。
  * 解码/绘制失败一律兜底返回原图，绝不因压缩报错而丢图。
  */
-export async function compressImageBlob(input: Blob, options?: Partial<CompressOptions>): Promise<CompressBlobResult> {
+export async function compressImageBlob(input: Blob, options?: Partial<CompressOptions>, signal?: AbortSignal): Promise<CompressBlobResult> {
+  try { return await withDeadline(signal => compressBlob(input, options, signal), 15000, signal); }
+  catch { return { blob: input, width: 0, height: 0, changed: false, failed: true }; }
+}
+
+async function compressBlob(input: Blob, options: Partial<CompressOptions> | undefined, signal: AbortSignal): Promise<CompressBlobResult> {
   const opts: CompressOptions = { ...DEFAULT_COMPRESS_OPTIONS, ...options };
   let decoded: DecodedImage | null = null;
   try {
-    decoded = await decodeImage(input);
+    decoded = await decodeImage(input, signal);
     const { width, height } = decoded;
     if (shouldSkipCompression({ width, height, bytes: input.size, mime: input.type }, opts)) {
       return { blob: input, width, height, changed: false };
@@ -146,7 +155,7 @@ export async function compressImageBlob(input: Blob, options?: Partial<CompressO
     const ctx = canvas.getContext('2d');
     if (!ctx) return { blob: input, width, height, changed: false, failed: true };
     ctx.drawImage(decoded.draw, 0, 0, target.width, target.height);
-    const outBlob = await canvasToBlob(canvas, opts.quality);
+    const outBlob = await abortable(canvasToBlob(canvas, opts.quality), signal);
     if (!outBlob) return { blob: input, width, height, changed: false, failed: true };
     if (outBlob.size >= input.size || input.size - outBlob.size < opts.minSaveBytes) {
       return { blob: input, width, height, changed: false };

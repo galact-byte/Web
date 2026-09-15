@@ -4,7 +4,7 @@ const http = require('node:http');
 const path = require('node:path');
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const MAX_CONCURRENT_UPLOADS = 4;
+const MAX_CONCURRENT_UPLOADS = 8;
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp']);
 const CONTENT_TYPES = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -55,6 +55,11 @@ function collectBody(request) {
       reject(error);
       return;
     }
+    const timer = setTimeout(() => request.destroy(new Error('图片接收超时')), 45_000);
+    const cleanup = () => clearTimeout(timer);
+    request.once('close', cleanup);
+    request.once('end', cleanup);
+    request.once('aborted', () => { cleanup(); reject(new Error('图片传输已中断')); });
     const chunks = [];
     let size = 0;
     let oversized = false;
@@ -123,7 +128,11 @@ async function createLanCollectorServer({ staticDir, snapshot, onImage, port = 0
   let currentAllowedItems = createAllowedItems(snapshot);
   let closed = false;
   let activeUploads = 0;
-  let uploadQueue = Promise.resolve();
+  const sessionId = crypto.randomBytes(16).toString('hex');
+  const uploads = new Map();
+  const sendState = (response, requestId, record) => sendJson(response,
+    record.state === 'saved' ? 201 : record.state === 'failed' ? 503 : 202,
+    { requestId, state: record.state, message: record.message });
 
   const sockets = new Set();
   const server = http.createServer(async (request, response) => {
@@ -135,7 +144,14 @@ async function createLanCollectorServer({ staticDir, snapshot, onImage, port = 0
     }
     if (requestUrl.pathname === '/api/session') {
       if (request.method !== 'GET') { sendJson(response, 405, { message: '不支持的请求方法' }); return; }
-      sendJson(response, 200, currentSnapshot);
+      sendJson(response, 200, { ...currentSnapshot, uploadRecovery: 1 });
+      return;
+    }
+    if (requestUrl.pathname === '/api/upload-status' && request.method === 'GET') {
+      const requestId = requestUrl.searchParams.get('requestId');
+      const record = uploads.get(requestId);
+      if (record) sendState(response, requestId, record);
+      else sendJson(response, 404, { state: 'not_received', message: '当前会话尚未接收此图片。' });
       return;
     }
     if (requestUrl.pathname === '/api/upload') {
@@ -155,16 +171,35 @@ async function createLanCollectorServer({ staticDir, snapshot, onImage, port = 0
       try {
         const bytes = await collectBody(request);
         if (!isAllowedImage(contentType, bytes)) { const error = new Error('图片内容与声明类型不一致，上传已拒绝。'); error.statusCode = 415; throw error; }
-        const image = {
+        const providedId = requestUrl.searchParams.get('requestId');
+        const requestId = providedId || crypto.randomBytes(16).toString('base64url');
+        if (!/^[A-Za-z0-9_-]{16,80}$/.test(requestId)) { sendJson(response, 400, { message: '上传编号无效。' }); return; }
+        const fingerprint = crypto.createHash('sha256').update(bytes).digest('hex');
+        let record = uploads.get(requestId);
+        if (record) {
+          if (record.projectId !== projectId || record.assetId !== assetId || record.itemId !== itemId || record.fingerprint !== fingerprint || record.mime !== contentType) {
+            sendJson(response, 409, { message: '同一上传编号的图片或目标不一致。' }); return;
+          }
+          if (record.state !== 'failed' || requestUrl.searchParams.get('retry') !== '1') { sendState(response, requestId, record); return; }
+        }
+        if ((!record && uploads.size >= 4096) || [...uploads.values()].filter(entry => entry.state === 'pending').length >= MAX_CONCURRENT_UPLOADS) {
+          sendJson(response, 429, { message: '待保存图片过多或会话已达上限，请先完成当前图片。' }); return;
+        }
+        if (!record) { record = { projectId, assetId, itemId, fingerprint, mime: contentType, attempt: 0 }; uploads.set(requestId, record); }
+        record.attempt++;
+        record.state = 'pending'; record.message = '正在等待电脑端保存。';
+        const payload = { requestId, sessionId, attempt: record.attempt, projectId, assetId, itemId, image: {
           fileName: safeFileName(request.headers['x-file-name']),
-          data: `data:${contentType};base64,${bytes.toString('base64')}`,
-          mimeType: contentType,
-        };
-        const queuedUpload = uploadQueue.then(() => onImage({ projectId, assetId, itemId, image }));
-        // 即使当前上传失败，也要继续处理后续上传，避免一个失败永久阻塞会话。
-        uploadQueue = queuedUpload.catch(() => undefined);
-        await queuedUpload;
-        sendJson(response, 201, { message: '图片已写入电脑项目。' });
+          data: `data:${contentType};base64,${bytes.toString('base64')}`, mimeType: contentType,
+        } };
+        // 接收回执与真实落库分开；Promise 保留到真实终态，迟到成功仍可被手机核对。
+        const save = Promise.resolve().then(() => onImage(payload)).then(() => {
+          record.state = 'saved'; record.message = '图片已写入电脑项目。';
+        }, () => {
+          record.state = 'failed'; record.message = '电脑端未能保存图片，请在电脑端查看错误后重试。';
+        });
+        if (providedId) sendState(response, requestId, record);
+        else { await save; sendState(response, requestId, record); }
       } catch (error) {
         const statusCode = error && typeof error === 'object' && 'statusCode' in error && (error.statusCode === 413 || error.statusCode === 415) ? error.statusCode : 503;
         sendJson(response, statusCode, { message: error instanceof Error ? error.message : '写入电脑项目失败。' });
@@ -177,7 +212,11 @@ async function createLanCollectorServer({ staticDir, snapshot, onImage, port = 0
     serveStatic(staticDir, requestUrl.pathname, request.method || 'GET', response);
   });
 
+  server.headersTimeout = 5000;
+  server.requestTimeout = 45_000;
+  server.setTimeout(10_000, socket => socket.destroy());
   server.on('connection', (socket) => {
+    if (sockets.size >= 32) { socket.destroy(); return; }
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
   });

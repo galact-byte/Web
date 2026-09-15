@@ -1,5 +1,4 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
-const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 const { fileURLToPath } = require('node:url');
@@ -39,7 +38,6 @@ function isAllowedNavigation(url) {
 
 function rejectPendingImageSaves(message) {
   for (const pending of pendingImageSaves.values()) {
-    clearTimeout(pending.timeout);
     pending.reject(new Error(message));
   }
   pendingImageSaves.clear();
@@ -47,14 +45,11 @@ function rejectPendingImageSaves(message) {
 
 function requestImageSave(payload) {
   if (!mainWindow || mainWindow.isDestroyed()) return Promise.reject(new Error('桌面工作台已关闭，无法保存图片。'));
-  const requestId = crypto.randomBytes(16).toString('base64url');
+  const { requestId, sessionId, attempt } = payload;
+  const key = `${sessionId}:${requestId}:${attempt}`;
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      pendingImageSaves.delete(requestId);
-      reject(new Error('电脑端保存图片超时，请确认工作台仍保持打开。'));
-    }, 20_000);
-    pendingImageSaves.set(requestId, { resolve, reject, timeout });
-    mainWindow.webContents.send('lan:image', { ...payload, requestId });
+    pendingImageSaves.set(key, { resolve, reject });
+    mainWindow.webContents.send('lan:image', payload);
   });
 }
 
@@ -219,10 +214,10 @@ ipcMain.handle('lan:update-session', (event, snapshot) => {
 });
 ipcMain.on('lan:image-saved', (event, requestId, outcome) => {
   if (!isExpectedRenderer(event.sender) || typeof requestId !== 'string') return;
-  const pending = pendingImageSaves.get(requestId);
+  const key = `${outcome?.sessionId}:${requestId}:${outcome?.attempt}`;
+  const pending = pendingImageSaves.get(key);
   if (!pending) return;
-  clearTimeout(pending.timeout);
-  pendingImageSaves.delete(requestId);
+  pendingImageSaves.delete(key);
   if (outcome?.success) pending.resolve();
   else pending.reject(new Error(typeof outcome?.message === 'string' ? outcome.message : '电脑端未能保存图片。'));
 });

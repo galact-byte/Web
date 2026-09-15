@@ -244,16 +244,16 @@ function useLanGroupSession(bridge: LanBridge | null) {
         ? binding.saveImage
         : (input: LanImageSavePayload) => saveLanImageToProject(upload.projectId, input);
       void save(payload).then(
-        () => { bridge.confirmImageSaved(upload.requestId, { success: true }); scheduleRebuild(); },
+        () => { bridge.confirmImageSaved(upload.requestId, { sessionId: upload.sessionId, attempt: upload.attempt, success: true }); scheduleRebuild(); },
         (error: unknown) => {
           // 手机端会看到失败提示，但电脑端也必须留下痕迹，否则这张图为什么没入库无从查起。
           recordError({
             type: 'manual',
             message: `手机上传图片写入失败（系统 ${upload.projectId}）：${error instanceof Error ? error.message : String(error)}`,
             stack: error instanceof Error ? error.stack : undefined,
-            context: 'lan:saveImage',
+            context: `lan:saveImage requestId=${upload.requestId} assetId=${upload.assetId} itemId=${upload.itemId}`,
           });
-          bridge.confirmImageSaved(upload.requestId, { success: false, message: error instanceof Error ? error.message : '电脑端未能保存图片。' });
+          bridge.confirmImageSaved(upload.requestId, { sessionId: upload.sessionId, attempt: upload.attempt, success: false, message: error instanceof Error ? error.message : '电脑端未能保存图片。' });
         }
       );
     });

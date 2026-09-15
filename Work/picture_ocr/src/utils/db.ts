@@ -703,12 +703,18 @@ export async function addImageToProject(
   const record = buildStoredImage(projectId, image);
   if (!record) throw new Error('图片没有内容，未写入');
   const db = await openDB();
-  return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
+  return trackWrite(new Promise<void>((resolve, reject) => {
     const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, IMAGES_STORE_NAME], 'readwrite');
     const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
     let failure: Error | null = null;
+    const timer = setTimeout(() => {
+      failure = new Error('图片保存超时，已请求中止事务，请核对保存结果。');
+      // abort 可能撞上已提交的事务；仍以稍后到来的 complete/abort 作为唯一终态。
+      try { tx.abort(); } catch { /* 提交已经完成时等待 oncomplete。 */ }
+    }, DB_DOC_TIMEOUT_MS);
     const docRequest = projectsStore.get(projectId);
     docRequest.onsuccess = () => {
+      try {
       const raw = docRequest.result as ProjectDocument | undefined;
       if (!raw) {
         failure = new Error(`项目 ${projectId} 不存在，图片未保存`);
@@ -731,12 +737,21 @@ export async function addImageToProject(
       tx.objectStore(IMAGES_STORE_NAME).put(record);
       projectsStore.put(doc);
       tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(doc));
+      } catch (error) {
+        failure = error instanceof Error ? error : new Error('图片保存失败');
+        tx.abort();
+      }
     };
     docRequest.onerror = () => { failure = docRequest.error ?? new Error('读取项目失败'); };
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onabort = () => { db.close(); reject(failure ?? tx.error ?? new Error('图片保存事务已中止')); };
-    tx.onerror = () => { db.close(); reject(failure ?? tx.error); };
-  }), 'addImageToProject', DB_DOC_TIMEOUT_MS));
+    tx.oncomplete = () => { clearTimeout(timer); db.close(); resolve(); };
+    tx.onabort = () => {
+      clearTimeout(timer); db.close();
+      const error = failure ?? tx.error ?? new Error('图片保存事务已中止');
+      recordError({ type: 'manual', message: error.message, context: 'db:addImageToProject' });
+      reject(error);
+    };
+    tx.onerror = () => { failure ??= tx.error ?? new Error('图片保存事务出错'); };
+  }));
 }
 
 /** 删除一张图片：同事务去掉文档引用与 images store 里的字节。 */

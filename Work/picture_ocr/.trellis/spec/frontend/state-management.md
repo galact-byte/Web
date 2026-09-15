@@ -35,7 +35,7 @@ dispatch({ type: 'REORDER_ITEMS', payload: { assetId: asset.id, itemIds } });
 
 - `AppProvider` 先从 IndexedDB 加载项目，加载完成后才允许自动保存，防止初始默认值覆盖已存数据。
 - 普通编辑经 500ms 防抖调用 `saveProject`；`saveQueueRef` 串行化保存，避免异步写入逆序。不要在组件额外复制这个防抖保存流程。
-- 需要服务端/LAN 确认的图片采用 `addImageAndSave`：先基于当前 reducer 状态生成 document、等待 IndexedDB 成功保存、再 dispatch，确保移动端不会提前报告成功。
+- 需要服务端/LAN 确认的图片采用 `addImageAndSave`：经 `addImageToProject` 从库中现读现改，等待 projects/summaries/images 三 store 原子事务提交，再 dispatch；不得用内存整份文档覆盖，也不得提前报告成功。上传稳定编号、两端回执、超时与恢复遵循 [局域网上传恢复契约](../backend/lan-upload.md)。
 
 ## 项目列表与摘要 store
 
@@ -62,7 +62,7 @@ dispatch({ type: 'REORDER_ITEMS', payload: { assetId: asset.id, itemIds } });
 
 ## 存储操作超时与报错采集
 
-- `db.ts` 用 `withTimeout` 包裹 `openDB` 与各事务，卡死超时以明确错误 reject（openDB 兜底更长，兼容首次升级回填），避免 UI 无限转圈。
+- `db.ts` 普通路径用 `withTimeout` 包裹 `openDB` 与事务；`addImageToProject` 是必须区分真实提交的例外：120 秒时请求 abort，以实际 oncomplete/onabort 结算，trackWrite 持续到真实终态，迟到 complete 仍是成功。不得用包装 Promise 超时推断图片没有保存。
 - **整份项目文档的读写（`loadProject`/`saveProject`/自检）用 `DB_DOC_TIMEOUT_MS`（较宽）**：文档内联 Base64，百 MB 级序列化在普通事务超时内完不成；超时只 reject Promise（底层事务仍在跑），会制造假失败。
 - **“静默失败会丢数据”的路径必须用 `reportCriticalError`（记录 + 弹 Toast），不得只 `console.error`**：项目自动保存失败、退出时 flush 失败均属此类；手机局域网上传落库失败至少 `recordError`。
 - **项目读取失败时绝不允许用空白文档顶替并进入可保存状态**（`AppContext` 保持 `loadedRef=false`）：否则 debounce 保存会把空文档写回去，直接清空真实项目。

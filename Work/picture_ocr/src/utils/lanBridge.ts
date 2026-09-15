@@ -1,3 +1,7 @@
+import { requestJson } from './asyncDeadline';
+
+export interface LanSaveOutcome { success: boolean; message?: string; sessionId?: string; attempt?: number }
+
 export interface LanCollectorItemSnapshot {
   id: string;
   label: string;
@@ -22,12 +26,15 @@ export interface LanCollectorSystem {
 
 /** 项目组级采集快照：一次会话覆盖组内全部系统，手机端据此选系统。 */
 export interface LanCollectorSnapshot {
+  uploadRecovery?: number;
   groupId: string | null;
   groupTitle: string;
   systems: LanCollectorSystem[];
 }
 
 export interface LanImageUpload {
+  sessionId?: string;
+  attempt?: number;
   requestId: string;
   projectId: string;
   assetId: string;
@@ -62,7 +69,7 @@ export interface LanBridge {
   updateSession: (snapshot: LanCollectorSnapshot) => Promise<LanSessionStatus>;
   getStatus: () => Promise<LanSessionStatus>;
   onImage: (listener: (upload: LanImageUpload) => void) => () => void;
-  confirmImageSaved: (requestId: string, outcome: { success: boolean; message?: string }) => void;
+  confirmImageSaved: (requestId: string, outcome: LanSaveOutcome) => void;
 }
 
 interface ControlPendingResponse {
@@ -75,20 +82,31 @@ const pollingRequestIds = new Set<string>();
 const confirmationTimers = new Map<string, number>();
 let pollingTimer: number | null = null;
 let pollInFlight = false;
+let generation = 0;
+let controlController = new AbortController();
+const receivedGenerations = new Map<string, number>();
+const uploadKey = (requestId: string, outcome: { sessionId?: string; attempt?: number }) => `${outcome.sessionId ?? ''}:${requestId}:${outcome.attempt ?? 0}`;
+class ControlError extends Error { constructor(message: string, readonly status: number) { super(message); } }
+
+function resetControl(): void {
+  generation++;
+  controlController.abort();
+  controlController = new AbortController();
+  clearAllConfirmations();
+  pollingRequestIds.clear();
+  receivedGenerations.clear();
+}
 
 function isLocalHost(): boolean {
   return window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.hostname === '::1';
 }
 
 async function requestControl<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${CONTROL_API}${path}`, {
-    cache: 'no-store',
-    ...options,
-    headers: { 'x-evidence-control': '1', ...options?.headers },
-  });
-  const result = await response.json().catch(() => ({ message: '局域网采集服务返回了无效响应。' })) as T & { message?: string };
-  if (!response.ok) throw new Error(result.message || '局域网采集服务请求失败。');
-  return result;
+  const { response, data } = await requestJson(`${CONTROL_API}${path}`, {
+    cache: 'no-store', ...options, headers: { 'x-evidence-control': '1', ...options?.headers },
+  }, 8000, controlController.signal);
+  if (!response.ok) throw new ControlError(typeof data.message === 'string' ? data.message : '局域网采集服务请求失败。', response.status);
+  return data as T;
 }
 
 function stopPollingIfIdle(): void {
@@ -109,18 +127,23 @@ function clearAllConfirmations(): void {
   for (const requestId of confirmationTimers.keys()) clearConfirmation(requestId);
 }
 
-function confirmWebImage(requestId: string, outcome: { success: boolean; message?: string }): void {
+function confirmWebImage(requestId: string, outcome: LanSaveOutcome, epoch = generation): void {
+  const key = uploadKey(requestId, outcome);
+  if (epoch !== generation || receivedGenerations.get(key) !== epoch) return;
   void requestControl('/confirm', {
     method: 'POST',
     headers: { 'content-type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ requestId, ...outcome }),
   }).then(() => {
-    clearConfirmation(requestId);
+    if (epoch !== generation) return;
+    clearConfirmation(key);
+    receivedGenerations.delete(key);
     schedulePoll();
-  }).catch(() => {
-    if (!confirmationTimers.has(requestId)) return;
-    const timer = window.setTimeout(() => confirmWebImage(requestId, outcome), 1500);
-    confirmationTimers.set(requestId, timer);
+  }).catch((error: unknown) => {
+    if (epoch !== generation || !confirmationTimers.has(key)) return;
+    if (error instanceof ControlError && [400, 401, 403, 404, 409].includes(error.status)) { clearConfirmation(key); receivedGenerations.delete(key); return; }
+    const timer = window.setTimeout(() => confirmWebImage(requestId, outcome, epoch), 1500);
+    confirmationTimers.set(key, timer);
   });
 }
 
@@ -135,11 +158,18 @@ function schedulePoll(delay = 0): void {
 async function pollPendingImage(): Promise<void> {
   if (pollInFlight || pollListeners.size === 0) return;
   pollInFlight = true;
+  const epoch = generation;
   try {
     const pending = await requestControl<ControlPendingResponse>('/pending');
-    if (pending.upload && !pollingRequestIds.has(pending.upload.requestId)) {
-      pollingRequestIds.add(pending.upload.requestId);
-      for (const listener of pollListeners) listener(pending.upload);
+    if (epoch !== generation) return;
+    const upload = pending.upload;
+    if (upload && typeof upload.requestId === 'string' && typeof upload.projectId === 'string'
+      && typeof upload.assetId === 'string' && typeof upload.itemId === 'string' && typeof upload.image?.data === 'string') {
+      const key = uploadKey(upload.requestId, upload);
+      if (pollingRequestIds.has(key)) return;
+      pollingRequestIds.add(key);
+      receivedGenerations.set(key, epoch);
+      for (const listener of pollListeners) listener(upload);
     }
   } catch {
     // 会话被停止或启动器退出时由下一次显式操作报告错误，轮询不打断工作台。
@@ -151,6 +181,7 @@ async function pollPendingImage(): Promise<void> {
 
 const webBridge: LanBridge = {
   async startSession(snapshot, selectedAddress) {
+    resetControl();
     return requestControl<LanSessionStatus>('/start', {
       method: 'POST',
       headers: { 'content-type': 'application/json; charset=utf-8' },
@@ -158,8 +189,7 @@ const webBridge: LanBridge = {
     });
   },
   async stopSession() {
-    clearAllConfirmations();
-    pollingRequestIds.clear();
+    resetControl();
     return requestControl<LanSessionStatus>('/stop', { method: 'POST' });
   },
   updateSession(snapshot) {
@@ -181,9 +211,11 @@ const webBridge: LanBridge = {
     };
   },
   confirmImageSaved(requestId, outcome) {
-    const previousTimer = confirmationTimers.get(requestId);
+    const key = uploadKey(requestId, outcome);
+    if (receivedGenerations.get(key) !== generation) return;
+    const previousTimer = confirmationTimers.get(key);
     if (previousTimer !== undefined) window.clearTimeout(previousTimer);
-    confirmationTimers.set(requestId, 0);
+    confirmationTimers.set(key, 0);
     confirmWebImage(requestId, outcome);
   },
 };

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const collectorSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/components/LanMobileCollector.tsx'), 'utf8');
+const uploadSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/utils/lanUpload.ts'), 'utf8');
 const dialogSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/components/LanCollectorDialog.tsx'), 'utf8');
 const projectListSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/components/ProjectList.tsx'), 'utf8');
 const projectListHeaderSource = fs.readFileSync(path.resolve(scriptDirectory, '../src/components/project-list/ProjectListHeader.tsx'), 'utf8');
@@ -22,7 +23,7 @@ assert.match(collectorSource, /系统选择（推荐）/, '手机采集必须提
 assert.match(collectorSource, /采集系统/, '手机采集页必须提供“采集系统”选择区。');
 assert.match(collectorSource, /const selectSystem = \(systemId: string\) =>/, '手机采集页必须支持切换采集系统。');
 assert.match(collectorSource, /snapshot\.systems/, '手机采集页必须基于组快照的多系统结构渲染。');
-assert.match(collectorSource, /projectId=\$\{encodeURIComponent\(systemId\)\}/, '手机上传必须携带目标系统标识 projectId。');
+assert.match(uploadSource, /projectId: job\.projectId/, '手机上传必须携带保留的原目标系统标识 projectId。');
 assert.match(collectorSource, /snapshot\.groupTitle/, '手机采集页标题应展示项目组名称。');
 assert.match(collectorSource, /拍照\/相册分开选择/, '手机采集必须提供适合 Chrome 的分开选择方式。');
 assert.match(collectorSource, /cameraInputRefs/, '分开选择方式必须使用专用相机输入引用。');
