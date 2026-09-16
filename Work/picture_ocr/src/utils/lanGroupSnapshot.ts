@@ -79,7 +79,7 @@ export async function buildGroupSnapshot(options: BuildGroupSnapshotOptions): Pr
   const group = groupId ? await loadProjectGroup(groupId) : null;
   return {
     groupId,
-    groupTitle: resolveGroupTitle(group ? group.projectName : groupId ? groupTitle : undefined, systems),
+    groupTitle: resolveGroupTitle(group ? group.projectName.trim() || group.unitName.trim() : groupId ? groupTitle : undefined, systems),
     systems,
   };
 }

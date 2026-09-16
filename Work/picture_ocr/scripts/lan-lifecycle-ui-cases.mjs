@@ -52,6 +52,24 @@ export async function runLifecycleCases({ computer, phone, until, click, pass, u
     const session = await fetch(new URL('/api/session' + new URL(url).hash.replace('#/lan/', '?token='), url)).then(r => r.json());
     assert.deepEqual(session.systems.map(s => s.projectId).sort(), ['g1', 'g2']);
   });
+  await check('仅填单位名称时列表与手机一致，采集范围不变', async () => {
+    await computer.evaluate('document.querySelector("[data-group-id=multi] summary").click()');
+    await click(computer, '编辑项目组');
+    await computer.evaluate(`(() => {
+      const inputs = document.querySelectorAll('[role="dialog"] input');
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setValue.call(inputs[1], '  ');
+      inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+      setValue.call(inputs[2], '太原市行政审批服务管理局');
+      inputs[2].dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    await click(computer, '保存');
+    await until(computer, 'document.querySelector("[data-group-id=multi]").textContent.includes("太原市行政审批服务管理局")', '列表单位名称');
+    await until(phone, 'document.querySelector("h1").textContent === "太原市行政审批服务管理局"', '手机单位名称');
+    const session = await fetch(new URL('/api/session' + new URL(url).hash.replace('#/lan/', '?token='), url)).then(r => r.json());
+    assert.equal(session.groupTitle, '太原市行政审批服务管理局');
+    assert.deepEqual(session.systems.map(s => s.projectId).sort(), ['g1', 'g2']);
+  });
   await check('无网页相机 API 时一次点击直接打开系统相机', async () => {
     await phone.evaluate(`(() => {
       window.cameraClicks = 0;
