@@ -134,3 +134,24 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 4: 局域网采集恢复与 v0.8.3 发布
+
+**Date**: 2026-09-16
+**Task**: 局域网采集恢复与 v0.8.3 发布
+**Branch**: `main`
+
+### Summary
+
+修复手机后台/断网恢复后的只读状态核对、项目组名称刷新及 Chrome 相机能力路由。双端生命周期 22 项与列表 37 项回归通过，发布前 0.8.3 构建/PWA/名称/恢复复验通过。用户批准提交推送及 Release，按既有标签工作流发布；真实 OS 锁屏与手机系统相机仍待现场验证。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c51b135` | (see git log) |
+
+### Status
+
+[OK] **Completed**
