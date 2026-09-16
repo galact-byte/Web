@@ -192,40 +192,49 @@ function useLanGroupSession(bridge: LanBridge | null) {
   const activeGroupRef = useRef<{ groupId: string | null; groupTitle: string; systemIds?: string[] | null } | null>(null);
   const runningRef = useRef(false);
   const rebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rebuildVersionRef = useRef(0);
 
   useEffect(() => { runningRef.current = running; }, [running]);
 
   const rebuildNow = useCallback(async () => {
     const group = activeGroupRef.current;
     if (!group) return;
+    const version = ++rebuildVersionRef.current;
+    const binding = bindingRef.current;
+    const included = binding?.groupId === group.groupId
+      && (!group.systemIds?.length || group.systemIds.includes(binding.projectId));
     try {
       const next = await buildGroupSnapshot({
         groupId: group.groupId,
         groupTitle: group.groupTitle,
         systemIds: group.systemIds ?? null,
-        openSystemOverride: bindingRef.current?.liveSystem ?? null,
+        openSystemOverride: included ? binding?.liveSystem : null,
       });
+      if (version !== rebuildVersionRef.current || activeGroupRef.current !== group) return;
       setSnapshot(next);
       if (runningRef.current && bridge) {
         const status = await bridge.updateSession(next);
+        if (version !== rebuildVersionRef.current || activeGroupRef.current !== group) return;
         setRunning(status.running);
         if (!status.running) setNotice('手机局域网采集会话已结束。');
       }
     } catch (error) {
+      if (version !== rebuildVersionRef.current || activeGroupRef.current !== group) return;
       setNotice(`同步项目结构失败：${error instanceof Error ? error.message : '未知错误'}。`);
     }
   }, [bridge]);
 
   const scheduleRebuild = useCallback(() => {
+    rebuildVersionRef.current++;
     if (rebuildTimerRef.current) clearTimeout(rebuildTimerRef.current);
     rebuildTimerRef.current = setTimeout(() => { void rebuildNow(); }, 400);
   }, [rebuildNow]);
 
   const registerBinding = useCallback((binding: OpenSystemBinding | null) => {
     bindingRef.current = binding;
-    // 未开会话时若尚无活动组，跟随当前打开系统的组，便于工作台内直接启动。
-    if (!activeGroupRef.current && binding) {
-      activeGroupRef.current = { groupId: binding.groupId, groupTitle: '' };
+    // 会话未启动时跟随当前工作台；已启动时保持原采集范围。
+    if (!runningRef.current && binding) {
+      activeGroupRef.current = { groupId: binding.groupId, groupTitle: '', systemIds: binding.groupId ? null : [binding.projectId] };
     }
     scheduleRebuild();
   }, [scheduleRebuild]);
@@ -265,16 +274,19 @@ function useLanGroupSession(bridge: LanBridge | null) {
   }, [rebuildNow]);
 
   const handleStatusChange = useCallback((isRunning: boolean) => {
+    if (runningRef.current !== isRunning) rebuildVersionRef.current++;
+    runningRef.current = isRunning;
     setRunning(isRunning);
     if (isRunning) setNotice('');
   }, []);
 
   useEffect(() => () => {
+    rebuildVersionRef.current++;
     if (rebuildTimerRef.current) clearTimeout(rebuildTimerRef.current);
     void bridge?.stopSession();
   }, [bridge]);
 
-  return { running, snapshot, notice, registerBinding, prepareForGroup, handleStatusChange };
+  return { running, snapshot, notice, registerBinding, prepareForGroup, handleStatusChange, scheduleRebuild };
 }
 
 const App: React.FC = () => {
@@ -323,9 +335,11 @@ const App: React.FC = () => {
     window.location.hash = '';
   };
 
+  const { scheduleRebuild } = lan;
   const handleProjectSaved = useCallback(() => {
     setProjectListRefreshKey((key) => key + 1);
-  }, []);
+    scheduleRebuild();
+  }, [scheduleRebuild]);
 
   const handleLeaveMobile = () => {
     setOpenProjectId(null);
@@ -371,7 +385,7 @@ const App: React.FC = () => {
   if (!activeProjectId) {
     return (
       <>
-        <ProjectList key={projectListRefreshKey} viewState={projectListView} onViewStateChange={setProjectListView} onOpenProject={handleOpenProject} onStartLanCollector={lanBridge ? startLanForGroup : undefined} />
+        <ProjectList key={projectListRefreshKey} viewState={projectListView} onViewStateChange={setProjectListView} onOpenProject={handleOpenProject} onProjectMetadataSaved={scheduleRebuild} onStartLanCollector={lanBridge ? startLanForGroup : undefined} />
         {lanDialog}
         <PendingWritesIndicator />
       </>

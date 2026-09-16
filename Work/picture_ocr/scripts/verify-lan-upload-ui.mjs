@@ -9,11 +9,20 @@ import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import { startWeb, freePort } from './lan-test-helpers.mjs';
 import { connectBrowser } from './browser-test-client.mjs';
+import { runLifecycleCases } from './lan-lifecycle-ui-cases.mjs';
+const lifecycle = process.argv.includes('--lifecycle');
 const require = createRequire(import.meta.url);
 const output = path.resolve('.trellis/.runtime/lan-upload-qa'); await mkdir(output, { recursive: true });
 const bundle = (await build({ entryPoints: ['scripts/lan-browser-cases.mjs'], bundle: true, write: false, platform: 'browser', format: 'iife', globalName: 'qa' })).outputFiles[0].text;
 const report = [];
-const until = (client, expression, label) => client.evaluate(`qa.until(() => (${expression}), ${JSON.stringify(label)})`);
+const until = async (client, expression, label) => {
+  if (!lifecycle) return client.evaluate(`qa.until(() => (${expression}), ${JSON.stringify(label)})`);
+  for (let n = 0; n < 80; n++) {
+    if (await client.evaluate(`(async () => Boolean(await (${expression})))()`)) return;
+    await delay(100);
+  }
+  throw new Error(`等待超时：${label}`);
+};
 const click = (client, text) => client.evaluate(`(() => { const button = qa.button(${JSON.stringify(text)}); if (!button || button.disabled) throw new Error('按钮不可用'); button.click(); })()`);
 for (const platform of (process.argv.includes('--web-only') ? ['web'] : process.argv.includes('--desktop-only') ? ['desktop'] : ['web', 'desktop'])) {
   let host, computer, phone;
@@ -22,10 +31,10 @@ for (const platform of (process.argv.includes('--web-only') ? ['web'] : process.
   const launch = async (desktop, url = 'about:blank') => {
     const profile = await mkdtemp(path.join(tmpdir(), 'picture-ocr-lan-browser-')); profiles.push(profile);
     const port = await freePort();
-    const env = { ...process.env, PROJECT_LIST_TEST_PROFILE: profile }; delete env.ELECTRON_RUN_AS_NODE;
+    const env = { ...process.env, PROJECT_LIST_TEST_PROFILE: profile, LAN_TEST_BACKGROUND: lifecycle ? '1' : '' }; delete env.ELECTRON_RUN_AS_NODE;
     const child = desktop
       ? spawn(require('electron'), ['scripts/project-list-electron.cjs', `--remote-debugging-port=${port}`], { env, stdio: 'ignore' })
-      : spawn(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', ['--headless=new', '--no-first-run', '--disable-gpu', '--disable-background-timer-throttling', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, url], { stdio: 'ignore' });
+      : spawn(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', ['--headless=new', '--no-first-run', '--disable-gpu', ...(lifecycle ? [] : ['--disable-background-timer-throttling']), `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, url], { stdio: 'ignore' });
     children.push(child);
     return connectBrowser(port, target => target.type === 'page');
   };
@@ -39,12 +48,16 @@ for (const platform of (process.argv.includes('--web-only') ? ['web'] : process.
     await computer.evaluate('qa.seed()');
     await computer.send('Page.addScriptToEvaluateOnNewDocument', { source: bundle });
     await computer.send('Page.reload', { ignoreCache: true }); await delay(700);
-    const url = await computer.evaluate('qa.startLan("group")'); assert.ok(url);
+    const url = await computer.evaluate(`qa.startLan(${JSON.stringify(lifecycle ? 'workbench' : 'group')})`); assert.ok(url);
     phone = await launch(false);
     await phone.send('Page.enable');
     await phone.send('Page.addScriptToEvaluateOnNewDocument', { source: bundle + '\nqa.mobileInstrument();' });
     await phone.send('Page.navigate', { url }); await delay(600);
     await until(phone, 'document.querySelector("input[type=file]")', '手机采集启动');
+    if (lifecycle) {
+      await runLifecycleCases({ computer, phone, until, click, pass, url, platform });
+      continue;
+    }
     await phone.evaluate('window.lanFault = "lost"; qa.sendFile()');
     await until(phone, 'qa.button("重新核对并重试") && !qa.button("重新核对并重试").disabled', '丢回执后恢复');
     await until(computer, 'qa.images().then(value => value.count === 1)', '真实图片入库');
@@ -140,4 +153,4 @@ for (const platform of (process.argv.includes('--web-only') ? ['web'] : process.
     for (const profile of profiles) await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 }
-await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
+await writeFile(path.join(output, lifecycle ? 'lifecycle-report.json' : 'report.json'), JSON.stringify(report, null, 2));

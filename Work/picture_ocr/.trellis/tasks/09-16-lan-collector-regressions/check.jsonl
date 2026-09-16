@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"构建、隔离双端与移动端交互验证"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"保存终态、组名与采集范围不得回归"}
+{"file":".trellis/spec/backend/lan-upload.md","reason":"状态真实性、幂等、会话隔离及日志保护"}
+{"file":".trellis/tasks/09-16-lan-collector-regressions/research/findings.md","reason":"避免把关闭后台节流的验证当作锁屏证据"}

@@ -29,6 +29,8 @@ git diff --check
 
 修改上传、确认、手机恢复或图片事务终态时，另遵守 [局域网上传恢复契约](../backend/lan-upload.md)。先构建，再运行 `node scripts/verify-lan-upload-ui.mjs`；使用真实 PowerShell 服务及正式 Electron main/preload，隔离数据库，核对真实图片引用与字节条数。截图与报告位于 `.trellis/.runtime/lan-upload-qa/`。网络预算仅在测试页面/临时脚本缩短，不能改变生产时限来让测试通过。
 
+修改后台/锁屏恢复、采集名称或相机入口时，另运行 `node scripts/verify-lan-upload-ui.mjs --lifecycle` 和 `node scripts/verify-lan-group-snapshot.mjs`。生命周期模式保留正式后台节流设置，用 CDP 冻结/解冻模拟暂停；Headless 解冻后可能仍为 hidden，手机恢复时显式用 focus emulation 模拟可见并断言 visibilityState。不能把页面内部 await 计时器当成测试监督器，冻结/节流场景从外部 CDP 查询条件。无浏览器能力或非安全上下文点击拍照应同步触发 capture input；权限拒绝人工回退、预览取消释放 tracks、相册取消不上传均需验证。原生系统相机与 OS 锁屏仍属真机验证边界。
+
 ## 项目列表回归
 
 - `node scripts/verify-project-list-views.mjs` 通过 esbuild 执行真实 TypeScript 派生逻辑，不复制实现。
@@ -37,7 +39,7 @@ git diff --check
 - 自动化键盘 Enter 通过 CDP 发送时带 `text: '\\r'`，保证浏览器收到激活键；不能用 `.click()` 冒充键盘可用证据。读取源码断言先归一化 CRLF。
 - 多项目原地展开回归覆盖首次全展开、全收起后成功刷新/工作区重挂载、搜索展开与清除恢复、单组选择交集、收起清选择、保存成功但刷新失败后的重试定位；组级采集在子系统搜索裁剪后仍须包含完整组。
 - 三档截图分别保留独立页与项目展开页；键盘测试用 CDP Enter/Space 激活真实项目按钮，确认 aria-expanded、组内显隐及收起焦点恢复。
-- 隔离 Electron 测试入口对测试窗口调用 `setBackgroundThrottling(false)`，避免终端遮挡测试窗口时页面计时器被节流；生产 main/preload 不改。CDP 命令设超时，连接关闭后立即 reject，失败截图也不能无限等待。可用 `--web-only` / `--desktop-only` 定位环境问题，完整验收仍跑无参数双端版本。
+- 隔离 Electron 常规测试入口对测试窗口调用 `setBackgroundThrottling(false)`，避免终端遮挡测试窗口时页面计时器被节流；`LAN_TEST_BACKGROUND=1` 的生命周期测试必须跳过该设置，生产 main/preload 不改。CDP 命令设超时，连接关闭后立即 reject，失败截图也不能无限等待。可用 `--web-only` / `--desktop-only` 定位环境问题，完整验收仍跑无参数双端版本。
 - 模拟外部删除原组时让工作区打开另一系统，避免原系统卸载 flushSave 与夹具删除竞态；本测试验证列表落点，不声称解决跨窗口自动保存覆盖。
 
 ## 存储位置与导出保存（缓解 C 盘膨胀）
