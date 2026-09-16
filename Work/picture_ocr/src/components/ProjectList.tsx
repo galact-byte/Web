@@ -34,6 +34,7 @@ interface ProjectListProps {
   viewState: ProjectListViewState;
   onViewStateChange: React.Dispatch<React.SetStateAction<ProjectListViewState>>;
   onOpenProject: (projectId: string, isNewProject?: boolean) => void;
+  onProjectMetadataSaved?: () => void;
   /** 启动项目组级手机局域网采集（仅在桌面/Web ZIP 存在桥时由 App 传入）。 */
   onStartLanCollector?: (groupId: string | null, groupTitle: string, systemIds: string[]) => void;
 }
@@ -61,7 +62,7 @@ function formatTime(timestamp: number): string {
     : '-';
 }
 
-const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange, onOpenProject, onStartLanCollector }) => {
+const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange, onOpenProject, onStartLanCollector, onProjectMetadataSaved }) => {
   const [groups, setGroups] = useState<ProjectGroupSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -406,6 +407,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange,
       }
       setPendingReveal(createdSystem);
       setDialogState(null);
+      onProjectMetadataSaved?.();
       await refreshProjects();
       return true;
     } catch (err) {

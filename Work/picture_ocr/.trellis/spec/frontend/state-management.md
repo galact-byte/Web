@@ -103,6 +103,13 @@ dispatch({ type: 'REORDER_ITEMS', payload: { assetId: asset.id, itemIds } });
 
 错误：`if (!raw) resolve({missing:[],orphans:[]})`，把无法判断伪装为一致。正确：先校验文档，无法检查则 reject；关联 count 只证明索引记录数量，不等于可恢复图片数量。
 
+## 局域网采集名称与范围
+
+- `buildGroupSnapshot` 按 groupId 读取 `loadProjectGroup`，真实组的 `projectName` 为权威，启动标题不得盖住最新名称；独立系统按当前系统元数据回退，缺组只展示、不造组。显式 systemIds 和原上传目标保持不变。
+- 工作台 `onProjectSaved` 与列表 `onProjectMetadataSaved` 均在实际保存后调用 App 的 `scheduleRebuild`；列表回调只刷新采集快照，不重挂载列表。不可依赖退出工作台时的 400ms 重建碰巧覆盖稍后的改名。
+- 未启动时跟随当前工作台，已启动时保持采集范围；构建代际及活动组身份拒绝过期结果。`handleStatusChange` 只有 running 真正变化才作废构建；对话框初始化重复报告 false 不能取消首次快照。
+- 验证：`node scripts/verify-lan-group-snapshot.mjs` 覆盖权威组名/空名/独立/缺组与读取失败；`verify-lan-upload-ui.mjs --lifecycle` 覆盖工作台和列表改名后同一手机会话更新；`verify-project-list-ui.mjs` 覆盖组级/系统级启动和搜索不裁剪采集范围。
+
 ## 局部与派生状态
 
 - 仅由一个视图使用的输入、弹窗、loading、错误消息、Set 选择状态保留在该组件中；如 `ProjectList.tsx`。

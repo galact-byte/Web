@@ -11,7 +11,7 @@
 - `GET /api/upload-status?token=…&requestId=…`：核对原请求。
 - Web `/api/control/pending` 返回 `requestId/sessionId/attempt/projectId/assetId/itemId/image`；`POST /api/control/confirm` 接受 `requestId/sessionId/attempt/success`。
 - Electron `lan:image` 与 `lan:image-result` 使用同一身份三元组；preload 透传，main 不重新生成请求编号。
-- `synchronizeUpload(job, phase, signal)` 位于 `src/utils/lanUpload.ts`；`requestJson/withDeadline/abortable` 位于 `asyncDeadline.ts`。
+- `synchronizeUpload(job, phase, signal, mode = 'send')` 位于 `src/utils/lanUpload.ts`，`mode: 'check'` 只核对状态、不 POST；`queryUploadStatus(job, signal)` 单次只读查询供低频恢复使用。`requestJson/withDeadline/abortable` 位于 `asyncDeadline.ts`。
 
 ## 3. 数据与生命周期
 
@@ -21,6 +21,7 @@
 - Web pending 不因 GET 被删除；保存完成后 confirm 删除队列。相同确认幂等成功，旧 attempt/session 或冲突结果 409。桥接层只重发保存结果，不重复执行已完成保存；请求单次 8 秒，轮询 finally 解锁，代际校验隔离停止/新会话。
 - 无 requestId 的旧客户端保持服务端生成编号的兼容入口；新客户端在旧宿主上不承诺安全重传。桌面新版请求先返回 202，旧请求保留等待 201 的行为。
 - 手机内存只保留一张原图、压缩字节和固定目标。处理 15 秒、上传 45 秒、请求/完整 JSON 响应 8 秒、主动等待保存 30 秒。恢复前台依据真实截止时间检查；token 变更和卸载取消旧工作，旧快照不能覆盖新会话。
+- 手机恢复前台（visibilitychange/pageshow）或网络 online 时合并核对原请求，正在执行时只排一个后续核对。仅电脑暂停时手机没有前台恢复事件，因此 `unconfirmed` 状态还需每 5 秒串行只读查询一次（后台/离线/其他操作中跳过）。手动操作取消只读查询；token 更换、放弃、成功和卸载必须清理请求与定时器。自动核对遇到 `not_received` 不重发，明确 `failed` 仍需人工重试；只有 `saved` 才清除原图。只读网络失败保留原状态，避免提示闪烁。
 - Web 网络每连接异步收发，PowerShell 主循环只处理完整请求；最多 32 连接，非 loopback 最多占到 28，为本机控制保留容量。头 32KiB / 5 秒、正文 10MiB / 45 秒、发送 10 秒总预算。拒绝非法/重复 Content-Length 和 Transfer-Encoding。单连接失败不退出服务，日志不记录 token 或图片。
 - `addImageToProject` 不再套“只拒绝 Promise”的通用超时；120 秒时请求 abort，以真实 oncomplete/onabort 结算并释放 trackWrite。事务 error 记录原因但不提前释放；迟到 complete 仍为成功。其他数据库路径没有随本任务重构。
 
@@ -51,6 +52,7 @@
 - `node scripts/verify-lan-upload-recovery.mjs`：两端同 id 去重、目标/字节冲突、失败人工重试、重复/迟到确认、8 张队列容量；Web 旧会话隔离。
 - `node scripts/verify-lan-deadlines.mjs`、`verify-lan-mobile-recovery.mjs`、`verify-lan-write-lifecycle.mjs`：响应体挂起、前后台截止时间、迟到资源、稳定目标/编号、实际事务终态与关闭保护。
 - 先 `npm run build`，再 `node scripts/verify-lan-upload-ui.mjs`：真实 PS + 浏览器、正式 Electron main/preload + 临时 userData；丢回执、写入失败、迟到事务事件、解码挂起、同 id 恢复，核对真实 IDB 引用/字节数量；375/768/1440px、状态播报和真实 Enter。
+- `node scripts/verify-lan-upload-ui.mjs --lifecycle`：正式后台节流配置，真实双端服务/IDB，加 CDP 页面冻结、网络故障和前台恢复模拟；验证手机暂停、双方暂停及两种恢复顺序、仅电脑暂停的持续核对。各场景原 POST 数不增加，每图引用/字节各一条。此模式不传 Chrome 禁用节流参数，Electron 测试入口设置 `LAN_TEST_BACKGROUND=1`，不得调用 `setBackgroundThrottling(false)`。同时验证两入口改名、相机能力/权限/取消。报告 `lifecycle-report.json` 单独保留，不能把模拟当成 OS 锁屏实测。
 - 现有 LAN server/mobile-picker/image-sink、image-compression/image-store/pending-writes/error-report、Web LAN 和 PWA 检查；`git diff --check`。
 - 不使用真实用户数据或重启用户正在采集的服务。隔离浏览器与受控故障不等于手机相机权限、热点和浏览器被系统回收的真机验证。
 
@@ -59,3 +61,5 @@
 错误：每次 POST 新建 requestId；20 秒没有确认就认定写入失败并删除关联；重试再次添图。
 
 正确：固定身份与目标，只有真实持久化提交才确认成功；网络等待结束只表示尚未确认，保留原图和原编号核对。事务保护持续到真实终态，旧 session/attempt 的回执不污染新结果。
+
+错误：只监听手机恢复前台；电脑暂停而手机一直前台时，保存完成仍永久停在未确认。正确：前台事件核对 + 未确认状态低频只读查询，自动恢复绝不发送照片。`[CONNECTION CLOSED] phase=header path=unknown timeout=False` 可由空连接关闭产生，不能单凭它认定某张图上传失败。

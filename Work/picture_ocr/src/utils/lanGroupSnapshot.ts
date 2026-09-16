@@ -1,6 +1,6 @@
 import type { ProjectDocument } from '../types';
 import type { LanCollectorSnapshot, LanCollectorSystem } from './lanBridge';
-import { listProjects, loadProject } from './db';
+import { listProjects, loadProject, loadProjectGroup } from './db';
 
 /** 纯函数：把一个系统文档映射为组快照中的系统条目（仅结构与张数，不含图片 data）。 */
 export function mapDocumentToSystemSnapshot(doc: ProjectDocument): LanCollectorSystem {
@@ -76,9 +76,10 @@ export async function buildGroupSnapshot(options: BuildGroupSnapshotOptions): Pr
     systems.unshift(openSystemOverride);
   }
 
+  const group = groupId ? await loadProjectGroup(groupId) : null;
   return {
     groupId,
-    groupTitle: resolveGroupTitle(groupTitle, systems),
+    groupTitle: resolveGroupTitle(group ? group.projectName : groupId ? groupTitle : undefined, systems),
     systems,
   };
 }

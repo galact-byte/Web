@@ -275,7 +275,12 @@ export async function layout() {
 export async function startLan(scope) {
   await until(() => document.querySelector('[aria-busy="false"]'), '采集前列表加载');
   await tab('groups'); await search('交易平台');
-  if (scope === 'group') await click('手机采集', groupRow('multi'));
+  if (scope === 'workbench') {
+    await click('打开', systemRow('g1'));
+    await until(() => !!button('项目信息'), '工作台启动');
+    await until(() => !!button('手机局域网采集'), '工作台采集入口');
+    await click('手机局域网采集');
+  } else if (scope === 'group') await click('手机采集', groupRow('multi'));
   else { await expand('multi'); await click('手机采集', systemRow('g1')); }
   await until(() => !!button('启动局域网采集'), '采集对话框');
   // 等待 App 的异步组快照组装完成，再提交真实会话启动。

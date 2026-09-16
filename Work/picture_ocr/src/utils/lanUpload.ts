@@ -59,22 +59,30 @@ function pause(signal: AbortSignal): Promise<void> {
   });
 }
 
-/** 重试始终核对原身份，只有明确未接收或明确保存失败才重发字节。 */
-export async function synchronizeUpload(job: PendingUpload, phase: (value: UploadPhase) => void, signal: AbortSignal): Promise<void> {
+/** 单次只读核对；后台恢复不能隐式重传，旧服务也不能猜测上传编号。 */
+export async function queryUploadStatus(job: PendingUpload, signal: AbortSignal): Promise<'saved' | 'pending' | 'not_received' | 'failed'> {
+  if (!job.sent) return 'not_received';
+  if (!job.recovery && !job.serverRequestId) throw new UploadError('当前电脑服务不支持安全重试。请先在电脑核对图片并保存原图，再重启同版本应用。', 'unconfirmed');
   const query = new URLSearchParams({ token: job.token, requestId: job.serverRequestId ?? job.requestId });
-  const status = async (parent = signal) => {
-    const { response, data } = await requestJson(`/api/upload-status?${query}`, { cache: 'no-store' }, 8000, parent);
-    return readState(response, data);
-  };
+  const { response, data } = await requestJson(`/api/upload-status?${query}`, { cache: 'no-store' }, 8000, signal);
+  return readState(response, data);
+}
+
+/** 重试始终核对原身份，只有明确未接收或明确保存失败才重发字节。 */
+export async function synchronizeUpload(job: PendingUpload, phase: (value: UploadPhase) => void, signal: AbortSignal, mode: 'send' | 'check' = 'send'): Promise<void> {
+  const status = (parent = signal) => queryUploadStatus(job, parent);
   let retry = false;
   let state: 'saved' | 'pending' | 'not_received' | 'failed' = 'not_received';
   if (job.sent) {
     phase('waiting');
-    if (!job.recovery && !job.serverRequestId) throw new UploadError('当前电脑服务不支持安全重试。请先在电脑核对图片并保存原图，再重启同版本应用。', 'unconfirmed');
     state = await status();
     if (state === 'saved') return;
     if (!job.recovery && state !== 'pending') throw new UploadError('当前电脑服务不支持安全重试，请先在电脑核对并保存原图。', 'unconfirmed');
     retry = state === 'failed';
+  }
+  if (mode === 'check') {
+    if (state === 'failed') throw new UploadError('电脑端未能保存图片，请检查电脑提示后重试。', 'failed');
+    if (state === 'not_received') throw new UploadError('电脑端尚未接收此图片，请点击重新核对并重试。', 'unconfirmed');
   }
   if (state === 'not_received' || retry) {
     if (!job.original.type.startsWith('image/') || job.original.size > 10 * 1024 * 1024) throw new UploadError('请选择不超过 10MB 的图片。当前原文件仍可保存。', 'failed');
@@ -95,7 +103,7 @@ export async function synchronizeUpload(job: PendingUpload, phase: (value: Uploa
     }, 45000, signal);
     if (typeof data.requestId === 'string') {
       if (job.recovery && data.requestId !== job.requestId) throw new UploadError('电脑返回的上传编号不一致，请保留原图并核对。', 'unconfirmed');
-      job.serverRequestId = data.requestId; query.set('requestId', data.requestId);
+      job.serverRequestId = data.requestId;
     }
     state = readState(response, data);
     if (state === 'saved') return;
