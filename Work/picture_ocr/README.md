@@ -71,6 +71,16 @@ npm run desktop:build
 
 仓库已提供 GitHub Actions 工作流：`.github/workflows/release-picture-ocr.yml`。
 
+### 版本号约定
+
+以最近一次已发布版本为基础递增，当前 0.x 阶段按改动规模划分：
+
+- 修复、小功能和局部交互改善递增末位（patch），例如大图滚轮缩放：`0.8.3 → 0.8.4`。
+- 较大的功能更新、新增独立模块或主要工作流程变化才递增次版本（minor），例如 `0.8.x → 0.9.0`；不因出现任意新功能就自动升次版本。
+- 不兼容变更或进入 1.0 等版本阶段调整需单独确认，并说明兼容性和升级影响。
+
+发布前同步 `package.json`、`package-lock.json` 和本次 `RELEASE-NOTES.md` 的版本；先推送 main，再推送一致的 `picture-ocr-vX.Y.Z` 标签。
+
 ### 方式一：推送标签自动发布
 
 ```bash
@@ -85,7 +95,7 @@ git push origin picture-ocr-v0.1.0
 3. 将 `dist/`、启动脚本、`README.md` 和版本信息打包为 `picture-ocr-<tag>.zip`。
 4. 构建 Windows 桌面客户端 exe/安装包。
 5. 创建或更新 GitHub Release，并上传 Web ZIP 和 Windows 客户端附件。
-6. 在 Release 正文和 ZIP 内 `RELEASE-NOTES.txt` 写入与该标签实际内容一致的人工更新/修复摘要；不得沿用上一版本的通用文案。
+6. 从项目的 `RELEASE-NOTES.md` 读取人工发布说明，用作 Release 正文并复制到 ZIP 内；内容必须与该标签一致，不得沿用上一版本的通用文案。
 
 ZIP 解压后，同事只需要双击唯一的启动入口 `启动测评证据采集工具.bat`，浏览器会自动打开本地页面。使用期间不要关闭启动窗口；服务因异常或手动停止而退出时，窗口也会同步关闭，不会留下看似仍在运行的空终端。Release 页面会同时说明本次更新内容，避免只写“下载 ZIP 可使用”这类空泛文案。
 
