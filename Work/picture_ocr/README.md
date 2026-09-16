@@ -34,74 +34,14 @@ npm run dev
 
 默认开发地址以 Vite 输出为准，通常是 `http://localhost:5173/`。
 
-## 构建
+## 下载与启动
 
-```bash
-npm run build
-```
+从 [GitHub Releases](https://github.com/galact-byte/Web/releases) 下载所需版本：
 
-构建产物输出到 `dist/`。项目的 Vite 配置使用 `base: './'`，因此构建后的静态文件可以直接部署到任意子路径或本地静态服务器。
+- **Windows 桌面版**：下载便携版 exe，直接打开即可使用。
+- **Web 版**：下载 `picture-ocr-vX.Y.Z.zip` 并完整解压，双击 `启动测评证据采集工具.bat`，浏览器会自动打开本地页面。使用期间请保持启动窗口打开。
 
-如需本地预览构建产物：
-
-```bash
-npm run preview
-```
-
-## 客户端打包
-
-项目支持两种交付形态：
-
-1. Web 静态版 ZIP：解压后可用 `启动测评证据采集工具.bat` 启动本地静态服务。
-2. Windows 桌面客户端：基于 Electron 打包为 exe/安装包。
-
-本地构建 Windows 客户端：
-
-```bash
-npm run desktop:pack
-```
-
-如果只想快速验证 Electron 目录构建：
-
-```bash
-npm run desktop:build
-```
-
-## Release 打包
-
-仓库已提供 GitHub Actions 工作流：`.github/workflows/release-picture-ocr.yml`。
-
-### 版本号约定
-
-以最近一次已发布版本为基础递增，当前 0.x 阶段按改动规模划分：
-
-- 修复、小功能和局部交互改善递增末位（patch），例如大图滚轮缩放：`0.8.3 → 0.8.4`。
-- 较大的功能更新、新增独立模块或主要工作流程变化才递增次版本（minor），例如 `0.8.x → 0.9.0`；不因出现任意新功能就自动升次版本。
-- 不兼容变更或进入 1.0 等版本阶段调整需单独确认，并说明兼容性和升级影响。
-
-发布前同步 `package.json`、`package-lock.json` 和本次 `RELEASE-NOTES.md` 的版本；先推送 main，再推送一致的 `picture-ocr-vX.Y.Z` 标签。
-
-### 方式一：推送标签自动发布
-
-```bash
-git tag picture-ocr-v0.1.0
-git push origin picture-ocr-v0.1.0
-```
-
-推送匹配 `picture-ocr-v*` 的标签后，工作流会自动：
-
-1. 安装依赖。
-2. 运行 `npm run build`。
-3. 将 `dist/`、启动脚本、`README.md` 和版本信息打包为 `picture-ocr-<tag>.zip`。
-4. 构建 Windows 桌面客户端 exe/安装包。
-5. 创建或更新 GitHub Release，并上传 Web ZIP 和 Windows 客户端附件。
-6. 从项目的 `RELEASE-NOTES.md` 读取人工发布说明，用作 Release 正文并复制到 ZIP 内；内容必须与该标签一致，不得沿用上一版本的通用文案。
-
-ZIP 解压后，同事只需要双击唯一的启动入口 `启动测评证据采集工具.bat`，浏览器会自动打开本地页面。使用期间不要关闭启动窗口；服务因异常或手动停止而退出时，窗口也会同步关闭，不会留下看似仍在运行的空终端。Release 页面会同时说明本次更新内容，避免只写“下载 ZIP 可使用”这类空泛文案。
-
-### 方式二：手动运行工作流
-
-在 GitHub 仓库页面进入 **Actions → Build Picture OCR Release → Run workflow**，填写 release tag 后运行。
+每个 Release 页面及 Web ZIP 内的 `RELEASE-NOTES.md` 均提供该版本的更新说明。
 
 ## 手机局域网实时采集（Web ZIP 与 Windows 客户端）
 
