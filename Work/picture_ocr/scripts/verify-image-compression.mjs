@@ -65,11 +65,19 @@ function readSource(relativePath) {
   assert.equal(estimateDataUrlBytes('AAAA'), 3, '无逗号也可估算');
 }
 
-// shouldSkipCompression：小图跳过，大尺寸或大体积不跳过
+// shouldSkipCompression：小体积图片保留原分辨率，大照片仍压缩
 {
   const opts = DEFAULT_COMPRESS_OPTIONS;
   // 小截图：尺寸小 + 体积小 -> 跳过
   assert.equal(shouldSkipCompression({ width: 1615, height: 970, bytes: 100 * 1024 }, opts), true, '小截图应跳过');
+  // 几百 KB 的截图不因高分辨率而缩小，也不因格式而重编码。
+  for (const mime of ['image/png', 'image/jpeg', 'image/webp']) {
+    for (const bytes of [300 * 1024, 700 * 1024, 1024 * 1024 - 1]) {
+      assert.equal(shouldSkipCompression({ width: 3840, height: 2160, bytes, mime }, opts), true, `${mime} ${bytes} 字节的 4K 截图应保留原图`);
+    }
+  }
+  assert.equal(shouldSkipCompression({ width: 3840, height: 2160, bytes: 1024 * 1024, mime: 'image/png' }, opts), false, '恰好 1 MiB 仍进入压缩判断');
+  assert.equal(shouldSkipCompression({ width: 3840, height: 2160, bytes: 300 * 1024, mime: 'image/png' }, { ...opts, skipBelowBytes: 200 * 1024 }), false, '调用方自定义体积阈值仍生效');
   // 12MP 手机照：尺寸超标 -> 不跳过
   assert.equal(shouldSkipCompression({ width: 4096, height: 3072, bytes: 8 * 1024 * 1024 }, opts), false, '大照片不跳过');
   // 尺寸达标但体积超阈值（大 PNG）-> 不跳过，仍重编码
