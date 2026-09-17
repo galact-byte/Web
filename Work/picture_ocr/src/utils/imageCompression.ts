@@ -10,7 +10,7 @@ export interface CompressOptions {
   maxEdge: number;
   /** JPEG 质量 0~1 */
   quality: number;
-  /** 长边已达标且体积低于此值时跳过（字节） */
+  /** 体积低于此值时保留原图，不受分辨率限制（字节） */
   skipBelowBytes: number;
   /** 压缩后至少节省这么多字节才替换，避免 JPEG 二次编码抖出十几字节 */
   minSaveBytes: number;
@@ -19,7 +19,7 @@ export interface CompressOptions {
 export const DEFAULT_COMPRESS_OPTIONS: CompressOptions = {
   maxEdge: 1920,
   quality: 0.82,
-  skipBelowBytes: 600 * 1024,
+  skipBelowBytes: 1024 * 1024,
   minSaveBytes: 8 * 1024,
 };
 
@@ -70,14 +70,14 @@ function isJpegMime(mime: string | undefined): boolean {
 
 /**
  * 纯函数：是否跳过压缩。
- * 长边已 ≤ maxEdge 且体积 < skipBelowBytes 时跳过（小截图/已压缩图）；
- * 尺寸虽小但体积超阈值仍会重编码，以便把大 PNG 也压下来。
+ * 体积 < skipBelowBytes 时保留原图，避免高分辨率小截图被缩小；
+ * 超过体积阈值的大 PNG 仍可重编码。
  * 已是 JPEG 且长边已达标的图不再二次编码（避免每次只抖出十几字节）。
  */
 export function shouldSkipCompression(input: SkipDecisionInput, opts: CompressOptions): boolean {
   const longest = Math.max(input.width, input.height);
   if (longest <= opts.maxEdge && isJpegMime(input.mime)) return true;
-  return longest <= opts.maxEdge && input.bytes < opts.skipBelowBytes;
+  return input.bytes < opts.skipBelowBytes;
 }
 
 // ————————————————————————————— canvas I/O（仅浏览器可用） —————————————————————————————
