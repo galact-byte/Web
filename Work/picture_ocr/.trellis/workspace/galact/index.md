@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
-- **Last Active**: 2026-09-16
+- **Total Sessions**: 5
+- **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~157 | Active |
+| `journal-1.md` | ~189 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-09-29 | 存储提醒与系统归档，发布 v0.9.0 | `f921696` | `main` |
 | 4 | 2026-09-16 | 局域网采集恢复与 v0.8.3 发布 | `c51b135` | `main` |
 | 3 | 2026-09-15 | 修复局域网上传卡住并准备发布 v0.8.2 | `e632502` | `main` |
 | 2 | 2026-09-14 | 项目原地展开与排版优化，发布 v0.8.1 | `e6235dd` | `main` |

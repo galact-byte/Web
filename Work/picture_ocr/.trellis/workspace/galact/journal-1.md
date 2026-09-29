@@ -155,3 +155,35 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 5: 存储提醒与系统归档，发布 v0.9.0
+<!-- trellis-session: v=2 fp=bfbafb29ed8eb360 -->
+
+**Date**: 2026-09-29
+**Task**: 存储提醒与系统归档，发布 v0.9.0
+**Branch**: `main`
+
+### Summary
+
+完成存储提醒、占用明细、系统归档/恢复；真实系统副本上桌面 22/22、网页 21/21 端到端验收；新建/导入系统保存即记为已整理；发布 v0.9.0
+
+### Main Changes
+
+- 新增 archive/storageReminder/storageStats/storagePersistence 与桌面 archiveFiles IPC、Web disk-free 接口
+- db.ts 归档/恢复事务与已归档只读兜底；saveProject 系列保存后 markReferenceFormSaved
+- verify-archive-ui 注入时序修复；spec 重写数据库规范并补归档约定
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f921696` | feat(picture-ocr): 新增存储提醒与系统归档，发布 v0.9.0 |
+
+### Testing
+
+- [OK] 全部 verify:* 与项目列表/局域网界面回归通过；真实副本 P7 双端通过
+
+### Status
+
+[OK] **Completed**
