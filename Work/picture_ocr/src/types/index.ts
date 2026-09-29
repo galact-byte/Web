@@ -54,6 +54,23 @@ export interface Asset {
   items: CheckItem[];
 }
 
+/**
+ * 系统归档标记：图片字节已写入用户选择目录的归档文件并删除本地副本，文档与引用保留。
+ * 存在即视为整体只读，需先恢复。所有 normalize/摘要派生必须透传，否则下次保存会抹掉标记。
+ */
+export interface ArchiveInfo {
+  archivedAt: number;
+  /** 归档文件名（不含目录）。 */
+  fileName: string;
+  /** 保存位置显示名：Web 为目录名，桌面为完整路径。 */
+  locationLabel: string;
+  imageCount: number;
+  /** 归档图片原始字节合计。 */
+  imageBytes: number;
+  /** 归档清单 SHA-256（hex），恢复时比对。 */
+  fingerprint: string;
+}
+
 /** IndexedDB 存储的完整项目文档 */
 export interface ProjectDocument {
   id: string;
@@ -64,6 +81,8 @@ export interface ProjectDocument {
   assets: Asset[];
   createdAt: number; // timestamp
   updatedAt: number; // timestamp
+  /** 已归档时存在；旧数据与未归档为 null/undefined。 */
+  archive?: ArchiveInfo | null;
 }
 
 /** 项目组（母项目）元数据。系统名称及证据数据保存在各系统子项目中。 */
@@ -85,6 +104,7 @@ export interface ProjectSummary {
   assetCount: number;
   createdAt: number;
   updatedAt: number;
+  archive?: ArchiveInfo | null;
 }
 
 /** 外层列表使用的项目组及其系统子项目。 */

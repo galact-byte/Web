@@ -23,10 +23,14 @@ import { claimSummaryRepairNotice } from '../utils/summaryRepair';
 import { formatBytes } from '../utils/storageEstimate';
 import ImportDialog from './ImportDialog';
 import StorageSettingsDialog from './StorageSettingsDialog';
+import ArchiveDialog from './archive/ArchiveDialog';
+import StorageReminderBanner from './archive/StorageReminderBanner';
+import { useStorageReminder } from './archive/useStorageReminder';
+import { restoreProject } from '../utils/archive';
 import ProjectListHeader from './project-list/ProjectListHeader';
 import ProjectActions, { type ProjectListAction } from './project-list/ProjectActions';
 import { GROUP_SYSTEM_LIST_GRID, SYSTEM_LIST_GRID, LIST_ACTION_CLASS as actionButton } from './project-list/projectListUi';
-import { splitProjectViews, filterGroups, filterSystems, filterGroupSystems, syncExpandedGroups, selectedVisibleSystems, listLocationKey, groupUpdatedAt, type ProjectListLocation, type ProjectListViewState } from './project-list/projectListViews';
+import { splitProjectViews, filterGroups, filterSystems, filterGroupSystems, syncExpandedGroups, selectedVisibleSystems, listLocationKey, groupUpdatedAt, getSystemDisplayName, getGroupDisplayName, formatTime, type ProjectListLocation, type ProjectListViewState } from './project-list/projectListViews';
 import ProjectGroupDialog, { type ProjectGroupDialogMode } from './project-list/ProjectGroupDialog';
 import { useConfirmDialog } from './ConfirmDialog';
 import { useToast } from './Toast';
@@ -46,21 +50,6 @@ interface DialogState {
 }
 
 
-function getSystemDisplayName(project: ProjectSummary): string {
-  return project.meta.systemName.trim() || '未命名系统';
-}
-
-function getGroupDisplayName(summary: ProjectGroupSummary): string {
-  const group = summary.group;
-  if (!group) return summary.systems[0]?.meta.projectName.trim() || '项目组记录缺失';
-  return group.projectName.trim() || group.unitName.trim() || '未命名项目组';
-}
-
-function formatTime(timestamp: number): string {
-  return timestamp
-    ? new Date(timestamp).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-    : '-';
-}
 
 const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange, onOpenProject, onStartLanCollector, onProjectMetadataSaved }) => {
   const [groups, setGroups] = useState<ProjectGroupSummary[]>([]);
@@ -81,8 +70,12 @@ const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange,
   const [saving, setSaving] = useState(false);
   const [storageSettingsOpen, setStorageSettingsOpen] = useState(false);
   const [compressingSystemId, setCompressingSystemId] = useState<string | null>(null);
+  const [archiveDialog, setArchiveDialog] = useState<{ initialSelectedIds?: string[] } | null>(null);
+  const [restoringSystem, setRestoringSystem] = useState<ProjectSummary | null>(null);
+  const restoreInputRef = useRef<HTMLInputElement>(null);
   const { confirm, dialog } = useConfirmDialog();
   const showToast = useToast();
+  const reminder = useStorageReminder(groups, loaded && !loading && !loadError);
 
   // 桌面版：启动时若自定义数据目录不可用已回退默认，提示一次。
   useEffect(() => {
@@ -180,7 +173,40 @@ const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange,
     }));
   };
 
+  const requestRestore = async (system: ProjectSummary) => {
+    const info = system.archive;
+    if (!info || restoringSystem) return;
+    const ok = await confirm({
+      title: '该系统已归档',
+      message: `系统“${getSystemDisplayName(system)}”已于 ${formatTime(info.archivedAt)} 归档，本地没有图片，需要先恢复才能打开。\n\n请选择归档文件「${info.fileName}」（归档时保存在：${info.locationLabel}）。是否现在恢复？`,
+      confirmText: '选择归档文件恢复',
+      tone: 'default',
+    });
+    if (!ok || !restoreInputRef.current) return;
+    setRestoringSystem(system);
+    restoreInputRef.current.value = '';
+    restoreInputRef.current.click();
+  };
+
+  const handleRestoreFile = async (file: File | undefined) => {
+    const system = restoringSystem;
+    if (!system) return;
+    if (!file) { setRestoringSystem(null); return; }
+    try {
+      await restoreProject(system.id, file);
+      showToast(`已恢复系统“${getSystemDisplayName(system)}”，图片已放回本地。`, 'success');
+      await refreshProjects();
+      reminder.recheck();
+    } catch (err) {
+      showToast(`恢复失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
+    } finally {
+      setRestoringSystem(null);
+    }
+  };
+
   const openSystem = (systemId: string) => {
+    const target = groups.flatMap((summary) => summary.systems).find((system) => system.id === systemId);
+    if (target?.archive) { void requestRestore(target); return; }
     onViewStateChange(current => ({ ...current, location,
       positions: { ...current.positions, [locationKey]: { search, scrollY: window.scrollY } },
     }));
@@ -256,7 +282,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange,
   };
 
   const handleDeleteSystem = async (system: ProjectSummary) => {
-    if (!await confirm({ title: '删除系统', message: `确定要删除系统“${getSystemDisplayName(system)}”吗？\n\n此操作会删除该系统的所有资产、检查项和截图，且不可撤销。`, confirmText: '删除系统', tone: 'danger' })) return;
+    if (!await confirm({ title: '删除系统', message: `确定要删除系统“${getSystemDisplayName(system)}”吗？\n\n此操作会删除该系统的所有资产、检查项和截图，且不可撤销。${system.archive ? `\n\n该系统已归档，删除不会删掉归档文件「${system.archive.fileName}」。` : ''}`, confirmText: '删除系统', tone: 'danger' })) return;
     try {
       await deleteProject(system.id);
       setSelectedProjectIds((current) => { const next = new Set(current); next.delete(system.id); return next; });
@@ -268,7 +294,8 @@ const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange,
 
   const handleDeleteGroup = async (summary: ProjectGroupSummary) => {
     if (!summary.group) return;
-    if (!await confirm({ title: '删除项目组', message: `确定要删除项目组“${getGroupDisplayName(summary)}”及其 ${summary.systems.length} 个系统吗？\n\n此操作会删除该项目组全部系统的资产、检查项和截图，且不可撤销。`, confirmText: '删除项目组', tone: 'danger' })) return;
+    const archivedCount = summary.systems.filter((system) => system.archive).length;
+    if (!await confirm({ title: '删除项目组', message: `确定要删除项目组“${getGroupDisplayName(summary)}”及其 ${summary.systems.length} 个系统吗？\n\n此操作会删除该项目组全部系统的资产、检查项和截图，且不可撤销。${archivedCount > 0 ? `\n\n其中 ${archivedCount} 个已归档，删除不会删掉归档文件。` : ''}`, confirmText: '删除项目组', tone: 'danger' })) return;
     try {
       await deleteProjectGroup(summary.group.id);
       setSelectedProjectIds((current) => {
@@ -418,19 +445,27 @@ const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange,
     }
   };
 
-  const systemActions = (system: ProjectSummary): ProjectListAction[] => [
-    ...(onStartLanCollector ? [{ label: '手机采集', className: 'md:hidden', onClick: () => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id]) }] : []),
-    { label: '编辑', onClick: () => setDialogState({ mode: 'edit-system', group: groups.find(summary => summary.id === system.groupId)?.group ?? null, system }) },
-    { label: '导出数据包', onClick: () => void handleExportSystem(system) },
-    { label: compressingSystemId === system.id ? '正在压缩…' : '压缩图片', disabled: compressingSystemId !== null, onClick: () => void handleCompressSystem(system) },
-    { label: '导入数据包', onClick: () => setImportTargetId(system.id) },
-    { label: '删除', danger: true, onClick: () => void handleDeleteSystem(system) },
-  ];
+  const archivedHint = '该系统已归档，请先恢复';
+  const systemActions = (system: ProjectSummary): ProjectListAction[] => {
+    const archived = Boolean(system.archive);
+    const hint = archived ? archivedHint : undefined;
+    return [
+      ...(onStartLanCollector ? [{ label: '手机采集', className: 'md:hidden', disabled: archived, title: hint, onClick: () => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id]) }] : []),
+      { label: '编辑', onClick: () => setDialogState({ mode: 'edit-system', group: groups.find(summary => summary.id === system.groupId)?.group ?? null, system }) },
+      { label: '导出数据包', disabled: archived, title: hint, onClick: () => void handleExportSystem(system) },
+      { label: compressingSystemId === system.id ? '正在压缩…' : '压缩图片', disabled: compressingSystemId !== null || archived, title: hint, onClick: () => void handleCompressSystem(system) },
+      { label: '导入数据包', disabled: archived, title: hint, onClick: () => setImportTargetId(system.id) },
+      { label: '删除', danger: true, onClick: () => void handleDeleteSystem(system) },
+    ];
+  };
+  /** 项目组级采集只带未归档系统（已归档的本地无图片且只读）。 */
+  const collectableSystems = (summary: ProjectGroupSummary) => summary.systems.filter((system) => !system.archive);
+  const archivedInGroup = (summary: ProjectGroupSummary) => summary.systems.filter((system) => system.archive).length;
   const groupActions = (summary: ProjectGroupSummary): ProjectListAction[] => {
     const group = summary.group;
     return [
-      ...(onStartLanCollector ? [{ label: '手机采集', className: 'md:hidden', disabled: summary.systems.length === 0,
-        onClick: () => onStartLanCollector(summary.id, getGroupDisplayName(summary), summary.systems.map(system => system.id)) }] : []),
+      ...(onStartLanCollector ? [{ label: '手机采集', className: 'md:hidden', disabled: collectableSystems(summary).length === 0,
+        onClick: () => onStartLanCollector(summary.id, getGroupDisplayName(summary), collectableSystems(summary).map(system => system.id)) }] : []),
       ...(group ? [
         { label: '编辑项目组', onClick: () => setDialogState({ mode: 'edit-group', group, system: null }) },
         { label: '删除项目组', danger: true, onClick: () => void handleDeleteGroup(summary) },
@@ -448,14 +483,17 @@ const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange,
   const renderSystemRow = (system: ProjectSummary, groupUnit?: string) => (
     <div key={system.id} id={`system-${system.id}`} data-system-id={system.id} className={`grid ${groupUnit !== undefined ? GROUP_SYSTEM_LIST_GRID : SYSTEM_LIST_GRID} items-center gap-3 border-b border-slate-200 bg-white px-3 ${groupUnit !== undefined ? 'py-2' : 'py-4'} text-sm text-slate-700 last:border-b-0 hover:bg-slate-50 sm:px-4`}>
       <label className="flex min-h-11 items-center justify-center"><input aria-label={`选择${getSystemDisplayName(system)}`} type="checkbox" checked={selectedProjectIds.has(system.id)} onChange={() => toggleProjectSelection(system.id, system.groupId)} className="h-4 w-4" /></label>
-      <div className="min-w-0"><button type="button" onClick={() => openSystem(system.id)} className="min-h-11 break-words text-left font-medium text-slate-950 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-blue-600">{getSystemDisplayName(system)}</button>
+      <div className="min-w-0"><button type="button" onClick={() => openSystem(system.id)} className={`min-h-11 break-words text-left font-medium underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-blue-600 ${system.archive ? 'text-slate-500' : 'text-slate-950'}`}>{getSystemDisplayName(system)}</button>
+        {system.archive && <span data-archived-tag title={`归档于 ${formatTime(system.archive.archivedAt)}，文件：${system.archive.fileName}`} className="ml-2 inline-block whitespace-nowrap border border-slate-300 bg-slate-100 px-1.5 text-xs text-slate-600">已归档</span>}
         {groupUnit !== undefined && system.meta.unitName && system.meta.unitName !== groupUnit && <p className="break-words text-xs text-slate-600">{system.meta.unitName}</p>}
         <p className="mt-1 break-words text-xs text-slate-600 lg:hidden">{groupUnit === undefined && `${system.meta.unitName || '未填写单位'} · `}{formatTime(system.updatedAt)} · {system.assetCount} 项资产</p>
       </div>
       {groupUnit === undefined && <span className="hidden break-words lg:block">{system.meta.unitName || '未填写'}</span>}<span data-column="updated" className="hidden whitespace-nowrap text-xs lg:block">{formatTime(system.updatedAt)}</span><span data-column="assets" className="hidden whitespace-nowrap text-center tabular-nums lg:block">{system.assetCount}</span>
       <div className="col-span-2 flex flex-wrap justify-end gap-2 md:col-span-1">
-        <button type="button" onClick={() => openSystem(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>打开</button>
-        {onStartLanCollector && <button type="button" onClick={() => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id])} className={`${actionButton} hidden border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 md:inline-flex`}>手机采集</button>}
+        {system.archive
+          ? <button type="button" disabled={restoringSystem !== null} onClick={() => void requestRestore(system)} className={`${actionButton} border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50`}>{restoringSystem?.id === system.id ? '恢复中…' : '恢复'}</button>
+          : <button type="button" onClick={() => openSystem(system.id)} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>打开</button>}
+        {onStartLanCollector && <button type="button" disabled={Boolean(system.archive)} title={system.archive ? archivedHint : undefined} onClick={() => onStartLanCollector(system.groupId, getSystemDisplayName(system), [system.id])} className={`${actionButton} hidden border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 md:inline-flex`}>手机采集</button>}
         <ProjectActions label={`${getSystemDisplayName(system)}的系统操作`} actions={systemActions(system)} />
       </div>
     </div>
@@ -466,6 +504,8 @@ const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange,
       <ProjectListHeader search={search} searchLabel={isGroupList ? '搜索项目或组内系统' : '搜索当前列表的系统'} showSelection={!isGroupList} selectedCount={selectedSystems.length} onSearchChange={changeSearch} onDeleteSelected={handleDeleteSelectedProjects} onCreateProject={() => setDialogState({ mode: 'create-group', group: null, system: null })} onOpenStorageSettings={() => setStorageSettingsOpen(true)} />
       <main className="mx-auto max-w-[1280px] px-4 py-6 sm:px-8">
         <h2 className="mb-4 text-2xl font-bold text-slate-950">项目管理中心</h2>
+        {reminder.result && reminder.result.level !== 'none' && <StorageReminderBanner result={reminder.result} onSnooze={reminder.snooze}
+          onArchive={() => setArchiveDialog({ initialSelectedIds: reminder.result?.staleCandidates.map((candidate) => candidate.projectId) })} />}
         <nav aria-label="项目分类" className="mb-6 flex flex-wrap gap-2 border-b border-slate-300">
           <button type="button" aria-current={location.kind !== 'independent' ? 'page' : undefined} onClick={() => navigate({ kind: 'groups' })}
             className={`${actionButton} rounded-none border-x-0 border-t-0 border-b-2 ${location.kind !== 'independent' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-600 hover:bg-slate-200'}`}>
@@ -501,14 +541,14 @@ const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange,
                         <span className="block break-words text-base font-semibold text-slate-950">{getGroupDisplayName(summary)}</span>
                         <span className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
                           {unitName && unitName !== getGroupDisplayName(summary) && <span className="break-words">{unitName}</span>}
-                          <span className="whitespace-nowrap">{summary.systems.length} 个系统</span><span className="whitespace-nowrap">更新于 {formatTime(groupUpdatedAt(summary))}</span>
+                          <span className="whitespace-nowrap">{summary.systems.length} 个系统</span>{archivedInGroup(summary) > 0 && <span data-group-archived className="whitespace-nowrap border border-slate-300 bg-slate-100 px-1.5 text-slate-600">{archivedInGroup(summary) === summary.systems.length ? '已归档' : `${archivedInGroup(summary)} 个已归档`}</span>}<span className="whitespace-nowrap">更新于 {formatTime(groupUpdatedAt(summary))}</span>
                         </span>
                         {!summary.group && <span className="mt-1 block text-xs text-red-700">项目组记录缺失 · 系统数据仍保留，可打开或导出</span>}
                       </span>
                     </button>
                     <div className="flex shrink-0 flex-wrap justify-end gap-2">
                       {summary.group && <button type="button" onClick={() => setDialogState({ mode: 'add-system', group: summary.group, system: null })} className={`${actionButton} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>添加系统</button>}
-                      {onStartLanCollector && <button type="button" disabled={summary.systems.length === 0} onClick={() => onStartLanCollector(summary.id, getGroupDisplayName(summary), summary.systems.map(system => system.id))} className={`${actionButton} hidden border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 md:inline-flex`}>手机采集</button>}
+                      {onStartLanCollector && <button type="button" disabled={collectableSystems(summary).length === 0} onClick={() => onStartLanCollector(summary.id, getGroupDisplayName(summary), collectableSystems(summary).map(system => system.id))} className={`${actionButton} hidden border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 md:inline-flex`}>手机采集</button>}
                       {groupActions(summary).length > 0 && <div className={!summary.group ? 'md:hidden' : undefined}><ProjectActions label={`${getGroupDisplayName(summary)}的项目操作`} actions={groupActions(summary)} /></div>}
                     </div>
                   </div>
@@ -534,7 +574,9 @@ const ProjectList: React.FC<ProjectListProps> = ({ viewState, onViewStateChange,
       </main>
       <ProjectGroupDialog open={!!dialogState} mode={dialogState?.mode ?? 'create-group'} group={dialogState?.group ?? null} system={dialogState?.system?.meta ?? null} onClose={() => { if (!saving) setDialogState(null); }} onSave={handleSaveDialog} />
       <ImportDialog isOpen={!!importTargetId} targetProjectName={importTarget ? getImportTargetName(importTarget) : '未知系统'} onClose={() => setImportTargetId(null)} onImportOverwrite={(file, password) => importIntoSystem(file, password, 'overwrite')} onImportMerge={(file, password) => importIntoSystem(file, password, 'merge')} />
-      {storageSettingsOpen && <StorageSettingsDialog onClose={() => setStorageSettingsOpen(false)} />}
+      {storageSettingsOpen && <StorageSettingsDialog onClose={() => setStorageSettingsOpen(false)} onOpenArchive={() => { setStorageSettingsOpen(false); setArchiveDialog({}); }} onReminderSettingsChanged={reminder.recheck} />}
+      {archiveDialog && <ArchiveDialog groups={groups} initialSelectedIds={archiveDialog.initialSelectedIds} onClose={() => setArchiveDialog(null)} onArchived={() => { void refreshProjects(); reminder.recheck(); }} />}
+      <input ref={restoreInputRef} type="file" accept=".zip,application/zip" className="hidden" data-restore-input onChange={(event) => void handleRestoreFile(event.target.files?.[0])} />
       {dialog}
     </div>
   );

@@ -29,11 +29,13 @@ interface AppProviderProps {
   children: React.ReactNode;
   projectId: string;
   onProjectSaved?: () => void;
+  /** 打开的系统已归档（经 URL 绕过列表进入）：不进入可编辑状态，由调用方带回列表。 */
+  onArchivedOpen?: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-export function AppProvider({ children, projectId, onProjectSaved }: AppProviderProps) {
+export function AppProvider({ children, projectId, onProjectSaved, onArchivedOpen }: AppProviderProps) {
   const [state, dispatch] = useReducer(appReducer, undefined, createInitialState);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedRef = useRef(false);
@@ -72,6 +74,11 @@ export function AppProvider({ children, projectId, onProjectSaved }: AppProvider
       .catch(() => false)
       .then(() => loadProject(projectId))
       .then((doc) => {
+        if (doc?.archive) {
+          // 已归档系统整体只读：保持 loadedRef=false，自动保存与图片增删都不会触发。
+          onArchivedOpen?.();
+          return;
+        }
         if (doc) {
           createdAtRef.current = doc.createdAt;
           projectGroupIdRef.current = doc.groupId;

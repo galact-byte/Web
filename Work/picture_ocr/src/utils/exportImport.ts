@@ -43,6 +43,18 @@ export async function createDataPackageBlob(
   categories: Category[],
   assets: Asset[]
 ): Promise<Blob> {
+  return buildDataPackageZip(meta, categories, assets).zip.generateAsync({ type: 'blob' });
+}
+
+/**
+ * 组装数据包 ZIP（manifest.json + images/），返回 JSZip 实例与 manifest，
+ * 供归档在同一结构上追加 archive.json，保证归档文件可被普通「导入数据包」识别。
+ */
+export function buildDataPackageZip(
+  meta: ProjectMeta,
+  categories: Category[],
+  assets: Asset[]
+): { zip: JSZip; manifest: ExportPackage } {
   const zip = new JSZip();
   const imageFolder = zip.folder('images');
 
@@ -91,7 +103,7 @@ export async function createDataPackageBlob(
   // Add manifest
   zip.file('manifest.json', JSON.stringify(exportPackage, null, 2));
 
-  return zip.generateAsync({ type: 'blob' });
+  return { zip, manifest: exportPackage };
 }
 
 export async function exportDataPackage(

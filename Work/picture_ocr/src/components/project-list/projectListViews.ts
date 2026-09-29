@@ -12,6 +12,23 @@ export function listLocationKey(location: ProjectListLocation): string {
   return location.kind;
 }
 
+export function getSystemDisplayName(project: ProjectSummary): string {
+  return project.meta.systemName.trim() || '未命名系统';
+}
+
+/** 与 lanGroupSnapshot 同一规则：项目名称优先，空时回退单位名称（#165）。 */
+export function getGroupDisplayName(summary: ProjectGroupSummary): string {
+  const group = summary.group;
+  if (!group) return summary.systems[0]?.meta.projectName.trim() || '项目组记录缺失';
+  return group.projectName.trim() || group.unitName.trim() || '未命名项目组';
+}
+
+export function formatTime(timestamp: number): string {
+  return timestamp
+    ? new Date(timestamp).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '-';
+}
+
 export function groupUpdatedAt(summary: ProjectGroupSummary): number {
   return summary.systems.reduce((latest, system) => Math.max(latest, system.updatedAt), summary.group?.updatedAt ?? 0);
 }

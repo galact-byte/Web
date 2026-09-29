@@ -68,7 +68,29 @@ interface DataLocationChangeResult {
   error?: string;
 }
 
+interface ArchiveDirectoryChoice {
+  targetId: string;
+  /** 所选目录完整路径。 */
+  label: string;
+  drive: string;
+  dataDrive: string;
+  sameDriveAsData: boolean;
+}
+
+interface DiskFreeInfo {
+  drive: string;
+  freeBytes: number;
+  totalBytes: number;
+}
+
 interface Window {
+  evidenceArchive?: {
+    chooseDirectory: () => Promise<ArchiveDirectoryChoice | null>;
+    exists: (targetId: string, name: string) => Promise<boolean>;
+    writeFile: (targetId: string, name: string, bytes: Uint8Array) => Promise<void>;
+    readFile: (targetId: string, name: string) => Promise<Uint8Array>;
+    diskFree: () => Promise<DiskFreeInfo>;
+  };
   evidenceLan?: {
     startSession: (snapshot: LanCollectorSnapshot, selectedAddress?: string) => Promise<LanSessionStatus>;
     stopSession: () => Promise<LanSessionStatus>;

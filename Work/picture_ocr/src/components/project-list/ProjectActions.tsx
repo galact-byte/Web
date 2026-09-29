@@ -7,6 +7,8 @@ export interface ProjectListAction {
   disabled?: boolean;
   danger?: boolean;
   className?: string;
+  /** 禁用时说明原因（悬停提示）。 */
+  title?: string;
 }
 interface ProjectActionsProps {
   label: string;
@@ -71,7 +73,7 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ label, actions }) => {
     }}>
       <summary aria-label={label} className={`${LIST_ACTION_CLASS} cursor-pointer list-none border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}>更多</summary>
       <div style={position} className="z-30 overflow-y-auto rounded border border-slate-300 bg-white p-1 shadow-sm">
-        {actions.map(action => <button key={action.label} type="button" disabled={action.disabled}
+        {actions.map(action => <button key={action.label} type="button" disabled={action.disabled} title={action.title}
           className={`min-h-11 w-full px-3 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 ${action.danger ? 'border-t border-slate-200 text-red-700 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-100'} ${action.className ?? ''}`}
           onClick={() => { close(true); action.onClick(); }}>{action.label}</button>)}
       </div>

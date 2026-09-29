@@ -4,6 +4,7 @@ const path = require('node:path');
 const { fileURLToPath } = require('node:url');
 const { createLanCollectorServer } = require('./lanServer.cjs');
 const dataLocation = require('./dataLocation.cjs');
+const { createArchiveFiles } = require('./archiveFiles.cjs');
 
 // 必须在 app ready、任何 store 打开之前应用数据目录指针。
 dataLocation.init();
@@ -277,6 +278,24 @@ ipcMain.handle('data:delete-backup', (event) => {
   if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可删除数据备份。');
   return dataLocation.deleteBackup();
 });
+const archiveFiles = createArchiveFiles({
+  showOpenDialog: (options) => (mainWindow && !mainWindow.isDestroyed() ? dialog.showOpenDialog(mainWindow, options) : dialog.showOpenDialog(options)),
+  // 数据目录可能已迁到其它盘（dataLocation 在 ready 前把 userData 指向实际目录）。
+  getDataDir: () => app.getPath('userData'),
+});
+const guardArchive = (event) => {
+  if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可进行归档读写。');
+};
+ipcMain.handle('archive:choose-dir', (event) => { guardArchive(event); return archiveFiles.chooseDirectory(); });
+ipcMain.handle('archive:exists', (event, targetId, name) => { guardArchive(event); return archiveFiles.exists(targetId, name); });
+ipcMain.handle('archive:write', (event, targetId, name, bytes) => { guardArchive(event); return archiveFiles.writeFile(targetId, name, bytes); });
+ipcMain.handle('archive:read', async (event, targetId, name) => {
+  guardArchive(event);
+  const buffer = await archiveFiles.readFile(targetId, name);
+  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+});
+ipcMain.handle('archive:disk-free', (event) => { guardArchive(event); return archiveFiles.diskFree(); });
+
 ipcMain.handle('data:relaunch', (event) => {
   if (!isExpectedRenderer(event.sender)) throw new Error('只有主工作台可重启应用。');
   // electron-builder portable 运行在临时解压目录，process.execPath 指向临时 exe；

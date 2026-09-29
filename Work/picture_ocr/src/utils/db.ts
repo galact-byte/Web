@@ -1,4 +1,5 @@
 import type {
+  ArchiveInfo,
   Asset,
   Category,
   ImageData,
@@ -18,6 +19,7 @@ import {
   buildStoredImage,
   collectImageRefs,
   collectInlineImages,
+  estimateBase64Bytes,
   imageRecordKey,
   planImageReconcile,
   planMigrationTargets,
@@ -418,8 +420,31 @@ export function normalizeProjectDocument(doc: Partial<ProjectDocument> & { id?: 
     assets: cloneAssets(doc.assets ?? []),
     createdAt: doc.createdAt || doc.updatedAt || now,
     updatedAt: doc.updatedAt || now,
+    archive: normalizeArchiveInfo(doc.archive),
   };
   return normalizedDoc;
+}
+
+/**
+ * 归档标记的运行时校验。所有文档/摘要派生都必须经过这里透传，
+ * 漏掉任何一处都会在下次保存时抹掉标记，造成「本地无图片又不显示已归档」。
+ */
+export function normalizeArchiveInfo(value: unknown): ArchiveInfo | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  const isCount = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0;
+  if (!isCount(v.archivedAt) || v.archivedAt <= 0) return null;
+  if (typeof v.fileName !== 'string' || !v.fileName) return null;
+  if (typeof v.fingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(v.fingerprint)) return null;
+  if (!isCount(v.imageCount) || !isCount(v.imageBytes)) return null;
+  return {
+    archivedAt: v.archivedAt,
+    fileName: v.fileName,
+    locationLabel: typeof v.locationLabel === 'string' ? v.locationLabel : '',
+    imageCount: v.imageCount,
+    imageBytes: v.imageBytes,
+    fingerprint: v.fingerprint,
+  };
 }
 
 export function normalizeProjectGroup(group: Partial<ProjectGroup> & { id?: string }): ProjectGroup {
@@ -476,15 +501,44 @@ export async function listProjectGroups(): Promise<ProjectGroupSummary[]> {
   }), 'listProjectGroups');
 }
 
+/**
+ * 整份文档写入前的归档守卫（在写事务内执行，读的是轻量摘要）：
+ * 库里已归档时，只接受携带同一归档标记且不带新图片字节的写入。工作台/手机采集页可经 URL 绕过列表直接打开
+ * 已归档系统，它们构造的文档不带 archive 字段，放行就会把标记写成 null——本地已无字节、列表也不再显示已归档。
+ * 归档/恢复只走 commitProjectArchive / commitProjectRestore，不经此路径。
+ */
+function guardArchivedWrite(
+  tx: IDBTransaction,
+  doc: ProjectDocument,
+  writesImageBytes: boolean,
+  write: () => void,
+  fail: (error: Error) => void,
+): void {
+  const request = tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).get(doc.id);
+  request.onsuccess = () => {
+    const existing = normalizeArchiveInfo((request.result as { archive?: unknown } | undefined)?.archive);
+    if (existing && (writesImageBytes || doc.archive?.fingerprint !== existing.fingerprint)) {
+      fail(new Error(ARCHIVED_READONLY_MESSAGE));
+      try { tx.abort(); } catch { /* 已结束 */ }
+      return;
+    }
+    write();
+  };
+}
+
 export async function saveProject(doc: ProjectDocument): Promise<void> {
   const db = await openDB();
   const normalizedDoc = normalizeProjectDocument(doc);
   return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
+    let failure: Error | null = null;
     const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME], 'readwrite');
-    tx.objectStore(PROJECTS_STORE_NAME).put(normalizedDoc);
-    tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(normalizedDoc));
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
+    guardArchivedWrite(tx, normalizedDoc, false, () => {
+      tx.objectStore(PROJECTS_STORE_NAME).put(normalizedDoc);
+      tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(normalizedDoc));
+    }, (error) => { failure = error; });
+    tx.oncomplete = () => { db.close(); markReferenceFormSaved([normalizedDoc]); resolve(); };
+    tx.onabort = () => { db.close(); reject(failure ?? tx.error ?? new Error('保存事务已中止')); };
+    tx.onerror = () => { db.close(); reject(failure ?? tx.error); };
   }), 'saveProject', DB_DOC_TIMEOUT_MS));
 }
 
@@ -532,7 +586,7 @@ export async function createProjectGroupWithSystems(
       projectsStore.put(project);
       summariesStore.put(toProjectSummary(project));
     });
-    tx.oncomplete = () => { db.close(); resolve(projects); };
+    tx.oncomplete = () => { db.close(); markReferenceFormSaved(projects); resolve(projects); };
     tx.onerror = () => { db.close(); reject(tx.error); };
   }), 'createProjectGroupWithSystems', DB_DOC_TIMEOUT_MS);
 }
@@ -722,6 +776,11 @@ export async function addImageToProject(
         return;
       }
       const doc = normalizeProjectDocument(raw);
+      if (doc.archive) {
+        failure = new Error(ARCHIVED_READONLY_MESSAGE);
+        tx.abort();
+        return;
+      }
       const item = doc.assets.find((asset) => asset.id === assetId)?.items.find((entry) => entry.id === itemId);
       if (!item) {
         failure = new Error('检查项已不存在，图片未保存');
@@ -775,6 +834,11 @@ export async function removeImageFromProject(
         return;
       }
       const doc = normalizeProjectDocument(raw);
+      if (doc.archive) {
+        failure = new Error(ARCHIVED_READONLY_MESSAGE);
+        tx.abort();
+        return;
+      }
       const item = doc.assets.find((asset) => asset.id === assetId)?.items.find((entry) => entry.id === itemId);
       if (item) item.images = item.images.filter((entry) => entry.id !== imageId);
       doc.updatedAt = Date.now();
@@ -787,6 +851,112 @@ export async function removeImageFromProject(
     tx.onabort = () => { db.close(); reject(failure ?? tx.error ?? new Error('图片删除事务已中止')); };
     tx.onerror = () => { db.close(); reject(failure ?? tx.error); };
   }), 'removeImageFromProject', DB_DOC_TIMEOUT_MS));
+}
+
+const ARCHIVED_READONLY_MESSAGE = '该系统已归档，请先恢复再修改';
+
+/**
+ * 归档/恢复用的读写事务：与 addImageToProject 相同，超时只请求 abort，
+ * 最终以真实 oncomplete/onabort 结算，避免「其实已提交却报失败」。
+ * body 内调用 fail() 即中止整个事务并以该原因 reject。
+ */
+function runArchiveTransaction(
+  label: string,
+  body: (tx: IDBTransaction, fail: (message: string) => void) => void
+): Promise<void> {
+  return openDB().then((db) => trackWrite(new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, IMAGES_STORE_NAME], 'readwrite');
+    let failure: Error | null = null;
+    const fail = (message: string) => {
+      failure ??= new Error(message);
+      try { tx.abort(); } catch { /* 已结束 */ }
+    };
+    const timer = setTimeout(() => fail(`${label}超时，已请求中止，请刷新后核对状态`), DB_DOC_TIMEOUT_MS);
+    try { body(tx, fail); } catch (error) { fail(error instanceof Error ? error.message : `${label}失败`); }
+    tx.oncomplete = () => { clearTimeout(timer); db.close(); resolve(); };
+    tx.onabort = () => {
+      clearTimeout(timer); db.close();
+      const error = failure ?? tx.error ?? new Error(`${label}事务已中止`);
+      recordError({ type: 'manual', message: error.message, context: `db:${label}` });
+      reject(error);
+    };
+    tx.onerror = () => { failure ??= tx.error ?? new Error(`${label}事务出错`); };
+  })));
+}
+
+function sameIdSet(a: string[], b: string[]): boolean {
+  const left = new Set(a);
+  const right = new Set(b);
+  return left.size === a.length && right.size === b.length && left.size === right.size && [...left].every((id) => right.has(id));
+}
+
+/**
+ * 归档提交：归档文件已写入并读回校验通过后，单事务删除本地图片字节并打标记。
+ * 事务内重读文档与 by_project 主键，任一集合与 expectedImageIds 不同（归档期间有上传/删除）就整体取消。
+ * 不改 updatedAt，保留「最后修改」语义。
+ */
+export function commitProjectArchive(projectId: string, expectedImageIds: string[], info: ArchiveInfo): Promise<void> {
+  const archive = normalizeArchiveInfo(info);
+  if (!archive) return Promise.reject(new Error('归档信息无效，未删除本地数据'));
+  return runArchiveTransaction('归档提交', (tx, fail) => {
+    const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
+    const imagesStore = tx.objectStore(IMAGES_STORE_NAME);
+    const docRequest = projectsStore.get(projectId);
+    const keysRequest = imagesStore.index(IMAGES_PROJECT_INDEX).getAllKeys(projectId);
+    keysRequest.onsuccess = () => {
+      try {
+        const raw: unknown = docRequest.result;
+        if (!isInspectableProject(raw)) return fail(`系统 ${projectId} 不存在或文档无效，未删除本地数据`);
+        const doc = normalizeProjectDocument(raw);
+        if (doc.archive) return fail('该系统已归档');
+        if (collectInlineImages(doc).length > 0) return fail('该系统图片尚未整理完成，暂不能归档');
+        const storedKeys = keysRequest.result.map(String);
+        const storedIds = storedKeys.map((key) => key.slice(projectId.length + 1));
+        if (!sameIdSet(collectImageRefs(doc), expectedImageIds) || !sameIdSet(storedIds, expectedImageIds)) {
+          return fail('归档期间系统有改动，已取消，本地数据未删除，请重试');
+        }
+        for (const key of storedKeys) imagesStore.delete(key);
+        doc.archive = archive;
+        projectsStore.put(doc);
+        tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(doc));
+      } catch (error) {
+        fail(error instanceof Error ? error.message : '归档提交失败');
+      }
+    };
+  });
+}
+
+/**
+ * 恢复：把归档文件里的原始图片记录单事务写回并去掉标记。
+ * 必须是已归档、指纹一致、且记录集合恰好等于文档引用集合；任一写入失败整体回滚。
+ */
+export function restoreProjectArchive(projectId: string, fingerprint: string, records: StoredImage[]): Promise<void> {
+  const invalid = records.find((record) => !record || record.projectId !== projectId
+    || record.key !== imageRecordKey(projectId, record.imageId) || typeof record.data !== 'string' || !record.data.startsWith('data:'));
+  if (invalid) return Promise.reject(new Error('归档图片记录与该系统不一致，未恢复'));
+  return runArchiveTransaction('归档恢复', (tx, fail) => {
+    const projectsStore = tx.objectStore(PROJECTS_STORE_NAME);
+    const imagesStore = tx.objectStore(IMAGES_STORE_NAME);
+    const docRequest = projectsStore.get(projectId);
+    docRequest.onsuccess = () => {
+      try {
+        const raw: unknown = docRequest.result;
+        if (!isInspectableProject(raw)) return fail(`系统 ${projectId} 不存在或文档无效，无法恢复`);
+        const doc = normalizeProjectDocument(raw);
+        if (!doc.archive) return fail('该系统未归档，无需恢复');
+        if (doc.archive.fingerprint !== fingerprint) return fail('归档文件与该系统的归档记录不匹配');
+        if (!sameIdSet(collectImageRefs(doc), records.map((record) => record.imageId))) {
+          return fail('归档文件中的图片与系统记录不一致，未恢复');
+        }
+        for (const record of records) imagesStore.put(record);
+        doc.archive = null;
+        projectsStore.put(doc);
+        tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(doc));
+      } catch (error) {
+        fail(error instanceof Error ? error.message : '恢复写入失败');
+      }
+    };
+  });
 }
 
 function isInspectableProject(raw: unknown): raw is ProjectDocument {
@@ -807,9 +977,54 @@ export async function reconcileProjectImages(projectId: string): Promise<ImageRe
       if (!isInspectableProject(raw)) throw new Error(`项目 ${projectId} 文档不存在或无效，无法对账`);
       const inlineIds = new Set(collectInlineImages(raw).map((entry) => entry.image.id));
       const plan = planImageReconcile(projectId, collectImageRefs(raw), keysRequest.result);
+      // 已归档：字节在归档文件里，本地无字节属正常；孤立字节仍如实报告。
+      if (normalizeArchiveInfo((raw as { archive?: unknown }).archive)) {
+        return { missing: [], orphans: plan.orphans, archived: true };
+      }
       return { missing: plan.missing.filter(id => !inlineIds.has(id)), orphans: plan.orphans };
     };
   });
+}
+
+export interface ProjectImageMeasure {
+  count: number;
+  /** images store 中该项目图片 byteSize 合计。 */
+  bytes: number;
+}
+
+/** 只数条数（by_project 索引 count，不读字节），用于判断统计缓存是否仍有效。 */
+export async function countProjectImages(projectId: string): Promise<number> {
+  const db = await openDB();
+  return withTimeout(new Promise<number>((resolve, reject) => {
+    const request = db.transaction(IMAGES_STORE_NAME, 'readonly').objectStore(IMAGES_STORE_NAME).index(IMAGES_PROJECT_INDEX).count(projectId);
+    request.onsuccess = () => { db.close(); resolve(request.result); };
+    request.onerror = () => { db.close(); reject(request.error); };
+  }), 'countProjectImages');
+}
+
+/** 逐条游标累加 byteSize：一次只持有一条记录，不把整个系统的字节读进内存。 */
+export async function measureProjectImages(projectId: string): Promise<ProjectImageMeasure> {
+  const db = await openDB();
+  return withTimeout(new Promise<ProjectImageMeasure>((resolve, reject) => {
+    const measure: ProjectImageMeasure = { count: 0, bytes: 0 };
+    const request = db.transaction(IMAGES_STORE_NAME, 'readonly').objectStore(IMAGES_STORE_NAME).index(IMAGES_PROJECT_INDEX).openCursor(projectId);
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) { db.close(); resolve(measure); return; }
+      const record = cursor.value as Partial<StoredImage> | undefined;
+      measure.count += 1;
+      measure.bytes += typeof record?.byteSize === 'number' && record.byteSize > 0
+        ? record.byteSize
+        : typeof record?.data === 'string' ? estimateBase64Bytes(record.data) : 0;
+      cursor.continue();
+    };
+    request.onerror = () => { db.close(); reject(request.error); };
+  }), 'measureProjectImages', DB_DOC_TIMEOUT_MS);
+}
+
+/** 给定系统中尚未完成图片整理（未搬迁或搬迁失败）的那些；只读 localStorage 状态，不读文档。 */
+export function getProjectsNeedingMigration(projectIds: string[]): Set<string> {
+  return new Set(planMigrationTargets(projectIds, { ...readMigrationState(), damagedIds: [] }));
 }
 
 const MIGRATION_STATE_KEY = 'evidence-image-migration-v5';
@@ -843,6 +1058,20 @@ function writeMigrationState(state: MigrationState): void {
   } catch {
     // 写不进（隐私模式/配额）只会导致下次重新扫描，不影响正确性。
   }
+}
+
+/**
+ * 已提交的文档若没有内联字节，就是搜迁的终态：直接记为已整理。
+ * 否则新建、导入的系统要等列表页后台搜迁跑过一轮，在此之前存储统计与归档明细会把它当成「待整理」。
+ * 与后台搜迁并发时这里的记录可能被覆盖，最多退回到下一轮搜迁再确认，不影响数据。
+ */
+function markReferenceFormSaved(docs: ProjectDocument[]): void {
+  const state = readMigrationState();
+  const done = new Set(state.completedIds);
+  const added = docs.filter((doc) => !done.has(doc.id) && collectInlineImages(doc).length === 0).map((doc) => doc.id);
+  if (added.length === 0) return;
+  state.completedIds.push(...added);
+  writeMigrationState(state);
 }
 
 async function listProjectKeys(): Promise<string[]> {
@@ -969,14 +1198,17 @@ export async function saveProjectWithImages(doc: ProjectDocument): Promise<void>
 
   const db = await openDB();
   return trackWrite(withTimeout(new Promise<void>((resolve, reject) => {
+    let failure: Error | null = null;
     const tx = db.transaction([PROJECTS_STORE_NAME, PROJECT_SUMMARIES_STORE_NAME, IMAGES_STORE_NAME], 'readwrite');
-    const imagesStore = tx.objectStore(IMAGES_STORE_NAME);
-    for (const record of records) imagesStore.put(record);
-    tx.objectStore(PROJECTS_STORE_NAME).put(stripped);
-    tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(stripped));
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onabort = () => { db.close(); reject(tx.error ?? new Error('保存事务已中止')); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
+    guardArchivedWrite(tx, stripped, records.length > 0, () => {
+      const imagesStore = tx.objectStore(IMAGES_STORE_NAME);
+      for (const record of records) imagesStore.put(record);
+      tx.objectStore(PROJECTS_STORE_NAME).put(stripped);
+      tx.objectStore(PROJECT_SUMMARIES_STORE_NAME).put(toProjectSummary(stripped));
+    }, (error) => { failure = error; });
+    tx.oncomplete = () => { db.close(); markReferenceFormSaved([stripped]); resolve(); };
+    tx.onabort = () => { db.close(); reject(failure ?? tx.error ?? new Error('保存事务已中止')); };
+    tx.onerror = () => { db.close(); reject(failure ?? tx.error); };
   }), 'saveProjectWithImages', DB_DOC_TIMEOUT_MS));
 }
 
@@ -1161,6 +1393,7 @@ function toProjectSummary(doc: ProjectDocument): ProjectSummary {
     assetCount: doc.assets.length,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+    archive: normalizeArchiveInfo(doc.archive),
   };
 }
 
@@ -1174,6 +1407,7 @@ function normalizeSummary(summary: Partial<ProjectSummary> & { id: string }): Pr
     assetCount: typeof summary.assetCount === 'number' && summary.assetCount >= 0 ? summary.assetCount : 0,
     createdAt: summary.createdAt || summary.updatedAt || now,
     updatedAt: summary.updatedAt || now,
+    archive: normalizeArchiveInfo(summary.archive),
   };
 }
 
@@ -1187,6 +1421,7 @@ function summaryFromRaw(raw: Partial<ProjectDocument> & { id: string }): Project
     assetCount: Array.isArray(raw.assets) ? raw.assets.length : 0,
     createdAt: raw.createdAt || raw.updatedAt || now,
     updatedAt: raw.updatedAt || now,
+    archive: normalizeArchiveInfo(raw.archive),
   };
 }
 

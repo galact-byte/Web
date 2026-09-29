@@ -46,6 +46,10 @@ const MobileCollector: React.FC<MobileCollectorProps> = ({ projectId, onBack }) 
         setMessage('项目不存在或已被删除。');
         return;
       }
+      if (loaded.archive) {
+        setMessage('该系统已归档，需在电脑端恢复后才能继续采集。');
+        return;
+      }
       setDocument(loaded);
       setActiveCategoryId(loaded.assets[0]?.categoryId ?? loaded.categories[0]?.id ?? null);
       setActiveAssetId(loaded.assets[0]?.id ?? null);

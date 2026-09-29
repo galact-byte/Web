@@ -39,9 +39,9 @@ dispatch({ type: 'REORDER_ITEMS', payload: { assetId: asset.id, itemIds } });
 
 ## 项目列表与摘要 store
 
-- 图片以 Base64 内联在 `ProjectDocument.assets[].items[].images[].data`。**列表加载绝不得读取完整项目文档**（会把数百 MB Base64 载入内存 + 深拷贝，导致主线程卡死/OOM）。
-- 列表只读轻量摘要 store `projectSummaries`（`id/groupId/meta/assetCount/createdAt/updatedAt`，无图片字节），见 `db.ts` 的 `listProjects` / `listProjectGroups`。
-- 所有写/删/迁移项目的函数必须在**同一事务**内同步维护 `projectSummaries`（`saveProject`、`createProjectGroupWithSystems`、`updateProjectGroupAndSystems`、`deleteProject`、`deleteProjectGroup`、`migrateLegacyProjectIfNeeded`），否则列表与真实数据会漂移。新增写入路径时一并追加摘要维护。
+- 未迁移的老项目仍可能把图片 Base64 内联在 `ProjectDocument.assets[].items[].images[].data`（v5 起新图片字节在独立 `images` store）。**列表加载绝不得读取完整项目文档**（会把数百 MB Base64 载入内存 + 深拷贝，导致主线程卡死/OOM）。
+- 列表只读轻量摘要 store `projectSummaries`（`id/groupId/meta/assetCount/createdAt/updatedAt/archive`，无图片字节），见 `db.ts` 的 `listProjects` / `listProjectGroups`。
+- 所有写/删/迁移项目的函数必须在**同一事务**内同步维护 `projectSummaries`（`saveProject`、`saveProjectWithImages`、`createProjectGroupWithSystems`、`updateProjectGroupAndSystems`、`deleteProject`、`deleteProjectGroup`、`addImageToProject`、`removeImageFromProject`、`commitProjectArchive`、`restoreProjectArchive`、`migrateLegacyProjectIfNeeded`），否则列表与真实数据会漂移。新增写入路径时一并追加摘要维护。
 - `DB_VERSION` 升级的 `onupgradeneeded` **只做建表/建索引**（遍历数据报错会中止 versionchange 事务并回滚版本）；存量回填放到升级完成后的 `ensureSummariesSynced()`。DB 版本一旦发布不可降级回旧代码。
 - 摘要自检（`ensureSummariesSynced`）的不变量，改动时不得退化：
   - 用 `projects` 与 `projectSummaries` 的 **`getAllKeys()` 主键求差**判定缺失，不得用「摘要数 >= 项目数」之类计数近似。
@@ -109,6 +109,18 @@ dispatch({ type: 'REORDER_ITEMS', payload: { assetId: asset.id, itemIds } });
 - 工作台 `onProjectSaved` 与列表 `onProjectMetadataSaved` 均在实际保存后调用 App 的 `scheduleRebuild`；列表回调只刷新采集快照，不重挂载列表。不可依赖退出工作台时的 400ms 重建碰巧覆盖稍后的改名。
 - 未启动时跟随当前工作台，已启动时保持采集范围；构建代际及活动组身份拒绝过期结果。`handleStatusChange` 只有 running 真正变化才作废构建；对话框初始化重复报告 false 不能取消首次快照。
 - 验证：`node scripts/verify-lan-group-snapshot.mjs` 覆盖权威组名/空名/独立/缺组与读取失败；`verify-lan-upload-ui.mjs --lifecycle` 覆盖工作台和列表改名后同一手机会话更新；`verify-project-list-ui.mjs` 覆盖组级/系统级启动和搜索不裁剪采集范围。
+
+## 已归档系统与存储提醒
+
+库内事务、标记格式与编排顺序见 [数据库规范·归档与恢复事务](../backend/database-guidelines.md)。前端这侧的约束：
+
+- **标记透传**：`archive` 字段随文档与摘要流转，工作台 `AppContext.buildDocument` 不携带它；不要依赖内存态维护标记，数据层在写事务内以库为准兜底。
+- **整体只读**：已归档系统不进工作台。入口各自拦截——`AppProvider.onArchivedOpen` 让 App 回列表并提示（覆盖 `#/project/<id>` 直开）；`MobileCollector` 拒绝采集；`MobileProjectList` 与 `lanGroupSnapshot.buildGroupSnapshot` 过滤已归档；列表禁用打开/导入/导出/压缩/手机采集，组级采集跳过已归档系统。新增打开或写入入口时同样要拦。
+- **归档目标**：`archiveTarget.ts` —— Web 用 `showDirectoryPicker` 目录句柄，桌面经 preload `window.evidenceArchive`（主进程 `archive:*` IPC，渲染进程只持一次性 `targetId`，文件名净化，partial → sync → rename）。不支持目录选择的浏览器不提供归档，绝不退化为下载到 C 盘再删本地。
+- **提醒**：`storageReminder.evaluateReminder` 是纯函数（占用/磁盘剩余/久未修改三类，稍后提醒期间仅紧急线仍显示），输入缺失不误报；阈值存 localStorage。Web 磁盘剩余来自 `start-server.ps1` 的 `GET /api/control/disk-free`（loopback + 控制标识头），开发服务器/旧脚本返回非 JSON 时按未知处理。
+- **占用统计**：`storageStats.computeStorageStats` 只读摘要 + 游标累加，按 `updatedAt`、归档状态与 `countProjectImages` 条数校验 localStorage 缓存，任一变化即重算（归档/恢复不改 `updatedAt`，靠归档状态与条数失效）；已删除系统的缓存在下次统计时清理。
+- **持久存储**：`main.tsx` 启动时 `requestPersistence()`，存储设置用 `getPersistenceState()` 只查询不重复申请。
+- **验证**：`verify:storage-reminder`、`verify:storage-stats`、`verify-lan-group-snapshot.mjs`（已归档排除），界面双端 `npm run build` 后 `verify:archive-ui`。
 
 ## 局部与派生状态
 

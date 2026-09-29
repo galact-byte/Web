@@ -42,7 +42,11 @@ assert.equal((await buildGroupSnapshot({ groupId: 'g', systemIds: ['s1'] })).gro
 assert.equal((await buildGroupSnapshot({ groupId: null, groupTitle: '旧名', systemIds: ['solo'] })).groupTitle, '系统 solo');
 fixture.group = null;
 assert.equal((await buildGroupSnapshot({ groupId: 'g', groupTitle: '缺组展示名' })).groupTitle, '缺组展示名');
+fixture.group = { id: 'g', projectName: '组', unitName: '单位' };
+fixture.docs = [doc('s1', 'g'), { ...doc('s2', 'g'), archive: { archivedAt: 1, fileName: 'x.zip', locationLabel: 'D:', imageCount: 1, imageBytes: 1, fingerprint: 'f'.repeat(64) } }];
+assert.deepEqual((await buildGroupSnapshot({ groupId: 'g' })).systems.map(s => s.projectId), ['s1'], '已归档系统不进入手机采集列表');
+assert.deepEqual((await buildGroupSnapshot({ groupId: 'g', systemIds: ['s1', 's2'] })).systems.map(s => s.projectId), ['s1'], '显式点名的已归档系统也要排除');
 fixture.fail = true;
 await assert.rejects(buildGroupSnapshot({ groupId: 'g' }), /read failed/);
 delete globalThis.__lanGroupFixture;
-console.log('PASS group snapshot: authoritative names, project-name priority, unit-name fallback/rename, explicit membership, empty/single/independent/missing groups and read failure');
+console.log('PASS group snapshot: authoritative names, project-name priority, unit-name fallback/rename, explicit membership, empty/single/independent/missing groups, archived exclusion and read failure');

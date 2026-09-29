@@ -65,6 +65,8 @@ export async function buildGroupSnapshot(options: BuildGroupSnapshotOptions): Pr
   const docs = await Promise.all(idsToLoad.map((id) => loadProject(id)));
   const systems: LanCollectorSystem[] = docs
     .filter((doc): doc is ProjectDocument => Boolean(doc))
+    // 已归档系统本地无图片且整体只读，不出现在手机采集的系统列表里。
+    .filter((doc) => !doc.archive)
     .map((doc) =>
       openSystemOverride && openSystemOverride.projectId === doc.id
         ? openSystemOverride

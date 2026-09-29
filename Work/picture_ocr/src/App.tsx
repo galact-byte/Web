@@ -335,6 +335,14 @@ const App: React.FC = () => {
     window.location.hash = '';
   };
 
+  const handleArchivedOpen = useCallback(() => {
+    setOpenProjectId(null);
+    setNewProjectInfoPrompt(false);
+    setProjectListRefreshKey((key) => key + 1);
+    window.location.hash = '';
+    showToast('该系统已归档，需在项目列表中恢复后才能打开。', 'info');
+  }, [showToast]);
+
   const { scheduleRebuild } = lan;
   const handleProjectSaved = useCallback(() => {
     setProjectListRefreshKey((key) => key + 1);
@@ -398,6 +406,7 @@ const App: React.FC = () => {
         key={activeProjectId}
         projectId={activeProjectId}
         onProjectSaved={handleProjectSaved}
+        onArchivedOpen={handleArchivedOpen}
       >
         <AppContent
           projectId={activeProjectId}

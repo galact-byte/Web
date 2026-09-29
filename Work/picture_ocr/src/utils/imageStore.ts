@@ -61,6 +61,8 @@ export interface ImageReconcilePlan {
   missing: string[];
   /** images store 里有字节、但文档已不再引用的图片 id（孤儿，占空间）。 */
   orphans: string[];
+  /** 项目已归档：本地无字节属正常，missing 恒为空。 */
+  archived?: boolean;
 }
 
 export interface MigrationState {

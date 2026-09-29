@@ -17,7 +17,7 @@ const MobileProjectList: React.FC<MobileProjectListProps> = ({ onOpen, onOpenDes
 
   useEffect(() => {
     listProjectGroups().then((groups) => {
-      setProjects(groups.flatMap((group) => group.systems));
+      setProjects(groups.flatMap((group) => group.systems).filter((system) => !system.archive));
       setMessage('');
     }).catch((err) => setMessage(`加载项目失败：${err instanceof Error ? err.message : '未知错误'}`));
   }, []);

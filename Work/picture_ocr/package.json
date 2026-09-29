@@ -1,7 +1,7 @@
 {
   "name": "picture_ocr",
   "private": true,
-  "version": "0.8.6",
+  "version": "0.9.0",
   "description": "测评证据采集工具",
   "author": "galact",
   "repository": {
@@ -25,6 +25,13 @@
     "verify:summary-repair": "node scripts/verify-summary-repair.mjs",
     "verify:image-store": "node scripts/verify-image-store.mjs",
     "verify:pending-writes": "node scripts/verify-pending-writes.mjs",
+    "verify:archive-model": "node scripts/verify-archive-model.mjs",
+    "verify:archive-format": "node scripts/verify-archive-format.mjs",
+    "verify:archive-files": "node scripts/verify-archive-files.cjs",
+    "verify:archive-flow": "node scripts/verify-archive-flow.mjs",
+    "verify:archive-ui": "node scripts/verify-archive-ui.mjs",
+    "verify:storage-reminder": "node scripts/verify-storage-reminder.mjs",
+    "verify:storage-stats": "node scripts/verify-storage-stats.mjs",
     "verify:lan-server": "node scripts/verify-lan-server.cjs",
     "verify:lan-mobile-picker": "node scripts/verify-lan-mobile-picker.mjs",
     "verify:web-lan-server": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-web-lan-server.ps1",

@@ -25,3 +25,11 @@ contextBridge.exposeInMainWorld('evidenceData', {
   deleteBackup: () => ipcRenderer.invoke('data:delete-backup'),
   relaunch: () => ipcRenderer.invoke('data:relaunch'),
 });
+
+contextBridge.exposeInMainWorld('evidenceArchive', {
+  chooseDirectory: () => ipcRenderer.invoke('archive:choose-dir'),
+  exists: (targetId, name) => ipcRenderer.invoke('archive:exists', targetId, name),
+  writeFile: (targetId, name, bytes) => ipcRenderer.invoke('archive:write', targetId, name, bytes),
+  readFile: (targetId, name) => ipcRenderer.invoke('archive:read', targetId, name),
+  diskFree: () => ipcRenderer.invoke('archive:disk-free'),
+});

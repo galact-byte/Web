@@ -91,6 +91,13 @@ for (const fn of ['saveProject', 'saveProjectGroup', 'updateProjectGroupAndSyste
   const body = db.split(`export async function ${fn}`)[1]?.split('\nexport ')[0] ?? '';
   check(`${fn} 计入未完成写入`, /trackWrite\(/.test(body));
 }
+// 归档提交/恢复走 runArchiveTransaction，该 helper 必须经 trackWrite；两条路径必须经该 helper。
+const archiveHelper = db.split('function runArchiveTransaction')[1]?.split('\nfunction ')[0] ?? '';
+check('归档事务 helper 计入未完成写入', /trackWrite\(/.test(archiveHelper));
+for (const fn of ['commitProjectArchive', 'restoreProjectArchive']) {
+  const body = db.split(`export function ${fn}`)[1]?.split('\nexport ')[0] ?? '';
+  check(`${fn} 经归档事务 helper 计入未完成写入`, /runArchiveTransaction\(/.test(body));
+}
 
 // ---------- 3) 渲染进程 beforeunload 拦截 ----------
 const guardSource = read('src/utils/pendingWrites.ts') + read('src/main.tsx');

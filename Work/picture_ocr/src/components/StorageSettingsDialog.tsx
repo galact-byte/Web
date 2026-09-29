@@ -12,12 +12,25 @@ import {
   type ImageMigrationProgress,
 } from '../utils/db';
 import type { SummaryRepairReport } from '../utils/summaryRepair';
+import { getPersistenceState, requestPersistence, type PersistenceState } from '../utils/storagePersistence';
+import { getDataDiskFree, loadReminderSettings, saveReminderSettings, type ReminderSettings } from '../utils/storageReminder';
 
 interface StorageSettingsDialogProps {
   onClose: () => void;
+  /** 打开「占用明细与归档」。 */
+  onOpenArchive?: () => void;
+  onReminderSettingsChanged?: () => void;
 }
 
-const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }) => {
+const GB = 1024 * 1024 * 1024;
+
+const PERSISTENCE_TEXT: Record<PersistenceState, string> = {
+  granted: '已开启：磁盘紧张时浏览器不会自动清除本工具的数据。',
+  denied: '未获批准：浏览器在磁盘紧张时仍可能清除本工具的数据。是否批准由浏览器根据使用情况决定（常用、加入书签后更容易获批），请定期归档或导出备份。',
+  unsupported: '当前浏览器不支持持久存储，请定期归档或导出备份。',
+};
+
+const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose, onOpenArchive, onReminderSettingsChanged }) => {
   const showToast = useToast();
   const { confirm, dialog } = useConfirmDialog();
   const desktop = typeof window !== 'undefined' && !!window.evidenceData;
@@ -220,6 +233,65 @@ const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }
 
   const highUsage = estimate?.ratio != null && estimate.ratio >= STORAGE_WARN_RATIO;
 
+  // 磁盘剩余（两端都显示：桌面为数据目录所在盘，Web 为浏览器数据所在盘）
+  const [diskFree, setDiskFree] = useState<DiskFreeInfo | null | undefined>(undefined);
+  useEffect(() => { void getDataDiskFree().then(setDiskFree); }, []);
+
+  // 持久存储（仅 Web）
+  const [persistence, setPersistence] = useState<PersistenceState | null>(null);
+  const [persisting, setPersisting] = useState(false);
+  useEffect(() => {
+    if (desktop) return;
+    void getPersistenceState().then(setPersistence);
+  }, [desktop]);
+  const handleRequestPersistence = async () => {
+    setPersisting(true);
+    try {
+      const state = await requestPersistence();
+      setPersistence(state);
+      showToast(state === 'granted' ? '持久存储已开启。' : '浏览器没有批准持久存储，请定期归档或导出备份。', state === 'granted' ? 'success' : 'info');
+    } finally {
+      setPersisting(false);
+    }
+  };
+
+  // 提醒阈值（GB / 天，界面上用整数编辑）
+  const [reminder, setReminder] = useState<ReminderSettings>(() => loadReminderSettings());
+  const [reminderDraft, setReminderDraft] = useState(() => ({
+    usage: String(Math.round((reminder.usageLimitBytes / GB) * 10) / 10),
+    diskMin: String(Math.round((reminder.diskFreeMinBytes / GB) * 10) / 10),
+    diskUrgent: String(Math.round((reminder.diskFreeUrgentBytes / GB) * 10) / 10),
+    staleDays: String(reminder.staleDays),
+  }));
+  const handleSaveReminder = () => {
+    const usage = Number(reminderDraft.usage);
+    const diskMin = Number(reminderDraft.diskMin);
+    const diskUrgent = Number(reminderDraft.diskUrgent);
+    const staleDays = Number(reminderDraft.staleDays);
+    if (![usage, diskMin, diskUrgent, staleDays].every((value) => Number.isFinite(value) && value > 0)) {
+      showToast('提醒阈值必须是大于 0 的数字。', 'error');
+      return;
+    }
+    if (diskUrgent >= diskMin) {
+      showToast('磁盘紧急线必须小于磁盘提醒线。', 'error');
+      return;
+    }
+    const next: ReminderSettings = {
+      ...reminder,
+      usageLimitBytes: Math.round(usage * GB),
+      diskFreeMinBytes: Math.round(diskMin * GB),
+      diskFreeUrgentBytes: Math.round(diskUrgent * GB),
+      staleDays: Math.round(staleDays),
+      // 改了阈值就按新标准立即重新判断，不沿用之前的「稍后提醒」。
+      snoozedUntil: null,
+    };
+    saveReminderSettings(next);
+    setReminder(next);
+    onReminderSettingsChanged?.();
+    showToast('提醒设置已保存。', 'success');
+  };
+  const reminderInput = 'w-20 border border-slate-300 px-2 py-1 text-right text-sm tabular-nums focus:border-blue-500 focus:outline-none';
+
   return (
     <div
       role="dialog"
@@ -318,7 +390,7 @@ const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }
                     </div>
                     {highUsage && (
                       <p className="mt-2 border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
-                        存储占用偏高。建议先把项目导出备份到非 C 盘，再删除不再需要的项目释放空间。
+                        存储占用偏高。可以把不常用的系统归档到其它盘，释放本地空间。
                       </p>
                     )}
                   </div>
@@ -326,11 +398,64 @@ const StorageSettingsDialog: React.FC<StorageSettingsDialogProps> = ({ onClose }
                   <p className="mt-1 text-xs text-slate-500">当前浏览器不支持存储用量查询。</p>
                 )}
                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                  网页版数据存在浏览器本地，无法由应用迁移到其它盘。如需控制 C 盘占用，可先将旧项目导出备份到非 C 盘，确认备份可用后再从项目列表删除。长期大量使用建议改用桌面版（可将数据目录迁移到 D 盘）。
+                  网页版数据存在浏览器本地，无法由应用迁移到其它盘。如需控制 C 盘占用，可把不常用的系统归档到 D 盘等位置（下方「归档」）。长期大量使用建议改用桌面版（可将数据目录迁移到 D 盘）。
                 </p>
+              </div>
+              <div data-persistence={persistence ?? 'loading'}>
+                <p className="text-sm font-medium text-slate-700">持久存储</p>
+                <p className={`mt-1 text-xs leading-5 ${persistence === 'granted' ? 'text-slate-600' : 'text-amber-800'}`}>
+                  {persistence ? PERSISTENCE_TEXT[persistence] : '读取中…'}
+                </p>
+                {persistence === 'denied' && (
+                  <button
+                    onClick={() => void handleRequestPersistence()}
+                    disabled={persisting}
+                    className="mt-2 border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {persisting ? '申请中…' : '再次申请'}
+                  </button>
+                )}
               </div>
             </div>
           )}
+
+          <div className="mt-5 border-t border-slate-200 pt-5" data-archive-section>
+            <p className="text-sm font-medium text-slate-700">归档与存储提醒</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              归档会把不常用系统的图片打包保存到你选择的目录（建议 C 盘以外），校验无误后删除本地图片，项目仍保留在列表里，需要时用归档文件恢复。
+            </p>
+            <p className="mt-2 border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600" data-disk-free>
+              {diskFree === undefined
+                ? '数据所在磁盘：读取中…'
+                : diskFree
+                  ? `数据所在磁盘 ${diskFree.drive || ''} 剩余 ${formatBytes(diskFree.freeBytes)} / 共 ${formatBytes(diskFree.totalBytes)}`
+                  : '无法读取数据所在磁盘的剩余空间（磁盘剩余提醒不会生效）。'}
+            </p>
+            {onOpenArchive && (
+              <button
+                onClick={onOpenArchive}
+                className="mt-2 border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
+              >
+                查看占用明细与归档…
+              </button>
+            )}
+            <div className="mt-4 grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 text-xs text-slate-600">
+              <label htmlFor="reminder-usage">本工具占用超过（GB）</label>
+              <input id="reminder-usage" inputMode="decimal" className={reminderInput} value={reminderDraft.usage} onChange={(event) => setReminderDraft((d) => ({ ...d, usage: event.target.value }))} />
+              <label htmlFor="reminder-disk-min">磁盘剩余低于（GB）</label>
+              <input id="reminder-disk-min" inputMode="decimal" className={reminderInput} value={reminderDraft.diskMin} onChange={(event) => setReminderDraft((d) => ({ ...d, diskMin: event.target.value }))} />
+              <label htmlFor="reminder-disk-urgent">紧急提醒：磁盘剩余低于（GB，不受「稍后提醒」影响）</label>
+              <input id="reminder-disk-urgent" inputMode="decimal" className={reminderInput} value={reminderDraft.diskUrgent} onChange={(event) => setReminderDraft((d) => ({ ...d, diskUrgent: event.target.value }))} />
+              <label htmlFor="reminder-stale">系统超过多少天未修改建议归档</label>
+              <input id="reminder-stale" inputMode="numeric" className={reminderInput} value={reminderDraft.staleDays} onChange={(event) => setReminderDraft((d) => ({ ...d, staleDays: event.target.value }))} />
+            </div>
+            <button
+              onClick={handleSaveReminder}
+              className="mt-3 border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              保存提醒设置
+            </button>
+          </div>
 
           <div className="mt-5 border-t border-slate-200 pt-5">
             <p className="text-sm font-medium text-slate-700">存储自检</p>

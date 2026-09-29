@@ -53,6 +53,10 @@ try {
     Assert-That ($null -ne $status -and $status.StatusCode -eq 200) "启动器必须提供 localhost 控制状态 API。日志：$(if (Test-Path $logPath) { Get-Content -Raw $logPath } else { '无' })"
     try { $missingControlHeaderStatus = [int](Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/api/control/status").StatusCode } catch { $missingControlHeaderStatus = [int]$_.Exception.Response.StatusCode }
     Assert-That ($missingControlHeaderStatus -eq 403) '即使来自 loopback，缺少本机应用标识的跨站控制请求也必须被拒绝。'
+    $diskFree = Invoke-JsonRequest -Method GET -Uri "$baseUrl/api/control/disk-free"
+    Assert-That ($diskFree.StatusCode -eq 200 -and $diskFree.Body.freeBytes -gt 0 -and $diskFree.Body.totalBytes -ge $diskFree.Body.freeBytes -and $diskFree.Body.drive -match '^[A-Za-z]:$') '磁盘剩余接口必须返回浏览器数据所在盘的剩余与总量。'
+    try { $diskFreeNoHeader = [int](Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/api/control/disk-free").StatusCode } catch { $diskFreeNoHeader = [int]$_.Exception.Response.StatusCode }
+    Assert-That ($diskFreeNoHeader -eq 403) '磁盘剩余接口缺少本机应用标识时必须拒绝。'
     if ($status.Body.addresses.Count -eq 0) {
         $unavailable = Invoke-JsonRequest -Method POST -Uri "$baseUrl/api/control/start" -Body @{ selectedAddress = ''; snapshot = @{ projectId = 'verify-project'; categories = @(); assets = @() } }
         Assert-That ($unavailable.StatusCode -eq 400 -and $unavailable.Body.message -match '未检测到可用私有局域网 IPv4 地址') '无 LAN 环境必须保持本机控制端可用，并明确拒绝启动手机采集会话。'
