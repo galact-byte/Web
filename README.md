@@ -103,8 +103,7 @@
 - **启动**: 双击 `start.bat` 或手动 `uvicorn app.main:app --reload --port 8011`
 
 #### 6.3 picture_ocr - 测评证据采集工具（已迁移）
-- 已迁移至独立仓库 [galact-byte/picture_ocr](https://github.com/galact-byte/picture_ocr)，后续开发与发布均在新仓库进行。
-- v0.9.0 及更早版本的 Release（`picture-ocr-v*` 标签）仍保留在本仓库。
+- 已迁移至独立仓库 [galact-byte/picture_ocr](https://github.com/galact-byte/picture_ocr)。
 
 ---
 
