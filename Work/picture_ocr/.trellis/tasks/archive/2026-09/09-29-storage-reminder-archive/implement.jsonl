@@ -1,7 +1,0 @@
-{"file": ".trellis/spec/frontend/index.md", "reason": "前端规范入口"}
-{"file": ".trellis/spec/frontend/state-management.md", "reason": "IndexedDB/摘要/Context 状态规则"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件与样式规范"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "验证脚本与质量要求"}
-{"file": ".trellis/spec/frontend/type-safety.md", "reason": "运行时边界校验"}
-{"file": ".trellis/spec/backend/error-handling.md", "reason": "错误反馈"}
-{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Web/Electron 双端跨层"}
