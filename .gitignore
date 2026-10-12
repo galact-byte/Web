@@ -2,3 +2,8 @@ DDDD/
 .omc/
 # picture_ocr 已迁移为独立仓库（galact-byte/picture_ocr），本地目录保留为嵌套仓库
 Work/picture_ocr/
+
+# 本地 AI 配置
+CLAUDE.md
+GEMINI.md
+AGENTS.md
