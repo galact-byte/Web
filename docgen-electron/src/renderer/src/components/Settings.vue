@@ -42,7 +42,7 @@
               :style="{ backgroundColor: color.value }"
               @click="handleColorChange(color.value)"
             >
-              <el-icon v-if="primaryColor === color.value" color="#fff"><Check /></el-icon>
+              <el-icon v-if="primaryColor === color.value" :color="onPrimaryColor(color.value)"><Check /></el-icon>
             </div>
           </div>
         </div>
@@ -257,7 +257,22 @@ const applyTheme = (themeValue: string) => {
 }
 
 // 应用主题色
+// 在主题色上选对比度更高的文字色（白或深灰），按 WCAG 相对亮度计算
+const onPrimaryColor = (hex: string) => {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  if (!m) return '#ffffff'
+  const [r, g, b] = [m[1], m[2], m[3]].map((v) => {
+    const c = parseInt(v, 16) / 255
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  })
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+  const whiteContrast = 1.05 / (lum + 0.05)
+  const darkContrast = (lum + 0.05) / 0.059
+  return whiteContrast >= darkContrast ? '#ffffff' : '#111827'
+}
+
 const applyPrimaryColor = (color: string) => {
+  document.documentElement.style.setProperty('--on-primary', onPrimaryColor(color))
   document.documentElement.style.setProperty('--primary-color', color)
   document.documentElement.style.setProperty('--primary-color-rgb', hexToRgb(color))
 }

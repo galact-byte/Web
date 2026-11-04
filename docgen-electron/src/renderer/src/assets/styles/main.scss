@@ -29,7 +29,14 @@ h6 {
 
 // Override Element Plus specific styles nicely
 :root {
-    --el-color-primary: #{$primary-color};
+    // Element Plus 主色及派生色跟随 --primary-color；派生色算法与其默认实现一致（浅色往白混、深色往 #141414 混）
+    --el-color-primary: var(--primary-color);
+    --el-color-primary-light-3: color-mix(in srgb, var(--primary-color) 70%, white);
+    --el-color-primary-light-5: color-mix(in srgb, var(--primary-color) 50%, white);
+    --el-color-primary-light-7: color-mix(in srgb, var(--primary-color) 30%, white);
+    --el-color-primary-light-8: color-mix(in srgb, var(--primary-color) 20%, white);
+    --el-color-primary-light-9: color-mix(in srgb, var(--primary-color) 10%, white);
+    --el-color-primary-dark-2: color-mix(in srgb, var(--primary-color) 80%, black);
     --el-color-success: #{$success-color};
     --el-color-warning: #{$warning-color};
     --el-color-danger: #{$danger-color};
@@ -51,6 +58,20 @@ html.dark {
     --bg-card-rgb: 20, 20, 20;
     --text-main: #e5eaf3;
     --text-sidebar: #a3a6ad;
+    // element-plus/theme-chalk/dark/css-vars.css 在 html.dark 下重定义了主色，这里需要同等特异性并在其后加载
+    --el-color-primary: var(--primary-color);
+    --el-color-primary-light-3: color-mix(in srgb, var(--primary-color) 70%, #141414);
+    --el-color-primary-light-5: color-mix(in srgb, var(--primary-color) 50%, #141414);
+    --el-color-primary-light-7: color-mix(in srgb, var(--primary-color) 30%, #141414);
+    --el-color-primary-light-8: color-mix(in srgb, var(--primary-color) 20%, #141414);
+    --el-color-primary-light-9: color-mix(in srgb, var(--primary-color) 10%, #141414);
+    --el-color-primary-dark-2: color-mix(in srgb, var(--primary-color) 80%, white);
+}
+
+.el-button--primary {
+    --el-button-text-color: var(--on-primary, #ffffff);
+    --el-button-hover-text-color: var(--on-primary, #ffffff);
+    --el-button-disabled-text-color: var(--on-primary, #ffffff);
 }
 
 .el-button {
@@ -64,11 +85,11 @@ html.dark {
     box-shadow: 0 0 0 1px var(--el-border-color, #{$border-color}) inset;
 
     &:hover {
-        box-shadow: 0 0 0 1px $primary-light inset;
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-color) 70%, white) inset;
     }
 
     &.is-focus {
-        box-shadow: 0 0 0 1px $primary-color inset !important;
+        box-shadow: 0 0 0 1px var(--primary-color) inset !important;
     }
 }
 

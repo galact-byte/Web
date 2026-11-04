@@ -1,10 +1,27 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { join } from 'path'
+import { join, resolve as resolvePath, relative, isAbsolute, sep } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import spawn from 'cross-spawn'
 import fs from 'fs'
 import { Buffer } from 'buffer'
 
+
+// 将渲染进程传入的路径逐级解析并限制在 base 之内，拒绝 .. 与绝对路径越界（不处理符号链接）
+function resolveInside(base: string, ...segments: string[]): string {
+    let current = resolvePath(base)
+    for (const segment of segments) {
+        if (typeof segment !== 'string') {
+            throw new Error('路径参数无效')
+        }
+        const next = resolvePath(current, segment)
+        const rel = relative(current, next)
+        if (rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)) {
+            throw new Error(`路径超出允许范围: ${segment}`)
+        }
+        current = next
+    }
+    return current
+}
 
 function createWindow(): void {
     const mainWindow = new BrowserWindow({
@@ -193,7 +210,7 @@ ipcMain.handle('get-history', async () => {
 // 📄 读取配置文件
 ipcMain.handle('read-file', async (_event, path) => {
     try {
-        const fullPath = join(process.cwd(), path)
+        const fullPath = resolveInside(process.cwd(), path)
         if (fs.existsSync(fullPath)) {
             return JSON.parse(fs.readFileSync(fullPath, 'utf-8'))
         }
@@ -207,13 +224,8 @@ ipcMain.handle('read-file', async (_event, path) => {
 // 💾 保存文件
 ipcMain.handle('save-file', async (_event, { filename, data }) => {
     try {
-        const filePath = join(process.cwd(), filename)
+        const filePath = resolveInside(process.cwd(), filename)
         console.log(`Saving file to: ${filePath}`)
-
-        if (filename === 'history.json') {
-            const preview = Array.isArray(data) ? `Array[${data.length}]` : (typeof data === 'string' ? data.slice(0, 50) : JSON.stringify(data).slice(0, 50));
-            console.log(`[DEBUG] save-file history.json content: ${preview}`)
-        }
 
         const content = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
         fs.writeFileSync(filePath, content, 'utf-8')
@@ -228,7 +240,7 @@ ipcMain.handle('save-file', async (_event, { filename, data }) => {
 // ✍️ 写入文件
 ipcMain.handle('write-file', async (_event, { path, data }) => {
     try {
-        const fullPath = join(process.cwd(), path)
+        const fullPath = resolveInside(process.cwd(), path)
         fs.writeFileSync(fullPath, JSON.stringify(data, null, 2), 'utf-8')
         return { success: true }
     } catch (err: any) {
@@ -240,7 +252,13 @@ ipcMain.handle('write-file', async (_event, { path, data }) => {
 // 📂 打开文件夹
 ipcMain.handle('open-folder', async (_event, path) => {
     // Try cwd first (Development / Portable)
-    let fullPath = join(process.cwd(), path)
+    let fullPath: string
+    try {
+        fullPath = resolveInside(process.cwd(), path)
+    } catch (err) {
+        console.error(`拒绝打开路径 ${path}:`, err)
+        return false
+    }
 
     if (!fs.existsSync(fullPath)) {
         // Try resources path (Packaged Production)
@@ -262,7 +280,7 @@ ipcMain.handle('open-folder', async (_event, path) => {
 ipcMain.handle('list-files', async (_event, subDir) => {
     try {
         const basePath = getBasePath()
-        const dirPath = join(basePath, subDir)
+        const dirPath = resolveInside(basePath, subDir)
         console.log(`[DEBUG] list-files: subDir=${subDir}, base=${basePath}, full=${dirPath}`)
 
         if (!fs.existsSync(dirPath)) {
@@ -327,7 +345,7 @@ const getBasePath = () => {
 // 📖 打开文件（用系统默认程序）
 ipcMain.handle('open-file', async (_event, folder, filename) => {
     try {
-        const fullPath = join(getBasePath(), folder, filename)
+        const fullPath = resolveInside(getBasePath(), folder, filename)
         if (fs.existsSync(fullPath)) {
             await shell.openPath(fullPath)
             return true
@@ -342,7 +360,7 @@ ipcMain.handle('open-file', async (_event, folder, filename) => {
 // 📄 读取文件内容
 ipcMain.handle('read-file-content', async (_event, folder, filename) => {
     try {
-        const fullPath = join(getBasePath(), folder, filename)
+        const fullPath = resolveInside(getBasePath(), folder, filename)
         if (fs.existsSync(fullPath)) {
             return fs.readFileSync(fullPath, 'utf-8')
         }
@@ -356,7 +374,7 @@ ipcMain.handle('read-file-content', async (_event, folder, filename) => {
 // ✍️ 写入文件内容
 ipcMain.handle('write-file-content', async (_event, folder, filename, content) => {
     try {
-        const fullPath = join(getBasePath(), folder, filename)
+        const fullPath = resolveInside(getBasePath(), folder, filename)
         fs.writeFileSync(fullPath, content, 'utf-8')
         return true
     } catch (err) {
@@ -369,9 +387,9 @@ ipcMain.handle('write-file-content', async (_event, folder, filename, content) =
 ipcMain.handle('delete-file', async (_event, folder, filename) => {
     try {
         const basePath = getBasePath()
-        const srcPath = join(basePath, folder, filename)
-        const trashDir = join(basePath, '.trash', folder)
-        const destPath = join(trashDir, filename)
+        const srcPath = resolveInside(basePath, folder, filename)
+        const trashDir = resolveInside(basePath, '.trash', folder)
+        const destPath = resolveInside(trashDir, filename)
 
         if (!fs.existsSync(srcPath)) {
             return false
@@ -393,12 +411,12 @@ ipcMain.handle('delete-file', async (_event, folder, filename) => {
 // 📤 上传文件
 ipcMain.handle('upload-file', async (_event, { folder, filename, content }) => {
     try {
-        const dirPath = join(getBasePath(), folder)
+        const dirPath = resolveInside(getBasePath(), folder)
         if (!fs.existsSync(dirPath)) {
             fs.mkdirSync(dirPath, { recursive: true })
         }
 
-        const filePath = join(dirPath, filename)
+        const filePath = resolveInside(dirPath, filename)
         fs.writeFileSync(filePath, Buffer.from(content))
         return true
     } catch (err) {
@@ -411,9 +429,9 @@ ipcMain.handle('upload-file', async (_event, { folder, filename, content }) => {
 ipcMain.handle('restore-file', async (_event, folder, filename) => {
     try {
         const basePath = getBasePath()
-        const srcPath = join(basePath, '.trash', folder, filename)
-        const destDir = join(basePath, folder)
-        const destPath = join(destDir, filename)
+        const srcPath = resolveInside(basePath, '.trash', folder, filename)
+        const destDir = resolveInside(basePath, folder)
+        const destPath = resolveInside(destDir, filename)
 
         if (!fs.existsSync(srcPath)) {
             console.error(`Trash file not found: ${srcPath}`)
@@ -437,7 +455,7 @@ ipcMain.handle('restore-file', async (_event, folder, filename) => {
 ipcMain.handle('permanent-delete-file', async (_event, folder, filename) => {
     try {
         const basePath = getBasePath()
-        const filePath = join(basePath, '.trash', folder, filename)
+        const filePath = resolveInside(basePath, '.trash', folder, filename)
 
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath)
