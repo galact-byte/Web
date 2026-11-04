@@ -23,7 +23,7 @@ def load_env_variables():
         'EVAL_PHONE': os.getenv('EVAL_PHONE', ''),
     }
     
-    print(f"已加载环境变量: {env_vars}")
+    print(f'已加载环境变量: {[k for k, v in env_vars.items() if v]}')
     return env_vars
 
 
@@ -57,7 +57,13 @@ def merge_system_information(project_info):
     """合并系统信息"""
     if '系统' in project_info and project_info['系统']:
         merge_info = project_info['系统']
-        systems = [f"{system_info['系统名称']}（{system_info['系统级别']}）" for system_info in merge_info]
+        systems = []
+        for system_info in merge_info:
+            name = str(system_info.get('系统名称', '')).strip()
+            if not name:
+                continue
+            level = str(system_info.get('系统级别', '')).strip()
+            systems.append(f'{name}（{level}）' if level else name)
         project_info['合并系统信息'] = '、'.join(systems)
     else:
         project_info['合并系统信息'] = ''

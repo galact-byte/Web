@@ -150,7 +150,7 @@
                 </template>
             </el-table-column>
         </el-table>
-        <div v-if="recycleBin.length === 0" style="padding: 40px; text-align: center; color: #909399;">
+        <div v-if="recycleBin.length === 0" style="padding: 40px; text-align: center; color: var(--el-text-color-secondary);">
             回收站是空的
         </div>
         <template #footer>
@@ -183,14 +183,14 @@
                         >
                             {{ proj.项目名称 }}
                         </el-tag>
-                        <span v-if="(record.data.projects?.length || 0) > 5" style="color: #909399;">
+                        <span v-if="(record.data.projects?.length || 0) > 5" style="color: var(--el-text-color-secondary);">
                             ... 等 {{ record.data.projects.length }} 个项目
                         </span>
                     </div>
                 </el-card>
             </el-timeline-item>
         </el-timeline>
-        <div v-if="historyRecords.length === 0" style="padding: 40px; text-align: center; color: #909399;">
+        <div v-if="historyRecords.length === 0" style="padding: 40px; text-align: center; color: var(--el-text-color-secondary);">
             暂无历史记录
         </div>
         <template #footer>
@@ -234,6 +234,26 @@ const loadData = async () => {
         }
     } catch (e) {
         ElMessage.error('加载失败: ' + e)
+    }
+}
+
+const loadRecycleBin = async () => {
+    try {
+        const data = await window.api.readConfig('RecycleBin.json')
+        recycleBin.value = Array.isArray(data?.projects) ? data.projects : []
+    } catch (e) {
+        console.error('Failed to load recycle bin:', e)
+    }
+}
+
+const saveRecycleBin = async () => {
+    try {
+        const plain = JSON.parse(JSON.stringify(recycleBin.value))
+        const ok = await window.api.saveFile('RecycleBin.json', { projects: plain })
+        if (!ok) throw new Error('保存失败')
+    } catch (e) {
+        console.error('Failed to save recycle bin:', e)
+        ElMessage.error('回收站保存失败: ' + e)
     }
 }
 
@@ -344,6 +364,7 @@ const deleteProject = async (index: number) => {
         
         const success = await saveToFile()
         if (success) {
+            await saveRecycleBin()
             ElMessage.success('已删除(可在回收站中恢复)')
         }
     } catch (e) {
@@ -376,6 +397,7 @@ const clearAll = async () => {
         
         const success = await saveToFile()
         if (success) {
+            await saveRecycleBin()
             ElMessage.success('已清空所有项目(可在回收站中恢复)')
         }
     } catch (e) {
@@ -392,6 +414,7 @@ const restoreProject = async (index: number) => {
     
     const success = await saveToFile()
     if (success) {
+        await saveRecycleBin()
         ElMessage.success('项目已恢复')
     }
 }
@@ -404,6 +427,7 @@ const permanentDelete = async (index: number) => {
             type: 'error'
         })
         recycleBin.value.splice(index, 1)
+        await saveRecycleBin()
         ElMessage.success('已彻底删除')
     } catch (e) {
         // User cancelled
@@ -418,6 +442,7 @@ const clearRecycleBin = async () => {
             type: 'error'
         })
         recycleBin.value = []
+        await saveRecycleBin()
         ElMessage.success('回收站已清空')
     } catch (e) {
         // User cancelled
@@ -533,6 +558,7 @@ const generate = async () => {
 onMounted(() => {
     loadData()
     loadHistory()
+    loadRecycleBin()
 })
 </script>
 
@@ -548,13 +574,13 @@ onMounted(() => {
 
 .title-group h2 {
     font-size: 24px;
-    color: #1f2937;
+    color: var(--text-main, #1f2937);
     margin-bottom: 4px;
 }
 
 .subtitle {
     font-size: 14px;
-    color: #6b7280;
+    color: var(--el-text-color-secondary);
     margin: 0;
 }
 
@@ -567,7 +593,7 @@ onMounted(() => {
 .table-card {
     border-radius: 8px;
     overflow: hidden;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--el-border-color-lighter);
 }
 
 .empty-state {

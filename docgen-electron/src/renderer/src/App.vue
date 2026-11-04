@@ -124,7 +124,12 @@ const applyBackgroundImage = (image: string, opacityVal: number) => {
 const loadSettings = () => {
   const savedSettings = localStorage.getItem('docgen-settings')
   if (savedSettings) {
-    const settings = JSON.parse(savedSettings)
+    let settings: Record<string, any> = {}
+    try {
+      settings = JSON.parse(savedSettings) || {}
+    } catch (e) {
+      console.error('读取外观设置失败，使用默认值:', e)
+    }
     applyTheme(settings.theme || 'light')
     applyPrimaryColor(settings.primaryColor || '#4f46e5')
     applyFontSize(settings.fontSize || 'medium')
@@ -144,17 +149,6 @@ onMounted(() => {
   width: 100vw;
   overflow: hidden;
   font-size: var(--base-font-size, 14px);
-  --bg-sidebar-rgb: 31, 41, 55;
-  --bg-content-rgb: 243, 244, 246;
-  --text-main: #1f2937;
-  --text-sidebar: #9ca3af;
-}
-
-:global(.dark) .app-container {
-  --bg-sidebar-rgb: 17, 24, 39;
-  --bg-content-rgb: 17, 24, 39;
-  --text-main: #f3f4f6;
-  --text-sidebar: #9ca3af;
 }
 
 .layout-wrapper {
@@ -165,10 +159,10 @@ onMounted(() => {
 
 .sidebar {
   width: 240px;
-  background-color: rgba(var(--bg-sidebar-rgb), var(--content-opacity));
+  background-color: rgba(var(--bg-sidebar-rgb), var(--content-opacity, 1));
   display: flex;
   flex-direction: column;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid var(--el-border-color-lighter);
   flex-shrink: 0;
   backdrop-filter: blur(10px);
   transition: background-color var(--transition-duration, 0.3s), border-color var(--transition-duration, 0.3s);
@@ -179,13 +173,13 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 0 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
 .logo-icon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, var(--primary-color, #4f46e5) 0%, #818cf8 100%);
+  background: var(--primary-color, #4f46e5);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -199,7 +193,7 @@ onMounted(() => {
 .logo h3 {
   margin: 0;
   font-size: 18px;
-  color: white;
+  color: var(--text-main);
   font-weight: 600;
 }
 
@@ -226,14 +220,13 @@ onMounted(() => {
 }
 
 .menu-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: white;
+  background: var(--el-fill-color-light);
+  color: var(--text-main);
 }
 
 .menu-item.active {
   background: var(--primary-color, #4f46e5);
   color: white;
-  box-shadow: 0 4px 12px rgba(var(--primary-color-rgb, 79, 70, 229), 0.4);
 }
 
 .menu-icon {
@@ -243,7 +236,7 @@ onMounted(() => {
 
 .main-content {
   flex: 1;
-  background-color: rgba(var(--bg-content-rgb), var(--content-opacity));
+  background-color: rgba(var(--bg-content-rgb), var(--content-opacity, 1));
   overflow: auto;
   padding: 32px;
   backdrop-filter: blur(10px);

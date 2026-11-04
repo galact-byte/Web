@@ -151,6 +151,15 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Sunny, Discount, Document, MagicStick, Bell, QuestionFilled, RefreshLeft, Check, Picture, View } from '@element-plus/icons-vue'
 
+const safeParse = (raw: string): Record<string, any> => {
+  try {
+    return JSON.parse(raw) || {}
+  } catch (e) {
+    console.error('读取外观设置失败，使用默认值:', e)
+    return {}
+  }
+}
+
 // 设置状态
 const theme = ref('light')
 const primaryColor = ref('#4f46e5')
@@ -177,7 +186,7 @@ const themeColors = [
 const loadSettings = () => {
   const savedSettings = localStorage.getItem('docgen-settings')
   if (savedSettings) {
-    const settings = JSON.parse(savedSettings)
+    const settings = safeParse(savedSettings)
     theme.value = settings.theme || 'light'
     primaryColor.value = settings.primaryColor || '#4f46e5'
     fontSize.value = settings.fontSize || 'medium'
@@ -208,7 +217,19 @@ const saveSettings = () => {
     backgroundImage: backgroundImage.value,
     backgroundOpacity: backgroundOpacity.value
   }
-  localStorage.setItem('docgen-settings', JSON.stringify(settings))
+  try {
+    localStorage.setItem('docgen-settings', JSON.stringify(settings))
+  } catch (e) {
+    console.error('保存外观设置失败:', e)
+    if (backgroundImage.value) {
+      backgroundImage.value = ''
+      applyBackgroundImage()
+      saveSettings()
+      ElMessage.error('背景图片过大，无法保存，已取消设置')
+    } else {
+      ElMessage.error('外观设置保存失败')
+    }
+  }
 }
 
 // function to convert hex to rgb
@@ -310,7 +331,7 @@ const selectBackgroundImage = () => {
         backgroundImage.value = ev.target?.result as string
         applyBackgroundImage()
         saveSettings()
-        ElMessage.success('背景图片已设置')
+        if (backgroundImage.value) ElMessage.success('背景图片已设置')
       }
       reader.readAsDataURL(file)
     }
@@ -410,13 +431,13 @@ onMounted(() => {
 
 .title-group h2 {
   font-size: 24px;
-  color: #1f2937;
+  color: var(--text-main, #1f2937);
   margin-bottom: 4px;
 }
 
 .subtitle {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--el-text-color-secondary);
   margin: 0;
 }
 
@@ -428,14 +449,8 @@ onMounted(() => {
 
 .settings-card {
   border-radius: 12px;
-  background-color: rgba(255, 255, 255, 0.85);
+  background-color: rgba(var(--bg-card-rgb), 0.85);
   backdrop-filter: blur(10px);
-}
-
-:global(.dark) .settings-card {
-  background-color: rgba(30, 30, 45, 0.85);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: #fff;
 }
 
 .card-header {
@@ -455,12 +470,12 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   font-size: 14px;
-  color: #374151;
+  color: var(--el-text-color-regular);
 }
 
 .setting-label .el-icon {
   font-size: 20px;
-  color: #6b7280;
+  color: var(--el-text-color-secondary);
 }
 
 .color-picker-group {
@@ -481,8 +496,7 @@ onMounted(() => {
 }
 
 .color-option:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: var(--el-border-color);
 }
 
 .color-option.active {

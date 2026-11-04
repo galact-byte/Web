@@ -346,13 +346,13 @@ onMounted(() => {
 
 .title-group h2 {
     font-size: 24px;
-    color: #1f2937;
+    color: var(--text-main, #1f2937);
     margin-bottom: 4px;
 }
 
 .subtitle {
     font-size: 14px;
-    color: #6b7280;
+    color: var(--el-text-color-secondary);
     margin: 0;
 }
 

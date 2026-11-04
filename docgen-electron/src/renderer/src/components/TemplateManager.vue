@@ -106,7 +106,7 @@
                     </template>
                 </el-table-column>
             </el-table>
-            <div v-if="recycleBin.length === 0" style="padding: 40px; text-align: center; color: #909399;">
+            <div v-if="recycleBin.length === 0" style="padding: 40px; text-align: center; color: var(--el-text-color-secondary);">
                 回收站是空的
             </div>
             <template #footer>
@@ -412,38 +412,38 @@ onMounted(() => {
 
 .title-group h2 {
     font-size: 24px;
-    color: #1f2937;
+    color: var(--text-main, #1f2937);
     margin-bottom: 4px;
 }
 
 .subtitle {
     font-size: 14px;
-    color: #6b7280;
+    color: var(--el-text-color-secondary);
     margin: 0;
 }
 
 .content-wrapper {
-    background: white;
+    background: var(--el-bg-color);
     border-radius: 12px;
     padding: 2px;
     /* slight padding for border effect if needed */
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     flex: 1;
     overflow: hidden;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--el-border-color-lighter);
 }
 
 /* Custom Tabs Styling */
 :deep(.el-tabs__nav-wrap::after) {
     height: 1px;
-    background-color: #f3f4f6;
+    background-color: var(--el-border-color-lighter);
 }
 
 :deep(.el-tabs__header) {
     margin: 0;
     padding: 0 20px;
-    background: #f9fafb;
-    border-bottom: 1px solid #e5e7eb;
+    background: var(--el-fill-color-light);
+    border-bottom: 1px solid var(--el-border-color-lighter);
     border-radius: 12px 12px 0 0;
 }
 
@@ -451,11 +451,11 @@ onMounted(() => {
     height: 56px;
     line-height: 56px;
     font-size: 15px;
-    color: #6b7280;
+    color: var(--el-text-color-secondary);
 }
 
 :deep(.el-tabs__item.is-active) {
-    color: #4f46e5;
+    color: var(--primary-color, #4f46e5);
     font-weight: 600;
 }
 
@@ -470,12 +470,12 @@ onMounted(() => {
 }
 
 .icon-wrapper.doc {
-    background: #eff6ff;
+    background: rgba(59, 130, 246, 0.12);
     color: #3b82f6;
 }
 
 .icon-wrapper.json {
-    background: #fff7ed;
+    background: rgba(245, 158, 11, 0.12);
     color: #f59e0b;
 }
 
@@ -486,7 +486,7 @@ onMounted(() => {
 
 .file-name {
     font-weight: 500;
-    color: #374151;
+    color: var(--el-text-color-regular);
 }
 .actions {
     display: flex;

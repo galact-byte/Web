@@ -17,7 +17,6 @@ declare global {
             loadEnv: () => Promise<any>
             saveEnv: (data: any) => Promise<any>
             restoreFile: (folder: string, filename: string) => Promise<boolean>
-            restoreFile: (folder: string, filename: string) => Promise<boolean>
             permanentDeleteFile: (folder: string, filename: string) => Promise<boolean>
             readFileContent: (folder: string, filename: string) => Promise<string | null>
             writeFileContent: (folder: string, filename: string, content: string) => Promise<boolean>

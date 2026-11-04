@@ -64,7 +64,6 @@ const envVars = ref({
 })
 
 const saving = ref(false)
-const placeholderExample = ref('{{CLIENT_COMPANY}}')
 
 // 加载环境变量
 const loadEnv = async () => {
@@ -126,10 +125,10 @@ onMounted(() => {
 .tips-box {
   margin-top: 24px;
   padding: 16px;
-  background: #f9fafb;
+  background: var(--el-fill-color-light);
   border-radius: 8px;
   font-size: 14px;
-  color: #4b5563;
+  color: var(--el-text-color-regular);
 }
 
 .tips-box p {
@@ -144,12 +143,5 @@ onMounted(() => {
 
 .tips-box li {
   margin-bottom: 6px;
-}
-
-.tips-box code {
-  background: #e5e7eb;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: monospace;
 }
 </style>
