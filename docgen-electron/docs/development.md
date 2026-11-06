@@ -35,7 +35,7 @@ python scripts/smoke-test.py
 - 推送 `docgen-electron/**` 或工作流自身的改动至 `main`。
 - 在 Actions 页面手动点击 **Run workflow**。
 
-流程：安装锁定的 npm 依赖及 Python 构建依赖 → PyInstaller 生成 `main3.exe` → electron-builder 生成 Windows x64 NSIS 安装包 → 运行后端冒烟测试 → 上传安装包和 SHA-256 校验文件。
+流程：安装锁定的 npm 依赖及 Python 构建依赖 → PyInstaller 生成 `main3.exe` → electron-builder 生成 Windows x64 NSIS 安装包 → 运行后端冒烟测试 → 上传安装包、SHA-256 校验文件和人工编写的 `RELEASE_NOTES.md`。
 
 产物名称为 `DocGenPro-Windows-x64`，保留 30 天。工作流只有仓库读取权限，不创建 Release、不推送文件、不需要额外配置 Secret。同一分支新构建会取消尚未结束的旧构建。
 

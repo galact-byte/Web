@@ -74,6 +74,7 @@ jobs:
             "$hash  $($_.Name)"
           }
           $lines | Set-Content dist_setup/SHA256SUMS.txt -Encoding utf8
+          Copy-Item RELEASE_NOTES.md dist_setup/RELEASE_NOTES.md
           "Download the Windows x64 installer from the **DocGenPro-Windows-x64** artifact below. No Node.js or Python installation is required." >> $env:GITHUB_STEP_SUMMARY
 
       - name: Upload installer
@@ -83,5 +84,6 @@ jobs:
           path: |
             docgen-electron/dist_setup/*.exe
             docgen-electron/dist_setup/SHA256SUMS.txt
+            docgen-electron/dist_setup/RELEASE_NOTES.md
           if-no-files-found: error
           retention-days: 30

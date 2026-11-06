@@ -15,6 +15,7 @@
 |---|---|---|
 | 新增 | `.github/workflows/docgen-windows.yml` | Windows 构建、包内后端测试及安装包/校验文件上传 |
 | 新增 | `docgen-electron/requirements-build.txt` | Python 构建依赖 |
+| 新增 | `docgen-electron/RELEASE_NOTES.md` | 面向用户的功能、修复与兼容性说明，随安装包分发 |
 | 新增 | `docgen-electron/scripts/smoke-test.py` | 验证包内后端、模板、单/多项目生成和缺失配置失败分支 |
 | 新增 | `docgen-electron/docs/development.md` | 维护者开发及构建说明 |
 | 修改 | `.gitignore`、`docgen-electron/.gitignore` | 忽略本地 AI 文件、构建缓存、Python 环境和运行数据 |
