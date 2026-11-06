@@ -7,3 +7,7 @@ Work/picture_ocr/
 CLAUDE.md
 GEMINI.md
 AGENTS.md
+
+# 本地任务运行文件
+.pi/
+.until-done/

@@ -18,14 +18,11 @@
     "win": {
       "target": [
         "nsis"
-      ],
-      "icon": "resources/icon.ico"
+      ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "resources/icon.ico",
-      "uninstallerIcon": "resources/icon.ico",
       "uninstallDisplayName": "卸载 DocGenPro"
     },
     "extraResources": [

@@ -31,3 +31,16 @@ out/
 information.json
 Projects.json
 RecycleBin.json
+
+# Python 打包中间产物与本地环境
+build/
+*.spec
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 本地运行配置（区分大小写的 Git 环境）
+projects.json
+.env.*
+!.env.example

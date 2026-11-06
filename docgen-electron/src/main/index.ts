@@ -137,8 +137,7 @@ ipcMain.handle('run-docgen', async (_event, { mode, data }) => {
     })
 })
 
-// 💾 保存历史记录
-// 💾 保存历史记录
+// 💾 保存历史记录（仅更新单项目历史，保留多项目历史记录）
 function saveToHistory(data: any) {
     // 验证数据有效性
     if (!data || !data['项目名称'] || !String(data['项目名称']).trim()) {
@@ -149,19 +148,24 @@ function saveToHistory(data: any) {
     const historyFile = join(process.cwd(), 'history.json')
     console.log(`Saving history to: ${historyFile}`)
 
-    let history: any[] = []
+    let rawHistory: any[] = []
 
     try {
         if (fs.existsSync(historyFile)) {
-            history = JSON.parse(fs.readFileSync(historyFile, 'utf-8'))
+            const parsed = JSON.parse(fs.readFileSync(historyFile, 'utf-8'))
+            if (Array.isArray(parsed)) rawHistory = parsed
         }
     } catch (e) {
         console.error('读取历史记录失败:', e)
     }
 
-    // 检查是否与最近一条历史记录内容相同（去重）
-    if (history.length > 0) {
-        const lastData = history[0].data
+    const isMultiEntry = (item: any) => item?.mode === 'multi' || Array.isArray(item?.data?.projects)
+    const singleHistory = rawHistory.filter((item) => !isMultiEntry(item))
+    const multiHistory = rawHistory.filter((item) => isMultiEntry(item))
+
+    // 检查是否与最近一条单项目历史记录内容相同（去重）
+    if (singleHistory.length > 0) {
+        const lastData = singleHistory[0].data
         if (JSON.stringify(lastData) === JSON.stringify(data)) {
             console.log('历史记录内容相同，跳过保存')
             return
@@ -169,6 +173,7 @@ function saveToHistory(data: any) {
     }
 
     const entry = {
+        mode: 'single',
         timestamp: new Date().toLocaleString('zh-CN', {
             year: 'numeric',
             month: '2-digit',
@@ -179,13 +184,11 @@ function saveToHistory(data: any) {
         data: data
     }
 
-    history.unshift(entry)
-    if (history.length > 10) {
-        history = history.slice(0, 10)
-    }
+    singleHistory.unshift(entry)
+    const cappedSingle = singleHistory.slice(0, 10)
 
     try {
-        fs.writeFileSync(historyFile, JSON.stringify(history, null, 2), 'utf-8')
+        fs.writeFileSync(historyFile, JSON.stringify([...cappedSingle, ...multiHistory], null, 2), 'utf-8')
         console.log('History saved successfully')
     } catch (e) {
         console.error('保存历史记录失败:', e)
@@ -295,13 +298,16 @@ ipcMain.handle('list-files', async (_event, subDir) => {
             try {
                 const filePath = join(dirPath, file)
                 const stats = fs.statSync(filePath)
+                if (!stats.isFile()) continue
                 const size = stats.size < 1024
                     ? `${stats.size} B`
                     : `${(stats.size / 1024).toFixed(0)} KB`
+                const mtime = stats.mtime.toLocaleString('zh-CN')
 
                 result.push({
                     name: file,
-                    date: stats.mtime.toLocaleString('zh-CN').split(' ')[0],
+                    date: mtime.split(' ')[0],
+                    mtime,
                     size: size
                 })
             } catch (fileErr) {

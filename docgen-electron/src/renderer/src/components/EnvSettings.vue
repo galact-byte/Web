@@ -1,52 +1,54 @@
-<!-- src/components/EnvSettings.vue -->
 <template>
   <div class="env-settings">
+    <div class="page-header">
+      <div class="title-group">
+        <h2>环境变量</h2>
+        <p class="subtitle">配置全局通用的委托测评单位与联系信息</p>
+      </div>
+      <div class="actions">
+        <el-button type="primary" @click="saveEnv" :loading="saving">
+          <el-icon class="el-icon--left"><Check /></el-icon>
+          保存配置
+        </el-button>
+      </div>
+    </div>
+
     <el-card class="settings-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>环境变量配置</span>
-          <el-button type="primary" size="small" @click="saveEnv" :loading="saving">
-            保存配置
-          </el-button>
+          <span>全局占位符变量</span>
         </div>
       </template>
 
       <el-alert
-        title="这些变量将被用于所有文档生成"
+        v-if="showTips"
+        title="这些变量将被用于所有单项目与多项目文档生成"
         type="info"
+        show-icon
         :closable="false"
-        style="margin-bottom: 20px;"
+        style="margin-bottom: 20px"
       />
 
       <el-form label-width="140px">
         <el-form-item label="委托测评单位名称">
-          <el-input 
-            v-model="envVars.CLIENT_COMPANY" 
-            placeholder="例如：xxx公司"
-          />
+          <el-input v-model="envVars.CLIENT_COMPANY" placeholder="例如：xxx公司" clearable />
         </el-form-item>
 
         <el-form-item label="测评联系人">
-          <el-input 
-            v-model="envVars.EVAL_CONTACT" 
-            placeholder="例如：张三"
-          />
+          <el-input v-model="envVars.EVAL_CONTACT" placeholder="例如：张三" clearable />
         </el-form-item>
 
         <el-form-item label="联系电话">
-          <el-input 
-            v-model="envVars.EVAL_PHONE" 
-            placeholder="例如：138xxxxxxxx"
-          />
+          <el-input v-model="envVars.EVAL_PHONE" placeholder="例如：138xxxxxxxx" clearable />
         </el-form-item>
       </el-form>
 
-      <div class="tips-box">
+      <div v-if="showTips" class="tips-box">
         <p><strong>使用说明：</strong></p>
         <ul>
-          <li>这些变量会在文档中自动替换对应的占位符</li>
-          <li>配置保存后会立即生效，影响后续所有文档生成</li>
-          <li>可以在模板文档中使用这些占位符，无需每次手动填写</li>
+          <li>这些变量会在文档生成时自动替换对应的占位符</li>
+          <li>配置保存后会立即写入 <code>.env</code> 并对后续所有文档生成生效</li>
+          <li>可在 Word 模板与规则中使用这些占位符，无需每次重复填写</li>
         </ul>
       </div>
     </el-card>
@@ -56,6 +58,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Check } from '@element-plus/icons-vue'
+import { useSettings } from '../composables/useSettings'
+
+const { showTips, notify } = useSettings()
 
 const envVars = ref({
   CLIENT_COMPANY: '',
@@ -65,7 +71,6 @@ const envVars = ref({
 
 const saving = ref(false)
 
-// 加载环境变量
 const loadEnv = async () => {
   try {
     const result = await window.api.loadEnv()
@@ -81,15 +86,13 @@ const loadEnv = async () => {
   }
 }
 
-// 保存环境变量
 const saveEnv = async () => {
   saving.value = true
   try {
-    // Fix: Clone object to remove Vue Proxy properties which cause 'object could not be cloned' error
     const plainEnvVars = JSON.parse(JSON.stringify(envVars.value))
     const result = await window.api.saveEnv(plainEnvVars)
     if (result.success) {
-      ElMessage.success('环境变量保存成功')
+      notify('success', '环境变量保存成功')
     } else {
       ElMessage.error('保存失败: ' + result.message)
     }
@@ -107,7 +110,28 @@ onMounted(() => {
 
 <style scoped>
 .env-settings {
-  max-width: 800px;
+  max-width: 880px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.title-group h2 {
+  font-size: 20px;
+  color: var(--text-main, #1f2937);
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  margin: 0;
 }
 
 .card-header {
