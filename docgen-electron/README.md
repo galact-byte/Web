@@ -13,10 +13,9 @@
 
 支持 Windows x64，下载安装后即可使用，无需配置运行环境。
 
-1. 登录 GitHub，打开 [自动构建页面](https://github.com/galact-byte/Web/actions/workflows/docgen-windows.yml)。
-2. 选择最近一次成功的构建，在页面底部 **Artifacts** 下载 `DocGenPro-Windows-x64`。
-3. 解压下载的 ZIP，双击其中的 `.exe` 安装程序，按提示完成安装。
-4. 从开始菜单或桌面快捷方式启动 **DocGenPro**。
+1. 打开 [DocGenPro 下载页面](https://github.com/galact-byte/Web/releases/tag/docgen-v2.1.0)。
+2. 在页面底部 **Assets** 下载 `.exe` 安装程序，双击后按提示完成安装。
+3. 从开始菜单或桌面快捷方式启动 **DocGenPro**。
 
 安装包未签名，Windows 可能显示未知发布者提醒，请确认下载来源后再运行。
 

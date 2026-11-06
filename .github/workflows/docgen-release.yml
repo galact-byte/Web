@@ -1,0 +1,109 @@
+name: DocGenPro Release
+
+on:
+  workflow_run:
+    workflows: ['DocGenPro Windows installer']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful DocGenPro Windows installer run ID
+        required: true
+        type: string
+
+concurrency:
+  group: docgen-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Validate successful build and version
+        id: build
+        run: |
+          if ($env:BUILD_RUN_ID -notmatch '^\d+$') { throw 'Invalid build run ID' }
+          $runJson = gh api "repos/$env:GH_REPO/actions/runs/$env:BUILD_RUN_ID"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read build run' }
+          $run = $runJson | ConvertFrom-Json
+          if ($run.conclusion -ne 'success' -or $run.status -ne 'completed' -or
+              $run.head_branch -ne 'main' -or $run.head_repository.full_name -ne $env:GH_REPO -or
+              $run.path -ne '.github/workflows/docgen-windows.yml') {
+            throw 'Only successful main-branch DocGenPro builds from this repository may be published'
+          }
+          $encoded = gh api "repos/$env:GH_REPO/contents/docgen-electron/package.json?ref=$($run.head_sha)" --jq .content
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read package version at build commit' }
+          $package = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($encoded -join ''))) | ConvertFrom-Json
+          $version = $package.version
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'A stable x.y.z package version is required' }
+          $tag = "docgen-v$version"
+          $query = '.[] | select(.tag_name == "' + $tag + '") | .html_url'
+          $existing = @(gh api --paginate "repos/$env:GH_REPO/releases?per_page=100" --jq $query)
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot check existing releases' }
+          if ($existing.Count -gt 0) {
+            "published=true" >> $env:GITHUB_OUTPUT
+            "Version $version is already published: $($existing[0]). Existing assets were not changed. Bump package.json/package-lock.json and update RELEASE_NOTES.md for a new release." >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            "published=false" >> $env:GITHUB_OUTPUT
+          }
+          "sha=$($run.head_sha)" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Download tested installer
+        if: steps.build.outputs.published == 'false'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: DocGenPro-Windows-x64
+          run-id: ${{ env.BUILD_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: artifacts
+
+      - name: Verify installer checksum and release notes
+        if: steps.build.outputs.published == 'false'
+        env:
+          VERSION: ${{ steps.build.outputs.version }}
+        run: |
+          $installers = @(Get-ChildItem artifacts -Filter '*.exe' -File)
+          if ($installers.Count -eq 0) { throw 'Missing installer' }
+          $checksums = @(Get-Content artifacts/SHA256SUMS.txt)
+          if ($checksums.Count -ne $installers.Count) { throw 'Incomplete checksum manifest' }
+          foreach ($line in $checksums) {
+            if ($line -notmatch '^([a-fA-F0-9]{64})  (.+\.exe)$') { throw 'Invalid checksum line' }
+            $expected = $Matches[1]
+            $name = $Matches[2]
+            if ([IO.Path]::GetFileName($name) -ne $name) { throw 'Invalid installer filename' }
+            $actual = (Get-FileHash (Join-Path artifacts $name) -Algorithm SHA256).Hash
+            if ($actual -ne $expected) { throw "Installer checksum mismatch: $name" }
+          }
+          if ((Get-Content artifacts/RELEASE_NOTES.md -TotalCount 1) -ne "# DocGenPro $env:VERSION") {
+            throw 'Release notes do not match the built version'
+          }
+
+      - name: Publish versioned release
+        if: steps.build.outputs.published == 'false'
+        env:
+          TAG: ${{ steps.build.outputs.tag }}
+          VERSION: ${{ steps.build.outputs.version }}
+          BUILD_SHA: ${{ steps.build.outputs.sha }}
+        run: |
+          $assets = @((Get-ChildItem artifacts -Filter '*.exe' -File).FullName)
+          $assets += (Resolve-Path artifacts/SHA256SUMS.txt).Path
+          $assets += (Resolve-Path artifacts/RELEASE_NOTES.md).Path
+          gh release create $env:TAG @assets --repo $env:GH_REPO --target $env:BUILD_SHA --title "DocGenPro $env:VERSION" --notes-file artifacts/RELEASE_NOTES.md --latest=false
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
+          "Published https://github.com/$env:GH_REPO/releases/tag/$env:TAG" >> $env:GITHUB_STEP_SUMMARY

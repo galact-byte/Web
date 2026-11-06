@@ -37,7 +37,13 @@ python scripts/smoke-test.py
 
 流程：安装锁定的 npm 依赖及 Python 构建依赖 → PyInstaller 生成 `main3.exe` → electron-builder 生成 Windows x64 NSIS 安装包 → 运行后端冒烟测试 → 上传安装包、SHA-256 校验文件和人工编写的 `RELEASE_NOTES.md`。
 
-产物名称为 `DocGenPro-Windows-x64`，保留 30 天。工作流只有仓库读取权限，不创建 Release、不推送文件、不需要额外配置 Secret。同一分支新构建会取消尚未结束的旧构建。
+构建产物名称为 `DocGenPro-Windows-x64`，保留 30 天。构建工作流只有仓库读取权限；同一分支新构建会取消尚未结束的旧构建。
+
+`.github/workflows/docgen-release.yml` 在上述构建成功后发布 Release，也支持手动输入已成功的构建运行 ID，将现有产物直接发布，无需重打包。它只接受本仓库 `main` 上指定构建工作流的成功产物，发布前验证安装包 SHA-256 和说明版本。
+
+发布标签为 `docgen-v<package.json 版本>`，指向实际构建提交；正文使用该产物内人工编写的 `RELEASE_NOTES.md`。Release 附带安装程序、校验文件和发布说明，不改变仓库其他子项目的 Latest 标记。已存在的同版本 Release 不覆盖；发布新版前需同步更新 `package.json`、`package-lock.json` 和发布说明，并更新 README 的版本下载链接。
+
+发布任务限定使用 `actions: read` 和 `contents: write`，通过 GitHub 内置令牌工作，不需要额外配置 Secret。
 
 ## 目录与忽略规则
 
