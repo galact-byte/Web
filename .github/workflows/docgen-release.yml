@@ -58,6 +58,9 @@ jobs:
             "published=true" >> $env:GITHUB_OUTPUT
             "Version $version is already published: $($existing[0]). Existing assets were not changed. Bump package.json/package-lock.json and update RELEASE_NOTES.md for a new release." >> $env:GITHUB_STEP_SUMMARY
           } else {
+            $previousLatest = gh api "repos/$env:GH_REPO/releases/latest" --jq .tag_name
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot read the existing Latest release' }
+            "previous_latest=$previousLatest" >> $env:GITHUB_OUTPUT
             "published=false" >> $env:GITHUB_OUTPUT
           }
           "sha=$($run.head_sha)" >> $env:GITHUB_OUTPUT
@@ -93,6 +96,15 @@ jobs:
           if ((Get-Content artifacts/RELEASE_NOTES.md -TotalCount 1) -ne "# DocGenPro $env:VERSION") {
             throw 'Release notes do not match the built version'
           }
+          # Match GitHub asset-name normalization before writing the public manifest.
+          foreach ($installer in $installers) {
+            $safeName = $installer.Name -replace '\s', '.'
+            if ($safeName -ne $installer.Name) { Rename-Item $installer.FullName $safeName }
+          }
+          Get-ChildItem artifacts -Filter '*.exe' -File | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content artifacts/SHA256SUMS.txt -Encoding utf8
 
       - name: Publish versioned release
         if: steps.build.outputs.published == 'false'
@@ -100,10 +112,15 @@ jobs:
           TAG: ${{ steps.build.outputs.tag }}
           VERSION: ${{ steps.build.outputs.version }}
           BUILD_SHA: ${{ steps.build.outputs.sha }}
+          PREVIOUS_LATEST: ${{ steps.build.outputs.previous_latest }}
         run: |
           $assets = @((Get-ChildItem artifacts -Filter '*.exe' -File).FullName)
           $assets += (Resolve-Path artifacts/SHA256SUMS.txt).Path
           $assets += (Resolve-Path artifacts/RELEASE_NOTES.md).Path
           gh release create $env:TAG @assets --repo $env:GH_REPO --target $env:BUILD_SHA --title "DocGenPro $env:VERSION" --notes-file artifacts/RELEASE_NOTES.md --latest=false
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
+          if ($env:PREVIOUS_LATEST -and $env:PREVIOUS_LATEST -ne $env:TAG) {
+            gh release edit $env:PREVIOUS_LATEST --repo $env:GH_REPO --latest
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot preserve the previous Latest release' }
+          }
           "Published https://github.com/$env:GH_REPO/releases/tag/$env:TAG" >> $env:GITHUB_STEP_SUMMARY
