@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory(prefix="docgen-smoke-") as temp:
     def run(*args):
         result = subprocess.run(
             [str(backend), *args], cwd=work, env=env, capture_output=True,
-            text=True, encoding="utf-8", errors="replace", timeout=60,
+            text=True, encoding="utf-8", timeout=60,
         )
         print(result.stdout)
         if result.stderr:

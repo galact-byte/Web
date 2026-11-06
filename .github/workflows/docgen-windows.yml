@@ -53,11 +53,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pip install -r requirements-build.txt
 
+      - name: Test backend encoding under a non-UTF-8 locale
+        run: python scripts/test_encoding.py
+
       - name: Build Python backend
         run: >-
           python -m PyInstaller --clean --noconfirm --onefile
           --distpath resources/bin --workpath build/python --specpath build/python
           --name main3 main3.py
+
+      - name: Test frozen backend encoding
+        run: |
+          $env:DOCGEN_TEST_BACKEND = (Resolve-Path resources/bin/main3.exe).Path
+          python scripts/test_encoding.py
 
       - name: Build Electron installer
         run: npm run build -- --win nsis --x64 --publish never

@@ -306,6 +306,11 @@ def replace_by_rules(doc, rules, project_info):
 import argparse
 
 if __name__ == '__main__':
+    # 冻结程序重定向输出时可能采用系统 ANSI 编码；与 Electron 的 UTF-8 解码保持一致。
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None:
+            stream.reconfigure(encoding='utf-8')
+
     # 首先加载环境变量
     env_vars = load_env_variables()
     

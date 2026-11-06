@@ -1,5 +1,31 @@
 # 修改记录 — Web
 
+## 2026-11-07 — 修复冻结后端中文输出崩溃
+
+### 背景与目标
+- 远端包内冒烟测试在后端首次输出中文时触发 `UnicodeEncodeError`；CI 中的 UTF-8 环境变量未解决冻结程序的输出编码问题。
+
+### 影响与兼容性
+- `main3.py` 启动时显式将标准输出和标准错误设为 UTF-8，与 Electron 的解码约定一致；不改变模板、配置格式或文档生成逻辑。
+
+### 文件与实现
+| 操作 | 路径 | 说明 |
+|---|---|---|
+| 修改 | `docgen-electron/main3.py` | 在首次输出之前配置 stdout/stderr 编码 |
+| 新增 | `docgen-electron/scripts/test_encoding.py` | 强制非 UTF-8 环境及重定向输出，覆盖启动、参数错误、缺失配置 |
+| 修改 | `.github/workflows/docgen-windows.yml` | 打包前测试源码，打包后测试真实冻结后端，失败时提前停止 |
+| 修改 | `docgen-electron/scripts/smoke-test.py` | 严格解码 UTF-8，不再替换非法字节掩盖输出乱码 |
+| 修改 | `docgen-electron/RELEASE_NOTES.md` | 补充面向用户的编码崩溃修复说明 |
+
+### 验证
+- 修改前 `python scripts/test_encoding.py`：3 项失败，复现相同的 cp1252 中文输出异常。
+- 修改后源码和本地 PyInstaller 生成的真实 `main3.exe`：各 3 项回归测试通过。
+- 本地冻结后端在临时目录生成单项目 5 份、多项目 10 份 DOCX，文档完整性及日志严格 UTF-8 解码检查通过；临时文档自动清理。
+- 工作流 YAML 和回归步骤顺序、`git diff --check` 检查通过。
+
+### 已知限制与后续
+- 远端 Windows runner 的修复结果由新推送触发的构建验证；不将旧提交构建的失败视为新修复结果。
+
 ## 2026-11-07 — DocGenPro Windows 自动打包
 
 ### 背景与目标
