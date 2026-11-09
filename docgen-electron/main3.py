@@ -10,6 +10,41 @@ from copy import deepcopy
 import os
 from dotenv import load_dotenv  # 新增：导入 dotenv
 import sys
+import shutil
+import tempfile
+from datetime import datetime
+
+
+VERIFICATION_DOCUMENTS = {
+    '执行验证测试': '验证测试授权书',
+    '自愿放弃验证测试': '自愿放弃验证测试声明',
+}
+
+
+def should_generate_document(document_name, project_info):
+    selected = VERIFICATION_DOCUMENTS[project_info['验证测试方式']]
+    return not any(
+        title in document_name and title != selected
+        for title in VERIFICATION_DOCUMENTS.values()
+    )
+
+
+def archive_conflicting_document(output_dir, document_name, project_info):
+    """保留切换方式前的文档，避免输出目录同时出现互斥文档。"""
+    selected = VERIFICATION_DOCUMENTS[project_info['验证测试方式']]
+    if selected not in document_name:
+        return
+    for name in os.listdir(output_dir):
+        path = os.path.join(output_dir, name)
+        if (not name.endswith('.docx') or not os.path.isfile(path)
+                or should_generate_document(name, project_info)):
+            continue
+        history_dir = os.path.join(output_dir, '历史文档')
+        os.makedirs(history_dir, exist_ok=True)
+        archive_dir = tempfile.mkdtemp(prefix=datetime.now().strftime('%Y%m%d-%H%M%S-'), dir=history_dir)
+        destination = os.path.join(archive_dir, name)
+        shutil.move(path, destination)
+        print(f"原互斥文档已保留到: {destination}")
 
 
 def load_env_variables():
@@ -72,6 +107,11 @@ def merge_system_information(project_info):
 
 def auto_add_project_info(project_info, env_vars):
     """自动添加项目信息的默认值，并合并环境变量"""
+    # 旧配置沿用原有业务详情表单对应的放弃声明方式。
+    project_info.setdefault('验证测试方式', '自愿放弃验证测试')
+    if project_info['验证测试方式'] not in VERIFICATION_DOCUMENTS:
+        raise ValueError('验证测试方式必须为“执行验证测试”或“自愿放弃验证测试”')
+
     # 合并环境变量到项目信息中
     project_info.update(env_vars)
     
@@ -138,6 +178,7 @@ def replace_doc_content(rules, project_info, output_subdir=None):
     output_filename = os.path.splitext(rules['文档名称'])[0] + ".docx"
     output_path = os.path.join(output_dir, output_filename)
     doc.save(output_path)
+    archive_conflicting_document(output_dir, rules['文档名称'], project_info)
     print(f"已生成文档: {output_path}")
     return True
 
@@ -152,8 +193,8 @@ def process_single_project(project_info, rules_dir, env_vars):
             # 读取规则文件
             with open(os.path.join(rules_dir, rule_file), 'r', encoding='utf-8') as f:
                 config = json.load(f)
-            # 替换文档内容并保存
-            replace_doc_content(config, project_info)
+            if should_generate_document(config['文档名称'], project_info):
+                replace_doc_content(config, project_info)
 
 
 def process_multiple_projects(projects_data, rules_dir, env_vars):
@@ -173,8 +214,8 @@ def process_multiple_projects(projects_data, rules_dir, env_vars):
                 # 读取规则文件
                 with open(os.path.join(rules_dir, rule_file), 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                # 替换文档内容并保存到对应项目的子目录
-                replace_doc_content(config, project_info, output_subdir)
+                if should_generate_document(config['文档名称'], project_info):
+                    replace_doc_content(config, project_info, output_subdir)
 
 
 def replace_by_placeholder(doc, mapping):
@@ -338,7 +379,7 @@ if __name__ == '__main__':
             config_file = 'projects.json'
         else:
             print("无效的选择！请输入 1 或 2")
-            exit(1)
+            sys.exit(1)
     else:
         args = parser.parse_args()
         mode = args.mode
@@ -350,7 +391,7 @@ if __name__ == '__main__':
         print(f"\n正在运行单项目模式... 配置文件: {config_file}")
         if not os.path.exists(config_file):
             print(f"错误: 找不到配置文件 {config_file}")
-            exit(1)
+            sys.exit(1)
 
         with open(config_file, 'r', encoding='utf-8') as f:
             project_info = json.load(f)
@@ -363,14 +404,14 @@ if __name__ == '__main__':
         print(f"\n正在运行多项目批量模式... 配置文件: {config_file}")
         if not os.path.exists(config_file):
             print(f"错误: 找不到配置文件 {config_file}")
-            exit(1)
+            sys.exit(1)
 
         with open(config_file, 'r', encoding='utf-8') as f:
             projects_data = json.load(f)
 
         if 'projects' not in projects_data or len(projects_data['projects']) == 0:
             print("错误: projects.json 中没有项目数据！")
-            exit(1)
+            sys.exit(1)
 
         print(f"共找到 {len(projects_data['projects'])} 个项目")
         process_multiple_projects(projects_data, rules_dir, env_vars)

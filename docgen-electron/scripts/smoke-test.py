@@ -50,21 +50,35 @@ with tempfile.TemporaryDirectory(prefix="docgen-smoke-") as temp:
 
     assert run("--help").returncode == 0, "Backend cannot start"
     assert run("--mode", "1", "--config", "missing.json").returncode != 0, "Missing config must fail"
-    for mode, config in [("1", project), ("2", {"projects": [project, {**project, "项目编号": "CI-002"}]})]:
+    for mode, config in [
+        ("1", project),
+        ("1", {**project, "验证测试方式": "执行验证测试"}),
+        ("2", {"projects": [
+            {**project, "验证测试方式": "执行验证测试"},
+            {**project, "项目编号": "CI-002", "验证测试方式": "自愿放弃验证测试"},
+        ]}),
+    ]:
         (work / "fixture.json").write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
         assert run("--mode", mode, "--config", "fixture.json").returncode == 0, f"Mode {mode} failed"
         output = work / "授权文档输出目录"
         directories = [output] if mode == "1" else [
             output / "CI-001_构建验证项目", output / "CI-002_构建验证项目"
         ]
-        for directory in directories:
+        project_configs = [config] if mode == "1" else config["projects"]
+        for directory, item in zip(directories, project_configs):
+            excluded = (
+                "13自愿放弃验证测试声明（V4.5）.docx"
+                if item.get("验证测试方式") == "执行验证测试"
+                else "14验证测试授权书.docx"
+            )
+            selected = [name for name in expected if name != excluded]
             actual = sorted(path.name for path in directory.glob("*.docx"))
-            assert actual == sorted(expected), f"Incomplete output in {directory}: {actual}"
-            for name in expected:
+            assert actual == sorted(selected), f"Incomplete output in {directory}: {actual}"
+            for name in selected:
                 with zipfile.ZipFile(directory / name) as document:
                     assert document.testzip() is None, f"Corrupt document: {name}"
                     assert "word/document.xml" in document.namelist(), f"Invalid Word document: {name}"
         shutil.rmtree(output)
-        print(f"PASS: mode {mode}, {len(directories) * len(expected)} valid documents")
+        print(f"PASS: mode {mode}, {len(directories) * (len(expected) - 1)} valid documents")
 
 print("PASS: packaged backend, templates, rules and missing-config handling")

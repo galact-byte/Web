@@ -53,6 +53,14 @@ h6 {
     --bg-card-rgb: 255, 255, 255;
     --text-main: #1f2937;
     --text-sidebar: #4b5563;
+    --seg-track-bg: rgba(15, 23, 42, 0.045);
+    --seg-track-border: var(--el-border-color, #{$border-color});
+    --seg-item-color: #64748b;
+    --seg-item-hover-color: #1f2937;
+    --seg-active-bg: #ffffff;
+    --seg-active-border: rgba(15, 23, 42, 0.1);
+    --seg-active-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    --seg-active-color: #111827;
 }
 
 html.dark {
@@ -62,6 +70,14 @@ html.dark {
     --text-main: #f1f5f9;
     --text-sidebar: #cbd5e1;
     --accent-readable: color-mix(in srgb, var(--primary-color) 68%, #ffffff);
+    --seg-track-bg: rgba(255, 255, 255, 0.05);
+    --seg-track-border: rgba(255, 255, 255, 0.15);
+    --seg-item-color: rgba(226, 232, 240, 0.65);
+    --seg-item-hover-color: #f1f5f9;
+    --seg-active-bg: rgba(255, 255, 255, 0.14);
+    --seg-active-border: rgba(255, 255, 255, 0.26);
+    --seg-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    --seg-active-color: #ffffff;
     // element-plus/theme-chalk/dark/css-vars.css 在 html.dark 下重定义了主色，这里需要同等特异性并在其后加载
     --el-color-primary: var(--primary-color);
     --el-color-primary-light-3: color-mix(in srgb, var(--primary-color) 70%, #141414);
@@ -141,6 +157,15 @@ html.dark {
             color: color-mix(in srgb, var(--primary-color) 85%, #ffffff) !important;
         }
     }
+
+    .el-radio__input.is-checked + .el-radio__label {
+        color: var(--accent-readable);
+    }
+
+    .el-radio__inner {
+        background-color: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.36);
+    }
 }
 
 html.dark .has-bg-image {
@@ -150,6 +175,14 @@ html.dark .has-bg-image {
     --el-text-color-regular: #f1f5f9;
     --el-text-color-secondary: #cbd5e1;
     --el-text-color-placeholder: rgba(226, 232, 240, 0.55);
+    --seg-track-bg: rgba(255, 255, 255, 0.07);
+    --seg-track-border: rgba(255, 255, 255, 0.18);
+    --seg-item-color: rgba(226, 232, 240, 0.68);
+    --seg-item-hover-color: #ffffff;
+    --seg-active-bg: rgba(255, 255, 255, 0.18);
+    --seg-active-border: rgba(255, 255, 255, 0.34);
+    --seg-active-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+    --seg-active-color: #ffffff;
 
     .sidebar .logo-subtitle,
     .page-header .subtitle {

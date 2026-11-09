@@ -69,6 +69,17 @@
           </template>
         </el-table-column>
         <el-table-column prop="单位名称" label="单位名称" min-width="140" show-overflow-tooltip />
+        <el-table-column label="验证测试方式" min-width="148">
+          <template #default="scope">
+            <el-tag
+              size="small"
+              :type="scope.row.验证测试方式 === '执行验证测试' ? 'primary' : 'info'"
+              effect="plain"
+            >
+              {{ scope.row.验证测试方式 || '自愿放弃验证测试' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="系统" label="包含系统" width="96" align="center">
           <template #default="scope">
             <el-tag size="small" type="primary">
@@ -134,19 +145,24 @@
         <el-form-item label="委托单位联系方式" prop="委托单位联系方式">
           <el-input v-model="projectForm.委托单位联系方式" placeholder="请输入联系方式" clearable />
         </el-form-item>
-        <el-form-item label="具体业务名称" prop="具体业务名称">
-          <el-input v-model="projectForm.具体业务名称" placeholder="请输入业务名称" clearable />
+        <el-form-item label="验证测试方式" prop="验证测试方式">
+          <VerificationMode v-model="projectForm.验证测试方式" />
         </el-form-item>
-        <el-form-item label="业务影响" prop="业务影响">
-          <el-input v-model="projectForm.业务影响" placeholder="默认为: 中断、停机等" clearable />
-        </el-form-item>
-        <el-form-item label="影响后果" prop="影响后果">
-          <el-input
-            v-model="projectForm.影响后果"
-            placeholder="默认为: 关键业务无法办理等"
-            clearable
-          />
-        </el-form-item>
+        <template v-if="projectForm.验证测试方式 === '自愿放弃验证测试'">
+          <el-form-item label="具体业务名称" prop="具体业务名称">
+            <el-input v-model="projectForm.具体业务名称" placeholder="请输入业务名称" clearable />
+          </el-form-item>
+          <el-form-item label="业务影响" prop="业务影响">
+            <el-input v-model="projectForm.业务影响" placeholder="默认为: 中断、停机等" clearable />
+          </el-form-item>
+          <el-form-item label="影响后果" prop="影响后果">
+            <el-input
+              v-model="projectForm.影响后果"
+              placeholder="默认为: 关键业务无法办理等"
+              clearable
+            />
+          </el-form-item>
+        </template>
 
         <el-divider content-position="left">包含系统 ({{ projectForm.系统.length }})</el-divider>
         <el-row
@@ -298,6 +314,7 @@ import {
   type MultiHistoryEntry,
   type ProjectData
 } from '../utils/history'
+import VerificationMode from './VerificationMode.vue'
 import { useSettings } from '../composables/useSettings'
 
 const { showTips, notify } = useSettings()
@@ -308,6 +325,7 @@ const createEmptyProject = (): ProjectData => ({
   单位名称: '',
   委托单位联系人: '',
   委托单位联系方式: '',
+  验证测试方式: '自愿放弃验证测试',
   具体业务名称: '',
   业务影响: '',
   影响后果: '',
@@ -338,6 +356,7 @@ const sanitizeProjects = (list: ProjectData[]): ProjectData[] =>
     单位名称: p.单位名称 || '',
     委托单位联系人: p.委托单位联系人 || '',
     委托单位联系方式: p.委托单位联系方式 || '',
+    验证测试方式: p.验证测试方式 || '自愿放弃验证测试',
     具体业务名称: p.具体业务名称 || '',
     业务影响: p.业务影响 || '',
     影响后果: p.影响后果 || '',

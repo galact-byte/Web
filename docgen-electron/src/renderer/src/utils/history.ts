@@ -9,6 +9,7 @@ export interface ProjectData {
   单位名称: string
   委托单位联系人: string
   委托单位联系方式: string
+  验证测试方式?: '执行验证测试' | '自愿放弃验证测试'
   具体业务名称: string
   业务影响: string
   影响后果: string

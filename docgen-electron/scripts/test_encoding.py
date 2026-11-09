@@ -38,6 +38,7 @@ class BackendEncodingTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("错误: 找不到配置文件", result.stdout.decode("utf-8"))
         self.assertNotIn(b"UnicodeEncodeError", result.stderr)
+        self.assertNotIn(b"Traceback", result.stderr)
 
 
 if __name__ == "__main__":

@@ -80,6 +80,9 @@
             <el-form-item label="单位名称" prop="单位名称">
               <el-input v-model="form.单位名称" placeholder="请输入单位名称" clearable />
             </el-form-item>
+            <el-form-item label="验证测试方式" prop="验证测试方式">
+              <VerificationMode v-model="form.验证测试方式" />
+            </el-form-item>
           </el-card>
 
           <el-card class="section-card" shadow="hover" style="margin-top: 16px">
@@ -105,7 +108,7 @@
 
         <!-- Right Column: Business & Systems -->
         <el-col :xs="24" :lg="14" class="form-col">
-          <el-card class="section-card" shadow="hover">
+          <el-card v-if="form.验证测试方式 === '自愿放弃验证测试'" class="section-card" shadow="hover">
             <template #header>
               <div class="card-header">
                 <span>业务详情（自愿放弃声明）</span>
@@ -133,7 +136,7 @@
             </el-row>
           </el-card>
 
-          <el-card class="section-card" shadow="hover" style="margin-top: 16px">
+          <el-card class="section-card" shadow="hover" :style="{ marginTop: form.验证测试方式 === '自愿放弃验证测试' ? '16px' : '0' }">
             <template #header>
               <div class="card-header">
                 <span>系统列表 ({{ form.系统.length }})</span>
@@ -201,6 +204,7 @@ import {
   type ProjectData,
   type SingleHistoryEntry
 } from '../utils/history'
+import VerificationMode from './VerificationMode.vue'
 import { useSettings } from '../composables/useSettings'
 
 const { showTips, notify } = useSettings()
@@ -211,6 +215,7 @@ const createEmptyForm = (): ProjectData => ({
   单位名称: '',
   委托单位联系人: '',
   委托单位联系方式: '',
+  验证测试方式: '自愿放弃验证测试',
   具体业务名称: '',
   业务影响: '',
   影响后果: '',
@@ -232,6 +237,7 @@ const isFormDirty = (): boolean => {
       f.单位名称.trim() ||
       f.委托单位联系人.trim() ||
       f.委托单位联系方式.trim() ||
+      f.验证测试方式 !== '自愿放弃验证测试' ||
       f.具体业务名称.trim() ||
       f.业务影响.trim() ||
       f.影响后果.trim() ||

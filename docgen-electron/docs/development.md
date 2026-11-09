@@ -26,7 +26,19 @@ python scripts/smoke-test.py
 
 安装程序在 `dist_setup/`，未安装版本在 `dist_setup/win-unpacked/`。Python 后端、`templates/` 和 `rules/` 随包分发；当前没有自定义图标，使用 Electron 默认图标。构建未配置代码签名或自动更新。
 
-`smoke-test.py` 检查随包后端能启动、缺少配置时返回失败，并在临时目录实际执行单项目及双项目生成，检查文档数量与 DOCX 文件完整性；测试结束后自动清理临时文件。它不覆盖桌面 UI 交互或 Word 排版效果。
+`smoke-test.py` 检查随包后端能启动、缺少配置时返回失败，并在临时目录实际执行两种单项目选择及混合双项目生成，检查互斥文档选择、文档数量与 DOCX 文件完整性；测试结束后自动清理临时文件。它不覆盖桌面 UI 交互或 Word 排版效果。
+
+## 回归检查
+
+```powershell
+python -m unittest discover -s scripts -p "test_*.py"
+npx vue-tsc --noEmit
+npx electron-vite build
+```
+
+`test_verification_mode.py` 使用真实模板验证单项目选择、批量项目独立选择、缺少新字段的旧配置、非法选项，以及切换后旧文档归档保留。可通过 `DOCGEN_TEST_BACKEND` 指定已打包的 `main3.exe`，用同一套用例检查冻结后的行为。
+
+项目数据新增可选字段 `验证测试方式`，值为 `执行验证测试` 或 `自愿放弃验证测试`；旧数据缺少该字段时默认使用后者。界面复制、保存及历史恢复均保留此选择。生成器按模板名称识别两份互斥文档；自定义模板如需参与此规则，名称须包含 `验证测试授权书` 或 `自愿放弃验证测试声明`。
 
 ## GitHub Actions
 
