@@ -98,7 +98,7 @@ mysql+pymysql://user:password@127.0.0.1:3306/filing_db?charset=utf8mb4
 
 ### 达梦 / 人大金仓
 
-本项目数据层使用通用 SQLAlchemy 写法，可接入国产数据库。  
+本项目数据层使用通用 SQLAlchemy 写法，可接入国产数据库。
 需安装对应厂商驱动和 SQLAlchemy 方言后，配置 `DATABASE_URL` 即可（连接串格式以你现场驱动文档为准）。
 
 ## 5. 功能覆盖说明

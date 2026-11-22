@@ -14,7 +14,7 @@ Reduce 是一款 Android 应用，帮助你控制刷短视频的时间。它不�
 
 ## 安装
 
-从 [Releases](../../releases) 页面下载最新的 `app-release.apk` 安装即可。
+从 [Releases](https://github.com/galact-byte/Web/releases) 页面下载最新的 `app-release.apk` 安装即可。
 
 首次使用需要授予以下权限（App 内有引导按钮）：
 
